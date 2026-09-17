@@ -669,6 +669,13 @@ func (at *AutoTrader) warnFlipDeathSanity(d *kernel.PlanDoc) {
 	if d.FlipStructured != nil && d.FlipStructured.Price > 0 && !levelPrice(d.FlipStructured.Price) {
 		at.logWarnf("⚠️ flip/death sanity: flip{price %.2f} matches NO level in this plan's list (orphan anchor).", d.FlipStructured.Price)
 	}
+	// W-FLIP-DIRECTION (2026-09-17): the write-site validator now REJECTS a
+	// flip whose side points the wrong way for its bias; plans already in the
+	// store were written before it learned direction, so the read path WARNs
+	// with the same sentence (LONDON v3: short + flip{below → long}).
+	if err := kernel.FlipDirectionContradiction(d.Bias.Direction, d.FlipStructured); err != nil {
+		at.logWarnf("⚠️ flip/death sanity: %v — this flip can never fire on the move it is meant to catch.", err)
+	}
 	if d.DeathStructured != nil && d.FlipStructured != nil && d.DeathStructured.Price > 0 && d.FlipStructured.Price > 0 {
 		dd, ff := d.DeathStructured, d.FlipStructured
 		if math.Abs(dd.Price-ff.Price) <= 0.01 && dd.Side == ff.Side && dd.Rule == ff.Rule {

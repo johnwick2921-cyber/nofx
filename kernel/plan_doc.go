@@ -774,6 +774,13 @@ func ValidatePlanDocWithCaps(d *PlanDoc, maxLevels, maxScenarios int) error {
 			return fmt.Errorf("flip{price %.2f} does not match any number in bias.flip_condition prose %q", d.FlipStructured.Price, d.Bias.FlipCondition)
 		}
 	}
+	// W-FLIP-DIRECTION (2026-09-17): the number was checked, the DIRECTION was
+	// not. LONDON v3 shipped bias short + flip{below → long}: a short bias can
+	// only flip long on a close ABOVE the line, so the overnight rally could
+	// never flip it. Death is NOT judged here (separate question).
+	if err := FlipDirectionContradiction(d.Bias.Direction, d.FlipStructured); err != nil {
+		return err
+	}
 	// Wave 2 armed orders (2026-08-27) — the arm authorization must be coherent:
 	// only armable conditions, exact prices, sane long/short ordering.
 	if err := validateArmSpecs(d); err != nil {
@@ -785,6 +792,41 @@ func ValidatePlanDocWithCaps(d *PlanDoc, maxLevels, maxScenarios int) error {
 		return err
 	}
 	return nil
+}
+
+// FlipDirectionContradiction (W-FLIP-DIRECTION, 2026-09-17) is the one place
+// the flip's SIDE is judged against the bias it flips from: a short bias flips
+// to long only on a close ABOVE the line; a long bias flips to short only on a
+// close BELOW it. An empty flip_to is read as the opposite of the bias. Returns
+// nil when there is no structured flip, the bias is not long/short, or the
+// flip_to is not the opposite of the bias (that is not this rule's question).
+// Shared by the write-site validator (reject) and the read-path sanity pass
+// (WARN for plans already in the store), so both speak one sentence.
+func FlipDirectionContradiction(biasDir string, flip *PlanCondition) error {
+	if flip == nil {
+		return nil
+	}
+	bias := NormalizeBiasDirection(biasDir)
+	var opposite, wantSide string
+	switch bias {
+	case "short":
+		opposite, wantSide = "long", "above"
+	case "long":
+		opposite, wantSide = "short", "below"
+	default:
+		return nil
+	}
+	flipTo := strings.ToLower(strings.TrimSpace(flip.FlipTo))
+	if flipTo == "" {
+		flipTo = opposite
+	}
+	if flipTo != opposite {
+		return nil
+	}
+	if flip.Side == wantSide {
+		return nil
+	}
+	return fmt.Errorf("flip{%s %.2f → %s} contradicts bias %s: a %s bias flips to %s only on a close %s the line", flip.Side, flip.Price, flipTo, bias, bias, flipTo, wantSide)
 }
 
 // FlipToDirection parses the flip direction out of a killer line
