@@ -5099,3 +5099,75 @@ day.
   this class, checked: `class33_boot_sweep_test.go` L25/L156 stamp
   CreatedAt/UpdatedAt only and the sweep is not band-gated. None of the listed
   tests fails by the clock today; each is one registry change from doing so.
+
+## CLASS NN (assigned at merge) — A HOLD THAT RESTARTS ON EVERY RE-READ: hysteresis anchored to the version, not the plan (born 2026-08-21 with the regime wave's G3 hold, reported by the owner 2026-09-17 "it went up all night and never flipped", fix/flip-hold-anchor, W-FLIP-HOLD-ANCHOR)
+
+**Shape.** A hysteresis window ("no flip within N minutes of birth") measures
+age from the created_at of the ROW it happens to be evaluating. The row is a
+VERSION in an append-only chain, and something unrelated to state — a wake
+re-read — appends a new version every 30–40 minutes. Every re-read is a new
+birth, so the hold restarts, and a 30-minute hold becomes "held for most of
+the session" whenever wakes fire faster than the hold expires. Nothing is
+wrong on any single evaluation: each one truthfully reports the age of the row
+it was handed.
+
+**The live story (2026-09-16 ASIA, plan `2026-09-16:ASIA:…`).** v1 authored
+16:35:56 (`ASIA_scheduled_read`), then twelve `level_event` re-reads: v10
+23:36:02, v11 00:13:28, v12 00:39:28, v13 01:21:25 — every one bias SHORT with
+a flip "above X → long" and X stepping DOWN (29500.25 → 29479.50 → 29450.50 →
+29418.80) as the tape climbed. The 01:25 and 01:30 5m closes (29443.75,
+29448.25) were both above v13's 29418.80. The journal at 01:35:00:
+
+	flip_eval_skipped plan=… v13 flip=hold (plan age 815s < 30min)
+
+and again 01:36:28 (903s) and 01:38:28 (1023s). 815s is exactly 01:21:25 →
+01:35:00: the age of v13, a re-read that changed no state. The chain itself
+was nine hours old and had held one bias since 21:00:40 (v5 neutral → v6
+short). The plan went dormant at 01:50:15 on the DEATH line (29450.50), never
+having flipped; the owner woke to "it went up all night and never flipped".
+
+**Why it hid.** Three ways. (1) Every skip line was individually true — "plan
+age 815s" IS v13's age — so nothing in the log contradicted itself. (2) The
+G3 test (`TestG3FlipHold`) proved the hold with ONE version: fresh → held,
+old → fires. A chain of versions was never in the fixture, so the restart
+had no assertion to fail. (3) The two clocks were one variable: `sinceMs`
+windowed the CONDITION's bars (correctly the version's birth — a new flip
+line must be judged only on bars after it was written, P1c) AND clocked the
+hold. The right value for the first was the wrong value for the second, and
+sharing the name hid that they were different questions.
+
+**The fix shape.** Separate the clocks. The condition window stays the
+version's birth (touch gate + confirm closes untouched). The hold reads a
+STATE anchor — `kernel.ResolveFlipHoldAnchor`: the latest of the chain's
+first version, a deliberate re-plan version (death_replan / owner_reread /
+owner_reset), a version whose bias.direction changed, the last flip→dormant
+marker, the last re-arm marker. A same-bias wake re-read (level_event,
+structure_mss, a scheduled read) moves nothing. The skip line now names the
+anchor (`flip=hold (hold age 600s since session-plan-birth < 30min)`), the
+🧬 boot line prints `flip_hold=<N>min anchored to latest of {…}` READ from
+the knob and the resolver's own kinds table, and a chain the store cannot
+read falls back to the version's birth TAGGED `version(fallback)` so the
+pre-fix semantics are visible when they are in force. Death never had a hold
+and keeps none; it shares only the condition window. Proof at the production
+call site (`describeActivePlanDeath`): a same-bias re-read 11 min into a
+45-min-old chain is EVALUATED; v1 at 12 min is held; a flip 20 min ago then a
+re-read is held (and fires at 40); and the ASIA 09-16 chain replayed with the
+live 1m tape reproduces the 815s hold on the old clock and flips at 01:35 on
+the new one (`trader/flip_hold_anchor_test.go`).
+
+**Probes.**
+- `grep -n 'CreatedAt.UnixMilli\|created_at' kernel/*.go trader/*.go` and,
+  for each hit that feeds a TIME WINDOW or a HOLD, ask: is this row the
+  thing whose age matters, or merely the latest row about it? An append-only
+  chain (plans, overlays, armed_orders ledger, lifecycle log) makes every
+  "latest row" younger than the state it describes.
+- One variable feeding two predicates with different correct values
+  (`sinceMs` → condition window AND hold clock). Give the second its own
+  name at the signature, even when today's caller passes the same number.
+- A hysteresis / cooldown / debounce test with a single-row fixture. Add the
+  chain: two rows, the second younger than the window, the first older — the
+  verdict must come from the state, not the row.
+- Journal counter-read: the hold says `plan age Ns`. If N never exceeds the
+  wake cadence across a session, the hold is being restarted by the wakes.
+- The partner mirror (`vlautoagenttraderv1`) carries the same evaluator; the
+  fix propagates via `format-patch → am` (owner-run push).
