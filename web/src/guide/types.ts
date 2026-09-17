@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 
 // Stamped from the dispatch-101 follow-up binary (hook race class 130 + 🖥 by rev; planner tape NT8-only; scale-check adjacency, chart across the roll,
 // full-data rehydrate); see docs/superpowers/reports/2026-09-16-nt8-history-and-chart-depth.md.
-export const GUIDE_BUILT_REV = '4f1f375ea26bfb8bbc2b4ef7933ce4b347daf3fd'
+export const GUIDE_BUILT_REV = '00426a61fbb7a8884bdc1576c96028f8e3f9a295'
 
 export interface Card {
   title: string
