@@ -38,8 +38,30 @@ func TestDescribeActivePlanDeath_InvertedStoredFlipWarns(t *testing.T) {
 		t.Fatalf("an inverted flip must not fire on the rally it cannot see (behaviour unchanged):\n%s", buf.String())
 	}
 	log := buf.String()
-	if !strings.Contains(log, "flip_direction_inverted plan="+row.PlanID+" v1") || !strings.Contains(log, "contradicts bias short") {
+	if !strings.Contains(log, "flip_direction_inverted plan="+row.PlanID+" v1 (active)") || !strings.Contains(log, "contradicts bias short") {
 		t.Fatalf("a stored inverted flip must be named in the journal at the evaluation site; got:\n%s", log)
+	}
+	// Once per plan version, not per tick: a second evaluation adds no line.
+	at.describeActivePlanDeath(row)
+	if n := strings.Count(buf.String(), "flip_direction_inverted"); n != 1 {
+		t.Fatalf("the line must print once per plan version, got %d:\n%s", n, buf.String())
+	}
+}
+
+// A DORMANT plan is evaluated by describeDormantCleared, not
+// describeActivePlanDeath; the inverted shape must be named there too.
+func TestDescribeDormantCleared_InvertedStoredFlipWarns(t *testing.T) {
+	at, st, now := flipHoldTrader(t)
+	td := "2026-08-19" // distinct plan id from the active-plan test (once-per-version memory)
+	row := appendVersion(t, st, at, td, "dormant:flip:flip-condition", invertedShortPlanDoc(t), now.Add(-45*time.Minute))
+	barsAt(flipHoldTape(now, 40, 10))
+	buf := captureTraderLog(t)
+
+	at.describeDormantCleared(row)
+
+	log := buf.String()
+	if !strings.Contains(log, "flip_direction_inverted plan="+row.PlanID+" v1 (dormant)") || !strings.Contains(log, "contradicts bias short") {
+		t.Fatalf("a dormant inverted flip must be named at its evaluation site; got:\n%s", log)
 	}
 }
 

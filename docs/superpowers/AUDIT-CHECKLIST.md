@@ -5202,7 +5202,12 @@ flip whose level was simply never reached.
 
 **The fix shape.** ONE relational function, `kernel.FlipDirectionContradiction
 (biasDir, flip)`, called from the write site (REJECT, `ValidatePlanDocWithCaps`)
-and the read path (WARN, `warnFlipDeathSanity`) so both speak one sentence:
+and the read path (WARN, `noteFlipDirectionInverted`, called first by BOTH
+stored-plan evaluators — `describeActivePlanDeath` for active plans and
+`describeDormantCleared` for dormant ones — once per plan version, the
+notePlanProviderNil idiom; the 09-17 review found the first draft of this WARN
+sat in `warnFlipDeathSanity`, which only ever runs AFTER the write-site reject,
+so it was dead code with a green direct-call test) so both speak one sentence:
 `flip{below 29474.90 → long} contradicts bias short: a short bias flips to long
 only on a close above the line`. Empty flip_to is read as the opposite of the
 bias. Neutral bias and a flip_to that is not the opposite of the bias are not
@@ -5224,4 +5229,8 @@ the trader WARN via a logrus hook.
   rule is the class in the store, not a hypothetical.
 - A "never fired" condition in the journal must be distinguishable from a
   "could never fire" one: the read-path WARN is the probe; if the journal has
-  no such line for an old plan, the read path does not judge direction.
+  no `flip_direction_inverted` line for an old inverted plan, the read path
+  does not judge direction. Check EVERY evaluator of the stored object (active
+  AND dormant), and check the WARN's call site runs BEFORE any reject that
+  would make it unreachable — a green test that calls the function directly
+  proves nothing about the production call site.
