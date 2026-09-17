@@ -7,6 +7,11 @@ export const planCard: GuideSection = {
   tagline: 'The centerpiece — every element, decoded.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'h', text: 'STRUCTURE panel — bias only, not entries' },
+    {
+      kind: 'p',
+      text: "Above the level table sits the STRUCTURE panel. It exists only when the plan doc carries a structure block (day_plan.structure_map ON) — when the block is absent the panel renders nothing, never placeholder rows. One row per timeframe (D, 4h, 1h): a trend arrow (up/down/range), the last swing high and low, the impulse range with premium/discount as a percentage of the way from the impulse low, and the scorer-ranked HTF zones, each carrying its timeframe badge and freshness label. The chart draws the same zones as bands at their raw contract prices with kind·tf labels — never back-adjusted across the roll. STRUCTURE is bias context only: nothing in this panel authorizes or refuses an entry.",
+    },
     { kind: 'h', text: 'Scenario level identity' },
     {
       kind: 'p',
