@@ -5234,3 +5234,31 @@ the trader WARN via captured log output at both evaluators (named once across tw
   AND dormant), and check the WARN's call site runs BEFORE any reject that
   would make it unreachable — a green test that calls the function directly
   proves nothing about the production call site.
+
+## CLASS NN (assigned at merge) — A FLIP THAT ONLY SLEEPS: THE FLIPPED BIAS WAS NEVER READ (born 2026-09-17, found by the owner, fix/flip-reread)
+
+**Shape.** A structured flip fires, the plan goes DORMANT as designed (wick-noise
+protection), and the re-arm predicate only ever restores the SAME plan when price
+closes back on the old side. `doc.FlipStructured.FlipTo` is evaluated exactly once
+— to build the killer string "flip-condition: … → bias <FlipTo>" — and nothing ever
+authors a plan with the flipped bias. The owner watched a 120-pt overnight rally
+with a live "flips to long" line and no long plan.
+
+**How it hid.** The dormant write is correct and loud ("auto re-arms when price
+closes back"), so every check of the lifecycle machinery passed while the promise
+the flip line makes — a bias that FLIPS — had no producing code path.
+
+**Probes.**
+- For every killer string that names a direction ("→ bias long/short"), ask: what
+  CODE produces a plan with that direction? A log line is not a code path.
+- A hysteresis pair (dormant on breach, re-arm on close-back) restores the OLD
+  plan; a flip is a NEW thesis and needs its own read.
+- Pin the knob-gate: OFF = byte-identical dormant; ON = exactly ONE free re-read
+  per fired flip (plan+version key in system_config), refused/failed reads clear
+  the key and retry next cycle.
+
+**Fix pattern.** W-FLIP-REREAD: after the dormant write, request a structure_flip
+read (class-35 free, same preflight + wake cadence as a level wake) whose prompt
+carries "PRIOR PLAN v<N> bias <old> — … the prior plan is dormant"; on success the
+old version is superseded (`superseded:flip`); same-bias result is logged, never
+looped.

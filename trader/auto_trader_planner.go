@@ -312,6 +312,12 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) []SessionReadFired {
 					_ = at.store.SetSystemConfig(dormantSinceKey(existing), strconv.FormatInt(time.Now().UnixMilli(), 10))
 					at.logInfof("😴 plan %s %s v%d DORMANT — %s (entries blocked; auto re-arms when price closes back; replan budget untouched)",
 						tradeDate, s.Name, existing.Version, detail.Killer)
+					// W-FLIP-REREAD (2026-09-17) — the dormant marker protects
+					// entries; with the knob ON, ONE free re-read in the flipped
+					// direction is the only way the flipped bias ever materializes.
+					if strings.HasPrefix(detail.Killer, "flip-condition:") {
+						at.maybeRereadAfterFlip(now, s.Name, tradeDate, existing, detail.Killer)
+					}
 				}
 				continue // skip MSS/level wakes while dormant (re-arm path above runs first next cycle)
 			}
@@ -635,6 +641,122 @@ func (at *AutoTrader) executorPlanDeadReason() string {
 // dormantSinceKey keys the dormancy timestamp (flap guard) in system_config.
 func dormantSinceKey(row *store.PlanDB) string {
 	return fmt.Sprintf("plan_dormant_since:%s:%d", row.PlanID, row.Version)
+}
+
+// flipRereadDoneKey keys the once-per-fired-flip structure_flip read in
+// system_config ("0" or "" = not yet done — a refused read clears it so the
+// next cycle may retry).
+func flipRereadDoneKey(row *store.PlanDB) string {
+	return fmt.Sprintf("flip_reread_done:%s:%d", row.PlanID, row.Version)
+}
+
+// flipRereadRun is the read-call seam (fixtures substitute a recorder to assert
+// the request without running a live planner stream).
+var flipRereadRun = func(at *AutoTrader, session, tradeDate, prior string, row *store.PlanDB, failClosed bool) bool {
+	return at.runPlannerReadWithTriggerClaimedCtx(session, tradeDate, "structure_flip", prior, priorPlanLevelLines(row), failClosed)
+}
+
+// maybeRereadAfterFlip (W-FLIP-REREAD, 2026-09-17) — with day_plan.flip_reread
+// ON, a fired flip requests ONE free planner re-read in the flipped direction
+// (trigger structure_flip), under the same preflight and wake cadence as a
+// level-event wake. OFF = not called (the caller gates on the knob, and this
+// function double-checks it): today's dormant behaviour, byte-identical.
+func (at *AutoTrader) maybeRereadAfterFlip(now time.Time, session, tradeDate string, row *store.PlanDB, killer string) {
+	if at.store == nil || row == nil || market.FuturesBarsProvider == nil {
+		return
+	}
+	cfg := at.config.StrategyConfig.DayPlan
+	if cfg == nil || !cfg.FlipRereadEnabled() {
+		return // knob OFF → dormant only, no read
+	}
+	if v, err := at.store.GetSystemConfig(flipRereadDoneKey(row)); err == nil && v != "" && v != "0" {
+		return // one read per fired flip (plan+version key)
+	}
+	// Same preflight as every read — synchronously, so a refusal never consumes
+	// the once-key: the dormant plan stands and the next cycle may retry.
+	if !at.plannerPreflight(session, tradeDate, "structure_flip") {
+		at.logWarnf("🗓️ structure_flip read %s %s v%d — REFUSED by preflight (no fresh bars); the dormant plan stands.", tradeDate, session, row.Version)
+		return
+	}
+	// Rate-limit by the existing wake cadence: cutoff, 30m cooldown since the
+	// last wake-authored version, fast-market exempt — the same decision struct
+	// the level-event wake uses.
+	dec := WakeCadenceDecision{
+		Session: session, Desc: "structure_flip: " + killer,
+		CutoffMin: wakeCutoffMinutes(), CooldownMin: wakeCooldownMinutes(),
+		FastMarketThreshold: fastMarketATR(),
+	}
+	if _, driftATR := at.fastMarketDrift(at.wakeTimePrice()); driftATR > 0 {
+		dec.FastMarketATR = driftATR
+	}
+	if sess, okS := at.sessionRegistry(now).ActiveSession(now); okS {
+		dec.MinutesToFlat, dec.HaveFlat = minutesToSessionFlat(now, sess)
+	}
+	if dec.CooldownMin > 0 {
+		if last, lerr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, session, at.id); lerr == nil && last != nil &&
+			WakeCadenceGoverns(last.TriggerReason) && !last.CreatedAt.IsZero() {
+			dec.SinceLastWakeVersionMin = int(now.Sub(last.CreatedAt).Minutes())
+			dec.HaveLastWakeVersion = true
+		}
+	}
+	if dec.SkipForCutoff() {
+		at.logWarnf("%s", wakeCutoffLine(session, dec.Desc, dec.MinutesToFlat, dec.CutoffMin, 0))
+		return
+	}
+	if dec.SkipForCooldown() {
+		at.logWarnf("%s", wakeCooldownLine(session, dec.Desc, dec.SinceLastWakeVersionMin, dec.CooldownMin, 0))
+		return
+	}
+	if held, open := anyPlannerStreamOpen(); open {
+		at.logWarnf("%s", wakeStreamDeferLine(session, dec.Desc, held))
+		return
+	}
+	// Shared min-interval throttle: ANY planner wake resets the clock.
+	if !at.lastPlannerWakeAt.IsZero() && now.Sub(at.lastPlannerWakeAt) < time.Duration(cfg.WakeMinIntervalMinutes())*time.Minute {
+		at.logWarnf("🗓️ structure_flip read %s %s — SKIPPED: %.0fm elapsed < wake_min_interval_min (%dm).",
+			session, tradeDate, now.Sub(at.lastPlannerWakeAt).Minutes(), cfg.WakeMinIntervalMinutes())
+		return
+	}
+	at.lastPlannerWakeAt = now
+	_ = at.store.SetSystemConfig(flipRereadDoneKey(row), strconv.FormatInt(now.UnixMilli(), 10))
+
+	oldBias, flipTo := "", kernel.FlipToDirection(killer)
+	if doc, derr := kernel.ParsePlanDoc(row.Doc); derr == nil {
+		oldBias = doc.Bias.Direction
+	} else {
+		// The prior is a live plan in prod; here, the bias is metadata — read it
+		// even from a doc that strict validation refuses, so the prompt line
+		// always names the old side.
+		var raw kernel.PlanDoc
+		if json.Unmarshal([]byte(row.Doc), &raw) == nil {
+			oldBias = raw.Bias.Direction
+		}
+	}
+	prior := fmt.Sprintf("PRIOR PLAN v%d bias %s — its flip condition fired → bias is now expected %s unless the tape says otherwise; the prior plan is dormant. %s",
+		row.Version, oldBias, flipTo, killer)
+	at.logWarnf("🗓️ structure_flip read %s %s v%d — waking the planner (W-FLIP-REREAD): %s", tradeDate, session, row.Version, killer)
+	// Non-fatal and async, exactly like the level-event wake: a failed read
+	// keeps the dormant plan and the once-key clears so the next cycle retries.
+	go func() {
+		if !flipRereadRun(at, session, tradeDate, prior, row, false) {
+			at.logWarnf("🗓️ structure_flip read %s %s v%d did not complete — the dormant plan stands.", tradeDate, session, row.Version)
+			_ = at.store.SetSystemConfig(flipRereadDoneKey(row), "0")
+			return
+		}
+		fresh, fErr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, session, at.id)
+		if fErr != nil || fresh == nil || fresh.Version == row.Version {
+			return
+		}
+		if fdoc, derr := kernel.ParsePlanDoc(fresh.Doc); derr == nil && fdoc.Bias.Direction == oldBias {
+			at.logWarnf("🗓️ structure_flip: new v%d kept bias %s — the model disagreed with the flip (no loop; one read per fired flip).", fresh.Version, oldBias)
+		}
+		if err := at.store.Plan().UpdatePlanLifecycle(row.PlanID, row.Version, "superseded:flip", ""); err != nil {
+			at.logWarnf("🗓️ structure_flip: supersede write failed for v%d: %v", row.Version, err)
+		} else {
+			at.logInfof("🗓️ plan %s %s v%d SUPERSEDED by the structure_flip read (new v%d).", tradeDate, session, row.Version, fresh.Version)
+		}
+		at.carryOwnerEditsInto(fresh.PlanID, row.Version, fresh.Version)
+	}()
 }
 
 // describeDormantCleared evaluates the SAME structured condition that put the

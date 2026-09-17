@@ -446,6 +446,11 @@ export const planStrings = {
     zh: '按周期新鲜度 — HTF 价位按自身周期 K 线评分（重入）；研究显示两种方式均无优势',
     id: 'Kesegaran per TF — level HTF dinilai pada barnya sendiri (re-entries); riset: tanpa edge',
   },
+  flipReread: {
+    en: 'Flip re-read — when the flip condition fires, the plan still goes dormant, then ONE free re-read authors the flipped direction',
+    zh: '翻转重读 — 触发翻转条件时计划仍转入休眠，然后一次免费重读按翻转方向重新制定',
+    id: 'Flip re-read — saat kondisi flip terpicu, plan tetap dormant, lalu SATU re-read gratis menyusun arah yang baru',
+  },
   maxScenarios: { en: 'Max scenarios', zh: '最大情景数', id: 'Maks skenario' },
   maxReplans: {
     en: 'Max re-plans',

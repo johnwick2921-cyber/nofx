@@ -953,6 +953,11 @@ type DayPlanConfig struct {
 	// Q-C says 1.2 promotes a group that holds LESS — the owner may set 1.0
 	// after the S4 measurement is final.
 	HtfScoreMultiplier *float64 `json:"htf_score_multiplier,omitempty"`
+	// FlipReread (W-FLIP-REREAD, 2026-09-17): when a flip condition fires, the
+	// plan still goes DORMANT exactly as before, and ON adds ONE free planner
+	// re-read in the flipped direction (trigger structure_flip). OFF = today's
+	// behaviour byte-identical.
+	FlipReread bool `json:"flip_reread,omitempty"`
 	// AcceptanceRule: 2x5m (default) | 15m-close.
 	AcceptanceRule string `json:"acceptance_rule,omitempty"`
 	// ReplanCap: re-reads per session, 0–4 (default 2).
@@ -1532,6 +1537,12 @@ func (c *DayPlanConfig) Seat1HZoneEnabled() bool {
 
 // LevelsFreshByTFEnabled is the ONE resolution seam for the S2 by-TF freshness
 // knob: nil config or unset → OFF (today's 1m-touch grading).
+// FlipRereadEnabled is the ONE resolution seam for the W-FLIP-REREAD knob
+// (absent/false = OFF = today's dormant behaviour).
+func (c *DayPlanConfig) FlipRereadEnabled() bool {
+	return c != nil && c.FlipReread
+}
+
 func (c *DayPlanConfig) LevelsFreshByTFEnabled() bool {
 	return c != nil && c.LevelsFreshByTF
 }
