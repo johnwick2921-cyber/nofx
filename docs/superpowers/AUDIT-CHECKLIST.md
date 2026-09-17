@@ -5100,7 +5100,7 @@ day.
   CreatedAt/UpdatedAt only and the sweep is not band-gated. None of the listed
   tests fails by the clock today; each is one registry change from doing so.
 
-## CLASS NN (assigned at merge) — A HOLD THAT RESTARTS ON EVERY RE-READ: hysteresis anchored to the version, not the plan (born 2026-08-21 with the regime wave's G3 hold, reported by the owner 2026-09-17 "it went up all night and never flipped", fix/flip-hold-anchor, W-FLIP-HOLD-ANCHOR)
+## CLASS 139 — A HOLD THAT RESTARTS ON EVERY RE-READ: hysteresis anchored to the version, not the plan (born 2026-08-21 with the regime wave's G3 hold, reported by the owner 2026-09-17 "it went up all night and never flipped", fix/flip-hold-anchor, W-FLIP-HOLD-ANCHOR)
 
 **Shape.** A hysteresis window ("no flip within N minutes of birth") measures
 age from the created_at of the ROW it happens to be evaluating. The row is a
@@ -5167,7 +5167,7 @@ the new one (`trader/flip_hold_anchor_test.go`).
 - A hysteresis / cooldown / debounce test with a single-row fixture. Add the
   chain: two rows, the second younger than the window, the first older — the
   verdict must come from the state, not the row.
-- Journal counter-read: the hold says `plan age Ns`. If N never exceeds the
+- Journal counter-read: the hold says `hold age Ns since <kind>` (pre-fix journals read `plan age Ns`). If N never exceeds the
   wake cadence across a session, the hold is being restarted by the wakes.
 - The partner mirror (`vlautoagenttraderv1`) carries the same evaluator; the
   fix propagates via `format-patch → am` (owner-run push).
