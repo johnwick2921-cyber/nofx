@@ -294,7 +294,7 @@ export const planStrings = {
     id: 'Tampilkan semua zona',
   },
   chartZonesShown: {
-    en: '({shown} of {total} HTF zones drawn — nearest to price)',
+    en: '({shown} of {total} HTF zones drawn)',
     zh: '（绘制 {shown}/{total} 个高周期区域 — 最接近价格）',
     id: '({shown} dari {total} zona HTF digambar — terdekat dengan harga)',
   },
