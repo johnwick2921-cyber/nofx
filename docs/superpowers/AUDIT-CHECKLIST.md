@@ -4851,3 +4851,22 @@ counted what was DETECTED against what was SEATED per timeframe.
 
 **Fix pattern.** S1 (this) the structure table · S2 fresh-by-TF (DS-101) · S3 validator contract
 (DS-102) · S5 (DS-103) · S4 measurement (DS-R) before any knob turns on.
+## CLASS 132 — a recorder that narrates every write at INFO (born 2026-09-16, dispatch 103, DS-103)
+
+**Symptom:** the research-snapshot recorder emitted one INFO line per archived
+fact — 324,807 "research snapshot written:" lines in a measured one-hour slice
+(88.8% of all log lines; ~13.2M/day), ~16 GiB/day of archive with no retention,
+and drop notices that only reached the INFO sink.
+
+**Root cause:** a diagnostics archive narrating its own success at volume, wired
+to the INFO logger, with no env gate and no retention.
+
+**Law:** a recorder is not a narrator. A background archive may emit at most ONE
+rollup line per period (rows per object, drops, queue depth) at INFO; drop
+notices go to the WARN sink, coalesced to one line per minute with the delta;
+the boot line's counters are read live, never hardcoded; an env gate
+(RESEARCH_SNAPSHOT) leaves it OFF by default; retention (RESEARCH_RETAIN_DAYS,
+default 7) prunes at boot and daily with NO automatic VACUUM on a ~77 GB file.
+Fixed 2026-09-16: researchsnapshot/* + main.go:77 wiring; pins in
+researchsnapshot/volume_test.go; measured before/after in
+docs/superpowers/reports/2026-09-16-research-recorder-volume.md.
