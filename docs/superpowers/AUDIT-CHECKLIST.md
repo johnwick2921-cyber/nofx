@@ -4871,7 +4871,7 @@ Fixed 2026-09-16: researchsnapshot/* + main.go:77 wiring; pins in
 researchsnapshot/volume_test.go; measured before/after in
 docs/superpowers/reports/2026-09-16-research-recorder-volume.md.
 
-## CLASS NN (assigned at merge) — A PROTECTED-FILE HASH PIN THAT OUTLIVED THE WAVE THAT CHANGED THE FILE (born at the #131/#132 merge 2026-09-16, found 2026-09-16 via PR #140 CI, fixed in W-brandscope)
+## CLASS 134 — A PROTECTED-FILE HASH PIN THAT OUTLIVED THE WAVE THAT CHANGED THE FILE (born at the #131/#132 merge 2026-09-16, found 2026-09-16 via PR #140 CI, fixed in W-brandscope)
 
 **Shape.** `web/src/brand-scope.test.ts` pins sha256 hashes of load-bearing files (dispatch 102's
 protected set) and throws "protected file changed" on any byte. A wave that legitimately changes one of
