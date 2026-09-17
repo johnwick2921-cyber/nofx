@@ -427,7 +427,7 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 			// ADDENDUM (2) — bias-context facts line, computed from the same
 			// scored pool + bars (never a second data source).
 			if klBlock != "" {
-				if sc, _, _ := AssembleScoredLevelsMinGrade(ctx.TraderID, snapshotBars, ResolvedSessionRegistryFor(ctx.TraderID), activeSymbol, maxLevels, LegacyHtfSeats, snapshotNow, proximityK, minGrade, extra...); len(sc) > 0 {
+				if sc, _, _ := AssembleScoredLevelsMinGrade(ctx.TraderID, snapshotBars, ResolvedSessionRegistryFor(ctx.TraderID), activeSymbol, maxLevels, nil, snapshotNow, proximityK, minGrade, extra...); len(sc) > 0 {
 					bc := ComputeBiasContext(snapshotBars, sc, snapshotNow)
 					// FIX 8 (F6, 2026-08-27) — the executor's bias_ctx PDC read
 					// "n/a" post-roll because the day anchors sat outside the

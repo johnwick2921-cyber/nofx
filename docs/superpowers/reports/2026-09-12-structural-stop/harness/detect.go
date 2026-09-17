@@ -101,7 +101,7 @@ func buildRead(d *barDB, db *sql.DB, idx int, day time.Time, session string) (*r
 
 	reg := kernel.DefaultSessionRegistry()
 	_, _, price, _, raw := kernel.AssembleResearchLevels(
-		"backtest-zone-fade", bars1m, reg, "MNQ", maxLevelsReplay, kernel.LegacyHtfSeats, readTime, proximityKReplay, "", extra...)
+		"backtest-zone-fade", bars1m, reg, "MNQ", maxLevelsReplay, nil, readTime, proximityKReplay, "", extra...)
 
 	atr5m := kernel.StaleConfirmATR5m(bars1m)
 	inputs := kernel.LevelZoneInputs(raw, zoneSeries, readTime)

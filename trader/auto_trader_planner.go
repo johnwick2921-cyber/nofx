@@ -2029,27 +2029,27 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 // strategy-level day_plan values + the per-session override (min_grade). Nil /
 // unset fields fall back to the spec defaults, so a default config reproduces the
 // prior behavior byte-for-byte (max_levels 8, no min_grade filter, D/4h/1h/15m).
-// S3 (2026-09-16): htf_seats nil → 2 (the pre-S3 seatHTF constant); a legal 0
-// means NO HTF seating; anything above 6 clamps to 6. Pure — unit-tested
-// without an AutoTrader.
-func resolveSessionPlanCfg(dp *store.DayPlanConfig, session string) (maxLevels, htfSeats int, minGrade string, timeframes []string) {
+// S3 (2026-09-16): htf_seats nil → the LEGACY seatHTF path (byte-identical to
+// the pre-S3 table); a saved value clamps to 0-6 and activates the EFFECTIVE
+// promotion. Pure — unit-tested without an AutoTrader.
+func resolveSessionPlanCfg(dp *store.DayPlanConfig, session string) (maxLevels int, htfSeats *int, minGrade string, timeframes []string) {
 	maxLevels = kernel.DefaultMaxLevels
-	htfSeats = kernel.LegacyHtfSeats
 	timeframes = []string{"D", "4h", "1h", "15m"}
 	if dp == nil {
-		return maxLevels, htfSeats, minGrade, timeframes
+		return maxLevels, nil, minGrade, timeframes
 	}
 	if dp.MaxLevels > 0 {
 		maxLevels = dp.MaxLevels
 	}
 	if dp.HtfSeats != nil {
-		htfSeats = *dp.HtfSeats
-		if htfSeats < 0 {
-			htfSeats = 0
+		v := *dp.HtfSeats
+		if v < 0 {
+			v = 0
 		}
-		if htfSeats > 6 {
-			htfSeats = 6
+		if v > 6 {
+			v = 6
 		}
+		htfSeats = &v
 	}
 	if len(dp.PlannerTimeframes) > 0 {
 		timeframes = dp.PlannerTimeframes

@@ -426,16 +426,16 @@ func zoneFreshMult(f string) float64 {
 // (the owner's proximity_filter_atr; ≤0 → the spec constant 1.5) — the band
 // OUTSIDE which no level is generated or seated.
 func ScoreLevels(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64) []ScoredLevel {
-	return scoreLevelsPool(levels, price, dATR, freshness, maxLevels, proximityK, LegacyHtfSeats)
+	return scoreLevelsPool(levels, price, dATR, freshness, maxLevels, proximityK, nil)
 }
 
-// LegacyHtfSeats (S3, 2026-09-16) is the seatHTF count every legacy call path
-// resolves — the pre-S3 hardcoded maxHTFSeats. A path that never sees the
-// day_plan.htf_seats knob must seat exactly what it seated before.
+// LegacyHtfSeats (S3, 2026-09-16) is the seatHTF count the pre-S3 code
+// hardcoded. The legacy path (seats nil) seats exactly this many; the value is
+// kept as a named constant for the boot line and tests.
 const LegacyHtfSeats = 2
 
 // scoreLevelsPool is the full scorer (lock → grade → collapse → seat → top-N).
-func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64, htfSeats int) []ScoredLevel {
+func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64, htfSeats *int) []ScoredLevel {
 	if price <= 0 || dATR <= 0 {
 		return nil
 	}
@@ -660,13 +660,13 @@ func ScoreLevelsMinGrade(levels []DetectedLevel, price, dATR float64, freshness 
 // machine grade stamped, so the stamp map now records EVERY graded candidate,
 // not just the seated top-N.
 func ScoreLevelsMinGradeFull(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64, minGrade string) ([]ScoredLevel, []ScoredLevel) {
-	return ScoreLevelsMinGradeFullSeats(levels, price, dATR, freshness, maxLevels, proximityK, minGrade, LegacyHtfSeats)
+	return ScoreLevelsMinGradeFullSeats(levels, price, dATR, freshness, maxLevels, proximityK, minGrade, nil)
 }
 
 // ScoreLevelsMinGradeFullSeats is ScoreLevelsMinGradeFull with the resolved
 // day_plan.htf_seats knob (S3) — the production path; the legacy wrapper above
-// keeps every historical caller byte-identical at 2 seats.
-func ScoreLevelsMinGradeFullSeats(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64, minGrade string, htfSeats int) ([]ScoredLevel, []ScoredLevel) {
+// keeps every historical caller byte-identical (nil → legacy seating).
+func ScoreLevelsMinGradeFullSeats(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64, minGrade string, htfSeats *int) ([]ScoredLevel, []ScoredLevel) {
 	eff := maxLevels
 	if eff <= 0 {
 		eff = DefaultMaxLevels
@@ -1016,16 +1016,29 @@ func Seat1HZone(scored []ScoredLevel, maxLevels int) []ScoredLevel {
 	return out
 }
 
-// seatHTF (G2/G3/G6, 2026-08-24; seats knob S3, 2026-09-16) — promote up to
-// `seats` HTF swing/zone levels into the head seats (the top-N table is all the
-// model sees). Demotes the weakest non-today-priority, non-HTF entries to make
-// room. Runs on the FULL sorted list before seatBothSides; takes no action when
-// nothing was cut. seats ≤ 0 = no HTF seating (a legal knob value).
-func seatHTF(scored []ScoredLevel, maxLevels, seats int) []ScoredLevel {
+// seatHTF (G2/G3/G6, 2026-08-24; seats knob S3, 2026-09-16) — promote up to N
+// HTF swing/zone levels into the head seats (the top-N table is all the model
+// sees). Demotes the weakest non-today-priority, non-HTF entries to make room.
+//
+// seats == nil → the LEGACY path, byte-identical to the pre-S3 code (2 seats,
+// whole-list restore sort). That restore sort nullifies the promotion by
+// construction (class NN) — kept verbatim so a knob-unset strategy reproduces
+// today's table exactly.
+// seats != nil → the EFFECTIVE path (CTO ruling 2026-09-17 02:35Z): promote
+// *seats, then sort head and tail SEPARATELY with the same comparator — the
+// promoted slots keep their seats and the demoted entries stay in the tail.
+// *seats ≤ 0 = no HTF seating (a legal knob value).
+func seatHTF(scored []ScoredLevel, maxLevels int, seats *int) []ScoredLevel {
 	if maxLevels <= 0 {
 		maxLevels = DefaultMaxLevels
 	}
-	if len(scored) <= maxLevels || seats <= 0 {
+	if len(scored) <= maxLevels {
+		return scored
+	}
+	if seats == nil {
+		return seatHTFLegacy(scored, maxLevels)
+	}
+	if *seats <= 0 {
 		return scored
 	}
 	head := append([]ScoredLevel(nil), scored[:maxLevels]...)
@@ -1036,7 +1049,7 @@ func seatHTF(scored []ScoredLevel, maxLevels, seats int) []ScoredLevel {
 			seated++
 		}
 	}
-	need := seats - seated
+	need := *seats - seated
 	if need <= 0 {
 		return scored
 	}
@@ -1076,23 +1089,93 @@ func seatHTF(scored []ScoredLevel, maxLevels, seats int) []ScoredLevel {
 		head = append(head, cand)
 		need--
 	}
+	// EFFECTIVE: sort each block separately, never across the seat boundary —
+	// the promoted slots survive (the class-NN fix).
+	sortSeatBlock(head)
+	sortSeatBlock(tail)
+	return append(head, tail...)
+}
+
+// seatHTFLegacy is the pre-S3 seatHTF, byte-identical (2 seats, whole-list
+// restore sort). Knob unset keeps today's behaviour — including the class-NN
+// nullification — until the S4 measurement gates the effective path.
+func seatHTFLegacy(scored []ScoredLevel, maxLevels int) []ScoredLevel {
+	if maxLevels <= 0 {
+		maxLevels = DefaultMaxLevels
+	}
+	if len(scored) <= maxLevels {
+		return scored
+	}
+	const maxHTFSeats = 2
+	head := append([]ScoredLevel(nil), scored[:maxLevels]...)
+	tail := append([]ScoredLevel(nil), scored[maxLevels:]...)
+	seated := 0
+	for _, l := range head {
+		if isHTFSeatEligible(l) {
+			seated++
+		}
+	}
+	need := maxHTFSeats - seated
+	if need <= 0 {
+		return scored
+	}
+	var cands []ScoredLevel
+	for _, l := range tail {
+		if isHTFSeatEligible(l) {
+			cands = append(cands, l)
+		}
+	}
+	for need > 0 {
+		if len(cands) == 0 {
+			break
+		}
+		dropIdx := -1
+		for i := len(head) - 1; i >= 0; i-- {
+			if isTodayPriority(head[i].Kind) || isHTFSeatEligible(head[i]) {
+				continue
+			}
+			dropIdx = i
+			break
+		}
+		if dropIdx < 0 {
+			break
+		}
+		cand := cands[0]
+		cands = cands[1:]
+		for i, l := range tail {
+			if l.Price == cand.Price && l.Kind == cand.Kind && l.Label == cand.Label && l.HTF == cand.HTF {
+				tail = append(tail[:i], tail[i+1:]...)
+				break
+			}
+		}
+		tail = append(tail, head[dropIdx])
+		head = append(head[:dropIdx], head[dropIdx+1:]...)
+		head = append(head, cand)
+		need--
+	}
 	out := append(head, tail...)
 	// Restore strict seating order (same sort as the pre-pass).
-	sort.SliceStable(out, func(i, j int) bool {
-		pi, pj := isTodayPriority(out[i].Kind), isTodayPriority(out[j].Kind)
+	sortSeatBlock(out)
+	return out
+}
+
+// sortSeatBlock is the seating comparator (today-priority first, then score
+// desc, nearer |distance|, lower price), applied to ONE block.
+func sortSeatBlock(s []ScoredLevel) {
+	sort.SliceStable(s, func(i, j int) bool {
+		pi, pj := isTodayPriority(s[i].Kind), isTodayPriority(s[j].Kind)
 		if pi != pj {
 			return pi
 		}
-		if out[i].Score != out[j].Score {
-			return out[i].Score > out[j].Score
+		if s[i].Score != s[j].Score {
+			return s[i].Score > s[j].Score
 		}
-		di, dj := math.Abs(out[i].Distance), math.Abs(out[j].Distance)
+		di, dj := math.Abs(s[i].Distance), math.Abs(s[j].Distance)
 		if di != dj {
 			return di < dj
 		}
-		return out[i].Price < out[j].Price
+		return s[i].Price < s[j].Price
 	})
-	return out
 }
 
 func seatBothSides(scored []ScoredLevel, maxLevels int) []ScoredLevel {

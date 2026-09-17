@@ -17,8 +17,8 @@ func TestResolveSessionPlanCfgDefaults(t *testing.T) {
 	if maxLevels != kernel.DefaultMaxLevels {
 		t.Fatalf("nil config → default max_levels %d, got %d", kernel.DefaultMaxLevels, maxLevels)
 	}
-	if htfSeats != kernel.LegacyHtfSeats {
-		t.Fatalf("nil config → legacy htf_seats %d, got %d", kernel.LegacyHtfSeats, htfSeats)
+	if htfSeats != nil {
+		t.Fatalf("nil config → htf_seats nil (legacy path), got %v", *htfSeats)
 	}
 	if minGrade != "" {
 		t.Fatalf("nil config → no min_grade, got %q", minGrade)
@@ -42,8 +42,8 @@ func TestResolveSessionPlanCfgHonorsConfig(t *testing.T) {
 	if maxLevels != 6 {
 		t.Fatalf("config max_levels 6 not honored: got %d", maxLevels)
 	}
-	if htfSeats != 2 {
-		t.Fatalf("config htf_seats unset → legacy 2, got %d", htfSeats)
+	if htfSeats != nil {
+		t.Fatalf("config htf_seats unset → nil (legacy), got %v", *htfSeats)
 	}
 	if minGrade != "A" {
 		t.Fatalf("NY session min_grade A not honored: got %q", minGrade)
@@ -55,16 +55,16 @@ func TestResolveSessionPlanCfgHonorsConfig(t *testing.T) {
 	// S3 — a legal 0 must stay 0 (no HTF seating), not fall back to the default.
 	zero := 0
 	dp.HtfSeats = &zero
-	if ml, hs, _, _ := resolveSessionPlanCfg(dp, "NY"); hs != 0 {
-		t.Fatalf("htf_seats=0 must resolve 0, got %d", hs)
+	if ml, hs, _, _ := resolveSessionPlanCfg(dp, "NY"); hs == nil || *hs != 0 {
+		t.Fatalf("htf_seats=0 must resolve &0, got %v", hs)
 	} else if ml != 6 {
 		t.Fatalf("maxLevels drifted: %d", ml)
 	}
 	// S3 — clamp above the range.
 	nine := 9
 	dp.HtfSeats = &nine
-	if _, hs, _, _ := resolveSessionPlanCfg(dp, "NY"); hs != 6 {
-		t.Fatalf("htf_seats=9 must clamp to 6, got %d", hs)
+	if _, hs, _, _ := resolveSessionPlanCfg(dp, "NY"); hs == nil || *hs != 6 {
+		t.Fatalf("htf_seats=9 must clamp to &6, got %v", hs)
 	}
 
 	// a session with no override inherits (empty min_grade).

@@ -5,24 +5,26 @@ import (
 	"testing"
 )
 
-// S3 (2026-09-16) — day_plan.htf_seats drives seatHTF's promotion count:
-// 0 = no HTF seating, 2 = the legacy default, higher = more HTF seats.
+// S3 (2026-09-16, CTO ruling 2026-09-17 02:35Z) — day_plan.htf_seats drives
+// seatHTF: nil = the LEGACY path (byte-identical to the pre-S3 table, including
+// the class-NN restore-sort nullification); a saved value = the EFFECTIVE path
+// (promotion survives because head and tail are sorted separately).
 
+// htfsSeatFixture is PRE-SORTED like a real scorer output (score desc), and the
+// HTF candidates score BELOW the head fillers — the case that matters: without
+// an effective promotion they can never seat.
 func htfsSeatFixture() []ScoredLevel {
-	// PRE-SORTED like a real scorer output (score desc), all scores EQUAL: at the
-	// cut line the stable final sort keeps the promoted HTF in the head and the
-	// demoted round number in the tail — promotion is the only observable change.
 	scored := make([]ScoredLevel, 0, 13)
-	for i := 0; i < 8; i++ { // round numbers fill the head
+	for i := 0; i < 8; i++ { // stronger round numbers fill the head
 		scored = append(scored, ScoredLevel{
 			DetectedLevel: DetectedLevel{Kind: KindRound, Price: 990 + float64(i), Label: "RN"},
-			Score:         0.5, Grade: "C", Fresh: "fresh", Distance: 990 + float64(i) - 1000,
+			Score:         0.9, Grade: "B", Fresh: "fresh", Distance: 990 + float64(i) - 1000,
 		})
 	}
 	for i := 0; i < 5; i++ { // HTF reversal zones lost the cut
 		scored = append(scored, ScoredLevel{
 			DetectedLevel: DetectedLevel{Kind: KindSupply, Price: 1100 + float64(i), Lo: 1098 + float64(i), Hi: 1102 + float64(i), Label: "Supply·4h", HTF: true, TF: "4h", ZonePattern: "reversal"},
-			Score:         0.5, Grade: "C", Fresh: "fresh", Distance: 100 + float64(i),
+			Score:         0.4, Grade: "C", Fresh: "fresh", Distance: 100 + float64(i),
 		})
 	}
 	return scored
@@ -40,46 +42,64 @@ func htfCountInHead(out []ScoredLevel, maxLevels int) int {
 
 // the dispatch's seat test: htf_seats=4 seats four; 2 seats two; 0 seats none;
 // 6 seats all five candidates available.
-//
-// STOP-LINE (reported to the CTO 2026-09-16): seatHTF's final "restore strict
-// seating order" sort uses the SAME comparator as the pre-seat sort, so a
-// promoted tail candidate (which loses that comparator to every head member)
-// is restored to the tail by construction — the promotion path is nullified
-// and no seats value can change the table. The pre-existing
-// TestSeatHTFPromotesSwingLevels passes vacuously (its HTF candidates outscore
-// the head fillers, so the final sort alone seats them). This test is SKIPPED
-// until the CTO rules: make the promotion survive the sort, or ship the knob
-// on the no-op mechanism.
 func TestSeatHTFSeatsKnob(t *testing.T) {
-	t.Skip("STOP-line: seatHTF promotion is nullified by its own final sort — pending CTO ruling (D102-1/S3 report)")
 	for seats, want := range map[int]int{4: 4, 2: 2, 0: 0, 6: 5} {
-		out := seatHTF(htfsSeatFixture(), 8, seats)
+		v := seats
+		out := seatHTF(htfsSeatFixture(), 8, &v)
 		if got := htfCountInHead(out, 8); got != want {
 			t.Errorf("seats=%d: %d HTF in head, want %d", seats, got, want)
 		}
 	}
 }
 
+// the CTO's rewrite rule: with the knob UNSET (nil) the HTF candidates that
+// score BELOW the head fillers do NOT seat (legacy restore sort — class NN),
+// and with the knob SAVED they DO. Seating must be knob-gated, not score-gated.
+func TestSeatHTFPromotesSwingLevels(t *testing.T) {
+	fx := htfsSeatFixture()
+	if got := htfCountInHead(seatHTF(fx, 8, nil), 8); got != 0 {
+		t.Fatalf("knob unset (legacy path): %d HTF in head, want 0 — the legacy table must not change", got)
+	}
+	two := 2
+	if got := htfCountInHead(seatHTF(fx, 8, &two), 8); got != 2 {
+		t.Fatalf("knob saved=2 (effective path): %d HTF in head, want 2 — promotion must survive its own sort", got)
+	}
+	// today-priority entries must never be demoted, on either path.
+	pri := append([]ScoredLevel{
+		{DetectedLevel: DetectedLevel{Kind: KindPDH, Price: 1200, Label: "PDH", HTF: true}, Score: 1.4, Grade: "A", Fresh: "fresh", Distance: 200},
+	}, fx...)
+	out := seatHTF(pri, 8, &two)
+	priSeated := false
+	for _, l := range out[:8] {
+		if l.Kind == KindPDH {
+			priSeated = true
+		}
+	}
+	if !priSeated {
+		t.Fatal("today-priority PDH must stay seated")
+	}
+}
+
 // seats ≤ 0 must return the input untouched (a legal knob value, not an error).
 func TestSeatHTFZeroSeatsNoOp(t *testing.T) {
 	in := htfsSeatFixture()
-	out := seatHTF(in, 8, 0)
+	zero := 0
+	out := seatHTF(in, 8, &zero)
 	if !reflect.DeepEqual(out, in) {
 		t.Fatal("seats=0 must be a no-op — the table must not move")
 	}
 }
 
-// parity pins (canon 53): (1) the legacy wrapper and the S3 seats path with the
-// legacy count produce IDENTICAL tables; (2) knob-off byte-identity against the
-// pre-S3 binary is pinned by the existing goldens that run the production
-// Assemble path at LegacyHtfSeats (identity_output_parity_test,
-// one_setup_map_pin_test, weekly_shadow_test).
+// parity pins (canon 53): the legacy wrapper and the S3 seats path with nil
+// produce IDENTICAL tables; knob-off byte-identity against the pre-S3 binary is
+// pinned by the existing goldens that run the production Assemble path at nil
+// (identity_output_parity_test, one_setup_map_pin_test, weekly_shadow_test).
 func TestS3HtfSeatsParityWithLegacy(t *testing.T) {
 	levels, price, dATR := htfsParityLevels()
 	viaWrapper, _ := ScoreLevelsMinGradeFull(levels, price, dATR, nil, 8, 1.5, "")
-	viaSeats, _ := ScoreLevelsMinGradeFullSeats(levels, price, dATR, nil, 8, 1.5, "", LegacyHtfSeats)
+	viaSeats, _ := ScoreLevelsMinGradeFullSeats(levels, price, dATR, nil, 8, 1.5, "", nil)
 	if !reflect.DeepEqual(viaWrapper, viaSeats) {
-		t.Fatalf("ScoreLevelsMinGradeFull and …FullSeats(LegacyHtfSeats) must be byte-identical — wrapper=%d rows, seats=%d rows", len(viaWrapper), len(viaSeats))
+		t.Fatalf("ScoreLevelsMinGradeFull and …FullSeats(nil) must be byte-identical — wrapper=%d rows, seats=%d rows", len(viaWrapper), len(viaSeats))
 	}
 }
 
