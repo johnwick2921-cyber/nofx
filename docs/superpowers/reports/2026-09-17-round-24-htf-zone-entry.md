@@ -185,6 +185,14 @@ was built against). Harness binary sha256 `df59fd66d1ea2ad8`; run: `run_harness.
 `nice -n 19 ionice -c 3` (load rule, CTO 08:53 CT), reading the DB copy only. Reproduce:
 `python3 manifest.py > out-r24/manifest.md` after the five scripts.
 
+Method note (CTO ruling 09:05 CT): **the generated tables and the sample-id appendix are the
+record; the narrative is commentary on them.** They are emitted by `manifest.py` straight from
+the JSON traces and cannot drift from what ran; the narrative is typed by hand and CAN — at
+4c3c54b4 §2(c) quoted four `own` D-trend cells that were not in the table (0.516/0.520/0.478/
+0.523), caught by cross-checking every narrative number against the JSON before the PR and
+corrected at ab110b28 to the table's 0.493/0.506/0.495/0.525. Where a narrative number and a
+table disagree, the table is right and the narrative is the defect.
+
 Process note for the record: the first pass of Q1/Q2/Q5 ran as three parallel processes beside
 the Go harness at the NY open and stalled the live bar persister (99 × "persist queue stalled
 2s"); the CTO's load rule followed and is now standing.
