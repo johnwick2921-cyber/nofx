@@ -45,6 +45,14 @@ func (at *AutoTrader) structureMapForRead(symbol, contract string, pool []kernel
 	if en, _ := at.structureMapEnabled(); !en {
 		return nil
 	}
+	return at.structureMapCompute(symbol, contract, pool, price, now)
+}
+
+// structureMapCompute is structureMapForRead WITHOUT the knob gate — the
+// W-STRUCTURE-ZONE-SEATS candidate pass needs the map whether or not the
+// prompt section is on. Every S1 consumer still goes through the gated
+// wrapper above.
+func (at *AutoTrader) structureMapCompute(symbol, contract string, pool []kernel.ScoredLevel, price float64, now time.Time) *kernel.StructureMap {
 	if market.FuturesBarsProvider == nil {
 		return nil
 	}
