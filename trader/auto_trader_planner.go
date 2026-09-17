@@ -513,6 +513,15 @@ func (at *AutoTrader) describeActivePlanDeath(row *store.PlanDB) (kernel.PlanDea
 	if json.Unmarshal([]byte(row.Doc), &doc) != nil {
 		return kernel.PlanDeathDetail{}, false
 	}
+	// W-FLIP-DIRECTION (2026-09-17): the write site now REJECTS a flip whose
+	// side points the wrong way for its bias, but a plan written BEFORE it
+	// learned direction never passes the write site again — the only place it
+	// is seen is here, where its flip is EVALUATED. So the inverted shape is
+	// named here (LONDON v3: short + flip{below → long}), once per evaluation
+	// like flip_eval_skipped. WARN only: the evaluation itself is unchanged.
+	if err := kernel.FlipDirectionContradiction(doc.Bias.Direction, doc.FlipStructured); err != nil {
+		at.logWarnf("flip_direction_inverted plan=%s v%d %v — this flip can never fire on the move it is meant to catch (written before W-FLIP-DIRECTION)", row.PlanID, row.Version, err)
+	}
 	bars := market.FuturesBarsProvider(at.futuresSymbol(), kernel.AISVPBarInterval, kernel.AISVPBarCount)
 	if len(bars) == 0 {
 		return kernel.PlanDeathDetail{}, false
@@ -712,13 +721,6 @@ func (at *AutoTrader) warnFlipDeathSanity(d *kernel.PlanDoc) {
 	}
 	if d.FlipStructured != nil && d.FlipStructured.Price > 0 && !levelPrice(d.FlipStructured.Price) {
 		at.logWarnf("⚠️ flip/death sanity: flip{price %.2f} matches NO level in this plan's list (orphan anchor).", d.FlipStructured.Price)
-	}
-	// W-FLIP-DIRECTION (2026-09-17): the write-site validator now REJECTS a
-	// flip whose side points the wrong way for its bias; plans already in the
-	// store were written before it learned direction, so the read path WARNs
-	// with the same sentence (LONDON v3: short + flip{below → long}).
-	if err := kernel.FlipDirectionContradiction(d.Bias.Direction, d.FlipStructured); err != nil {
-		at.logWarnf("⚠️ flip/death sanity: %v — this flip can never fire on the move it is meant to catch.", err)
 	}
 	if d.DeathStructured != nil && d.FlipStructured != nil && d.DeathStructured.Price > 0 && d.FlipStructured.Price > 0 {
 		dd, ff := d.DeathStructured, d.FlipStructured

@@ -5171,3 +5171,57 @@ the new one (`trader/flip_hold_anchor_test.go`).
   wake cadence across a session, the hold is being restarted by the wakes.
 - The partner mirror (`vlautoagenttraderv1`) carries the same evaluator; the
   fix propagates via `format-patch → am` (owner-run push).
+
+## CLASS 140 — A VALIDATOR THAT CHECKS THE NUMBER AND NEVER THE DIRECTION (born 2026-08-27 with the structured flip{} object, found 2026-09-17 by the owner "same flip point it not flip", fix/flip-direction-validator, W-FLIP-DIRECTION)
+
+**Shape.** A structured condition carries three facts — a price, a side, a
+destination — and the write-site validator cross-checks exactly one of them
+(the price must appear in the prose). The side and the destination are
+enum-valid on their own ("below" is a legal side, "long" is a legal flip_to),
+so a plan whose flip points the WRONG WAY for its bias passes every schema
+check and ships. Nothing then fires it, because the move it names is the move
+that CONFIRMS the bias rather than reverses it.
+
+**The live story (2026-09-17 LONDON v3, and 20 of 341 plans in the store).**
+bias.direction="short", flip={29474.90, side "below", rule "2x5m", flip_to
+"long"}, death={29604.25 above}. A short bias reverses to long on a close
+ABOVE a line; "below → long" can only fire on a continuation of the short,
+i.e. never on the rally the owner watched all night. The number 29474.90 was
+in the prose, so the only cross-check passed. The read path's
+warnFlipDeathSanity judged the flip's ORPHAN status and its collision with
+death, never its direction. 20/341 historical plans carry the same inverted
+shape (query in the wave's report); every one of them "never flipped".
+
+**Why it hid.** (1) The enum validators are per-field: each of side/flip_to/
+bias is legal alone; the defect is a RELATION between three fields and no
+check was relational. (2) The prose cross-check reads as "the flip is
+verified" to anyone skimming the validator, so the direction question was
+assumed answered. (3) The failure is silent by construction — an inverted
+flip is a flip that never fires, indistinguishable in the journal from a
+flip whose level was simply never reached.
+
+**The fix shape.** ONE relational function, `kernel.FlipDirectionContradiction
+(biasDir, flip)`, called from the write site (REJECT, `ValidatePlanDocWithCaps`)
+and the read path (WARN, `warnFlipDeathSanity`) so both speak one sentence:
+`flip{below 29474.90 → long} contradicts bias short: a short bias flips to long
+only on a close above the line`. Empty flip_to is read as the opposite of the
+bias. Neutral bias and a flip_to that is not the opposite of the bias are not
+this rule's question (no-op). Class-38 discipline: the law is a prompt-contract
+row (`MustAppear` guarded by `ValidatePromptContracts`), a rendered prompt
+sentence, and a repair excerpt `RepairFlipDirectionLaw` routed on the error's
+own words ("contradicts bias") — the model is told the rule it is judged by.
+Death is untouched (separate question). Tests at the production call site for
+all six bias×side×flip_to cases, empty flip_to inference, repair routing, and
+the trader WARN via a logrus hook.
+
+**Probes.**
+- For every structured object with ≥2 enum fields (`PlanCondition`,
+  `ArmSpec`, `Confirm`, scenario direction vs target chain), list the
+  RELATIONS the fields must satisfy and grep the validator for a check that
+  names both fields in one predicate. A validator made only of per-field
+  enums has this class waiting.
+- `sqlite3 -readonly data/data.db "select count(*) from … where bias='short' and flip_side='below'"` (and the mirror) — a non-zero count on a shipped
+  rule is the class in the store, not a hypothetical.
+- A "never fired" condition in the journal must be distinguishable from a
+  "could never fire" one: the read-path WARN is the probe; if the journal has
+  no such line for an old plan, the read path does not judge direction.
