@@ -5235,7 +5235,7 @@ the trader WARN via captured log output at both evaluators (named once across tw
   would make it unreachable — a green test that calls the function directly
   proves nothing about the production call site.
 
-## CLASS NN (assigned at merge) — A FLIP THAT ONLY SLEEPS: THE FLIPPED BIAS WAS NEVER READ (born 2026-09-17, found by the owner, fix/flip-reread)
+## CLASS 141 — A FLIP THAT ONLY SLEEPS: THE FLIPPED BIAS WAS NEVER READ (born 2026-09-17, found by the owner, fix/flip-reread)
 
 **Shape.** A structured flip fires, the plan goes DORMANT as designed (wick-noise
 protection), and the re-arm predicate only ever restores the SAME plan when price
@@ -5266,6 +5266,10 @@ the flip line makes — a bias that FLIPS — had no producing code path.
   ("0"/""), and the dormant branch of maybeRunSessionReadsAt calls
   maybeRereadAfterFlip again every cycle the row sleeps — subject to the same
   preflight and cadence — until a read succeeds or the row re-arms.
+  Worst case, stated: ~1 launch per wake_min_interval_min (default 10 min,
+  up to 3 model calls per launch), no hard cap on launches while the row
+  stays dormant, class-35 free — the same cost shape as a level-event wake,
+  bounded only by the session read window.
 - The write site ENFORCES the flipped bias: `requiredBias :=
   kernel.FlipToDirection(priorKiller)` and "bias %s is MANDATORY". The model
   authors the flipped bias or the read writes nothing and the dormant plan
