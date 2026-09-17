@@ -4973,3 +4973,55 @@ from, because the line named no source at all.
 gate on, with its source in parens; print the n/a branch where the boot cannot
 know; log the resolved line again where the source becomes available (trader
 load).
+
+## CLASS 137 — A SWALLOWED CONFIG ERROR THAT SURFACES AS A DIFFERENT FAILURE (born 2026-09-16 on the partner install, fix/env-load-error-logged, W-ENV-PARSE-ERROR)
+
+**Shape.** A config loader's error is discarded (`_ = godotenv.Load()`,
+`main.go:40`), the loader is all-or-nothing, and the first thing to notice is a
+consumer three layers down that names ITS symptom, not the cause. On the new
+machine an RSA_PRIVATE_KEY pasted unquoted across several lines made `.env`
+unparseable; `loadFile` sets nothing on a parse error, so every variable stayed
+unset; the boot died as "secrets missing" in a 5-second systemd crash loop and
+the journal never mentioned `.env` at all — the operator was told to go find a
+secret that was sitting in the file the whole time.
+
+**How it hid.** Fail-open was the DESIGN (absence of `.env` is normal on some
+hosts), and the discard was written to cover that case; it covered the parse
+case identically, because the code never distinguished "no file" from "a file
+we could not read". The crash loop then re-ran the same silent path every five
+seconds, so the volume of evidence grew while the information content stayed
+zero.
+
+**The second trap, found while fixing the first.** godotenv v1.5.1's parse
+error is `unexpected character %q in variable name near %q`, and the second
+`%q` is the ENTIRE REMAINDER OF THE FILE from the bad statement onward. On the
+partner-install shape that is the private key body and every secret after it.
+Logging `err` verbatim — the obvious one-line fix — would have shipped them to
+journald, `data/nofx_*.log` and the DB sink (`logger/db_sink.go` ships WARN+).
+It also does not name a line number, despite reading as if it would.
+
+**Probes.**
+- `grep -rn '_ = .*Load()' --include=*.go` — every discarded loader error is
+  this class waiting for a malformed file. (Remaining after this wave:
+  `cmd/planner_ab/main.go:108`, `cmd/nq_smoke/main.go:53`,
+  `cmd/nq_smoke/smoke_resolver.go:17` — dev tools, run by hand, out of scope.)
+- Absence and malformation must log DIFFERENTLY, at different levels: INFO for
+  the normal case, WARN for the one an operator must act on.
+- Before logging any third-party error at WARN or above, READ the library's
+  `Errorf` format strings: does `%q`/`%s` carry input data? Redact by shape
+  (`redactDotEnvErr`), and pin the redaction with a test whose fixture holds a
+  fake secret and asserts it is absent from the log.
+- Test at the production call site with a real temp file, not a mocked loader:
+  malformed → WARN with the line named and no file contents;
+  valid → silent and the variable set; absent → INFO
+  (`TestLoadDotEnv_MalformedFileWarnsWithLineAndWithoutContents`,
+  `TestLoadDotEnv_ValidFileIsSilentAndLoads`, `TestLoadDotEnv_AbsentFileLogsInfo`
+  in `main_dotenv_test.go`).
+
+**Fix pattern.** Capture the error; branch on `errors.Is(err, os.ErrNotExist)`;
+keep the fail-open semantics byte-identical (nothing set on error, no exit);
+log ONE line per outcome with the diagnosis and the line number, and with the
+library's echo of the input stripped. When the library will not name the line,
+recover it by parsing growing prefixes and taking the line after the LAST
+prefix that parses (a quoted value may span lines, so the FIRST failing prefix
+is wrong — `TestDotEnvErrorLine_MultiLineQuoteBeforeBadLine`).
