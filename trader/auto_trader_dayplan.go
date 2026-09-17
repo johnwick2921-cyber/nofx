@@ -75,6 +75,9 @@ func (at *AutoTrader) snapshotSessionProfiles() {
 		// (the cutover verification quotes it): plan_max_tokens resolved from
 		// AI_PLAN_MAX_TOKENS, default 65536 = 2× the observed truncation ceiling.
 		at.logInfof("📐 planner cap: plan_max_tokens=%d (AI_PLAN_MAX_TOKENS; default 65536) · truncation → 🚨 WARN, never silent", aiPlanMaxTokens())
+		// S1 (2026-09-16) — the STRUCTURE table knob, READ from the bound strategy.
+		sEn, sKnown := at.structureMapEnabled()
+		at.logInfof("%s", kernel.StructureBootLine(sEn, sKnown))
 		at.logPlannerClientBootLine() // class 37 (C7): effective planner client config, resolved
 		// ROOT-FIX part B — the shadow A/B instrument's resolved state.
 		done, _ := store.ShadowABCount(at.store)

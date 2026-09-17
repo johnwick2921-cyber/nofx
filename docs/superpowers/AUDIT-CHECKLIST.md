@@ -4824,6 +4824,53 @@ hook was born 2026-09-09 and had won every boot until a restart 58 minutes after
 
 **Fix pattern.** landed + fired flags under one mutex; both orders pinned; identity over time.
 
+## CLASS 131 — ONE TABLE FOR TWO JOBS: THE STRUCTURE SEAT RACE (born 2026-09-16, feat/structure-map, S1 under the CTO's delegation)
+
+**Shape.** One 12-seat ranked table carries both jobs — where price may ENTER (15m/5m/1m + today's
+references) and which way the higher timeframes LEAN (D/4h/1h). Every rule that makes the entry table
+good for entries makes it blind to structure: `isTodayPriority` sorts today's references first,
+`freshMult` decays a 4h zone after one 1m touch (1.12 → 0.67), `collapseLevelClusters` renames a 4h level
+under the reference it sits beside, `seatHTF` caps HTF at 2, `zoneTierFor` folds 5m into the 1m tier.
+Measured 2026-09-16 16:31 CT: 244 HTF levels detected (≈70 4h, ≈12 daily); 11 seated — 8 references,
+3 HTF, zero daily. The plan read the day with no daily structure at all and nothing said so.
+
+**How it hid.** The table was always full and always graded; a full table looks like coverage. No line
+counted what was DETECTED against what was SEATED per timeframe.
+
+**Probes.**
+- Two jobs → two tables. A direction read (trend / last impulse / premium-discount / top zones per HTF)
+  lives in its own structure (`kernel.StructureMap`), labels INTACT, never collapsed into references,
+  never an entry; the entry table keeps its 12 seats and its rules.
+- Every S-wave knob defaults OFF and the prompt is byte-identical with it off (the existing goldens are
+  the proof); the live plan changes only after the measurement wave (S4).
+- A field the read could not compute is ABSENT (`structure` omitted), never `{}` / `[]` (canon).
+- The read logs what it saw per TF (`🗺 structure @<session>: D=… 4h=… 1h=… zones=<n> pd4h=…`) and the boot
+  line names the knob from the bound strategy (`🗺 structure: off|on(D/4h/1h)|n/a`).
+- Fixtures from the real store (read-only export, dated) at the CALL SITE, not rebuilt inputs; a 10-bar
+  daily series reads `range` honestly rather than pretending a trend.
+
+**Fix pattern.** S1 (this) the structure table · S2 fresh-by-TF (DS-101) · S3 validator contract
+(DS-102) · S5 (DS-103) · S4 measurement (DS-R) before any knob turns on.
+## CLASS 132 — a recorder that narrates every write at INFO (born 2026-09-16, dispatch 103, DS-103)
+
+**Symptom:** the research-snapshot recorder emitted one INFO line per archived
+fact — 324,807 "research snapshot written:" lines in a measured one-hour slice
+(88.8% of all log lines; ~13.2M/day), ~16 GiB/day of archive with no retention,
+and drop notices that only reached the INFO sink.
+
+**Root cause:** a diagnostics archive narrating its own success at volume, wired
+to the INFO logger, with no env gate and no retention.
+
+**Law:** a recorder is not a narrator. A background archive may emit at most ONE
+rollup line per period (rows per object, drops, queue depth) at INFO; drop
+notices go to the WARN sink, coalesced to one line per minute with the delta;
+the boot line's counters are read live, never hardcoded; an env gate
+(RESEARCH_SNAPSHOT) leaves it OFF by default; retention (RESEARCH_RETAIN_DAYS,
+default 7) prunes at boot and daily with NO automatic VACUUM on a ~77 GB file.
+Fixed 2026-09-16: researchsnapshot/* + main.go:77 wiring; pins in
+researchsnapshot/volume_test.go; measured before/after in
+docs/superpowers/reports/2026-09-16-research-recorder-volume.md.
+
 ## CLASS NN (assigned at merge) — S2 by-TF freshness
 
 **Shape.** A freshness grade computed from one timeframe's bars while the scoring
@@ -4834,8 +4881,11 @@ changes, keep the display vocabulary and the scoring ladder separate — the new
 grader may only feed the ladder through an explicit normalization map, and every
 legacy string must pass through it as identity (proved by
 `TestNormalizeByTFGrade_IdentityOnLegacy` + `TestScoreLevels_ByTFVocabScoresLikeCanonical`).
+Second rule (F1): a test is a RE-ENTRY — the level's own formation bars are its
+birth and never count; counting starts after the first own-TF bar that CLOSES
+fully outside the band.
 
 **Fix pattern (S2).** `kernel/levels_fresh_by_tf.go` grades HTF levels on their
-own-TF bars (fresh/tested-1/tested-2/stale); `normalizeByTFGrade` maps the new
-vocabulary onto the unchanged `freshMult`/`zoneFreshMult` tables; knob default
+own-TF bars (fresh/tested-1/tested-2/stale, re-entry semantics); `normalizeByTFGrade`
+maps the new vocabulary onto the unchanged `freshMult`/`zoneFreshMult` tables; knob default
 OFF so goldens stay byte-identical.

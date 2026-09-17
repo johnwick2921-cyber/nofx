@@ -38,6 +38,23 @@ const dayPlan: KnobSpec[] = [
     perSession: 'No.',
   },
   {
+    label: 'Structure table (S1)',
+    where:
+      'Strategy → Day Plan → structure_map (API/JSON knob; no editor toggle yet)',
+    what: "A SECOND table the planner reads, above the entry table: D / 4h / 1h direction from the last three labelled swings (HH/HL → up, LH/LL → down, mixed → range), the last swing high/low, the last impulse and where price sits in it (pd 0..1), plus each timeframe's top 4–6 zones with their labels INTACT. Bias only — never an entry; entries still come only from the ranked 12-seat table. Stamped on the plan doc as `structure` when computed; absent otherwise.",
+    trader:
+      "OFF by default (unset reads OFF — every S1 knob does; nothing changes the live plan until the S4 measurement). ON adds a '## STRUCTURE — bias only, not entries' section before the level table; OFF leaves the prompt byte-identical (the existing goldens prove it). The validator is untouched (that is S3).",
+    consumer:
+      'store/resolve_source.go ResolveStructureMap · trader/structure_map_wire.go structureMapForRead · kernel/structure_map.go ComputeStructureMap / RenderStructureSection',
+    range: 'true / false',
+    systemDefault: 'OFF (nil)',
+    recommended:
+      "OFF until DS-R's S4 measures what the structure section changes in the plans; then the owner's call.",
+    whenToTouch:
+      "Only for the measured comparison. Boot line '🗺 structure: off|on(D/4h/1h)|n/a' names the knob; each read logs '🗺 structure @<session>: D=… 4h=… 1h=… zones=<n> pd4h=<0.xx>'.",
+    perSession: 'No.',
+  },
+  {
     label: 'One setup — minimum grade',
     where: 'Strategy → Day Plan → one_setup_min_grade',
     what: 'The lowest merged-candidate grade the best level near price may carry (A+ | A | B | C). The best level is chosen grade-first, distance-second among candidates inside the reachability band; a scenario on a lower-graded level than the best is declined level_not_best.',
