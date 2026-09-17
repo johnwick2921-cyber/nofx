@@ -4871,7 +4871,7 @@ Fixed 2026-09-16: researchsnapshot/* + main.go:77 wiring; pins in
 researchsnapshot/volume_test.go; measured before/after in
 docs/superpowers/reports/2026-09-16-research-recorder-volume.md.
 
-## CLASS NN (assigned at merge) — S2 by-TF freshness
+## CLASS 133 — S2 by-TF freshness
 
 **Shape.** A freshness grade computed from one timeframe's bars while the scoring
 ladder it feeds was calibrated against another (1m touches). A 4h zone was
