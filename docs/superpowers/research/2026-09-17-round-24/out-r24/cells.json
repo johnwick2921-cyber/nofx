@@ -1,0 +1,2277 @@
+{
+ "big_threshold_pts": 250.0,
+ "population": {
+  "session_days": 70,
+  "measured": 68,
+  "plan_rows": 397,
+  "model_reads": 310,
+  "marker_rows": {
+   "planner_fail_closed": 33,
+   "demo_seed": 2,
+   "replans_exhausted": 5,
+   "owner_reset": 28,
+   "dormant": 12,
+   "rearmed": 5,
+   "e7_incident_kill": 2
+  },
+  "unmeasured_ids": [
+   "2026-08-15:NY",
+   "2026-08-16:NY"
+  ],
+  "big_n": 23,
+  "big_ids": [
+   "2026-08-17:ASIA",
+   "2026-08-18:NY",
+   "2026-08-19:LONDON",
+   "2026-08-19:NY",
+   "2026-08-20:LONDON",
+   "2026-08-20:NY",
+   "2026-08-21:NY",
+   "2026-08-23:ASIA",
+   "2026-08-24:ASIA",
+   "2026-08-24:NY",
+   "2026-08-25:NY",
+   "2026-08-26:ASIA",
+   "2026-08-27:NY",
+   "2026-08-28:NY",
+   "2026-08-30:ASIA",
+   "2026-09-01:LONDON",
+   "2026-09-01:NY",
+   "2026-09-03:NY",
+   "2026-09-08:NY",
+   "2026-09-10:LONDON",
+   "2026-09-14:NY",
+   "2026-09-15:LONDON",
+   "2026-09-16:NY"
+  ],
+  "small_n": 45,
+  "big_table": [
+   {
+    "key": "2026-09-14:NY",
+    "range": 562,
+    "bars_1m": 102,
+    "reads": 8,
+    "open": 28905.75,
+    "close": 29439.5,
+    "contract": "MNQ 09-26"
+   },
+   {
+    "key": "2026-09-16:NY",
+    "range": 499.75,
+    "bars_1m": 375,
+    "reads": 5,
+    "open": 29386.75,
+    "close": 29173.75,
+    "contract": "MNQ 12-26"
+   },
+   {
+    "key": "2026-09-01:LONDON",
+    "range": 473.75,
+    "bars_1m": 390,
+    "reads": 6,
+    "open": 29515.5,
+    "close": 29111.5,
+    "contract": "MNQ 09-26"
+   },
+   {
+    "key": "2026-09-10:LONDON",
+    "range": 435.75,
+    "bars_1m": 390,
+    "reads": 6,
+    "open": 29477.25,
+    "close": 29089.25,
+    "contract": "MNQ 09-26"
+   },
+   {
+    "key": "2026-08-20:LONDON",
+    "range": 432.5,
+    "bars_1m": 390,
+    "reads": 2,
+    "open": 29672.5,
+    "close": 29350.5,
+    "contract": "MNQ 09-26"
+   },
+   {
+    "key": "2026-09-03:NY",
+    "range": 385.75,
+    "bars_1m": 375,
+    "reads": 7,
+    "open": 29249.5,
+    "close": 29524,
+    "contract": "MNQ 09-26"
+   },
+   {
+    "key": "2026-08-28:NY",
+    "range": 374.75,
+    "bars_1m": 375,
+    "reads": 7,
+    "open": 29628,
+    "close": 29503,
+    "contract": "MNQ 09-26"
+   },
+   {
+    "key": "2026-08-19:NY",
+    "range": 366.25,
+    "bars_1m": 375,
+    "reads": 3,
+    "open": 29715,
+    "close": 29530.75,
+    "contract": "MNQ 09-26"
+   },
+   {
+    "key": "2026-08-23:ASIA",
+    "range": 355.75,
+    "bars_1m": 540,
+    "reads": 4,
+    "open": 29392.25,
+    "close": 29164,
+    "contract": "MNQ 09-26"
+   },
+   {
+    "key": "2026-08-17:ASIA",
+    "range": 338.75,
+    "bars_1m": 539,
+    "reads": 6,
+    "open": 30078.75,
+    "close": 29894.5,
+    "contract": "MNQ 09-26"
+   },
+   {
+    "key": "2026-09-01:NY",
+    "range": 315.5,
+    "bars_1m": 375,
+    "reads": 5,
+    "open": 29111.75,
+    "close": 29117.75,
+    "contract": "MNQ 09-26"
+   },
+   {
+    "key": "2026-08-24:NY",
+    "range": 296,
+    "bars_1m": 375,
+    "reads": 8,
+    "open": 29235.5,
+    "close": 29131,
+    "contract": "MNQ 09-26"
+   },
+   {
+    "key": "2026-08-24:ASIA",
+    "range": 271.25,
+    "bars_1m": 540,
+    "reads": 5,
+    "open": 29140,
+    "close": 29262.75,
+    "contract": "MNQ 09-26"
+   },
+   {
+    "key": "2026-08-25:NY",
+    "range": 270.5,
+    "bars_1m": 375,
+    "reads": 2,
+    "open": 29295.25,
+    "close": 29238.75,
+    "contract": "MNQ 09-26"
+   },
+   {
+    "key": "2026-08-30:ASIA",
+    "range": 270,
+    "bars_1m": 540,
+    "reads": 3,
+    "open": 29535,
+    "close": 29516.75,
+    "contract": "MNQ 09-26"
+   },
+   {
+    "key": "2026-08-21:NY",
+    "range": 268.25,
+    "bars_1m": 375,
+    "reads": 1,
+    "open": 29471,
+    "close": 29410.75,
+    "contract": "MNQ 09-26"
+   },
+   {
+    "key": "2026-08-20:NY",
+    "range": 267.75,
+    "bars_1m": 375,
+    "reads": 2,
+    "open": 29350.75,
+    "close": 29311.25,
+    "contract": "MNQ 09-26"
+   },
+   {
+    "key": "2026-09-08:NY",
+    "range": 262.25,
+    "bars_1m": 375,
+    "reads": 5,
+    "open": 29644.5,
+    "close": 29549,
+    "contract": "MNQ 09-26"
+   },
+   {
+    "key": "2026-08-18:NY",
+    "range": 256,
+    "bars_1m": 375,
+    "reads": 1,
+    "open": 29692.5,
+    "close": 29597.25,
+    "contract": "MNQ 09-26"
+   },
+   {
+    "key": "2026-08-19:LONDON",
+    "range": 254.75,
+    "bars_1m": 390,
+    "reads": 3,
+    "open": 29557,
+    "close": 29713.75,
+    "contract": "MNQ 09-26"
+   },
+   {
+    "key": "2026-08-27:NY",
+    "range": 254.25,
+    "bars_1m": 375,
+    "reads": 5,
+    "open": 29523.75,
+    "close": 29633,
+    "contract": "MNQ 09-26"
+   },
+   {
+    "key": "2026-08-26:ASIA",
+    "range": 253.5,
+    "bars_1m": 540,
+    "reads": 10,
+    "open": 29500,
+    "close": 29498,
+    "contract": "MNQ 09-26"
+   },
+   {
+    "key": "2026-09-15:LONDON",
+    "range": 253,
+    "bars_1m": 390,
+    "reads": 2,
+    "open": 29354,
+    "close": 29420.75,
+    "contract": "MNQ 12-26"
+   }
+  ],
+  "range_median_all": 210.75
+ },
+ "a": {
+  "big": {
+   "label": "range \u2265 250",
+   "reads_measured": 73,
+   "reads_recorded": 21,
+   "read_ids": [
+    "2026-08-17:ASIA@1",
+    "2026-08-17:ASIA@2",
+    "2026-08-18:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+    "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+    "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2"
+   ],
+   "seated": {
+    "n": 21,
+    "ahead_in_band_yes": 21,
+    "frac": 1.0,
+    "yes_ids": [
+     "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+     "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+     "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3",
+     "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+     "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5"
+    ],
+    "no_ids": [],
+    "ran_out_n": 12,
+    "ran_out_frac": 0.5714285714285714,
+    "overshoot_median_pts": 221.6875,
+    "ahead_median_n": 6,
+    "ahead_htf_any": 15,
+    "seated_n_median": 12,
+    "band_probe_max_abs_dist_over_band": 0,
+    "per_session_day": {
+     "2026-09-10:LONDON": "6/6",
+     "2026-09-14:NY": "8/8",
+     "2026-09-15:LONDON": "2/2",
+     "2026-09-16:NY": "5/5"
+    }
+   },
+   "doc": {
+    "n": 73,
+    "ahead_in_band_yes": 72,
+    "frac": 0.9863013698630136,
+    "yes_ids": [
+     "2026-08-17:ASIA@1",
+     "2026-08-17:ASIA@2",
+     "2026-08-18:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+     "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+     "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2"
+    ],
+    "no_ids": [
+     "2026-09-01:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5"
+    ],
+    "ran_out_n": 41,
+    "ran_out_frac": 0.5616438356164384,
+    "overshoot_median_pts": 102,
+    "doc_n_median": 9,
+    "per_session_day": {
+     "2026-08-17:ASIA": "2/2",
+     "2026-08-18:NY": "1/1",
+     "2026-08-19:LONDON": "3/3",
+     "2026-08-19:NY": "3/3",
+     "2026-08-20:LONDON": "2/2",
+     "2026-08-20:NY": "2/2",
+     "2026-08-21:NY": "1/1",
+     "2026-08-24:ASIA": "3/3",
+     "2026-08-24:NY": "3/3",
+     "2026-08-25:NY": "2/2",
+     "2026-08-26:ASIA": "7/7",
+     "2026-08-27:NY": "2/2",
+     "2026-08-28:NY": "5/5",
+     "2026-09-01:LONDON": "3/4",
+     "2026-09-01:NY": "2/2",
+     "2026-09-03:NY": "5/5",
+     "2026-09-08:NY": "5/5",
+     "2026-09-10:LONDON": "6/6",
+     "2026-09-14:NY": "8/8",
+     "2026-09-15:LONDON": "2/2",
+     "2026-09-16:NY": "5/5"
+    }
+   },
+   "by_trigger": {
+    "scheduled": {
+     "n": 30,
+     "doc_ahead_yes": 30,
+     "doc_ran_out": 16,
+     "ids": [
+      "2026-08-17:ASIA@1",
+      "2026-08-17:ASIA@2",
+      "2026-08-18:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2"
+     ],
+     "seated_n": 4,
+     "seated_ahead_yes": 4,
+     "seated_ran_out": 3
+    },
+    "level_event": {
+     "n": 40,
+     "doc_ahead_yes": 39,
+     "doc_ran_out": 23,
+     "ids": [
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5",
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@7",
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@8",
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@9",
+      "2026-08-27:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4"
+     ],
+     "seated_n": 16,
+     "seated_ahead_yes": 16,
+     "seated_ran_out": 8
+    },
+    "other": {
+     "n": 3,
+     "doc_ahead_yes": 3,
+     "doc_ran_out": 2,
+     "ids": [
+      "2026-08-24:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+      "2026-09-16:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4"
+     ],
+     "seated_n": 1,
+     "seated_ahead_yes": 1,
+     "seated_ran_out": 1
+    }
+   },
+   "dir_probe_exc_eq_close": "67/73",
+   "excursion_median_pts": 155.25
+  },
+  "small": {
+   "label": "range < 250 (control)",
+   "reads_measured": 231,
+   "reads_recorded": 88,
+   "read_ids": [
+    "2026-08-16:ASIA@1",
+    "2026-08-16:ASIA@2",
+    "2026-08-16:ASIA@3",
+    "2026-08-16:ASIA@4",
+    "2026-08-16:ASIA@5"
+   ],
+   "seated": {
+    "n": 88,
+    "ahead_in_band_yes": 88,
+    "frac": 1.0,
+    "yes_ids": [
+     "2026-09-09:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+     "2026-09-09:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+     "2026-09-09:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3",
+     "2026-09-09:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+     "2026-09-10:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1"
+    ],
+    "no_ids": [],
+    "ran_out_n": 19,
+    "ran_out_frac": 0.2159090909090909,
+    "overshoot_median_pts": 49.22259429276528,
+    "ahead_median_n": 7.0,
+    "ahead_htf_any": 71,
+    "seated_n_median": 12.0,
+    "band_probe_max_abs_dist_over_band": 0,
+    "per_session_day": {
+     "2026-09-09:ASIA": "1/1",
+     "2026-09-09:NY": "3/3",
+     "2026-09-10:ASIA": "9/9",
+     "2026-09-11:LONDON": "5/5",
+     "2026-09-11:NY": "6/6",
+     "2026-09-13:ASIA": "15/15",
+     "2026-09-14:ASIA": "8/8",
+     "2026-09-14:LONDON": "4/4",
+     "2026-09-15:ASIA": "9/9",
+     "2026-09-15:NY": "2/2",
+     "2026-09-16:ASIA": "13/13",
+     "2026-09-16:LONDON": "11/11",
+     "2026-09-17:LONDON": "2/2"
+    }
+   },
+   "doc": {
+    "n": 231,
+    "ahead_in_band_yes": 230,
+    "frac": 0.9956709956709957,
+    "yes_ids": [
+     "2026-08-16:ASIA@1",
+     "2026-08-16:ASIA@2",
+     "2026-08-16:ASIA@3",
+     "2026-08-16:ASIA@4",
+     "2026-08-16:ASIA@5"
+    ],
+    "no_ids": [
+     "2026-08-27:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3"
+    ],
+    "ran_out_n": 53,
+    "ran_out_frac": 0.22943722943722944,
+    "overshoot_median_pts": 66,
+    "doc_n_median": 10,
+    "per_session_day": {
+     "2026-08-16:ASIA": "5/5",
+     "2026-08-17:LONDON": "1/1",
+     "2026-08-17:NY": "2/2",
+     "2026-08-18:ASIA": "2/2",
+     "2026-08-18:LONDON": "1/1",
+     "2026-08-19:ASIA": "3/3",
+     "2026-08-20:ASIA": "3/3",
+     "2026-08-21:LONDON": "4/4",
+     "2026-08-25:ASIA": "8/8",
+     "2026-08-25:LONDON": "2/2",
+     "2026-08-26:LONDON": "12/12",
+     "2026-08-26:NY": "7/7",
+     "2026-08-27:ASIA": "10/10",
+     "2026-08-27:LONDON": "6/7",
+     "2026-08-28:LONDON": "6/6",
+     "2026-08-31:NY": "3/3",
+     "2026-09-01:ASIA": "4/4",
+     "2026-09-02:ASIA": "12/12",
+     "2026-09-02:LONDON": "4/4",
+     "2026-09-02:NY": "11/11",
+     "2026-09-03:ASIA": "7/7",
+     "2026-09-03:LONDON": "1/1",
+     "2026-09-04:LONDON": "3/3",
+     "2026-09-04:NY": "4/4",
+     "2026-09-06:ASIA": "5/5",
+     "2026-09-07:ASIA": "4/4",
+     "2026-09-08:ASIA": "7/7",
+     "2026-09-08:LONDON": "5/5",
+     "2026-09-09:ASIA": "1/1",
+     "2026-09-09:NY": "3/3",
+     "2026-09-10:ASIA": "9/9",
+     "2026-09-11:LONDON": "5/5",
+     "2026-09-11:NY": "6/6",
+     "2026-09-13:ASIA": "15/15",
+     "2026-09-14:ASIA": "8/8",
+     "2026-09-14:LONDON": "4/4",
+     "2026-09-15:ASIA": "9/9",
+     "2026-09-15:NY": "2/2",
+     "2026-09-16:ASIA": "13/13",
+     "2026-09-16:LONDON": "11/11",
+     "2026-09-17:LONDON": "2/2"
+    }
+   },
+   "by_trigger": {
+    "scheduled": {
+     "n": 47,
+     "doc_ahead_yes": 47,
+     "doc_ran_out": 16,
+     "ids": [
+      "2026-08-16:ASIA@1",
+      "2026-08-16:ASIA@2",
+      "2026-08-16:ASIA@3",
+      "2026-08-16:ASIA@4",
+      "2026-08-16:ASIA@5"
+     ],
+     "seated_n": 11,
+     "seated_ahead_yes": 11,
+     "seated_ran_out": 3
+    },
+    "level_event": {
+     "n": 183,
+     "doc_ahead_yes": 182,
+     "doc_ran_out": 37,
+     "ids": [
+      "2026-08-25:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+      "2026-08-25:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5",
+      "2026-08-25:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@6",
+      "2026-08-25:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@7",
+      "2026-08-25:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@11"
+     ],
+     "seated_n": 76,
+     "seated_ahead_yes": 76,
+     "seated_ran_out": 16
+    },
+    "other": {
+     "n": 1,
+     "doc_ahead_yes": 1,
+     "doc_ran_out": 0,
+     "ids": [
+      "2026-09-15:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2"
+     ],
+     "seated_n": 1,
+     "seated_ahead_yes": 1,
+     "seated_ran_out": 0
+    }
+   },
+   "dir_probe_exc_eq_close": "181/231",
+   "excursion_median_pts": 92
+  }
+ },
+ "b": {
+  "big": {
+   "label": "range \u2265 250",
+   "scenarios": 203,
+   "measured": 182,
+   "malformed": {
+    "last_target_behind_price": 21
+   },
+   "exhausted_n": 88,
+   "exhausted_frac": 0.4835164835164835,
+   "hit_first_n": 140,
+   "ids_exhausted": [
+    "2026-08-17:ASIA@1#S2",
+    "2026-08-17:ASIA@2#S2",
+    "2026-08-18:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1#S3",
+    "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2#S1",
+    "2026-08-19:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1#S3"
+   ],
+   "ids_measured": [
+    "2026-08-17:ASIA@1#S1",
+    "2026-08-17:ASIA@1#S2",
+    "2026-08-17:ASIA@2#S1",
+    "2026-08-17:ASIA@2#S2",
+    "2026-08-18:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1#S1"
+   ],
+   "minutes_to_last_median": 33.01656666666667,
+   "last_dist_median_pts": 69.75,
+   "n_targets_median": 3.0,
+   "per_session_day": {
+    "2026-08-17:ASIA": "2/4",
+    "2026-08-18:NY": "1/3",
+    "2026-08-19:LONDON": "1/9",
+    "2026-08-19:NY": "4/9",
+    "2026-08-20:LONDON": "5/6",
+    "2026-08-20:NY": "5/6",
+    "2026-08-21:NY": "1/3",
+    "2026-08-24:ASIA": "3/10",
+    "2026-08-24:NY": "5/9",
+    "2026-08-25:NY": "1/6",
+    "2026-08-26:ASIA": "21/21",
+    "2026-08-27:NY": "3/7",
+    "2026-08-28:NY": "3/11",
+    "2026-09-01:LONDON": "5/10",
+    "2026-09-01:NY": "6/7",
+    "2026-09-03:NY": "4/12",
+    "2026-09-08:NY": "4/12",
+    "2026-09-10:LONDON": "5/14",
+    "2026-09-14:NY": "1/11",
+    "2026-09-15:LONDON": "2/4",
+    "2026-09-16:NY": "6/8"
+   }
+  },
+  "small": {
+   "label": "control",
+   "scenarios": 684,
+   "measured": 596,
+   "malformed": {
+    "last_target_behind_price": 77
+   },
+   "exhausted_n": 247,
+   "exhausted_frac": 0.41442953020134227,
+   "hit_first_n": 448,
+   "ids_exhausted": [
+    "2026-08-16:ASIA@1#S1",
+    "2026-08-16:ASIA@1#S2",
+    "2026-08-16:ASIA@2#S2",
+    "2026-08-16:ASIA@3#S1",
+    "2026-08-16:ASIA@3#S2"
+   ],
+   "ids_measured": [
+    "2026-08-16:ASIA@1#S1",
+    "2026-08-16:ASIA@1#S2",
+    "2026-08-16:ASIA@1#S3",
+    "2026-08-16:ASIA@2#S1",
+    "2026-08-16:ASIA@2#S2"
+   ],
+   "minutes_to_last_median": 44.94638333333333,
+   "last_dist_median_pts": 69.55999999999949,
+   "n_targets_median": 3.0,
+   "per_session_day": {
+    "2026-08-16:ASIA": "7/14",
+    "2026-08-17:LONDON": "3/3",
+    "2026-08-17:NY": "2/6",
+    "2026-08-18:ASIA": "4/6",
+    "2026-08-18:LONDON": "2/3",
+    "2026-08-19:ASIA": "0/9",
+    "2026-08-20:ASIA": "1/7",
+    "2026-08-21:LONDON": "1/12",
+    "2026-08-25:ASIA": "6/30",
+    "2026-08-25:LONDON": "4/8",
+    "2026-08-26:LONDON": "9/47",
+    "2026-08-26:NY": "11/23",
+    "2026-08-27:ASIA": "11/32",
+    "2026-08-27:LONDON": "9/20",
+    "2026-08-28:LONDON": "2/17",
+    "2026-08-31:NY": "2/9",
+    "2026-09-01:ASIA": "3/10",
+    "2026-09-02:ASIA": "23/35",
+    "2026-09-02:LONDON": "0/14",
+    "2026-09-02:NY": "10/30",
+    "2026-09-03:ASIA": "13/21",
+    "2026-09-03:LONDON": "1/2",
+    "2026-09-04:LONDON": "6/9",
+    "2026-09-04:NY": "5/7",
+    "2026-09-06:ASIA": "12/14",
+    "2026-09-07:ASIA": "9/11",
+    "2026-09-08:ASIA": "7/11",
+    "2026-09-08:LONDON": "12/14",
+    "2026-09-09:ASIA": "4/5",
+    "2026-09-09:NY": "1/7",
+    "2026-09-10:ASIA": "10/19",
+    "2026-09-11:LONDON": "6/7",
+    "2026-09-11:NY": "1/11",
+    "2026-09-13:ASIA": "15/34",
+    "2026-09-14:ASIA": "3/12",
+    "2026-09-14:LONDON": "0/7",
+    "2026-09-15:ASIA": "8/17",
+    "2026-09-15:NY": "4/5",
+    "2026-09-16:ASIA": "13/22",
+    "2026-09-16:LONDON": "7/23",
+    "2026-09-17:LONDON": "0/3"
+   }
+  }
+ },
+ "c": {
+  "big": {
+   "label": "range \u2265 250",
+   "reads": 73,
+   "defs": {
+    "s1_1h": {
+     "reads": 73,
+     "trend_counts": {
+      "range": 17,
+      "down": 12,
+      "up": 34,
+      "n/a": 10
+     },
+     "trended": 46,
+     "found": 46,
+     "found_frac": 1.0,
+     "hit": 9,
+     "hit_frac": 0.1956521739130435,
+     "minutes_median": 0.7758833333333334,
+     "dist_median": 298.5,
+     "tf_of_found": {
+      "4h": 29,
+      "1h": 14,
+      "1d": 3
+     },
+     "role_of_found": {
+      "(unassigned)": 46
+     },
+     "ids_found": [
+      "2026-08-18:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3",
+      "2026-08-19:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1"
+     ],
+     "ids_hit": [
+      "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5",
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@6",
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@8"
+     ],
+     "ids_none": [],
+     "ring_median": 500
+    },
+    "s1_4h": {
+     "reads": 73,
+     "trend_counts": {
+      "up": 22,
+      "range": 17,
+      "down": 21,
+      "n/a": 13
+     },
+     "trended": 43,
+     "found": 43,
+     "found_frac": 1.0,
+     "hit": 7,
+     "hit_frac": 0.16279069767441862,
+     "minutes_median": 208.05708333333334,
+     "dist_median": 294.875,
+     "tf_of_found": {
+      "4h": 24,
+      "1h": 17,
+      "1d": 2
+     },
+     "role_of_found": {
+      "(unassigned)": 43
+     },
+     "ids_found": [
+      "2026-08-17:ASIA@1",
+      "2026-08-17:ASIA@2",
+      "2026-08-18:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2"
+     ],
+     "ids_hit": [
+      "2026-09-01:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5",
+      "2026-09-08:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+      "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3"
+     ],
+     "ids_none": [],
+     "ring_median": 500
+    },
+    "s1_D": {
+     "reads": 73,
+     "trend_counts": {
+      "range": 46,
+      "up": 14,
+      "n/a": 13
+     },
+     "trended": 14,
+     "found": 14,
+     "found_frac": 1.0,
+     "hit": 5,
+     "hit_frac": 0.35714285714285715,
+     "minutes_median": 0.7758833333333334,
+     "dist_median": 295.875,
+     "tf_of_found": {
+      "4h": 10,
+      "1h": 4
+     },
+     "role_of_found": {
+      "(unassigned)": 14
+     },
+     "ids_found": [
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5",
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@6",
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@7"
+     ],
+     "ids_hit": [
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5",
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@6",
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@8",
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@9"
+     ],
+     "ids_none": [],
+     "ring_median": 427
+    },
+    "plan_bias": {
+     "reads": 73,
+     "trend_counts": {
+      "up": 19,
+      "range": 17,
+      "down": 37
+     },
+     "trended": 56,
+     "found": 54,
+     "found_frac": 0.9642857142857143,
+     "hit": 9,
+     "hit_frac": 0.16666666666666666,
+     "minutes_median": 38.44788333333333,
+     "dist_median": 307.25,
+     "tf_of_found": {
+      "4h": 37,
+      "1d": 4,
+      "1h": 13
+     },
+     "role_of_found": {
+      "(unassigned)": 54
+     },
+     "ids_found": [
+      "2026-08-17:ASIA@1",
+      "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-19:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-19:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3"
+     ],
+     "ids_hit": [
+      "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-19:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3",
+      "2026-08-20:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-09-01:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-09-03:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4"
+     ],
+     "ids_none": [
+      "2026-09-15:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-09-16:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1"
+     ],
+     "ring_median": 0
+    }
+   },
+   "htf_src": {
+    "DetectHTFLevels": 73
+   },
+   "htf_beyond_band_median": 192
+  },
+  "small": {
+   "label": "control",
+   "reads": 231,
+   "defs": {
+    "s1_1h": {
+     "reads": 231,
+     "trend_counts": {
+      "range": 106,
+      "down": 49,
+      "up": 41,
+      "n/a": 35
+     },
+     "trended": 90,
+     "found": 90,
+     "found_frac": 1.0,
+     "hit": 8,
+     "hit_frac": 0.08888888888888889,
+     "minutes_median": 86.74175833333334,
+     "dist_median": 320.8125,
+     "tf_of_found": {
+      "1h": 26,
+      "4h": 60,
+      "1d": 4
+     },
+     "role_of_found": {
+      "(unassigned)": 90
+     },
+     "ids_found": [
+      "2026-08-18:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-18:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-20:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-20:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-20:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3"
+     ],
+     "ids_hit": [
+      "2026-08-18:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-27:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@6",
+      "2026-09-07:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+      "2026-09-07:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5",
+      "2026-09-08:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1"
+     ],
+     "ids_none": [],
+     "ring_median": 500
+    },
+    "s1_4h": {
+     "reads": 231,
+     "trend_counts": {
+      "up": 29,
+      "down": 104,
+      "range": 48,
+      "n/a": 50
+     },
+     "trended": 133,
+     "found": 133,
+     "found_frac": 1.0,
+     "hit": 14,
+     "hit_frac": 0.10526315789473684,
+     "minutes_median": 0.796975,
+     "dist_median": 354.75,
+     "tf_of_found": {
+      "4h": 102,
+      "1d": 13,
+      "1h": 18
+     },
+     "role_of_found": {
+      "(unassigned)": 133
+     },
+     "ids_found": [
+      "2026-08-16:ASIA@1",
+      "2026-08-16:ASIA@2",
+      "2026-08-16:ASIA@3",
+      "2026-08-16:ASIA@4",
+      "2026-08-16:ASIA@5"
+     ],
+     "ids_hit": [
+      "2026-08-21:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-21:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-31:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5",
+      "2026-09-06:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5",
+      "2026-09-06:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@6"
+     ],
+     "ids_none": [],
+     "ring_median": 500
+    },
+    "s1_D": {
+     "reads": 231,
+     "trend_counts": {
+      "range": 133,
+      "up": 48,
+      "n/a": 50
+     },
+     "trended": 48,
+     "found": 48,
+     "found_frac": 1.0,
+     "hit": 5,
+     "hit_frac": 0.10416666666666667,
+     "minutes_median": 45.22615,
+     "dist_median": 308.125,
+     "tf_of_found": {
+      "1h": 19,
+      "4h": 29
+     },
+     "role_of_found": {
+      "(unassigned)": 48
+     },
+     "ids_found": [
+      "2026-08-25:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@11",
+      "2026-08-25:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@13",
+      "2026-08-25:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@14",
+      "2026-08-26:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-26:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2"
+     ],
+     "ids_hit": [
+      "2026-08-26:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3",
+      "2026-08-26:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@6",
+      "2026-08-27:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-27:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3",
+      "2026-08-31:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5"
+     ],
+     "ids_none": [],
+     "ring_median": 429
+    },
+    "plan_bias": {
+     "reads": 231,
+     "trend_counts": {
+      "up": 94,
+      "range": 38,
+      "down": 99
+     },
+     "trended": 193,
+     "found": 177,
+     "found_frac": 0.917098445595855,
+     "hit": 28,
+     "hit_frac": 0.15819209039548024,
+     "minutes_median": 0.8672500000000001,
+     "dist_median": 327.5,
+     "tf_of_found": {
+      "4h": 96,
+      "1h": 61,
+      "1d": 20
+     },
+     "role_of_found": {
+      "(unassigned)": 177
+     },
+     "ids_found": [
+      "2026-08-16:ASIA@1",
+      "2026-08-16:ASIA@3",
+      "2026-08-16:ASIA@5",
+      "2026-08-17:LONDON@1",
+      "2026-08-17:NY@1"
+     ],
+     "ids_hit": [
+      "2026-08-18:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-21:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-21:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-27:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-27:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3"
+     ],
+     "ids_none": [
+      "2026-09-10:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-09-14:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-09-14:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3",
+      "2026-09-14:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+      "2026-09-14:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@8"
+     ],
+     "ring_median": 0
+    }
+   },
+   "htf_src": {
+    "DetectHTFLevels": 231
+   },
+   "htf_beyond_band_median": 198
+  }
+ },
+ "d": {
+  "big": {
+   "label": "range \u2265 250",
+   "session_days": 23,
+   "era_pre_class35": {
+    "session_days": 15,
+    "exhausted_marker_n": 0,
+    "exhausted_marker_ids": [],
+    "level_event_total": 10
+   },
+   "era_post_class35": {
+    "session_days": 8,
+    "counter_exhausted_n": 0,
+    "counter_used_total": 1,
+    "level_event_total": 30,
+    "marker_n": 0
+   },
+   "level_event_total": 40,
+   "level_event_median": 0,
+   "level_event_max": 7,
+   "spending_total": 1,
+   "counter_used_total": 1,
+   "exhausted_n": 0,
+   "exhausted_ids": [],
+   "would_exhaust_if_counted_n": 8,
+   "would_exhaust_ids": [
+    "2026-08-26:ASIA",
+    "2026-08-28:NY",
+    "2026-09-01:LONDON",
+    "2026-09-03:NY",
+    "2026-09-08:NY"
+   ],
+   "cap": 4,
+   "per_session_day": {
+    "2026-08-17:ASIA": {
+     "reads": 6,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "ASIA_scheduled_read": 2,
+      "owner_reset": 3,
+      "planner_fail_closed": 1
+     }
+    },
+    "2026-08-18:NY": {
+     "reads": 1,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "NY_scheduled_read": 1
+     }
+    },
+    "2026-08-19:LONDON": {
+     "reads": 3,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "LONDON_scheduled_read": 3
+     }
+    },
+    "2026-08-19:NY": {
+     "reads": 3,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "NY_scheduled_read": 3
+     }
+    },
+    "2026-08-20:LONDON": {
+     "reads": 2,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "LONDON_scheduled_read": 2
+     }
+    },
+    "2026-08-20:NY": {
+     "reads": 2,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "NY_scheduled_read": 2
+     }
+    },
+    "2026-08-21:NY": {
+     "reads": 1,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "NY_scheduled_read": 1
+     }
+    },
+    "2026-08-23:ASIA": {
+     "reads": 4,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "planner_fail_closed": 4
+     }
+    },
+    "2026-08-24:ASIA": {
+     "reads": 5,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "ASIA_scheduled_read": 3,
+      "owner_reset": 1,
+      "planner_fail_closed": 1
+     }
+    },
+    "2026-08-24:NY": {
+     "reads": 8,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "NY_scheduled_read": 2,
+      "owner_reset": 5,
+      "structure_mss": 1
+     }
+    },
+    "2026-08-25:NY": {
+     "reads": 2,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "NY_scheduled_read": 2
+     }
+    },
+    "2026-08-26:ASIA": {
+     "reads": 10,
+     "level_event": 4,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "ASIA_scheduled_read": 2,
+      "dormant:flip": 1,
+      "level_event": 4,
+      "owner_reset": 1,
+      "planner_fail_closed": 1,
+      "structure_mss": 1
+     }
+    },
+    "2026-08-27:NY": {
+     "reads": 5,
+     "level_event": 2,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "level_event": 2,
+      "owner_reset": 1,
+      "planner_fail_closed": 2
+     }
+    },
+    "2026-08-28:NY": {
+     "reads": 7,
+     "level_event": 4,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "NY_scheduled_read": 1,
+      "dormant:death": 2,
+      "level_event": 4
+     }
+    },
+    "2026-08-30:ASIA": {
+     "reads": 3,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "e7_incident_kill:manual_cancel_respected": 2,
+      "planner_fail_closed": 1
+     }
+    },
+    "2026-09-01:LONDON": {
+     "reads": 6,
+     "level_event": 4,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "dormant:flip": 1,
+      "level_event": 4,
+      "planner_fail_closed": 1
+     }
+    },
+    "2026-09-01:NY": {
+     "reads": 5,
+     "level_event": 1,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "NY_scheduled_read": 1,
+      "dormant:death": 1,
+      "dormant:flip": 1,
+      "level_event": 1,
+      "rearmed:2x5m close back below 29212.50 (buffer 0.5\u00d7ATR14, 2\u00d7 5m closes)": 1
+     }
+    },
+    "2026-09-03:NY": {
+     "reads": 7,
+     "level_event": 5,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "dormant:death": 2,
+      "level_event": 5
+     }
+    },
+    "2026-09-08:NY": {
+     "reads": 5,
+     "level_event": 4,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "NY_scheduled_read": 1,
+      "level_event": 4
+     }
+    },
+    "2026-09-10:LONDON": {
+     "reads": 6,
+     "level_event": 5,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "LONDON_scheduled_read": 1,
+      "level_event": 5
+     }
+    },
+    "2026-09-14:NY": {
+     "reads": 8,
+     "level_event": 7,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "NY_scheduled_read": 1,
+      "level_event": 7
+     }
+    },
+    "2026-09-15:LONDON": {
+     "reads": 2,
+     "level_event": 1,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "LONDON_scheduled_read": 1,
+      "level_event": 1
+     }
+    },
+    "2026-09-16:NY": {
+     "reads": 5,
+     "level_event": 3,
+     "spending": 1,
+     "counter": 1,
+     "triggers": {
+      "NY_scheduled_read": 1,
+      "death_replan": 1,
+      "level_event": 3
+     }
+    }
+   }
+  },
+  "small": {
+   "label": "control",
+   "session_days": 45,
+   "era_pre_class35": {
+    "session_days": 19,
+    "exhausted_marker_n": 4,
+    "exhausted_marker_ids": [
+     "2026-08-16:ASIA",
+     "2026-08-25:ASIA",
+     "2026-08-26:LONDON",
+     "2026-08-26:NY"
+    ],
+    "level_event_total": 47
+   },
+   "era_post_class35": {
+    "session_days": 26,
+    "counter_exhausted_n": 0,
+    "counter_used_total": 0,
+    "level_event_total": 137,
+    "marker_n": 0
+   },
+   "level_event_total": 184,
+   "level_event_median": 4,
+   "level_event_max": 15,
+   "spending_total": 0,
+   "counter_used_total": 0,
+   "exhausted_n": 0,
+   "exhausted_ids": [],
+   "would_exhaust_if_counted_n": 23,
+   "would_exhaust_ids": [
+    "2026-08-25:ASIA",
+    "2026-08-26:LONDON",
+    "2026-08-26:NY",
+    "2026-08-27:ASIA",
+    "2026-08-27:LONDON"
+   ],
+   "cap": 4,
+   "per_session_day": {
+    "2026-08-16:ASIA": {
+     "reads": 6,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "ASIA_scheduled_read": 5,
+      "replans_exhausted": 1
+     }
+    },
+    "2026-08-17:LONDON": {
+     "reads": 1,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "LONDON_scheduled_read": 1
+     }
+    },
+    "2026-08-17:NY": {
+     "reads": 3,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "NY_scheduled_read": 2,
+      "owner_reset": 1
+     }
+    },
+    "2026-08-18:ASIA": {
+     "reads": 6,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "ASIA_scheduled_read": 2,
+      "owner_reset": 1,
+      "planner_fail_closed": 3
+     }
+    },
+    "2026-08-18:LONDON": {
+     "reads": 1,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "LONDON_scheduled_read": 1
+     }
+    },
+    "2026-08-19:ASIA": {
+     "reads": 4,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "ASIA_scheduled_read": 3,
+      "owner_reset": 1
+     }
+    },
+    "2026-08-20:ASIA": {
+     "reads": 3,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "ASIA_scheduled_read": 3
+     }
+    },
+    "2026-08-21:LONDON": {
+     "reads": 4,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "LONDON_scheduled_read": 4
+     }
+    },
+    "2026-08-24:LONDON": {
+     "reads": 1,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "planner_fail_closed": 1
+     }
+    },
+    "2026-08-25:ASIA": {
+     "reads": 16,
+     "level_event": 7,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "ASIA_scheduled_read": 2,
+      "level_event": 7,
+      "owner_reset": 4,
+      "planner_fail_closed": 2,
+      "replans_exhausted": 1
+     }
+    },
+    "2026-08-25:LONDON": {
+     "reads": 2,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "LONDON_scheduled_read": 2
+     }
+    },
+    "2026-08-26:LONDON": {
+     "reads": 15,
+     "level_event": 12,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "LONDON_scheduled_read": 1,
+      "level_event": 12,
+      "replans_exhausted": 2
+     }
+    },
+    "2026-08-26:NY": {
+     "reads": 8,
+     "level_event": 4,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "NY_scheduled_read": 3,
+      "level_event": 4,
+      "replans_exhausted": 1
+     }
+    },
+    "2026-08-27:ASIA": {
+     "reads": 13,
+     "level_event": 10,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "level_event": 10,
+      "owner_reset": 1,
+      "planner_fail_closed": 1,
+      "rearmed:2x5m close back below 29678.25 (buffer 0.5\u00d7ATR14, 2\u00d7 5m closes)": 1
+     }
+    },
+    "2026-08-27:LONDON": {
+     "reads": 7,
+     "level_event": 6,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "LONDON_scheduled_read": 1,
+      "level_event": 6
+     }
+    },
+    "2026-08-28:LONDON": {
+     "reads": 6,
+     "level_event": 5,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "LONDON_scheduled_read": 1,
+      "level_event": 5
+     }
+    },
+    "2026-08-31:ASIA": {
+     "reads": 2,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "planner_fail_closed": 2
+     }
+    },
+    "2026-08-31:LONDON": {
+     "reads": 3,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "owner_reset": 1,
+      "planner_fail_closed": 2
+     }
+    },
+    "2026-08-31:NY": {
+     "reads": 7,
+     "level_event": 3,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "level_event": 3,
+      "owner_reset": 1,
+      "planner_fail_closed": 2,
+      "rearmed:2x5m close back above 29426.92 (buffer 0.5\u00d7ATR14, 2\u00d7 5m closes)": 1
+     }
+    },
+    "2026-09-01:ASIA": {
+     "reads": 10,
+     "level_event": 4,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "level_event": 4,
+      "owner_reset": 1,
+      "planner_fail_closed": 4,
+      "rearmed:2x5m close back above 29035.25 (buffer 0.5\u00d7ATR14, 2\u00d7 5m closes)": 1
+     }
+    },
+    "2026-09-02:ASIA": {
+     "reads": 15,
+     "level_event": 11,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "ASIA_scheduled_read": 1,
+      "dormant:death": 1,
+      "dormant:flip": 1,
+      "level_event": 11,
+      "rearmed:5m_close close back below 29211.00 (buffer 0.5\u00d7ATR14, 2\u00d7 5m closes)": 1
+     }
+    },
+    "2026-09-02:LONDON": {
+     "reads": 6,
+     "level_event": 4,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "level_event": 4,
+      "owner_reset": 1,
+      "planner_fail_closed": 1
+     }
+    },
+    "2026-09-02:NY": {
+     "reads": 12,
+     "level_event": 11,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "dormant:flip": 1,
+      "level_event": 11
+     }
+    },
+    "2026-09-03:ASIA": {
+     "reads": 7,
+     "level_event": 6,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "ASIA_scheduled_read": 1,
+      "level_event": 6
+     }
+    },
+    "2026-09-03:LONDON": {
+     "reads": 2,
+     "level_event": 1,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "dormant:flip": 1,
+      "level_event": 1
+     }
+    },
+    "2026-09-04:LONDON": {
+     "reads": 3,
+     "level_event": 2,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "LONDON_scheduled_read": 1,
+      "level_event": 2
+     }
+    },
+    "2026-09-04:NY": {
+     "reads": 6,
+     "level_event": 4,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "level_event": 4,
+      "owner_reset": 1,
+      "planner_fail_closed": 1
+     }
+    },
+    "2026-09-06:ASIA": {
+     "reads": 6,
+     "level_event": 4,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "ASIA_scheduled_read": 1,
+      "level_event": 4,
+      "owner_reset": 1
+     }
+    },
+    "2026-09-07:ASIA": {
+     "reads": 5,
+     "level_event": 3,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "ASIA_scheduled_read": 1,
+      "level_event": 3,
+      "owner_reset": 1
+     }
+    },
+    "2026-09-08:ASIA": {
+     "reads": 8,
+     "level_event": 7,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "ASIA_scheduled_read": 1,
+      "level_event": 7
+     }
+    },
+    "2026-09-08:LONDON": {
+     "reads": 5,
+     "level_event": 4,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "LONDON_scheduled_read": 1,
+      "level_event": 4
+     }
+    },
+    "2026-09-09:ASIA": {
+     "reads": 2,
+     "level_event": 1,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "ASIA_scheduled_read": 1,
+      "level_event": 1
+     }
+    },
+    "2026-09-09:NY": {
+     "reads": 3,
+     "level_event": 2,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "NY_scheduled_read": 1,
+      "level_event": 2
+     }
+    },
+    "2026-09-10:ASIA": {
+     "reads": 10,
+     "level_event": 8,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "ASIA_scheduled_read": 1,
+      "level_event": 8,
+      "owner_reset": 1
+     }
+    },
+    "2026-09-10:NY": {
+     "reads": 3,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "owner_reset": 1,
+      "planner_fail_closed": 2
+     }
+    },
+    "2026-09-11:LONDON": {
+     "reads": 5,
+     "level_event": 4,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "LONDON_scheduled_read": 1,
+      "level_event": 4
+     }
+    },
+    "2026-09-11:NY": {
+     "reads": 6,
+     "level_event": 5,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "NY_scheduled_read": 1,
+      "level_event": 5
+     }
+    },
+    "2026-09-13:ASIA": {
+     "reads": 16,
+     "level_event": 15,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "ASIA_scheduled_read": 1,
+      "level_event": 15
+     }
+    },
+    "2026-09-14:ASIA": {
+     "reads": 8,
+     "level_event": 7,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "ASIA_scheduled_read": 1,
+      "level_event": 7
+     }
+    },
+    "2026-09-14:LONDON": {
+     "reads": 4,
+     "level_event": 3,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "LONDON_scheduled_read": 1,
+      "level_event": 3
+     }
+    },
+    "2026-09-15:ASIA": {
+     "reads": 9,
+     "level_event": 8,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "ASIA_scheduled_read": 1,
+      "level_event": 8
+     }
+    },
+    "2026-09-15:NY": {
+     "reads": 2,
+     "level_event": 0,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "NY_scheduled_read": 1,
+      "structure_mss": 1
+     }
+    },
+    "2026-09-16:ASIA": {
+     "reads": 13,
+     "level_event": 12,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "ASIA_scheduled_read": 1,
+      "level_event": 12
+     }
+    },
+    "2026-09-16:LONDON": {
+     "reads": 11,
+     "level_event": 10,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "LONDON_scheduled_read": 1,
+      "level_event": 10
+     }
+    },
+    "2026-09-17:LONDON": {
+     "reads": 2,
+     "level_event": 1,
+     "spending": 0,
+     "counter": 0,
+     "triggers": {
+      "LONDON_scheduled_read": 1,
+      "level_event": 1
+     }
+    }
+   }
+  }
+ },
+ "c_inband": {
+  "big": {
+   "label": "range \u2265 250",
+   "reads": 73,
+   "defs": {
+    "s1_1h": {
+     "trended": 46,
+     "found": 46,
+     "found_frac": 1.0,
+     "hit": 12,
+     "hit_frac": 0.2608695652173913,
+     "minutes_median": 11.048591666666667,
+     "dist_median": 281.5625,
+     "tf_of_found": {
+      "4h": 22,
+      "1h": 21,
+      "1d": 3
+     },
+     "farther_than_table_and_aligned": 17,
+     "farther_hit": 6,
+     "ids_found": [
+      "2026-08-18:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3",
+      "2026-08-19:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1"
+     ],
+     "ids_hit": [
+      "2026-08-18:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-24:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3",
+      "2026-08-28:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@7",
+      "2026-09-01:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-09-01:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5"
+     ]
+    },
+    "s1_4h": {
+     "trended": 43,
+     "found": 43,
+     "found_frac": 1.0,
+     "hit": 8,
+     "hit_frac": 0.18604651162790697,
+     "minutes_median": 127.13818333333333,
+     "dist_median": 281.625,
+     "tf_of_found": {
+      "4h": 24,
+      "1h": 17,
+      "1d": 2
+     },
+     "farther_than_table_and_aligned": 17,
+     "farther_hit": 5,
+     "ids_found": [
+      "2026-08-17:ASIA@1",
+      "2026-08-17:ASIA@2",
+      "2026-08-18:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2"
+     ],
+     "ids_hit": [
+      "2026-08-28:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@7",
+      "2026-09-01:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-09-08:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5",
+      "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2"
+     ]
+    },
+    "s1_D": {
+     "trended": 14,
+     "found": 14,
+     "found_frac": 1.0,
+     "hit": 1,
+     "hit_frac": 0.07142857142857142,
+     "minutes_median": 2.148416666666667,
+     "dist_median": 282.75,
+     "tf_of_found": {
+      "4h": 9,
+      "1h": 4,
+      "1d": 1
+     },
+     "farther_than_table_and_aligned": 6,
+     "farther_hit": 0,
+     "ids_found": [
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5",
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@6",
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@7"
+     ],
+     "ids_hit": [
+      "2026-08-28:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@7"
+     ]
+    },
+    "plan_bias": {
+     "trended": 56,
+     "found": 55,
+     "found_frac": 0.9821428571428571,
+     "hit": 18,
+     "hit_frac": 0.32727272727272727,
+     "minutes_median": 17.519849999999998,
+     "dist_median": 270.5,
+     "tf_of_found": {
+      "4h": 32,
+      "1h": 18,
+      "1d": 5
+     },
+     "farther_than_table_and_aligned": 24,
+     "farther_hit": 11,
+     "ids_found": [
+      "2026-08-17:ASIA@1",
+      "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-19:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-19:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3"
+     ],
+     "ids_hit": [
+      "2026-08-20:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-24:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-24:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3",
+      "2026-08-27:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+      "2026-09-01:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2"
+     ]
+    }
+   },
+   "oracle_seated": {
+    "recorded_reads": 21,
+    "ran_out": 12,
+    "reads_with_missed": 15,
+    "reads_where_a_missed_level_was_reached": 12,
+    "ids": [
+     "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+     "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+     "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3",
+     "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+     "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5"
+    ]
+   },
+   "oracle": {
+    "reads_with_missed_inband_htf": 61,
+    "frac": 0.8356164383561644,
+    "missed_total": 881,
+    "missed_hit_total": 539,
+    "reads_where_a_missed_level_was_reached": 52,
+    "ids": [
+     "2026-08-17:ASIA@1 ['EQH\u00b71d@30076.75\u2713', 'EQH\u00b74h@30076.75\u2713', 'SUPPLY\u00b74h@30147.75\u2713']",
+     "2026-08-17:ASIA@2 ['EQH\u00b74h@29887.00\u2713', 'EQH\u00b74h@29985.00\u2713', 'EQH\u00b74h@30010.00\u2713']",
+     "2026-08-18:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1 ['EQL\u00b74h@29518.25\u2713', 'EQL\u00b74h@29577.25\u2713', 'EQL\u00b74h@29666.00\u2713']",
+     "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3 ['OB\u00b74h@29922.38', 'EQH\u00b71h@29928.75']",
+     "2026-08-19:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1 ['EQH\u00b74h@29363.50', 'EQL\u00b74h@29328.50', 'EQL\u00b74h@29396.75\u2713']"
+    ]
+   }
+  },
+  "small": {
+   "label": "control",
+   "reads": 231,
+   "defs": {
+    "s1_1h": {
+     "trended": 90,
+     "found": 90,
+     "found_frac": 1.0,
+     "hit": 14,
+     "hit_frac": 0.15555555555555556,
+     "minutes_median": 7.083475,
+     "dist_median": 301.0,
+     "tf_of_found": {
+      "4h": 57,
+      "1h": 28,
+      "1d": 5
+     },
+     "farther_than_table_and_aligned": 47,
+     "farther_hit": 9,
+     "ids_found": [
+      "2026-08-18:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-18:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-20:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-20:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-20:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3"
+     ],
+     "ids_hit": [
+      "2026-08-25:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@11",
+      "2026-09-03:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-09-07:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+      "2026-09-07:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5",
+      "2026-09-08:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1"
+     ]
+    },
+    "s1_4h": {
+     "trended": 133,
+     "found": 133,
+     "found_frac": 1.0,
+     "hit": 40,
+     "hit_frac": 0.3007518796992481,
+     "minutes_median": 18.496716666666664,
+     "dist_median": 293.25,
+     "tf_of_found": {
+      "4h": 106,
+      "1h": 25,
+      "1d": 2
+     },
+     "farther_than_table_and_aligned": 71,
+     "farther_hit": 28,
+     "ids_found": [
+      "2026-08-16:ASIA@1",
+      "2026-08-16:ASIA@2",
+      "2026-08-16:ASIA@3",
+      "2026-08-16:ASIA@4",
+      "2026-08-16:ASIA@5"
+     ],
+     "ids_hit": [
+      "2026-08-25:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@6",
+      "2026-08-25:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@7",
+      "2026-09-02:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-09-02:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-09-02:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3"
+     ]
+    },
+    "s1_D": {
+     "trended": 48,
+     "found": 48,
+     "found_frac": 1.0,
+     "hit": 4,
+     "hit_frac": 0.08333333333333333,
+     "minutes_median": 128.21115833333334,
+     "dist_median": 292.75,
+     "tf_of_found": {
+      "1d": 1,
+      "4h": 24,
+      "1h": 23
+     },
+     "farther_than_table_and_aligned": 18,
+     "farther_hit": 1,
+     "ids_found": [
+      "2026-08-25:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@11",
+      "2026-08-25:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@13",
+      "2026-08-25:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@14",
+      "2026-08-26:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-26:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2"
+     ],
+     "ids_hit": [
+      "2026-08-25:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@11",
+      "2026-08-26:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-08-26:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@7",
+      "2026-08-27:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1"
+     ]
+    },
+    "plan_bias": {
+     "trended": 193,
+     "found": 189,
+     "found_frac": 0.9792746113989638,
+     "hit": 35,
+     "hit_frac": 0.18518518518518517,
+     "minutes_median": 53.240233333333336,
+     "dist_median": 284.25,
+     "tf_of_found": {
+      "4h": 105,
+      "1h": 79,
+      "1d": 5
+     },
+     "farther_than_table_and_aligned": 98,
+     "farther_hit": 22,
+     "ids_found": [
+      "2026-08-16:ASIA@1",
+      "2026-08-16:ASIA@3",
+      "2026-08-16:ASIA@5",
+      "2026-08-17:LONDON@1",
+      "2026-08-17:NY@1"
+     ],
+     "ids_hit": [
+      "2026-08-26:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@7",
+      "2026-08-27:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@7",
+      "2026-09-02:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@6",
+      "2026-09-02:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@7",
+      "2026-09-02:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@9"
+     ]
+    }
+   },
+   "oracle_seated": {
+    "recorded_reads": 88,
+    "ran_out": 19,
+    "reads_with_missed": 52,
+    "reads_where_a_missed_level_was_reached": 32,
+    "ids": [
+     "2026-09-09:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+     "2026-09-09:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3",
+     "2026-09-09:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+     "2026-09-10:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+     "2026-09-10:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3"
+    ]
+   },
+   "oracle": {
+    "reads_with_missed_inband_htf": 193,
+    "frac": 0.8354978354978355,
+    "missed_total": 2732,
+    "missed_hit_total": 868,
+    "reads_where_a_missed_level_was_reached": 143,
+    "ids": [
+     "2026-08-16:ASIA@1 ['EQH\u00b74h@30275.00\u2713', 'EQL\u00b74h@30336.75', 'DEMAND\u00b74h@30273.50\u2713']",
+     "2026-08-16:ASIA@2 ['EQH\u00b74h@30275.00\u2713', 'EQL\u00b74h@30336.75', 'DEMAND\u00b74h@30273.50\u2713']",
+     "2026-08-16:ASIA@3 ['EQH\u00b74h@30275.00\u2713', 'EQL\u00b74h@30336.75', 'DEMAND\u00b74h@30273.50\u2713']",
+     "2026-08-16:ASIA@4 ['EQH\u00b74h@30275.00\u2713', 'EQL\u00b74h@30336.75', 'DEMAND\u00b74h@30273.50\u2713']",
+     "2026-08-16:ASIA@5 ['EQH\u00b74h@30275.00\u2713', 'EQL\u00b74h@30336.75', 'DEMAND\u00b74h@30273.50\u2713']"
+    ]
+   }
+  }
+ },
+ "c2": {
+  "big_doc": {
+   "label": "range \u2265 250",
+   "table": "doc",
+   "ran_out_reads": 41,
+   "ids": [
+    "2026-08-17:ASIA@1",
+    "2026-08-17:ASIA@2",
+    "2026-08-18:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+    "2026-08-19:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+    "2026-08-20:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1"
+   ],
+   "defs": {
+    "s1_1h": {
+     "trend_aligned_with_move": 10,
+     "found": 10,
+     "hit": 4,
+     "hit_frac_of_ran_out": 0.0975609756097561,
+     "minutes_median": 39.250625,
+     "ids_hit": [
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5",
+      "2026-09-03:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+      "2026-09-03:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5"
+     ]
+    },
+    "s1_4h": {
+     "trend_aligned_with_move": 9,
+     "found": 9,
+     "hit": 5,
+     "hit_frac_of_ran_out": 0.12195121951219512,
+     "minutes_median": 249.32473333333334,
+     "ids_hit": [
+      "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3",
+      "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+      "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5"
+     ]
+    },
+    "s1_D": {
+     "trend_aligned_with_move": 3,
+     "found": 3,
+     "hit": 2,
+     "hit_frac_of_ran_out": 0.04878048780487805,
+     "minutes_median": 20.034366666666667,
+     "ids_hit": [
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+      "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5"
+     ]
+    },
+    "plan_bias": {
+     "trend_aligned_with_move": 16,
+     "found": 15,
+     "hit": 5,
+     "hit_frac_of_ran_out": 0.12195121951219512,
+     "minutes_median": 39.54098333333334,
+     "ids_hit": [
+      "2026-08-20:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-09-01:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-09-03:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+      "2026-09-03:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5",
+      "2026-09-08:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1"
+     ]
+    }
+   }
+  },
+  "big_seated": {
+   "label": "range \u2265 250",
+   "table": "seated",
+   "ran_out_reads": 12,
+   "ids": [
+    "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+    "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+    "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3",
+    "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+    "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5"
+   ],
+   "defs": {
+    "s1_1h": {
+     "trend_aligned_with_move": 0,
+     "found": 0,
+     "hit": 0,
+     "hit_frac_of_ran_out": 0.0,
+     "minutes_median": null,
+     "ids_hit": []
+    },
+    "s1_4h": {
+     "trend_aligned_with_move": 6,
+     "found": 6,
+     "hit": 5,
+     "hit_frac_of_ran_out": 0.4166666666666667,
+     "minutes_median": 249.32473333333334,
+     "ids_hit": [
+      "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3",
+      "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+      "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5"
+     ]
+    },
+    "s1_D": {
+     "trend_aligned_with_move": 0,
+     "found": 0,
+     "hit": 0,
+     "hit_frac_of_ran_out": 0.0,
+     "minutes_median": null,
+     "ids_hit": []
+    },
+    "plan_bias": {
+     "trend_aligned_with_move": 1,
+     "found": 0,
+     "hit": 0,
+     "hit_frac_of_ran_out": 0.0,
+     "minutes_median": null,
+     "ids_hit": []
+    }
+   }
+  },
+  "small_doc": {
+   "label": "control",
+   "table": "doc",
+   "ran_out_reads": 53,
+   "ids": [
+    "2026-08-16:ASIA@1",
+    "2026-08-16:ASIA@2",
+    "2026-08-16:ASIA@3",
+    "2026-08-16:ASIA@4",
+    "2026-08-16:ASIA@5"
+   ],
+   "defs": {
+    "s1_1h": {
+     "trend_aligned_with_move": 14,
+     "found": 14,
+     "hit": 5,
+     "hit_frac_of_ran_out": 0.09433962264150944,
+     "minutes_median": 102.67698333333334,
+     "ids_hit": [
+      "2026-08-18:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-09-07:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+      "2026-09-08:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-09-14:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+      "2026-09-14:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2"
+     ]
+    },
+    "s1_4h": {
+     "trend_aligned_with_move": 21,
+     "found": 21,
+     "hit": 6,
+     "hit_frac_of_ran_out": 0.11320754716981132,
+     "minutes_median": 48.92686666666667,
+     "ids_hit": [
+      "2026-09-06:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5",
+      "2026-09-10:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@7",
+      "2026-09-10:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@8",
+      "2026-09-10:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@9",
+      "2026-09-14:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1"
+     ]
+    },
+    "s1_D": {
+     "trend_aligned_with_move": 5,
+     "found": 5,
+     "hit": 2,
+     "hit_frac_of_ran_out": 0.03773584905660377,
+     "minutes_median": 22.79685,
+     "ids_hit": [
+      "2026-08-27:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-27:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3"
+     ]
+    },
+    "plan_bias": {
+     "trend_aligned_with_move": 24,
+     "found": 24,
+     "hit": 11,
+     "hit_frac_of_ran_out": 0.20754716981132076,
+     "minutes_median": 0.8609833333333333,
+     "ids_hit": [
+      "2026-08-18:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-27:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+      "2026-08-27:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3",
+      "2026-09-06:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5",
+      "2026-09-07:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4"
+     ]
+    }
+   }
+  }
+ }
+}

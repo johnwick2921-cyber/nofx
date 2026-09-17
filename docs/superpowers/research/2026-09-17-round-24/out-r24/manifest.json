@@ -1,0 +1,133 @@
+{
+ "commit": "9a37f1910f69e571d43979e4cfe7ad47a730c5b1",
+ "scripts": {
+  "extract": "docs/superpowers/research/2026-09-17-round-24/extract.sh",
+  "harness": "docs/superpowers/research/2026-09-17-round-24/harness/ (go run ./\u2026 -in out-r24/in -out out-r24)",
+  "analysis": "docs/superpowers/research/2026-09-17-round-24/analysis.py"
+ },
+ "inputs_sha256": {
+  "bars.csv": "c99a31acb9e9e365cc44d10e7cd76def292eb552aa3c1707e48ca7b59e425058",
+  "bars_htf.csv": "90d61a9356d02d8faaaa078c229774dfaef24afa2e6fe3b7adda6362986c29ca",
+  "plans.json": "505fa846e49321f0630cf7c868bdbb14c409d009a23b22566ac963854685e6b9",
+  "plan_lifecycle_log.json": "f41eec2915e71b6686232e68b7685b3d731e585856c97d4fa030e0365f953a9b",
+  "replan_counters.json": "77b583040de7ff99acb2c00c197910be27568bafcfe7232a4a97baa6196e0468",
+  "strategy_dayplan.json": "76ddf39aa06321ffa83bdc10bc62370649968bbaf656483cca86341169122443",
+  "research_plan.json": "37402825e66820a729e9f88522e4d1894ad4c5fbe11d8189b271fa8ec65a4c3d"
+ },
+ "outputs_sha256": {
+  "sessions.jsonl": "5106733e04717c0bab8c99b6ebdf7a7dc8e1d4157e7ea172772e3f96ce4c3e05",
+  "reads.jsonl": "9f20558e88104d4151acc3cb08d5a17553fb500571cc51c9306ae91968296492",
+  "scenarios.jsonl": "41294851764043fa8b4875fc8729552b45f498682be460b0e65e86f1602d92a2",
+  "dayplan.jsonl": "c6ab78478139daf7d647dec00c523c0b765822849a955f20645d4dd09aea151d"
+ },
+ "lookahead": {
+  "at_read": "price/DATR/seated table/HTF universe/trend use only bars closed before created_at, or the planner's own recorded input snapshot for that read (research store, object=plan/input)",
+  "outcome": "excursion, ran_out, hit, minutes, exhausted use only 1m bars with open >= created_at and < session flat",
+  "direction": "dir_exc = side of the larger excursion from price-at-read over the remaining session (primary); dir_close = sign(flat close \u2212 price) reported as a probe"
+ },
+ "cells": {
+  "population": {
+   "n": 70,
+   "big_n": 23,
+   "ids": [
+    "2026-08-17:ASIA",
+    "2026-08-18:NY",
+    "2026-08-19:LONDON",
+    "2026-08-19:NY",
+    "2026-08-20:LONDON"
+   ]
+  },
+  "a_big_seated": {
+   "n": 21,
+   "ids": [
+    "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+    "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+    "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3",
+    "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+    "2026-09-10:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5"
+   ]
+  },
+  "a_big_doc": {
+   "n": 73,
+   "ids": [
+    "2026-08-17:ASIA@1",
+    "2026-08-17:ASIA@2",
+    "2026-08-18:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+    "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+    "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2"
+   ]
+  },
+  "b_big": {
+   "n": 182,
+   "ids": [
+    "2026-08-17:ASIA@1#S1",
+    "2026-08-17:ASIA@1#S2",
+    "2026-08-17:ASIA@2#S1",
+    "2026-08-17:ASIA@2#S2",
+    "2026-08-18:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1#S1"
+   ]
+  },
+  "c_big": {
+   "s1_1h": {
+    "n": 46,
+    "ids": [
+     "2026-08-18:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+     "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+     "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+     "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3",
+     "2026-08-19:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1"
+    ]
+   },
+   "s1_4h": {
+    "n": 43,
+    "ids": [
+     "2026-08-17:ASIA@1",
+     "2026-08-17:ASIA@2",
+     "2026-08-18:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+     "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+     "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2"
+    ]
+   },
+   "s1_D": {
+    "n": 14,
+    "ids": [
+     "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+     "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@4",
+     "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@5",
+     "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@6",
+     "2026-08-26:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@7"
+    ]
+   },
+   "plan_bias": {
+    "n": 54,
+    "ids": [
+     "2026-08-17:ASIA@1",
+     "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+     "2026-08-19:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+     "2026-08-19:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@2",
+     "2026-08-19:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@3"
+    ]
+   }
+  },
+  "c2_big_doc": {
+   "n": 41,
+   "ids": [
+    "2026-08-17:ASIA@1",
+    "2026-08-17:ASIA@2",
+    "2026-08-18:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+    "2026-08-19:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1",
+    "2026-08-20:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265@1"
+   ]
+  },
+  "d_big": {
+   "n": 23,
+   "ids": [
+    "2026-08-17:ASIA",
+    "2026-08-18:NY",
+    "2026-08-19:LONDON",
+    "2026-08-19:NY",
+    "2026-08-20:LONDON"
+   ]
+  }
+ }
+}
