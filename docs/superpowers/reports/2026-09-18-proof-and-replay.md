@@ -8,10 +8,19 @@
 
 ## A. STOP-ENTRY LIVE PROOF — in progress
 
-- Watcher running since 08:20 CT: `/tmp/ds104-stopentry-watch.sh` → log `/tmp/ds104-stopentry-watch.log` (60s poll, journal since 07:52 CT, patterns `stop_entry|stop-entry|⚔️ arm|armed_fill|fill@|🧾 cancels|nt8 addon|order_snapshot|cancel`, trader_name=hoang). `pgrep -f ds104-stopentry-watch` = alive [A].
-- Live state as of ~08:25 CT: today's only `kind=stop_entry` row in the LIVE DB is **id 166** (ASIA S2 LONG, entry 29894.00, stop 29849.00, created 01:36:39 CT, state=cancelled, pre-seam-on) [A, query below].
-- The dispatch's candidate (NY v1 S2 reclaim, entry 29766.75, stop 29796.00) had NOT materialized in `armed_orders` as of 08:25 CT. Watching.
-- Timelines will be appended here as frames arrive, with ids and journal quotes (L7: read, never typed).
+- Watcher: `/tmp/ds104-stopentry-watch.sh` (PID live, 60s poll, journal since 07:52 CT,
+  cursor patched to seconds after an early repeat bug). `pgrep` = alive [A].
+- **Boot line @ 07:52:20 CT (READ from journal) [A]:**
+  `🎯 stop-entry: seam=on · slots=stop_price · guard=stop-side · unknown=no-op · addon build_id=2026-09-07-h1 expected=2026-09-07-h1 match=yes`
+- **NY v1 plan written 08:06:20 CT** (planner call 359.8s, reasoning=max) [A].
+  Arm specs: S1 reject entry 29799.64 stop 29840 · S2 reclaim entry 29766.75 stop 29796.00 · S3 reject entry 29889.52 stop 29920.25 (all `wait_confirm:true`).
+- **S2 min-SL prediction CONFIRMED at authoring [A]:** journal 08:06:20
+  `⚔️ arm feasibility: S2 arm stop 29796.00 too close (29.25 < 29.29 = 1.5×ATR5m) — min-SL gate will refuse it (WARN — write proceeds; the gate-at-arm chain enforces)`.
+  So the candidate's stop is 0.04 pt inside the 1.5×ATR5m floor, exactly as the dispatch predicted. No `kind=stop_entry` row for S2 exists in armed_orders as of 08:35 CT (only id 166, ASIA, cancelled pre-seam-on).
+- **No stop_entry placement has reached the wire yet** — no `signal_id`, no NT8 frame for any stop_entry row today. Watching.
+- Observed on the same write [A]: `🪪 map 29647.50 id=NULL: missing formed_close_ms` and
+  `🪪 map 29967.25 id=NULL: missing formed_close_ms` — NULL-id map entries in the NY v1 machine map (the DS-102 id-assignment surface, live today).
+- Also observed [A]: `⏱ wake SKIPPED` ×4 (08:08–08:14, "22→16 min to flat (cutoff 25m) — seated Demand·1h invalidated") — no re-read between 08:06 and the last-entry gate.
 
 ### A queries (re-runnable)
 
@@ -20,7 +29,11 @@
 SELECT id, kind, state, session, scenario, side, printf('%.2f',entry_px),
        printf('%.2f',stop_px), created_at
 FROM armed_orders WHERE kind='stop_entry' AND date(created_at)='2026-09-18' ORDER BY id;
--- result @ ~08:25 CT: id=166|cancelled|ASIA|S2|LONG|29894.00|29849.00|2026-09-18 01:36:39
+-- result @ ~08:35 CT: id=166|cancelled|ASIA|S2|LONG|29894.00|29849.00|2026-09-18 01:36:39
+```
+
+```bash
+journalctl -u nofx --since '2026-09-18 07:52' --no-pager | grep -E 'stop-entry|arm feasibility|arm REFUSED'
 ```
 
 ## B. REPLAY TABLE 1 — what the switch cost
@@ -87,11 +100,59 @@ SELECT contract, o, h, l, c FROM bars WHERE symbol='MNQ' AND tf='1m'
 
 ## C. REPLAY TABLE 2 — reject plays under the geometry gate
 
-NOT YET RUN. Planned (due 11:00 CT):
-- geometry records: 93 in backup + 2 newer in live DB = 95 total
-  (`SELECT COUNT(*) FROM system_config WHERE key LIKE 'structural_geometry%'`) [A].
-- join every `reject` scenario in plans since 09-13 to its verdict and DS-102's
-  resolution rules (second column [B] until DS-102's branch exists).
+**Method.** Live DB read-only (superset). Plans with `trade_date >= '2026-09-13'`
+and `doc LIKE '%reject%'` → parse `doc.scenarios[]`, keep `condition=='reject'`,
+dedupe by (plan_id, version, scenario id). Join verdicts from `system_config`
+keys `structural_geometry:*` parsed as JSON (plan_id/version/scenario in the
+value). Re-runnable queries below.
+
+**C1 — totals [A]:** unique reject scenarios n=113 (ASIA 58 · LONDON 27 · NY 28);
+geometry verdict records n=95 (93 in the 02:25 backup + 2 live-only); scenarios
+WITHOUT a verdict record n=18.
+
+**C2 — verdict distribution (n=95) [A]:**
+
+| reason | n | detail breakdown |
+|---|---|---|
+| `no_provenance` | 65 | `entry_source_not_in_frozen_zones` 46 · `scenario_level_id_missing` 17 · `entry_zone_edges_or_provenance_unusable` 2 |
+| `rr` | 28 | all R:R < 2.0 floor: min 0.568, max 1.468 (gain/risk read from the detail string) |
+| `pending_gates` | 1 | `geometry_pass risk=10.5 gain=22.0 net=20.0` — passed geometry, refused later |
+| `entry_gate` | 1 | entry-gate refusal |
+
+All 95 records carry `quantity=0` (nothing was authorized).
+
+**C3 — the no-verdict 18 (n, with named ids)** [A]: scenarios whose
+(plan_id,version,S#) has no `structural_geometry` record — e.g.
+2026-09-13 ASIA v7 S3, v14 S3/S4/S5, 2026-09-14 ASIA v1 S1, LONDON v1 S1/S3, v4
+S3, NY v5 S1, … (full list in the archive file). Two plausible causes,
+unmeasured which: arm authored before the gate wrote records, or key-shape
+mismatch (leg). NOT MEASURED individually.
+
+**C4 — entry-level kinds from trigger prose** (regex over the 113 triggers;
+multiple tokens per scenario possible) [A]: ONH 30 · VWAP 30 · SWG 22 ·
+VWAP+1σ 15 · ONL 14 · PDC 10 · PDH 10 · PDL 4 · nPOC 4. The reject anchors are
+overwhelmingly the id-less kinds DS-102's fix targets (ONH/ONL/VWAP family).
+
+**C5 — would the level resolve under DS-102's rules (second column)?**
+**NOT MEASURED — [B] pending.** Their branch is not on dev yet; the gate's
+current matching (pre-DS-102, `trader/structural_geometry.go:23-77`
+`ResolveEntryGeometryZone`) fails closed on `scenario_level_id_missing`,
+identity price/label/TF not matching a frozen zone source
+(`entry_source_not_in_frozen_zones`), and unusable zone edges. Per the
+dispatch I will re-run each of the 113 against their exported resolver from a
+`_test.go` under `docs/` in this worktree the moment their PR lands (Part D),
+and report every disagreement.
+
+### C queries (re-runnable)
+
+```sql
+SELECT COUNT(*) FROM system_config WHERE key LIKE 'structural_geometry%';              -- 95
+SELECT COUNT(*) FROM plans WHERE trade_date >= '2026-09-13' AND doc LIKE '%reject%';   -- 79 backup; live is superset
+```
+
+```bash
+python3 /tmp/ds104_replay2.py   # produces /tmp/ds104-replay2.txt (per-scenario lines)
+```
 
 ## D. VERIFY OTHER LANES' CLAIMS
 
