@@ -190,3 +190,24 @@ $ npm run build                           → ✓ built in 4.92s
 
 Commits on `feat/knob-prune` (all pushed): `808c6ea8` claim · `013256c3` pre-prune pins ·
 `fdce92e6` Go · `d977af91` web editor · `3a48a8ec` guide · (this report).
+
+## 10. Merge of origin/dev f820a642 (CLASS 149 #170 + CLASS 150 #171) — a32ed9d6, 01:4x CT
+
+Conflicts (5), each resolved keeping BOTH sides: `store/strategy.go` (t1_currencies field +
+folded acceptance_rule comment) · `web/src/types/strategy.ts` (same) ·
+`web/src/i18n/plan-translations.ts` (t1Currencies + noTradeAdvisory kept, maxScenarios stays
+removed) · `web/src/guide/content/settings.ts` (t1 card kept, 5-toggle wake card replaced by the
+1-switch card) · `web/src/guide/GuidePage.test.tsx` (census 53 + t1 clause − 9 prune = **44**).
+`git diff --check` + marker grep clean. AUDIT-CHECKLIST: CLASS 149/150 in place, `## CLASS NN`
+prune-protocol section appended (number at merge).
+
+Tails at a32ed9d6 (nice -n 19 ionice -c 3): `go build ./... && go vet ./...` rc 0 ·
+`go test ./... -count=1` rc 0, 35 ok / 0 FAIL (store 71s, trader 339s, api 8.9s, kernel 1.4s) ·
+`go test -race ./kernel ./store ./trader ./api` rc 0 (4.6s / 130s / 365s / 11.7s) ·
+`tsc --noEmit` rc 0 · `vitest run` 72 files / 468 tests passed ·
+`eslint src/guide src/components/strategy --max-warnings 0` rc 1 with **56 prettier/prettier
+errors in five files this branch never touched** (GridConfigEditor, PublishSettingsEditor,
+RiskControlEditor, TokenEstimateBar, scenarioEconomics.test.ts) — identical to origin/dev
+(`git diff origin/dev` empty on them; the same command on a clean origin/dev checkout returns the
+same 56, rc 1) — pre-existing dev debt, not this wave's; eslint on every file the branch touched
+rc 0.
