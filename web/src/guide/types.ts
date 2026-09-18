@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 
 // Stamped from the shipped binary at boot time; see deploy/ for the bump step.
 // The guide top banner compares this against GET /api/health revision.
-export const GUIDE_BUILT_REV = '249ff3a5eea6f499c3590559cdd9afa88e4dd0b0'
+export const GUIDE_BUILT_REV = '99349544e1256ffb9fce5e15d5a08e391ec4e9e1'
 
 export interface Card {
   title: string
