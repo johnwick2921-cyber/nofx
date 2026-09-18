@@ -5772,3 +5772,75 @@ tie-break, old-binary statements, opt-in live-copy run via
 `BARS_KEY_LIVE_COPY`), `trader/ninjatrader/bar_persist_contract_key_test.go`
 (the persister's call site), `store/history_import_test.go` E1 (same-contract
 collision skips; another contract lands beside).
+
+## CLASS 150 — A T1 BLACKOUT THAT NEVER ASKED WHICH CURRENCY THE EVENT WAS IN (born 2026-08-19 with W3's red-news blackout, reported by the owner 2026-09-17 evening and ordered 2026-09-18 00:3x CT "fix 3", feat/t1-currencies, W-T1-CURRENCIES)
+
+**Shape.** W3 turned every T1 (red / High-impact) event of a session's
+calendar slice into a HARD ±15m no-trade window (`kernel.T1BlackoutWindows`)
+and the session currency filter (`calendar.SessionCurrencies`: ASIA = USD+JPY+
+CNY, LONDON = USD+EUR+GBP) decided which events were IN the slice at all. So
+the only currency question anyone ever asked was "is this event relevant to
+the session" — never "does a red print in THIS currency stop an MNQ trader".
+The stored 2026-09-17 slice (`calendar_slices`, source forexfactory, created
+1789707301008) carried `BOJ Policy Rate` and `Monetary Policy Statement` at
+`2026-09-18T02:54:00Z` JPY T1 (= 21:54 CT, ASIA) and three GBP T1 rows at
+`11:00Z` (Official Bank Rate, MPC votes, Monetary Policy Summary — LONDON);
+the 2026-09-18 slice carries `BOJ Press Conference` at `05:30Z` JPY T1. The
+MNQ bot sat in a HARD window for a Japanese rate decision, and the same code
+would have blacked out the London morning for the Bank of England.
+
+**Why it hid.** (1) The card, the plan's no_trade lines and the gate all
+agreed — they were three renderings of one unfiltered function, so no parity
+test could disagree. (2) `PlannerCalendarEvent.Currency` existed and was
+printed in the prompt's Calendar section, which made the currency look
+"handled". (3) The CLASS 145 investigation the night before looked straight at
+the BOJ window (`BOJ 21:30 ±15m +39m (clock drift)`) and fixed the WIDENING;
+nobody asked why a JPY event owned an MNQ window in the first place — the
+first bug on a line hides the second.
+
+**The rule.** A gate keyed on an event attribute must READ that attribute
+through a knob with a stated default, and the events it declines to gate on
+must stay VISIBLE. `day_plan.t1_currencies` (`store.DayPlanConfig.
+T1CurrenciesFor`: absent/empty → `[USD]`; `ALL`/`*` → every currency, the
+pre-wave behaviour byte-identical; canonicalised upper-case/trim/dedupe at the
+resolver). ONE split, `kernel.SplitT1(events, set)`: in-set → HARD window;
+out-of-set → `🟠 <title> <HH:MM> CT (<CCY>) — red news, advisory only
+(t1_currencies=<set>)` in the plan's no_trade lines, on the card (RulesBlock
+advisory row, never behind the notes toggle) and in the prompt's Calendar tag
+("ADVISORY only — NOT a machine blackout"), and NEVER in a gate window; an
+event with NO currency → HARD (fail closed) and one `⚠️ T1 event without
+currency treated as hard: <title>` per trade date. Every consumer reads
+`at.t1Currencies()`: the arm gate (`t1WindowsFor`), the plan write
+(`plannerT1Lines` + the machine no-trade band), the fade facts
+(`fadeFactsAt`) and the planner input (`PlannerInput.T1Currencies`). Boot line
+READ from the resolver: `🔴 t1_blackout=USD(default)` / `USD,EUR(saved)` /
+`ALL(saved) (W-T1-CURRENCIES)`.
+
+**Probes.**
+- Any gate that iterates calendar events: grep `Impact.*T1|T1BlackoutWindows|
+  SplitT1`; a new caller must pass the resolved set (the signature no longer
+  admits an unfiltered call — `T1BlackoutWindows(events, currencies)`).
+- `calendar.EventsForSession` drops events whose currency is not in the
+  session filter BEFORE the split, so an uncurrencied event cannot reach
+  `SplitT1` from a stored slice today; the fail-closed branch is defensive and
+  pinned at the kernel (`kernel/t1_currencies_test.go
+  TestT1EventWithoutCurrencyIsHardAndNamed`). If the session filter ever
+  admits unlabelled rows, the WARN line in `t1WindowsFor` is the tell.
+- Card vs gate parity is proved at PRODUCTION call sites, not helper
+  self-consistency (class 53): `trader/t1_currencies_test.go` runs the REAL
+  write core (`runPlannerReadCoreWithFactsGrades` with `plannerT1Lines` as the
+  extra lines) and reads the stored doc's `no_trade` + `no_trade_windows`
+  against `currentT1Windows → sessionGateDecision(…, at.sessionRunnable)` and
+  `fadeFactsAt(...).InT1Blackout`, under the default (BOJ advisory, USD hard)
+  and under `ALL` (both hard).
+- The pre-wave function is copied VERBATIM into `kernel/t1_currencies_test.go
+  legacyT1BlackoutWindows` and `ALL` is pinned `reflect.DeepEqual` to it on a
+  three-currency fixture, so "restores the old behaviour" is a comparison
+  against what shipped, not against the new code's own idea of itself.
+- Journal grep for the class: `red-news blackout: .*(JPY|GBP|EUR|CNY)` on an
+  MNQ trader under the USD default — should never appear; the advisory line
+  is `🟠 … advisory only (t1_currencies=USD)` on the card and in the plan row.
+- CLASS 145's fixtures (`trader/clock_widen_cap_test.go`,
+  `kernel/clock_widen_cap_test.go`) keep their JPY BOJ event by passing
+  `T1Currencies: [ALL]` explicitly — the class was born under the every-
+  currency regime and the cap is asserted there, not the currency split.
