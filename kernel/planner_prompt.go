@@ -29,7 +29,12 @@ type PlannerInput struct {
 	// T1CurrenciesFor). Empty → the shipped default; the Calendar section tags
 	// every other T1 event as advisory so the model is never told a blackout
 	// the gate will not enforce.
-	T1Currencies       []string
+	T1Currencies []string
+	// WriteFeasibilityOn (W-WRITE-TIME-FEASIBILITY, 2026-09-18) — true when the
+	// write-time feasibility knob is ON (the owner's default): the prompt
+	// renders the arm-disabled-at-write rule. false → the sentence is absent and
+	// the prompt is byte-identical to before the wave.
+	WriteFeasibilityOn bool
 	Zones              *LevelZoneMap // Uncut presentation snapshot; never used as trading inputs.
 	ResearchSnapshotID string        `json:"-"` // record link, never prompt content
 	TradeDate          string
@@ -766,7 +771,7 @@ func BuildPlannerPrompt(in PlannerInput) string {
 		}
 	}
 
-	b.WriteString(plannerOutputContract(in.MaxLevels, in.ScenarioCap, len(in.HTFZones) > 0, has1HSD))
+	b.WriteString(plannerOutputContract(in.MaxLevels, in.ScenarioCap, len(in.HTFZones) > 0, has1HSD, in.WriteFeasibilityOn))
 	return b.String()
 }
 
@@ -775,7 +780,7 @@ func BuildPlannerPrompt(in PlannerInput) string {
 // ask for what validation will accept, so a raised max_levels/scenario_cap both
 // gets requested AND passes instead of fail-closing every read against a
 // hardcoded 8/3.
-func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone bool) string {
+func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone bool, writeFeas bool) string {
 	maxL, maxS := resolvePlanCaps(maxLevels, maxScenarios)
 	htfRule := ""
 	if hasHTFZones {
@@ -864,7 +869,23 @@ func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone
 		// W2b (weekly-bias wave) — candle ground-truth law.
 		"Candles are ground truth for structure; ranked levels and tags are summaries. On conflict, trust the candles and say so in the scenario rationale. " +
 		// W3 (weekly-bias wave) — soft weekly law.
-		"Weekly guidance (soft law): counter-weekly scenarios are allowed but must state their justification (an HTF level or a sweep-reclaim of the draw); target chains toward the draw are preferred. The weekly bias never gates your plan.\n"
+		"Weekly guidance (soft law): counter-weekly scenarios are allowed but must state their justification (an HTF level or a sweep-reclaim of the draw); target chains toward the draw are preferred. The weekly bias never gates your plan.\n" +
+		writeTimeFeasibilitySentence(writeFeas)
+}
+
+// writeTimeFeasibilitySentence renders the write-time feasibility contract
+// sentence only when the knob is ON (the owner's default). OFF leaves the
+// contract byte-identical to before the wave (L4). The class-38 guard asserts
+// the fragments through the ON path.
+func writeTimeFeasibilitySentence(on bool) string {
+	if !on {
+		return ""
+	}
+	return "WRITE-TIME FEASIBILITY: a scenario whose arm would be refused by the gate-at-arm chain " +
+		"(stop too close to the min-SL floor, arm R:R below the arm minimum, a level the structural-geometry gate refuses, " +
+		"or a stop-entry trigger already through price) " +
+		"is repaired first; after the last repair attempt it is written with arm.enabled=false " +
+		"and arm_disabled_reason naming the refusal. "
 }
 
 func absF(x float64) float64 {

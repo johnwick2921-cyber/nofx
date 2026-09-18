@@ -5964,6 +5964,76 @@ half, the wildcard merely re-labelled the refusal (55 source_not_frozen became
 hint; the executor seam for both lanes is
 trader.ArmGeometryVerdict(doc, sc, geometryRefLevels).
 
+## CLASS 154 — A WRITE-TIME FEASIBILITY WARN THAT SAYS "THE GATE WILL REFUSE IT" AND WRITES THE PLAN ANYWAY (born with the arm-feasibility WARN 2026-08-28, found by the owner 2026-09-18 08:3x CT "fix all", W-WRITE-TIME-FEASIBILITY, fix/write-time-feasibility)
+
+**Shape.** `kernel.ArmFeasibilityWarnings` (F4, 2026-08-28) computed, at plan
+write time, exactly which arms the gate-at-arm chain would refuse every cycle
+(R:R below ARM_MIN_RR, stop closer than 1.5×ATR5m) — and then logged one WARN
+per arm and wrote the plan anyway. The owner's persistent journal shows 5 such
+WARNs since 2026-09-17 22:38 CT, every one followed by a PLAN written in-session
+(LONDON v2 07:32:52, NY v1 08:06:20) — WARN-then-write 5/5. The model never saw
+the WARN (it is not in the prompt), so it re-authored the same shape; the
+executor then refused the arm at arm time, printing the refusal to a log the
+model also never reads. The system knew the plan was dead on arrival and wrote
+it anyway.
+
+**Why it hid.** A WARN is invisible to every consumer except a human reading the
+journal; the write path is the only place that both has the verdict AND can make
+the author do something about it. "Warn-first" was the right rule for the
+bias-coherent warning (owner ruling 2026-09-04) but was inherited, unreviewed,
+by the arm-feasibility WARN, where the warning's own text ("the gate will
+refuse it") made the write a knowing contradiction.
+
+**Probes.**
+- `journalctl -u nofx --since <window> | grep -E "arm feasibility"` — every
+  WARN whose session then wrote a plan is an instance of this class.
+- Any write-site warning whose text names a downstream refusal, but which does
+  not feed the repair prompt or a disabled-arm stamp, is this class.
+
+**Fix.** The write site now runs the executor's own gate-at-arm predicates
+(`armGateVerdictFor` on the COMPOSED leg via `composeArmStop`, the executor's
+own geometry composition — canon 53, no re-implementation) per enabled arm,
+plus the executor's OWN stop-side placement guard (`decideStopEntry`, CTO
+amendment 2026-09-18: 29 of 30 stop_entry arms since 09-04 were wrong-side at
+write — source: DS-104 replay, bridge msg 1789737991919-898085): attempts
+1..N-1 send the scenarios back as a restriction-with-hint repair error naming
+the refusal, the numbers and the fix vocabulary; the last attempt writes the
+unarmable arms with `arm.enabled=false` + `arm_disabled_reason` (the reason
+CLASS: min_sl / rr / geometry_<code> / stop_side_wrong) + one WARN + the
+`arm_disabled_at_write:<trader>:<date>:<session>:<class>` counter. The
+classes reuse the executor's own armRefusalClass, which can also yield
+`other` / `not_armable` / `veto` — the short list above is not exhaustive. The check
+runs LAST among the validators so it never pre-empts a hard reject — the
+cost of that ordering is one extra model round-trip when an earlier validator
+has already burned attempts 1..N-1 (a two-defect model writes on attempt 2
+OFF and attempt 3 ON; a three-defect chain now fail-closes where it wrote
+before). TestWriteTimeFeasibilityNeverPreemptsHardRejects asserts that flow
+shape (hard reject attempt 1, the hint rides the attempt-3 prompt, the arm
+is disabled at attempt 3) — it does not measure the fail-closed rate, which
+needs the live journals and is NOT claimed here. Knob
+`day_plan.write_time_feasibility`, nil/unset = ON; explicit false = the old
+WARN-only behaviour byte-identical (pinned by a parity test at the rendering
+seam). The session-risk band is deliberately NOT judged at write (time-based).
+
+## CLASS 155 — THE CARD SHOWED THE EVALUATOR'S VERDICT AND NEVER THE EXECUTOR'S (born 2026-08-27 with the scenario evaluator line, found 2026-09-18 by the owner — "why no trade" — feat/arm-state-ui, W-ARM-STATE-UI)
+
+**Shape.** The plan card's per-scenario verdict (🎯 scenario S1 → ≈armed / ≈triggered)
+is the EVALUATOR's: it is computed from price alone and can read "≈triggered" every
+cycle while the EXECUTOR refuses the arm every cycle. The executor's verdict — whether
+the arm was refused, and why — lived only in system_config counters and a single WARN
+line (2026-09-18 LONDON v1 S1: ≈triggered 05:42:24, refused
+`geometry_no_provenance/scenario_level_id_missing`, invalidated 05:46:24; 93 of 95
+geometry records since 09-13 are refusals). The owner read "armed"/"triggered" all day
+and believed the bot was about to trade; it was not.
+
+**Rule (probe).** A scenario rendered ≈armed/≈triggered for >2 cycles with an executor
+refusal record and no executor text on the card = this class. The card must show, per
+scenario, what the EXECUTOR decided for the displayed plan version — `not attempted` /
+`refused: <reason> (<detail>)` / `armed #<id>` / `filled #<id>` / `cancelled:
+<state_reason>` — sourced ONLY from armed_orders rows and the executor geometry records;
+when no record exists render nothing (no dash, no "ok"). An uncomputed executor state is
+absent, never fabricated.
+
 ## CLASS NN (assigned at merge) — A DEATH LINE THAT PARKS THE PLAN UNTIL PRICE RETURNS SITS OUT THE SESSION WHEN IT DOESN'T (born 2026-08-25 with the plan-lifecycle wave, found 2026-09-18 09:10 CT NY v2, fix/death-reread, W-DEATH-REREAD)
 
 **Shape.** A structured death-condition kill writes `dormant:death:` and the
