@@ -135,13 +135,16 @@ func deathRealPathTrader(t *testing.T, deathReread *bool, respond func(n int, us
 // v2: one minute later, on the SAME below-line tape, v2 does NOT die.
 func TestDeathRereadRealPathLandsFreshPlanAndSupersedes(t *testing.T) {
 	at, st, client := deathRealPathTrader(t, nil, func(int, string) (string, error) { return validShortPlanJSON, nil })
-	// REAL-relative clock: the write site stamps v2's CreatedAt with the real
-	// time.Now(), so the wick (now.Sub(CreatedAt) < 10 min) can only be pinned
-	// against a synthetic clock that tracks real time. Real now is inside the NY
-	// session window, so the session registry admits the plan read.
-	now := time.Now().Truncate(time.Second)
+	// FIXED synthetic date (the flip real-path tests' own frame): the G7
+	// freshness gate measures bar staleness against the clock, and a real-clock
+	// now made the last complete 5m bucket land either side of the staleness
+	// threshold depending on the second the test started — a flake by
+	// construction. v2's CreatedAt is stamped with the real clock by the write
+	// site; nothing asserted here depends on it (the wick guard's timing is
+	// pinned by TestDeathBornWickActive, the predicate at both call sites).
+	now := time.Date(2026, 8, 18, 14, 0, 0, 0, time.UTC)
 	flipRereadTestNow(t, now)
-	td := now.Format("2006-01-02")
+	td := "2026-08-18"
 	row := seedActivePlan(t, at, td, "NY", now.Add(-40*time.Minute), deathFixtureDoc())
 	seedFlipBars(15500, 15470, 6*time.Minute, now) // two 5m closes below the death line 15480
 	logBuf := captureTraderLog(t)
