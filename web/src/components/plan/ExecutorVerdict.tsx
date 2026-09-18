@@ -12,6 +12,9 @@ export type ExecutorVerdictState =
   | 'cancelled'
   | 'refused'
   | 'not_attempted'
+  // superseded / shadowed / any other terminal ledger state — labelled
+  // verbatim as "<state>: <state_reason>", never guessed into a category.
+  | 'other'
 
 export interface ExecutorLine {
   state: ExecutorVerdictState
@@ -38,23 +41,16 @@ function fmtTime(ms: number): string {
   })
 }
 
-// The refusal vocabulary the executor writes (trader/structural_geometry.go
-// composeGeometry refuse() reasons + the atr_fallback refusal class).
-const REFUSAL_REASONS = new Set([
-  'no_provenance',
-  'scenario_level_id_missing',
-  'no_target',
-  'invalid_geometry',
-  'net_nonpositive',
-  'rr',
-  'atr_fallback',
-])
-
+// F2/F4 — the armed_orders ledger row is the ONLY proof of an arm. Once a
+// non-UNKNOWN row exists for this version it speaks and the geometry records
+// are NOT consulted at all (the FE cannot compare times: planOrderLeg carries
+// no created_at on the wire, so a ledger 'armed' over a later geometry refusal
+// shows 'armed' — defensible, documented here rather than guessed).
 function lineForState(
   state: string,
   rowId: number | undefined,
   reason: string | undefined
-): ExecutorLine | null {
+): ExecutorLine {
   if (state === 'filled')
     return {
       state: 'filled',
@@ -76,7 +72,14 @@ function lineForState(
       reason,
       label: `cancelled: ${reason || state}`,
     }
-  return null
+  // superseded, shadowed, or any state this file has never met: show the
+  // ledger's own words, never invent a category.
+  return {
+    state: 'other',
+    orderId: rowId,
+    reason,
+    label: `${state}${reason ? `: ${reason}` : ''}`,
+  }
 }
 
 /**
@@ -92,22 +95,29 @@ export function executorLinesFor(
 ): ExecutorLine[] {
   if (arm && arm.state !== 'UNKNOWN') {
     const legs = (arm.legs ?? []).filter((l) => l.state !== 'UNKNOWN')
-    if (arm.state === 'mixed') {
-      const lines = legs
-        .map((l) => lineForState(l.state, l.row_id, l.reason))
-        .filter((l): l is ExecutorLine => l !== null)
-      if (lines.length > 0) return lines
-    } else {
-      const line = lineForState(arm.state, legs[0]?.row_id, arm.reason)
-      if (line) return [line]
-    }
+    const lines =
+      arm.state === 'mixed'
+        ? legs.map((l) => lineForState(l.state, l.row_id, l.reason))
+        : [lineForState(arm.state, legs[0]?.row_id, arm.reason)]
+    // F2 — a ledger row exists for this version: it is the verdict. No
+    // fall-through to geometry, ever.
+    if (lines.length > 0) return lines
   }
   const rows = (geometry ?? []).filter((r) => r.scenario === scenario)
   if (rows.length === 0) return []
   const latest = rows.reduce((a, b) =>
     (b.time_ms ?? 0) > (a.time_ms ?? 0) ? b : a
   )
-  if (REFUSAL_REASONS.has(latest.reason))
+  // F1 — the store's OWN refusal rule (store/structural_geometry.go:119): any
+  // non-empty reason that is not admitted/pending_gates, with quantity 0, is
+  // a refusal — entry_gate, one_setup, rr, no_provenance, … No whitelist that
+  // ages as the executor grows new refusal classes.
+  if (
+    latest.quantity === 0 &&
+    latest.reason !== '' &&
+    latest.reason !== 'admitted' &&
+    latest.reason !== 'pending_gates'
+  )
     return [
       {
         state: 'refused',
@@ -130,18 +140,8 @@ export function executorLinesFor(
         label: 'not attempted',
       },
     ]
-  if (latest.quantity > 0)
-    // Admitted geometry whose order row is not on this version — truth: an
-    // admitted arm, no order id to cite.
-    return [
-      {
-        state: 'armed',
-        reason: 'admitted',
-        detail: latest.detail,
-        timeMs: latest.time_ms,
-        label: 'armed',
-      },
-    ]
+  // F2 — "admitted" is a GATE verdict, not proof of an arm; the ledger row is
+  // the only proof. An admitted record with no ledger row renders nothing.
   return []
 }
 

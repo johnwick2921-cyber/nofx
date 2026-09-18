@@ -122,6 +122,94 @@ describe('executorLinesFor', () => {
       }),
     ])
   })
+
+  // F1 (review) — the store's own refusal rule, not a whitelist: entry_gate
+  // and one_setup refusals must render, not vanish.
+  it('refuses entry_gate and one_setup via the store rule', () => {
+    expect(
+      executorLinesFor('S1', { state: 'UNKNOWN' }, [
+        geometryRow({
+          scenario: 'S1',
+          reason: 'entry_gate',
+          detail: 'gate changed: rr',
+          quantity: 0,
+          time_ms: 1760000000002,
+        }),
+      ])
+    ).toEqual([
+      expect.objectContaining({
+        state: 'refused',
+        label: 'refused: entry_gate (gate changed: rr)',
+      }),
+    ])
+    expect(
+      executorLinesFor('S1', { state: 'UNKNOWN' }, [
+        geometryRow({
+          scenario: 'S1',
+          reason: 'one_setup',
+          detail: 'one live arm',
+          quantity: 0,
+          time_ms: 1760000000003,
+        }),
+      ])
+    ).toEqual([expect.objectContaining({ state: 'refused' })])
+  })
+
+  // F2 (review) — a non-UNKNOWN ledger row is the verdict; geometry is never
+  // consulted behind it, and an admitted record with no ledger row is nothing.
+  it('a ledger row wins over an admitted geometry record', () => {
+    const admitted = geometryRow({
+      scenario: 'S1',
+      reason: 'admitted',
+      quantity: 1,
+      time_ms: 1760000000004,
+    })
+    expect(
+      executorLinesFor(
+        'S1',
+        {
+          state: 'superseded',
+          reason: 'v3 superseded',
+          legs: [
+            {
+              state: 'superseded',
+              reason: 'v3 superseded',
+              leg_index: 0,
+              placement_seq: 1,
+            },
+          ],
+        },
+        [admitted]
+      )
+    ).toEqual([
+      expect.objectContaining({
+        state: 'other',
+        label: 'superseded: v3 superseded',
+      }),
+    ])
+    expect(
+      executorLinesFor(
+        'S1',
+        {
+          state: 'shadowed',
+          reason: 'condition_shadowed',
+          legs: [
+            {
+              state: 'shadowed',
+              reason: 'condition_shadowed',
+              leg_index: 0,
+              placement_seq: 1,
+            },
+          ],
+        },
+        [admitted]
+      )
+    ).toEqual([
+      expect.objectContaining({ label: 'shadowed: condition_shadowed' }),
+    ])
+    // No ledger row + admitted geometry = NOT an arm; renders nothing.
+    expect(executorLinesFor('S1', { state: 'UNKNOWN' }, [admitted])).toEqual([])
+  })
 })
 
 describe('StrategyTradingBadge', () => {
@@ -145,6 +233,20 @@ describe('StrategyTradingBadge', () => {
     )
     expect(screen.getByTestId('strategy-display-badge').textContent).toBe(
       'displayInactive'
+    )
+  })
+
+  // F3 (review) — undefined = not loaded / failed: NO trading claim at all,
+  // never a false "no trader bound".
+  it('renders no trading claim when the binding is unloaded', () => {
+    const { container } = render(
+      <StrategyTradingBadge isActive traderNames={undefined} tr={tr} />
+    )
+    expect(
+      container.querySelector('[data-testid="strategy-trading-badge"]')
+    ).toBeNull()
+    expect(screen.getByTestId('strategy-display-badge').textContent).toBe(
+      'displayActive'
     )
   })
 })

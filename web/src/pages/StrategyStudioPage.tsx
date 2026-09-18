@@ -114,8 +114,12 @@ export function StrategyStudioPage() {
 
   const [strategies, setStrategies] = useState<Strategy[]>([])
   // W-ARM-STATE-UI — strategy_id -> bound trader names from /api/my-traders.
-  // The binding is what "trading" means; is_active is display + delete-lock only.
-  const [boundTraders, setBoundTraders] = useState<Record<string, string[]>>({})
+  // The binding is what "trading" means; is_active is display + delete-lock
+  // only. UNDEFINED = not loaded / fetch failed (the badge renders NO trading
+  // claim); {} = loaded and genuinely unbound. F3: the two must never collide.
+  const [boundTraders, setBoundTraders] = useState<
+    Record<string, string[]> | undefined
+  >(undefined)
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(
     null
   )
@@ -255,8 +259,8 @@ export function StrategyStudioPage() {
   }, [fetchStrategies, fetchAiModels])
 
   // W-ARM-STATE-UI — the real trading binding: /api/my-traders rows carry
-  // strategy_id + trader_name. Failure → the badge shows "no trader bound"
-  // and nothing is fabricated.
+  // strategy_id + trader_name. On ANY failure the map stays undefined — the
+  // badge then renders no trading claim rather than a false "no trader bound".
   useEffect(() => {
     if (!token) return
     const loadBindings = async () => {
@@ -276,7 +280,8 @@ export function StrategyStudioPage() {
         }
         setBoundTraders(map)
       } catch {
-        // see above — unavailable binding renders the honest unbound text
+        // binding read unavailable — the map stays undefined, nothing is
+        // fabricated and no trading claim is rendered (F3).
       }
     }
     void loadBindings()
@@ -1116,10 +1121,10 @@ export function StrategyStudioPage() {
                           className="p-1 rounded hover:bg-nofx-danger/20 text-nofx-danger disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                           title={
                             strategy.is_active
-                              ? (boundTraders[strategy.id] ?? []).length > 0
+                              ? (boundTraders?.[strategy.id] ?? []).length > 0
                                 ? tr('deleteBlockedByBinding', {
                                     names: (
-                                      boundTraders[strategy.id] ?? []
+                                      boundTraders?.[strategy.id] ?? []
                                     ).join(', '),
                                   })
                                 : tr('cannotDeleteActiveStrategy')
@@ -1134,7 +1139,11 @@ export function StrategyStudioPage() {
                   <div className="flex items-center gap-1 mt-1 flex-wrap">
                     <StrategyTradingBadge
                       isActive={strategy.is_active}
-                      traderNames={boundTraders[strategy.id] ?? []}
+                      traderNames={
+                        boundTraders === undefined
+                          ? undefined
+                          : (boundTraders[strategy.id] ?? [])
+                      }
                       tr={tr}
                     />
                     {strategy.is_default && (
