@@ -101,6 +101,83 @@ describe('DayPlanEditor', () => {
     )
   })
 
+  it('W-T1-CURRENCIES: the currency field parses a comma list, upper-cases, and clears to absent (default USD)', () => {
+    const onChange = vi.fn()
+    render(
+      <DayPlanEditor
+        config={{ plan_enabled: true }}
+        onChange={onChange}
+        language="en"
+      />
+    )
+    const input = screen.getByTestId('t1-currencies-input') as HTMLInputElement
+    expect(input.placeholder).toBe('USD')
+    expect(input.value).toBe('')
+    fireEvent.change(input, { target: { value: 'usd, eur ,' } })
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ t1_currencies: ['USD', 'EUR'] })
+    )
+    onChange.mockClear()
+    fireEvent.change(input, { target: { value: '' } })
+    const cleared = onChange.mock.calls[0][0] as DayPlanConfig
+    expect(cleared.t1_currencies).toBeUndefined()
+  })
+
+  it('W-T1-CURRENCIES: switching strategies resyncs the field, and an edit saves only to the new one (review of #171)', () => {
+    const onChangeA = vi.fn()
+    const onChangeB = vi.fn()
+    const { rerender } = render(
+      <DayPlanEditor
+        config={{ plan_enabled: true, t1_currencies: ['USD', 'EUR'] }}
+        onChange={onChangeA}
+        language="en"
+      />
+    )
+    const field = () =>
+      screen.getByTestId('t1-currencies-input') as HTMLInputElement
+    expect(field().value).toBe('USD,EUR')
+    // a trailing comma mid-typing is NOT eaten by the resync
+    fireEvent.change(field(), { target: { value: 'USD,EUR,' } })
+    rerender(
+      <DayPlanEditor
+        config={{ plan_enabled: true, t1_currencies: ['USD', 'EUR'] }}
+        onChange={onChangeA}
+        language="en"
+      />
+    )
+    expect(field().value).toBe('USD,EUR,')
+    // strategy B has no list → the field shows the default placeholder, not A's text
+    rerender(
+      <DayPlanEditor
+        config={{ plan_enabled: true }}
+        onChange={onChangeB}
+        language="en"
+      />
+    )
+    expect(field().value).toBe('')
+    expect(field().placeholder).toBe('USD')
+    fireEvent.change(field(), { target: { value: 'jpy' } })
+    expect(onChangeB).toHaveBeenCalledWith(
+      expect.objectContaining({ t1_currencies: ['JPY'] })
+    )
+    const savedB = onChangeB.mock.calls[0][0] as DayPlanConfig
+    expect(savedB.t1_currencies).not.toContain('EUR')
+    expect(onChangeA).toHaveBeenCalledTimes(1) // only the pre-switch keystroke
+  })
+
+  it('W-T1-CURRENCIES: a saved list renders in the field', () => {
+    render(
+      <DayPlanEditor
+        config={{ plan_enabled: true, t1_currencies: ['ALL'] }}
+        onChange={vi.fn()}
+        language="en"
+      />
+    )
+    expect(
+      (screen.getByTestId('t1-currencies-input') as HTMLInputElement).value
+    ).toBe('ALL')
+  })
+
   it('a per-session tri-state knob sets then inherits (clears) the field', () => {
     const onChange = vi.fn()
     const cfg: DayPlanConfig = { plan_enabled: true }

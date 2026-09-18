@@ -1393,10 +1393,13 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 // drift)" into the plan; the cap holds the widening to ClockWidenCapMinutes
 // and the journal names staleness instead of the clock.
 func (at *AutoTrader) plannerT1Lines(cal []kernel.PlannerCalendarEvent, holdHave bool, holdWiden, holdDrift int64, tradeDate, session string) []string {
+	// W-T1-CURRENCIES: the same resolved set the arm gate (t1WindowsFor)
+	// reads — hard lines for the set, advisory lines for every other T1 event.
+	ccy := at.t1Currencies()
 	if !holdHave || holdWiden <= 0 {
-		return kernel.T1NoTradeLines(cal)
+		return kernel.T1NoTradeLines(cal, ccy)
 	}
-	lines := kernel.T1NoTradeLinesDrift(cal, holdDrift)
+	lines := kernel.T1NoTradeLinesDrift(cal, ccy, holdDrift)
 	at.logWarnf("🕰 clock-hold: T1 news windows widened by %dm (|drift| %dms, cap %dm) for %s %s (F6)",
 		kernel.ClockWidenMinutes(holdDrift), holdWiden, kernel.ClockWidenCapMinutes, tradeDate, session)
 	if note := kernel.ClockDriftStaleNote(holdDrift); note != "" {
@@ -2931,6 +2934,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		// list — the ONLY gaps the planner may author fvg_entry from.
 		FreshFVGs:       kernel.FreshFvgCandidates(bars, symbol, now),
 		Calendar:        calEvents,
+		T1Currencies:    at.t1Currencies(),
 		DigestChain:     digestChain,
 		Warming:         warming,
 		IndicatorsBlock: indicatorsBlock,

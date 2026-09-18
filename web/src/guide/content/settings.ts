@@ -246,6 +246,24 @@ const dayPlan: KnobSpec[] = [
     perSession: 'No.',
   },
   {
+    label: 'Red-news hard-block currencies (W-T1-CURRENCIES)',
+    where: 'Strategy → Day Plan → t1_currencies text field (comma-separated)',
+    what: "Which currencies' T1 (red) calendar events open the HARD ±15m no-trade window. Default USD: only USD red events hard-block; a red event in any other currency (a BOJ rate decision, a BoE vote) is shown as an advisory line — on the plan card, in the plan's no_trade list and in the planner prompt — and blocks nothing. Set ALL to restore the old behaviour where every red event in the session's currency filter hard-blocked. Case-insensitive; blanks are ignored; a red event with NO currency still hard-blocks (fail closed) and is named once a day in the log.",
+    trader:
+      'Born 2026-09-17 evening: the BOJ rate decision (JPY, 21:54 CT) put the MNQ bot into a hard blackout. You trade a US index; a JPY or GBP print is worth knowing about, not worth sitting out. The arm gate, the plan write (band + lines) and the fade facts all read ONE resolved set (store.DayPlanConfig.T1CurrenciesFor) so the card can never show a blackout the gate does not enforce. Boot line: "🔴 t1_blackout=USD(default)" / "USD,EUR(saved)" / "ALL(saved)".',
+    consumer:
+      'kernel/calendar_blackout.go SplitT1 · trader/auto_trader_calendar.go t1WindowsFor (arm gate) · trader/auto_trader_planner.go plannerT1Lines (plan write) · trader/fade_facts.go fadeFactsAt · kernel/planner_prompt.go Calendar section',
+    range:
+      'comma-separated ISO currency codes (USD, EUR, GBP, JPY, CNY) or ALL',
+    systemDefault: 'USD (absent/empty = USD)',
+    recommended:
+      '⭐ USD for an MNQ/ES/NQ trader — the CME index products react to US prints; leave the rest advisory.',
+    whenToTouch:
+      'Add a currency only if you have watched its red prints move MNQ enough to want the machine to refuse entries around them; ALL only to reproduce the pre-2026-09-18 behaviour.',
+    perSession:
+      'No — one list for every session (the session currency filter still decides which events are shown at all).',
+  },
+  {
     label: 'Wake on level events (1 switch)',
     where:
       'Strategy → Day Plan → Planner wake-ups → Wake on level events (wake_on_level_events)',

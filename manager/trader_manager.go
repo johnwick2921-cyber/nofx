@@ -601,6 +601,8 @@ func (tm *TraderManager) addTraderFromStore(traderCfg *store.Trader, aiModelCfg 
 		}
 		// W-FLIP-REREAD (2026-09-17) — the resolved flip knob, with its source.
 		logger.Infof("%s", trader.FlipRereadBootLine(strategyConfig.DayPlan))
+		// W-T1-CURRENCIES (2026-09-18) — the resolved red-news hard-block set.
+		logger.Infof("%s", trader.T1CurrenciesBootLine(strategyConfig.DayPlan))
 		// D102-1 (2026-09-16): the exit posture, READ from the strategy
 		// toggles the mechanics honour — the main boot line prints n/a
 		// for these fields; this line prints the real values, prefixed with the

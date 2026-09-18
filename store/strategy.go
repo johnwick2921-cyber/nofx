@@ -963,6 +963,14 @@ type DayPlanConfig struct {
 	// re-read in the flipped direction (trigger structure_flip). OFF = today's
 	// behaviour byte-identical.
 	FlipReread bool `json:"flip_reread,omitempty"`
+	// T1Currencies (W-T1-CURRENCIES, 2026-09-18): the currencies whose T1
+	// (red) calendar events HARD-block entries (±T1BlackoutMinutes). Empty/nil
+	// = the shipped default ["USD"]. An explicit ["ALL"] (or ["*"]) restores
+	// the pre-wave behaviour: every T1 event hard-blocks. T1 events in any
+	// other currency stay VISIBLE as an advisory line (plan no_trade + card +
+	// prompt) and never gate. Born the night the BOJ rate decision (JPY)
+	// blacked out the MNQ bot.
+	T1Currencies []string `json:"t1_currencies,omitempty"`
 	// AcceptanceRule — W-KNOB-PRUNE (2026-09-18): FOLDED. There is exactly one
 	// rule (DefaultAcceptanceRule, 1×5m close); AcceptanceRuleFor returns it
 	// regardless of what is stored (the old resolver already mapped every other
@@ -1609,6 +1617,58 @@ func (c *DayPlanConfig) FoldedKnobLines() []string {
 // (absent/false = OFF = today's dormant behaviour).
 func (c *DayPlanConfig) FlipRereadEnabled() bool {
 	return c != nil && c.FlipReread
+}
+
+// T1CurrencyAll is the sentinel meaning "every currency hard-blocks" — the
+// pre-W-T1-CURRENCIES behaviour. "*" is accepted on input and canonicalised
+// to this.
+const T1CurrencyAll = "ALL"
+
+// DefaultT1Currencies is the shipped default: only USD red events hard-block.
+func DefaultT1Currencies() []string { return []string{"USD"} }
+
+// T1CurrenciesFor is the ONE resolution seam for the W-T1-CURRENCIES knob
+// (the value's canonicaliser — trim, upper-case, dedupe, drop blanks — so every
+// consumer sees one spelling). nil config or an empty/blank list → the shipped
+// default ["USD"]. Any entry "ALL" or "*" → ["ALL"] (every currency hard-blocks,
+// today's behaviour). Never returns nil or an empty list.
+func (c *DayPlanConfig) T1CurrenciesFor() []string {
+	if c == nil {
+		return DefaultT1Currencies()
+	}
+	out := make([]string, 0, len(c.T1Currencies))
+	seen := map[string]bool{}
+	for _, raw := range c.T1Currencies {
+		ccy := strings.ToUpper(strings.TrimSpace(raw))
+		if ccy == "" || seen[ccy] {
+			continue
+		}
+		if ccy == "*" || ccy == T1CurrencyAll {
+			return []string{T1CurrencyAll}
+		}
+		seen[ccy] = true
+		out = append(out, ccy)
+	}
+	if len(out) == 0 {
+		return DefaultT1Currencies()
+	}
+	return out
+}
+
+// T1CurrenciesSaved reports whether the strategy carries an explicit,
+// non-blank t1_currencies list (for the boot line's "(saved)" vs "(default)"
+// — READ, never inferred from the resolved value, since a saved ["USD"] must
+// still print "(saved)").
+func (c *DayPlanConfig) T1CurrenciesSaved() bool {
+	if c == nil {
+		return false
+	}
+	for _, raw := range c.T1Currencies {
+		if strings.TrimSpace(raw) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // LevelsFreshByTFEnabled is the ONE resolution seam for the S2 by-TF freshness

@@ -103,6 +103,10 @@ export interface DayPlanConfig {
   /** W-FLIP-REREAD (2026-09-17) — a fired flip goes dormant AND requests one
    *  free re-read in the flipped direction. Default false (legacy dormant). */
   flip_reread?: boolean
+  /** W-T1-CURRENCIES (2026-09-18) — currencies whose T1 (red) events HARD-block
+   *  entries. Absent/empty = ["USD"] (shipped default); ["ALL"] = every
+   *  currency (pre-wave behaviour). Other T1 events render as advisory only. */
+  t1_currencies?: string[]
   /** FOLDED (W-KNOB-PRUNE 2026-09-18): one rule exists (1×5m close); a
    *  stored value is read by nothing. */
   acceptance_rule?: string
