@@ -237,6 +237,29 @@ Verified in a detached worktree (removed after). **Mixed verdict** [A]:
    geometry bucket). #176 staying on the legacy geometry function cannot admit
    rows the fix would refuse.
 
+**Item 2b — PR #175 FIXED head 146baf1d (F1–F6).** Re-verified in a detached
+worktree (removed after). **All PASS + measured drift** [A]:
+
+1. PASS — `go test ./... -count=1` FULL: 35 ok, 0 FAIL;
+   `TestEveryClaimedProductionPathHasACallSite` passes explicitly
+   (`wiring_gate_test.go:284`).
+2. PASS — `gofmt -l` over changed .go files: empty.
+3. PASS — five named tests ran and passed (tails `ok nofx/trader 2.876s`,
+   `ok nofx/kernel 0.026s`).
+4. MEASURED — Table 2 [A] re-run at 146baf1d (109 backup rows):
+   **ARMED 58 / entry_zone_edges 20 / missing 19 / ambiguous 12** vs 33/55/19/2
+   at fa9bad01. 37 rows changed, every one named in the CTO message + report
+   archive: 25 edges_unusable→ADMIT (zero-width admission), 10→ambiguous (F4
+   wildcard), 2 ADMIT→ambiguous (09-13 ASIA v9 S1, v14 S1 — regression direction
+   for those two: previously admitted, now refused). The two earlier-named flips
+   stay ambiguous.
+5. PASS — adversarial (throwaway `docs/ds104_adversarial_test.go`): a
+   reference-KIND zone with explicit lo==hi non-nil + VALID strict id → REFUSED
+   `entry_zone_edges_or_provenance_unusable`; a nil-width line with a
+   non-reference-kind source → REFUSED same. Both refuse via the zero-width
+   guard itself (ids computed with `levelidentity.ID`, so `LevelByID` succeeds
+   and the guard is what fires).
+
 Nothing else bridged yet; rolling.
 
 ## E. UNKNOWNS / NOT MEASURED
