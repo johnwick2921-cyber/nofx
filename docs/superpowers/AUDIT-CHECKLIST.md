@@ -5536,7 +5536,7 @@ path now passes the SIGNED measurement.
   (arm path via `currentT1Windows`, plan-write step via `plannerT1Lines`; 42 s
   → +1m unlabelled, 90 s → "+2m (clock drift)" unchanged).
 
-## CLASS NN — A WAKE RE-READ DURING A FLIP BREACH RESTARTS THE FLIP WINDOW: THE FLIP NEVER FIRES (born 2026-08-25 with the W6 wakes, reported by the owner 2026-09-17 23:2x CT "why at the flip point it re-reads and the bias is still the same", fix/flip-owns-the-breach, W-FLIP-OWNS-THE-BREACH; number assigned at merge)
+## CLASS 147 — A WAKE RE-READ DURING A FLIP BREACH RESTARTS THE FLIP WINDOW: THE FLIP NEVER FIRES (born 2026-08-25 with the W6 wakes, reported by the owner 2026-09-17 23:2x CT "why at the flip point it re-reads and the bias is still the same", fix/flip-owns-the-breach, W-FLIP-OWNS-THE-BREACH; number assigned at merge)
 
 **Shape.** CLASS 139 anchored the flip HOLD to the chain, and left the
 flip CONDITION WINDOW on the version's birth on purpose (a new line must be
