@@ -181,8 +181,8 @@ func PromptContracts() []PromptContract {
 			// fragment renders only when the knob is ON (default ON per owner
 			// ruling "fix all").
 			Rule:       "an arm the gate-at-arm chain would refuse is repaired first, then written arm.enabled=false with arm_disabled_reason",
-			Site:       "trader/auto_trader_planner.go write-time feasibility check → armGateVerdictFor / ResolveEntryGeometryZone",
-			MustAppear: []string{"written with arm.enabled=false", "arm_disabled_reason"},
+			Site:       "trader/auto_trader_planner.go write-time feasibility check → armGateVerdictFor / composeArmStop geometry / decideStopEntry",
+			MustAppear: []string{"written with arm.enabled=false", "arm_disabled_reason", "stop-entry trigger already through price"},
 			Gate:       "WRITE-TIME FEASIBILITY",
 		},
 	}

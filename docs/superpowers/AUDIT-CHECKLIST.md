@@ -5949,15 +5949,21 @@ refuse it") made the write a knowing contradiction.
   not feed the repair prompt or a disabled-arm stamp, is this class.
 
 **Fix.** The write site now runs the executor's own gate-at-arm predicates
-(`armGateVerdictFor`, `ResolveEntryGeometryZone` — canon 53, no
-re-implementation) per enabled arm, plus the executor's OWN stop-side placement
-guard (`decideStopEntry`, CTO amendment 2026-09-18: 29 of 30 stop_entry arms
-since 09-04 were wrong-side at write): attempts 1..N-1 send the scenarios back
-as a restriction-with-hint repair error naming the refusal, the numbers and the
-fix vocabulary; the last attempt writes the unarmable arms with
-`arm.enabled=false` + `arm_disabled_reason` (`stop_side_wrong` for wrong-side
-stop entries) + one WARN + the
-`arm_disabled_at_write:<trader>:<date>:<session>:<reason>` counter. Knob
+(`armGateVerdictFor` on the COMPOSED leg via `composeArmStop`, the executor's
+own geometry composition — canon 53, no re-implementation) per enabled arm,
+plus the executor's OWN stop-side placement guard (`decideStopEntry`, CTO
+amendment 2026-09-18: 29 of 30 stop_entry arms since 09-04 were wrong-side at
+write — source: DS-104 replay, bridge msg 1789737991919-898085): attempts
+1..N-1 send the scenarios back as a restriction-with-hint repair error naming
+the refusal, the numbers and the fix vocabulary; the last attempt writes the
+unarmable arms with `arm.enabled=false` + `arm_disabled_reason` (the reason
+CLASS: min_sl / rr / geometry_<code> / stop_side_wrong) + one WARN + the
+`arm_disabled_at_write:<trader>:<date>:<session>:<class>` counter. The check
+runs LAST among the validators so it never pre-empts a hard reject — the
+cost of that ordering is one extra model round-trip when an earlier validator
+has already burned attempts 1..N-1 (a two-defect model writes on attempt 2
+OFF and attempt 3 ON; a three-defect chain now fail-closes where it wrote
+before — measured in TestWriteTimeFeasibilityNeverPreemptsHardRejects). Knob
 `day_plan.write_time_feasibility`, nil/unset = ON; explicit false = the old
 WARN-only behaviour byte-identical (pinned by a parity test at the rendering
 seam). The session-risk band is deliberately NOT judged at write (time-based).

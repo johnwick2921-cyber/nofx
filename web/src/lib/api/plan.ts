@@ -61,7 +61,13 @@ export interface ScenarioEconomics {
 export interface PlanScenario {
   level_id?: string | null
   economics?: ScenarioEconomics
-  arm?: { enabled?: boolean; entry: number; stop: number; target: number }
+  arm?: {
+    enabled?: boolean
+    entry: number
+    stop: number
+    target: number
+    arm_disabled_reason?: string
+  }
   id: string // S1, S2, S3
   trigger: string
   condition: string // reclaim | hold | sweep_reclaim | reject | acceptance | breakout_retest

@@ -1,26 +1,41 @@
 #!/usr/bin/env python3
 """W-WRITE-TIME-FEASIBILITY replay (2026-09-18, DS-101) — READ-ONLY.
 
+This is a PYTHON RE-IMPLEMENTATION of the predicates, NOT the Go call site —
+indicative replay, not a gate replay. Evidence tiers: [A] computed from stored
+rows in this run; [B] mirrored from the Go source the wave cites; [C] the
+geometry column mirrors the LEGACY resolver only (the Go write site composes
+via composeArmStop — geometry rows are indicative, not verdict-equal).
+
 Replays, for every plan version written since 2026-09-13, which write-time
 predicate would have fired per scenario arm: min-SL / R:R / geometry / none.
 
 Sources (read-only):
-  - /home/hoang/nofx/data/data.db (plans, bars)
-  - journalctl (for the WARN cross-check, optional)
+  - history (plans+bars ≤ 2026-09-18 02:25 CT):
+    /home/hoang/nofx-backups/pre-bars-key-20260918-022516.db (pre-CLASS-149
+    single-contract copy — the research load rule: the LIVE data.db is never
+    queried for research during 08:30–15:30 CT).
+  - rows written after 02:25 CT: live data.db, read-only lookups only.
+  - CLASS 149 contract filter: live bars are queried with `contract = ?` —
+    the plan's contract is the ContractAt rule (newest usable bar ≤ read
+    time; the row that traded wins, then later expiry). A time-only query
+    sees two contracts at the same minutes across the 09-07..09-14 overlap
+    and inflates the ATR (DS-104 addendum [A]: 280.51 vs 32.80 on 09-13).
 
 Honesty rules applied (canon):
-  - ATR5m is MEASURED from the MNQ 5m bars table (same provider the write site
-    uses), bars with open_time_ms <= created_at. <14 bars -> NOT MEASURED.
+  - ATR5m is MEASURED from MNQ 5m bars (the same provider family the write
+    site uses), bars with open_time_ms <= created_at. <14 bars -> NOT MEASURED.
   - The session-risk band and the HTF veto are NOT judged (spec).
   - The levelidentity hash re-check inside LevelByID is NOT replayed; id-match
     identity resolution is used and flagged in the report.
 """
 import json
 import sqlite3
-import sys
 from datetime import datetime, timezone
 
-DB = "/home/hoang/nofx/data/data.db"
+DB_LIVE = "/home/hoang/nofx/data/data.db"
+DB_HISTORY = "/home/hoang/nofx-backups/pre-bars-key-20260918-022516.db"
+CUTOFF_MS = int(datetime.fromisoformat("2026-09-18T02:25:00-05:00").timestamp() * 1000)
 ARM_MIN_RR = 2.0
 MIN_SL_MULT = 1.5
 SINCE = "2026-09-13"
@@ -133,21 +148,67 @@ def geometry_refusal(doc, sc, arm):
     return None
 
 
+def contract_at(live_1m, created_ms):
+    """Mirrors the ContractAt tie-break for live rows: among contracts with the
+    newest usable 1m bar at or before created_ms, the row that traded wins
+    (live > mixed > replay > import), then later expiry, then lexicographic.
+    Returns the contract label or None."""
+    prior = [r for r in live_1m if r[0] <= created_ms]
+    if not prior:
+        return None
+    newest = max(r[0] for r in prior)
+    cands = [r for r in prior if r[0] == newest]
+    src_rank = {"live": 0, "mixed": 1, "replay": 2, "import": 3}
+    cands.sort(key=lambda r: (src_rank.get(r[2] or "", 9), tuple(-x for x in expiry(r[1])), r[1]))
+    return cands[0][1]
+
+
+def expiry(label):
+    f = (label or "").split()
+    if len(f) >= 2:
+        parts = f[-1].split("-")
+        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+            return 2000 + int(parts[1]), int(parts[0])
+    return 0, 0
+
+
 def main():
-    con = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
-    rows = con.execute(
+    rows = []
+    con = sqlite3.connect(f"file:{DB_HISTORY}?mode=ro", uri=True)
+    rows += con.execute(
         "SELECT plan_id, version, trade_date, session, created_at, doc "
         "FROM plans WHERE created_at >= ? ORDER BY created_at, plan_id, version",
         (SINCE,)).fetchall()
-    bars = con.execute(
+    con.close()
+    con = sqlite3.connect(f"file:{DB_LIVE}?mode=ro", uri=True)
+    # live rows written after the 02:25 cutoff only (research load rule)
+    rows += con.execute(
+        "SELECT plan_id, version, trade_date, session, created_at, doc "
+        "FROM plans WHERE created_at >= ? AND created_at >= '2026-09-18 02:25' "
+        "ORDER BY created_at, plan_id, version",
+        (SINCE,)).fetchall()
+    # history bars: the single-contract pre-migration copy
+    con_hist = sqlite3.connect(f"file:{DB_HISTORY}?mode=ro", uri=True)
+    hist_bars = con_hist.execute(
         "SELECT open_time_ms, h, l, c FROM bars WHERE symbol='MNQ' AND tf='5m' "
         "ORDER BY open_time_ms").fetchall()
+    con_hist.close()
+    # live bars: contract-keyed, filtered per plan (CLASS 149)
+    live_bars = con.execute(
+        "SELECT open_time_ms, contract, source, h, l, c FROM bars "
+        "WHERE symbol='MNQ' AND tf='5m' ORDER BY open_time_ms").fetchall()
+    live_1m = con.execute(
+        "SELECT open_time_ms, contract, source FROM bars "
+        "WHERE symbol='MNQ' AND tf='1m' ORDER BY open_time_ms").fetchall()
     con.close()
 
     print(f"## Replay: write-time feasibility predicates, plans since {SINCE}\n")
-    print(f"rows={len(rows)} plans; MNQ 5m bars={len(bars)}; "
+    print(f"rows={len(rows)} plans; history bars={len(hist_bars)} (pre-CLASS-149 copy); "
+          f"live bars={len(live_bars)} (contract-filtered, CLASS 149); "
           f"arm_rr={ARM_MIN_RR}; min_sl={MIN_SL_MULT}×ATR5m; "
-          "session band/HTF NOT judged (spec); levelidentity hash NOT replayed\n")
+          "session band/HTF NOT judged (spec); levelidentity hash NOT replayed; "
+          "Python re-implementation, not the Go call site [C]; geometry column = "
+          "legacy resolver only [C]\n")
     print("| plan_id | v | session | S# | cond | dir | atr5m | rr | min_sl | "
           "geometry | stop_side | predicate |")
     print("|---|---|---|---|---|---|---|---|---|---|---|---|")
@@ -165,10 +226,19 @@ def main():
         atr, nbars = (None, 0)
         tape_close = None
         if created_ms:
-            atr, nbars = atr5m_from_bars(bars, created_ms)
-            closes = [b[3] for b in bars if b[0] <= created_ms]
-            if closes:
-                tape_close = closes[-1]
+            if created_ms <= CUTOFF_MS:
+                atr, nbars = atr5m_from_bars(hist_bars, created_ms)
+                closes = [b[3] for b in hist_bars if b[0] <= created_ms]
+                if closes:
+                    tape_close = closes[-1]
+            else:
+                contract = contract_at(live_1m, created_ms)
+                contracted = [(r[0], r[3], r[4], r[5]) for r in live_bars
+                              if r[1] == contract]
+                atr, nbars = atr5m_from_bars(contracted, created_ms)
+                closes = [b[3] for b in contracted if b[0] <= created_ms]
+                if closes:
+                    tape_close = closes[-1]
         for sc in doc.get("scenarios") or []:
             sid = sc.get("id") or "?"
             cond = sc.get("condition") or ""

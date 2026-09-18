@@ -61,7 +61,7 @@ func TestContractRowUsesTheDerivedArmableSet(t *testing.T) {
 	}
 
 	// And the rendered prompt must satisfy it from the same source.
-	if !strings.Contains(plannerOutputContract(8, 3, true, true), pipe) {
+	if !strings.Contains(plannerOutputContract(8, 3, true, true, false), pipe) {
 		t.Errorf("the prompt must render the derived set %q", pipe)
 	}
 }

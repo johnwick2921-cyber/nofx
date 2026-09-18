@@ -235,7 +235,7 @@ const dayPlan: KnobSpec[] = [
     trader:
       "ON = the planner learns why its arm will not trade and can fix it; the last attempt never fail-closes for this — it writes the arm disabled. OFF = today's behaviour: an arm-feasibility WARN is logged and the plan is written as authored (the gate-at-arm chain still refuses at arm time).",
     consumer:
-      'trader/auto_trader_planner.go (write-time feasibility check → armGateVerdictFor / ResolveEntryGeometryZone) · store.DayPlanConfig.WriteTimeFeasibilityEnabled',
+      'trader/auto_trader_planner.go (write-time feasibility check → armGateVerdictFor / composeArmStop geometry; the write site follows the executor to ArmGeometryVerdict at the geometry-refusal merge) · store.DayPlanConfig.WriteTimeFeasibilityEnabled',
     range: 'ON | OFF',
     systemDefault: 'ON (nil/unset = ON)',
     recommended:

@@ -1872,6 +1872,10 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGradesClock(authoringClock func
 	return at.runPlannerReadCoreObserved(authoringClock, nil, session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, requiredBias, prompt, facts, machineGrades, machineLabels, htfLabels, failClosed, call, extraNoTrade...)
 }
 
+// plannerMaxAttempts is the single source of the attempt-loop bound
+// (W-WRITE-TIME-FEASIBILITY NIT: the old literal `attempt < 3` duplicated it).
+const plannerMaxAttempts = 3
+
 func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time, researchTrace *researchsnapshot.PlanTrace, session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, requiredBias, prompt string, facts kernel.PlanFacts, machineGrades map[float64]string, machineLabels map[float64]string, htfLabels map[float64]string, failClosed bool, call func(userPrompt string) (string, error), extraNoTrade ...string) (int, string, error) {
 	// H4/H5 — validation must accept EXACTLY what the config allows: the resolved
 	// max_levels / scenario_cap (hard ceilings 12/5). Before this the parse
@@ -2104,37 +2108,19 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 		// F4 (LONDON-FORENSICS 2026-08-28) — arm feasibility WARN, never a
 		// fail: arms the gate-at-arm chain would refuse EVERY cycle (R:R <
 		// ARM_MIN_RR or stop < 1×ATR5m) are surfaced so the planner learns
-		// instead of printing ~120 REFUSED lines a session.
-		atr5m := 0.0
-		if market.FuturesBarsProvider != nil {
-			if b5 := market.FuturesBarsProvider(at.futuresSymbol(), "5m", kernel.AISVPBarCount); len(b5) > 0 {
-				atr5m = market.ExportCalculateATR(b5, 14)
+		// instead of printing ~120 REFUSED lines a session. Suppressed when
+		// the write-time feasibility knob is ON — the verdicts below carry
+		// the same information into the repair prompt (W-WRITE-TIME-
+		// FEASIBILITY NIT: no double noise).
+		// SHOULD-FIX 4: the SAME atr5m resolver the executor's arm seam uses
+		// (1m→5m aggregated bars), never a differently-sliced ATR.
+		atr5m := armSeamATR5m(at.futuresSymbol())
+		if !at.writeTimeFeasibilityOn() {
+			for _, w := range kernel.ArmFeasibilityWarnings(d, atr5m, at.armMinRRFor(nil), kernel.MinSLATRMult()) {
+				at.logWarnf("⚔️ arm feasibility: %s (WARN — write proceeds; the gate-at-arm chain enforces)", w)
 			}
-		}
-		for _, w := range kernel.ArmFeasibilityWarnings(d, atr5m, at.armMinRRFor(nil), kernel.MinSLATRMult()) {
-			at.logWarnf("⚔️ arm feasibility: %s (WARN — write proceeds; the gate-at-arm chain enforces)", w)
 		}
 
-		// W-WRITE-TIME-FEASIBILITY (2026-09-18, owner "fix all") — judge
-		// the SAME predicates the gate-at-arm chain runs, at write time.
-		// Attempts 1..N-1: restriction-with-hint via the existing repair
-		// machinery (budget unchanged). The last attempt: the scenarios are
-		// written arm.enabled=false + arm_disabled_reason (spec c).
-		if feas := at.writeTimeFeasibilityVerdicts(d, atr5m, at.config.StrategyConfig, session, facts.Price); len(feas) > 0 {
-			if attempt < 3 {
-				lastErr = fmt.Errorf("%s", writeTimeFeasibilityHint(feas))
-				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
-				rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
-				rejectHistory = addDistinctReject(rejectHistory, lastErr)
-				at.logWarnf("📐 planner attempt %d/3 write-time feasibility: %v", attempt, lastErr)
-				if modeLabel == "repair" {
-					at.recordRepairOutcome(raw, lastErr, prevReason)
-				}
-				continue
-			}
-			// last attempt — write the unarmable arms disabled, never a silent write.
-			at.applyWriteTimeArmDisable(d, feas, tradeDate, session)
-		}
 		// D2 (arms-follow-bias) — WIRED 2026-09-05. BiasArmWarning shipped
 		// 2026-09-04 to answer the planner-shape finding and had ZERO
 		// production callers: it was written, tested, and never called, so a
@@ -2239,6 +2225,35 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 			rejectBlock = plannerRejectBlock(verr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, verr)
 			continue
+		}
+		// W-WRITE-TIME-FEASIBILITY (2026-09-18, owner "fix all") — judge
+		// the SAME predicates the gate-at-arm chain runs, at write time.
+		// Runs LAST among the validators (CTO SHOULD-FIX 8): hard rejects
+		// above keep their attempts; this check never pre-empts them. The
+		// extra round-trip cost is stated in the AUDIT-CHECKLIST class.
+		// Attempts 1..N-1: restriction-with-hint via the existing repair
+		// machinery (budget unchanged). The last attempt: the scenarios are
+		// written arm.enabled=false + arm_disabled_reason (spec c).
+		//
+		// CTO BLOCKER 1: stamp the frozen zone map + scenario identity
+		// into d BEFORE judging — the geometry predicate resolves against
+		// them and the final stamp runs only after the loop.
+		d.Zones = facts.Zones
+		kernel.StampAuthoredIdentity(d, facts.IdentityMap)
+		if feas := at.writeTimeFeasibilityVerdicts(d, atr5m, at.config.StrategyConfig, session); len(feas) > 0 {
+			if attempt < plannerMaxAttempts {
+				lastErr = fmt.Errorf("%s", writeTimeFeasibilityHint(feas))
+				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
+				rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
+				rejectHistory = addDistinctReject(rejectHistory, lastErr)
+				at.logWarnf("📐 planner attempt %d/%d write-time feasibility: %v", attempt, plannerMaxAttempts, lastErr)
+				if modeLabel == "repair" {
+					at.recordRepairOutcome(raw, lastErr, prevReason)
+				}
+				continue
+			}
+			// last attempt — write the unarmable arms disabled, never a silent write.
+			at.applyWriteTimeArmDisable(d, feas, tradeDate, session)
 		}
 		// S5 (autopsy-response wave) — arm-authored counter: one tick per
 		// arm{} spec written; the before/after gauge of the arming mandate.

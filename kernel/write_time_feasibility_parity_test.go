@@ -12,12 +12,13 @@ import (
 // the same seam the class-38 boot guard renders every boot.
 
 const writeFeasibilitySentenceParity = "WRITE-TIME FEASIBILITY: a scenario whose arm would be refused by the gate-at-arm chain " +
-	"(stop too close to the min-SL floor, arm R:R below the arm minimum, or a level the structural-geometry gate refuses) " +
+	"(stop too close to the min-SL floor, arm R:R below the arm minimum, a level the structural-geometry gate refuses, " +
+	"or a stop-entry trigger already through price) " +
 	"is repaired first; after the last repair attempt it is written with arm.enabled=false " +
 	"and arm_disabled_reason naming the refusal. "
 
 func TestWriteTimeFeasibilityOffIsByteIdenticalToOnMinusSentence(t *testing.T) {
-	off := plannerOutputContract(8, 5, true, true)
+	off := plannerOutputContract(8, 5, true, true, false)
 	on := plannerOutputContract(8, 5, true, true, true)
 	if !strings.HasSuffix(on, writeFeasibilitySentenceParity) {
 		t.Fatalf("ON rendering must end with the contract sentence")

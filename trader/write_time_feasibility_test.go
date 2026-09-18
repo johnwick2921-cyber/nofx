@@ -18,20 +18,35 @@ import (
 // refuse, through a stubbed FuturesBarsProvider that yields a known 5m ATR so
 // the min-SL floor is deterministic.
 
-// feasBars returns synthetic 5m bars with a true range of exactly 8 points each
-// → ExportCalculateATR(14) = 8.0, so the min-SL floor is 1.5 × 8.0 = 12.0.
-func feasBars(symbol, tf string, n int) []market.Kline {
-	out := make([]market.Kline, 0, n)
-	for i := 0; i < n; i++ {
-		out = append(out, market.Kline{Open: 100, High: 108, Low: 100, Close: 108})
+// feasBarsFor returns a stub provider: 1m bars (the AISVP interval the arm seam
+// aggregates to 5m) with per-minute true range tr and close close1m, so
+// armSeamATR5mFromBars yields ATR14 = tr (each 5m bucket TR = tr) and the
+// stop-side predicate's last-tape close reads close1m (SHOULD-FIX 7).
+func feasBarsFor(close1m, tr float64) func(symbol, tf string, n int) []market.Kline {
+	start := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC).UnixMilli()
+	return func(symbol, tf string, n int) []market.Kline {
+		out := make([]market.Kline, 0, n)
+		for i := 0; i < n; i++ {
+			// One range move per 5-minute bucket; the other minutes stay flat so
+			// each aggregated bucket has TR exactly tr.
+			k := market.Kline{OpenTime: start + int64(i)*60_000, Open: close1m, Close: close1m}
+			if i%5 == 0 {
+				k.High, k.Low = close1m+tr, close1m
+				k.Close = close1m + tr
+			} else {
+				k.High, k.Low = close1m+tr, close1m+tr
+				k.Close = close1m + tr
+			}
+			out = append(out, k)
+		}
+		return out
 	}
-	return out
 }
 
 func feasStubBars(t *testing.T) {
 	t.Helper()
 	old := market.FuturesBarsProvider
-	market.FuturesBarsProvider = feasBars
+	market.FuturesBarsProvider = feasBarsFor(108, 8)
 	t.Cleanup(func() { market.FuturesBarsProvider = old })
 }
 
@@ -88,14 +103,15 @@ func feasClock() func() time.Time {
 	return func() time.Time { return now }
 }
 
-// feasATR5m recomputes the 5m ATR exactly the way the write site does.
+// feasATR5m recomputes the 5m ATR exactly the way the write site does:
+// armSeamATR5m's own math over the stub's 1m bars.
 func feasATR5m(t *testing.T) float64 {
 	t.Helper()
-	b5 := market.FuturesBarsProvider("MNQ", "5m", kernel.AISVPBarCount)
-	if len(b5) == 0 {
+	b := market.FuturesBarsProvider("MNQ", kernel.AISVPBarInterval, kernel.AISVPBarCount)
+	if len(b) == 0 {
 		t.Fatalf("stub provider returned no bars")
 	}
-	return market.ExportCalculateATR(b5, 14)
+	return armSeamATR5mFromBars(b)
 }
 
 // expectedFeasReason runs the SAME verdict function the write site runs, with
@@ -203,10 +219,10 @@ func TestWriteTimeFeasibilityLastAttemptDisablesArm(t *testing.T) {
 	if doc.Scenarios[0].Arm.Enabled {
 		t.Fatalf("last attempt must write the arm DISABLED, got enabled: %s", row.Doc)
 	}
-	if !strings.Contains(doc.Scenarios[0].Arm.DisabledReason, "too close") {
-		t.Fatalf("arm_disabled_reason must name the refusal, got %q", doc.Scenarios[0].Arm.DisabledReason)
+	if doc.Scenarios[0].Arm.DisabledReason != "min_sl" {
+		t.Fatalf("arm_disabled_reason must be the min_sl CLASS (SHOULD-FIX 6), got %q", doc.Scenarios[0].Arm.DisabledReason)
 	}
-	key := "arm_disabled_at_write:t1:2026-08-14:NY:" + want
+	key := "arm_disabled_at_write:t1:2026-08-14:NY:min_sl"
 	if n, err := store.SystemCounter(at.store, key); err != nil || n != 1 {
 		t.Fatalf("counter %q = %d, %v (want 1)", key, n, err)
 	}
@@ -249,7 +265,7 @@ func TestWriteTimeFeasibilityOffIsByteIdentical(t *testing.T) {
 // (CTO 2026-09-18): the trigger, its relation to price, and the two fixes.
 func TestWriteTimeFeasibilityStopSideHintText(t *testing.T) {
 	hint := writeTimeFeasibilityHint([]writeTimeFeasibilityIssue{
-		{Scenario: "S1", Cond: "reclaim", Kind: "stop_side", Trigger: 15480.50, Price: 15550.00, Side: "long", Reason: "stop_side_wrong"},
+		{Scenario: "S1", Cond: "reclaim", Kind: "stop_side", Class: "stop_side_wrong", Trigger: 15480.50, Price: 15550.00, Side: "long"},
 	})
 	for _, frag := range []string{
 		"write-time feasibility:",
@@ -274,6 +290,12 @@ func TestWriteTimeFeasibilityStopSideHintText(t *testing.T) {
 func TestWriteTimeFeasibilityStopSideLastAttemptDisables(t *testing.T) {
 	at := feasPlannerTrader(t, nil)
 	feasStubBars(t)
+	// The stop-side predicate re-reads the last 1m close at verdict time
+	// (SHOULD-FIX 7): make the tape say 15550 so the reclaim trigger 15480.50
+	// is already through it.
+	old := market.FuturesBarsProvider
+	market.FuturesBarsProvider = feasBarsFor(15550, 0)
+	t.Cleanup(func() { market.FuturesBarsProvider = old })
 	blocks := []string{}
 	_, lc, err := at.runPlannerReadCoreWithFactsGradesClock(feasClock(), "NY", "2026-08-14", "owner_reset",
 		"deepseek-v4-pro", "hashFeas4", "", "", "", "FULLPROMPT",
@@ -313,5 +335,110 @@ func TestWriteTimeFeasibilityStopSideLastAttemptDisables(t *testing.T) {
 	key := "arm_disabled_at_write:t1:2026-08-14:NY:stop_side_wrong"
 	if n, err := store.SystemCounter(at.store, key); err != nil || n != 1 {
 		t.Fatalf("counter %q = %d, %v (want 1)", key, n, err)
+	}
+}
+
+// CTO BLOCKER 1 (RED→GREEN): with the frozen zone map + identity map stamped
+// before judging, a reject play anchored at a REAL zone is ADMITTED at write
+// with the knob ON — no hint, no disabled arm, exactly one attempt.
+func TestWriteTimeFeasibilityRejectPlayAtRealZoneAdmitted(t *testing.T) {
+	at := feasPlannerTrader(t, nil)
+	feasStubBars(t)
+	now := time.Date(2026, 9, 10, 20, 0, 0, 0, kernel.CTLocation())
+	// A real machine identity for the class-39 fixture's PWL anchor at 15480.
+	l := identityTestLevel(now, 15480)
+	l.Label = "PWL"
+	candidates := kernel.BuildMapCandidates([]kernel.ScoredLevel{{DetectedLevel: l, Grade: "A", Score: 1}}, 15480, 10, kernel.MapCandidateOpts{})
+	if len(candidates) != 1 || candidates[0].ID == nil {
+		t.Fatalf("map did not expose identity: %+v", candidates)
+	}
+	lo, hi := 15470.0, 15490.0
+	tLo, tHi := 15540.0, 15560.0
+	zones := &kernel.LevelZoneMap{Zones: []kernel.LevelZone{
+		{
+			Anchor: 15480, Lo: &lo, Hi: &hi,
+			Sources: []kernel.ZoneSource{{Price: 15480, Label: "PWL", TF: l.FormationTF}},
+		},
+		{ // the distinct complete target the composition requires beyond the entry zone
+			Anchor: 15550, Lo: &tLo, Hi: &tHi,
+			Sources: []kernel.ZoneSource{{Price: 15550, Label: "RN 15550", TF: l.FormationTF}},
+		},
+	}}
+	facts := kernel.PlanFacts{Price: 15550, DATR: 300, Zones: zones, IdentityMap: candidates}
+	// New-authoring plans carry the authored level_id; the stamp resolves it
+	// against the frozen identity map (LevelByID re-checks the hash).
+	plan := strings.Replace(class39LegsPlanJSON("15550"),
+		`"condition": "reject", "direction": "long"`,
+		`"condition": "reject", "level_id": "`+*candidates[0].ID+`", "direction": "long"`, 1)
+	calls := 0
+	_, lc, err := at.runPlannerReadCoreWithFactsGradesClock(feasClock(), "NY", "2026-08-14", "owner_reset",
+		"deepseek-v4-pro", "hashB1", "", "", "", "FULLPROMPT", facts, nil,
+		map[float64]string{15480: "PWL", 15700: "RN 15700"}, nil, true,
+		func(userPrompt string) (string, error) {
+			calls++
+			return plan, nil
+		})
+	if err != nil || lc != "active" {
+		t.Fatalf("real-zone reject must be ADMITTED at write: lc=%q err=%v", lc, err)
+	}
+	if calls != 1 {
+		t.Fatalf("admission must not burn a retry, got %d calls", calls)
+	}
+	row, _ := at.store.Plan().GetLatestPlanForSession("2026-08-14", "NY")
+	var doc kernel.PlanDoc
+	if err := json.Unmarshal([]byte(row.Doc), &doc); err != nil {
+		t.Fatalf("doc unmarshal: %v", err)
+	}
+	if doc.Scenarios[0].Arm == nil || !doc.Scenarios[0].Arm.Enabled {
+		t.Fatalf("admitted reject arm must stay enabled, got %s", row.Doc)
+	}
+	if doc.Scenarios[0].Arm.DisabledReason != "" {
+		t.Fatalf("admitted arm must carry no disabled_reason, got %q", doc.Scenarios[0].Arm.DisabledReason)
+	}
+}
+
+// CTO SHOULD-FIX 8 (burned attempts): a hard validator keeps its attempt, the
+// write-time check runs LAST, and a plan whose arm only becomes infeasible on
+// the final attempt still writes with arm.enabled=false — the hint was seen.
+func TestWriteTimeFeasibilityNeverPreemptsHardRejects(t *testing.T) {
+	at := feasPlannerTrader(t, nil)
+	feasStubBars(t)
+	good := class39LegsPlanJSON("15550")
+	bad := strings.Replace(good, `"target_chain": [15550, 15620]`, `"target_chain": [15620]`, 1) // hard economics reject
+	blocks := []string{}
+	_, lc, err := at.runPlannerReadCoreWithFactsGradesClock(feasClock(), "NY", "2026-08-14", "owner_reset",
+		"deepseek-v4-pro", "hashS8", "", "", "", "FULLPROMPT",
+		kernel.PlanFacts{Price: 15550, DATR: 300}, nil, map[float64]string{15480: "PWL", 15700: "RN 15700"}, nil, true,
+		func(userPrompt string) (string, error) {
+			blocks = append(blocks, userPrompt)
+			switch len(blocks) {
+			case 1:
+				return bad, nil // hard validator burns attempt 1
+			default:
+				return good, nil // attempts 2-3: reject arm, no zone map → geometry refusal at write
+			}
+		})
+	if err != nil || lc != "active" {
+		t.Fatalf("burned-attempts write: lc=%q err=%v", lc, err)
+	}
+	if len(blocks) != 3 {
+		t.Fatalf("hard reject + hint + last-attempt = 3 calls, got %d", len(blocks))
+	}
+	// The hint rides the ATTEMPT-3 prompt (the repair from attempt 2's verdict).
+	// This is the documented burned-attempts cost: the model sees the hint but
+	// has no attempt left to act on it (CTO SHOULD-FIX 8).
+	if !strings.Contains(blocks[2], "write-time feasibility:") {
+		t.Fatalf("attempt 3 must carry the feasibility hint, got %q", blocks[2][:120])
+	}
+	row, _ := at.store.Plan().GetLatestPlanForSession("2026-08-14", "NY")
+	var doc kernel.PlanDoc
+	if err := json.Unmarshal([]byte(row.Doc), &doc); err != nil {
+		t.Fatalf("doc unmarshal: %v", err)
+	}
+	if doc.Scenarios[0].Arm == nil || doc.Scenarios[0].Arm.Enabled {
+		t.Fatalf("last attempt must write the arm disabled, got %s", row.Doc)
+	}
+	if doc.Scenarios[0].Arm.DisabledReason != "geometry_no_provenance" {
+		t.Fatalf("disabled_reason must be the geometry class, got %q", doc.Scenarios[0].Arm.DisabledReason)
 	}
 }

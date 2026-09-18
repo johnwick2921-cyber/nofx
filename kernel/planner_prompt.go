@@ -769,7 +769,7 @@ func BuildPlannerPrompt(in PlannerInput) string {
 // ask for what validation will accept, so a raised max_levels/scenario_cap both
 // gets requested AND passes instead of fail-closing every read against a
 // hardcoded 8/3.
-func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone bool, writeFeas ...bool) string {
+func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone bool, writeFeas bool) string {
 	maxL, maxS := resolvePlanCaps(maxLevels, maxScenarios)
 	htfRule := ""
 	if hasHTFZones {
@@ -866,12 +866,13 @@ func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone
 // sentence only when the knob is ON (the owner's default). OFF leaves the
 // contract byte-identical to before the wave (L4). The class-38 guard asserts
 // the fragments through the ON path.
-func writeTimeFeasibilitySentence(writeFeas []bool) string {
-	if len(writeFeas) == 0 || !writeFeas[0] {
+func writeTimeFeasibilitySentence(on bool) string {
+	if !on {
 		return ""
 	}
 	return "WRITE-TIME FEASIBILITY: a scenario whose arm would be refused by the gate-at-arm chain " +
-		"(stop too close to the min-SL floor, arm R:R below the arm minimum, or a level the structural-geometry gate refuses) " +
+		"(stop too close to the min-SL floor, arm R:R below the arm minimum, a level the structural-geometry gate refuses, " +
+		"or a stop-entry trigger already through price) " +
 		"is repaired first; after the last repair attempt it is written with arm.enabled=false " +
 		"and arm_disabled_reason naming the refusal. "
 }

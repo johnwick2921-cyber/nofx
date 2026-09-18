@@ -1,65 +1,65 @@
 ## Replay: write-time feasibility predicates, plans since 2026-09-13
 
-rows=96 plans; MNQ 5m bars=285554; arm_rr=2.0; min_sl=1.5×ATR5m; session band/HTF NOT judged (spec); levelidentity hash NOT replayed
+rows=96 plans; history bars=284500 (pre-CLASS-149 copy); live bars=285569 (contract-filtered, CLASS 149); arm_rr=2.0; min_sl=1.5×ATR5m; session band/HTF NOT judged (spec); levelidentity hash NOT replayed; Python re-implementation, not the Go call site [C]; geometry column = legacy resolver only [C]
 
 | plan_id | v | session | S# | cond | dir | atr5m | rr | min_sl | geometry | stop_side | predicate |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 1 | ASIA | S1 | reject | short | 280.51 | 2.23 | — | geometry: entry_source_not_in_frozen_zones | — | geometry |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 1 | ASIA | S2 | reject | long | 280.51 | 2.94 | — | — | — | none |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 1 | ASIA | S3 | sweep_reclaim | short | 280.51 | 4.97 | REFUSE | — | — | min-SL |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 2 | ASIA | S1 | sweep_reclaim | long | 316.65 | 2.26 | REFUSE | — | — | min-SL |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 2 | ASIA | S2 | reject | long | 316.65 | 2.23 | — | geometry: entry_source_not_in_frozen_zones | — | geometry |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 3 | ASIA | S1 | reject | short | 303.72 | 2.39 | — | geometry: entry_source_not_in_frozen_zones | — | geometry |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 3 | ASIA | S2 | reject | short | 303.72 | 2.68 | — | — | — | none |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 3 | ASIA | S3 | sweep_reclaim | short | 303.72 | 2.29 | REFUSE | — | — | min-SL |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 4 | ASIA | S1 | reject | short | 302.94 | 3.14 | — | — | — | none |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 4 | ASIA | S2 | sweep_reclaim | long | 302.94 | 2.60 | REFUSE | — | — | min-SL |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 5 | ASIA | S1 | reject | long | 302.13 | 2.14 | — | geometry: scenario_level_id_missing | — | geometry |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 6 | ASIA | S1 | sweep_reclaim | long | 303.48 | 2.41 | REFUSE | — | — | min-SL |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 6 | ASIA | S2 | reject | long | 303.48 | 2.74 | — | geometry: entry_source_not_in_frozen_zones | — | geometry |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 6 | ASIA | S3 | reclaim | long | 303.48 | 2.19 | REFUSE | — | — | min-SL |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 7 | ASIA | S1 | reject | long | 304.04 | 2.13 | — | geometry: entry_source_not_in_frozen_zones | — | geometry |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 7 | ASIA | S2 | reclaim | long | 304.04 | 2.22 | REFUSE | — | — | min-SL |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 8 | ASIA | S1 | sweep_reclaim | long | 300.92 | 2.29 | REFUSE | — | — | min-SL |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 8 | ASIA | S2 | reject | short | 300.92 | 2.35 | — | — | — | none |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 9 | ASIA | S1 | reject | long | 302.21 | 2.31 | — | — | — | none |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 10 | ASIA | S1 | sweep_reclaim | long | 301.44 | 3.03 | REFUSE | — | — | min-SL |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 10 | ASIA | S2 | reject | long | 301.44 | 2.42 | — | — | — | none |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 10 | ASIA | S3 | sweep_reclaim | short | 301.44 | 3.15 | REFUSE | — | — | min-SL |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 11 | ASIA | S1 | sweep_reclaim | long | 305.09 | 3.19 | REFUSE | — | — | min-SL |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 12 | ASIA | S1 | sweep_reclaim | long | 302.39 | 4.32 | REFUSE | — | — | min-SL |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 12 | ASIA | S2 | reject | short | 302.39 | 2.31 | — | geometry: entry_source_not_in_frozen_zones | — | geometry |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 13 | ASIA | S1 | sweep_reclaim | long | 302.52 | 2.16 | REFUSE | — | — | min-SL |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 13 | ASIA | S2 | reclaim | long | 302.52 | 2.03 | REFUSE | — | — | min-SL |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 14 | ASIA | S1 | reject | long | 303.50 | 2.92 | — | — | — | none |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 14 | ASIA | S2 | reclaim | long | 303.50 | 2.75 | REFUSE | — | — | min-SL |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 14 | ASIA | S5 | reject | long | 303.50 | 3.17 | — | geometry: entry_zone_edges_or_provenance_unusable | — | geometry |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 15 | ASIA | S1 | reject | long | 304.52 | 2.57 | — | geometry: scenario_level_id_missing | — | geometry |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 15 | ASIA | S2 | reject | long | 304.52 | 4.46 | — | geometry: entry_zone_edges_or_provenance_unusable | — | geometry |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 16 | ASIA | S1 | sweep_reclaim | long | 301.42 | 3.62 | REFUSE | — | — | min-SL |
-| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 16 | ASIA | S2 | reject | long | 301.42 | 2.23 | — | geometry: entry_source_not_in_frozen_zones | — | geometry |
-| 2026-09-14:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 1 | LONDON | S1 | reject | long | 303.13 | 4.14 | — | geometry: entry_source_not_in_frozen_zones | — | geometry |
-| 2026-09-14:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 1 | LONDON | S2 | reclaim | long | 303.13 | 2.37 | REFUSE | — | — | min-SL |
-| 2026-09-14:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 1 | LONDON | S3 | reject | long | 303.13 | 5.18 | — | geometry: entry_zone_edges_or_provenance_unusable | — | geometry |
-| 2026-09-14:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 2 | LONDON | S1 | reclaim | long | 310.06 | 2.05 | REFUSE | — | — | min-SL |
-| 2026-09-14:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 2 | LONDON | S2 | sweep_reclaim | long | 310.06 | 2.00 | REFUSE | — | — | min-SL |
-| 2026-09-14:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 3 | LONDON | S1 | reclaim | long | 309.43 | 2.59 | REFUSE | — | — | min-SL |
-| 2026-09-14:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 4 | LONDON | S1 | reject | long | 296.50 | 2.48 | — | — | — | none |
-| 2026-09-14:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 4 | LONDON | S2 | reclaim | long | 296.50 | 2.18 | REFUSE | — | — | min-SL |
-| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 1 | NY | S1 | reject | short | 308.94 | 2.01 | — | geometry: entry_source_not_in_frozen_zones | — | geometry |
-| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 1 | NY | S2 | reject | short | 308.94 | 2.02 | — | — | — | none |
-| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 1 | NY | S3 | sweep_reclaim | long | 308.94 | 2.15 | REFUSE | — | — | min-SL |
-| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 2 | NY | S1 | reject | long | 123.78 | 4.83 | — | geometry: entry_source_not_in_frozen_zones | — | geometry |
-| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 3 | NY | S1 | reject | short | 90.45 | 2.13 | — | — | — | none |
-| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 3 | NY | S2 | reclaim | long | 90.45 | 3.18 | REFUSE | — | — | min-SL |
-| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 4 | NY | S1 | reject | long | 60.97 | 2.05 | — | geometry: entry_source_not_in_frozen_zones | — | geometry |
-| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 4 | NY | S2 | sweep_reclaim | long | 60.97 | 4.58 | REFUSE | — | — | min-SL |
-| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 4 | NY | S3 | breakdown_continue | short | 60.97 | 3.72 | REFUSE | — | — | min-SL |
-| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 5 | NY | S1 | reject | short | 45.41 | 5.51 | — | — | — | none |
-| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 6 | NY | S1 | reject | short | 33.32 | 2.92 | — | — | — | none |
-| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 7 | NY | S1 | reject | short | 27.27 | 3.43 | — | — | — | none |
-| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 8 | NY | S1 | reject | short | 21.24 | 2.25 | — | — | — | none |
-| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 8 | NY | S2 | reject | short | 21.24 | 2.10 | — | — | — | none |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 1 | ASIA | S1 | reject | short | 32.80 | 2.23 | — | geometry: entry_source_not_in_frozen_zones | — | geometry |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 1 | ASIA | S2 | reject | long | 32.80 | 2.94 | — | — | — | none |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 1 | ASIA | S3 | sweep_reclaim | short | 32.80 | 4.97 | REFUSE | — | — | min-SL |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 2 | ASIA | S1 | sweep_reclaim | long | 72.96 | 2.26 | REFUSE | — | — | min-SL |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 2 | ASIA | S2 | reject | long | 72.96 | 2.23 | — | geometry: entry_source_not_in_frozen_zones | — | geometry |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 3 | ASIA | S1 | reject | short | 50.60 | 2.39 | — | geometry: entry_source_not_in_frozen_zones | — | geometry |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 3 | ASIA | S2 | reject | short | 50.60 | 2.68 | — | — | — | none |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 3 | ASIA | S3 | sweep_reclaim | short | 50.60 | 2.29 | REFUSE | — | — | min-SL |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 4 | ASIA | S1 | reject | short | 37.75 | 3.14 | — | — | — | none |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 4 | ASIA | S2 | sweep_reclaim | long | 37.75 | 2.60 | REFUSE | — | — | min-SL |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 5 | ASIA | S1 | reject | long | 34.10 | 2.14 | — | geometry: scenario_level_id_missing | — | geometry |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 6 | ASIA | S1 | sweep_reclaim | long | 31.63 | 2.41 | REFUSE | — | — | min-SL |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 6 | ASIA | S2 | reject | long | 31.63 | 2.74 | — | geometry: entry_source_not_in_frozen_zones | — | geometry |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 6 | ASIA | S3 | reclaim | long | 31.63 | 2.19 | REFUSE | — | — | min-SL |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 7 | ASIA | S1 | reject | long | 29.35 | 2.13 | — | geometry: entry_source_not_in_frozen_zones | — | geometry |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 7 | ASIA | S2 | reclaim | long | 29.35 | 2.22 | REFUSE | — | — | min-SL |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 8 | ASIA | S1 | sweep_reclaim | long | 24.74 | 2.29 | — | — | — | none |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 8 | ASIA | S2 | reject | short | 24.74 | 2.35 | — | — | — | none |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 9 | ASIA | S1 | reject | long | 24.52 | 2.31 | — | — | — | none |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 10 | ASIA | S1 | sweep_reclaim | long | 20.89 | 3.03 | REFUSE | — | — | min-SL |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 10 | ASIA | S2 | reject | long | 20.89 | 2.42 | — | — | — | none |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 10 | ASIA | S3 | sweep_reclaim | short | 20.89 | 3.15 | REFUSE | — | — | min-SL |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 11 | ASIA | S1 | sweep_reclaim | long | 18.29 | 3.19 | — | — | — | none |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 12 | ASIA | S1 | sweep_reclaim | long | 15.84 | 4.32 | — | — | — | none |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 12 | ASIA | S2 | reject | short | 15.84 | 2.31 | — | geometry: entry_source_not_in_frozen_zones | — | geometry |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 13 | ASIA | S1 | sweep_reclaim | long | 15.56 | 2.16 | — | — | — | none |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 13 | ASIA | S2 | reclaim | long | 15.56 | 2.03 | — | — | trigger 29020.75 through price 29022.50 | stop_side |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 14 | ASIA | S1 | reject | long | 15.01 | 2.92 | — | — | — | none |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 14 | ASIA | S2 | reclaim | long | 15.01 | 2.75 | — | — | rests | none |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 14 | ASIA | S5 | reject | long | 15.01 | 3.17 | — | geometry: entry_zone_edges_or_provenance_unusable | — | geometry |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 15 | ASIA | S1 | reject | long | 15.28 | 2.57 | — | geometry: scenario_level_id_missing | — | geometry |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 15 | ASIA | S2 | reject | long | 15.28 | 4.46 | — | geometry: entry_zone_edges_or_provenance_unusable | — | geometry |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 16 | ASIA | S1 | sweep_reclaim | long | 14.95 | 3.62 | — | — | — | none |
+| 2026-09-13:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 16 | ASIA | S2 | reject | long | 14.95 | 2.23 | — | geometry: entry_source_not_in_frozen_zones | — | geometry |
+| 2026-09-14:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 1 | LONDON | S1 | reject | long | 15.50 | 4.14 | — | geometry: entry_source_not_in_frozen_zones | — | geometry |
+| 2026-09-14:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 1 | LONDON | S2 | reclaim | long | 15.50 | 2.37 | — | — | rests | none |
+| 2026-09-14:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 1 | LONDON | S3 | reject | long | 15.50 | 5.18 | — | geometry: entry_zone_edges_or_provenance_unusable | — | geometry |
+| 2026-09-14:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 2 | LONDON | S1 | reclaim | long | 20.29 | 2.05 | — | — | rests | none |
+| 2026-09-14:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 2 | LONDON | S2 | sweep_reclaim | long | 20.29 | 2.00 | — | — | — | none |
+| 2026-09-14:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 3 | LONDON | S1 | reclaim | long | 24.58 | 2.59 | REFUSE | — | — | min-SL |
+| 2026-09-14:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 4 | LONDON | S1 | reject | long | 21.07 | 2.48 | — | — | — | none |
+| 2026-09-14:LONDON:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 4 | LONDON | S2 | reclaim | long | 21.07 | 2.18 | — | — | rests | none |
+| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 1 | NY | S1 | reject | short | 27.85 | 2.01 | — | geometry: entry_source_not_in_frozen_zones | — | geometry |
+| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 1 | NY | S2 | reject | short | 27.85 | 2.02 | — | — | — | none |
+| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 1 | NY | S3 | sweep_reclaim | long | 27.85 | 2.15 | — | — | — | none |
+| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 2 | NY | S1 | reject | long | 66.50 | 4.83 | — | geometry: entry_source_not_in_frozen_zones | — | geometry |
+| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 3 | NY | S1 | reject | short | 53.83 | 2.13 | — | — | — | none |
+| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 3 | NY | S2 | reclaim | long | 53.83 | 3.18 | REFUSE | — | — | min-SL |
+| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 4 | NY | S1 | reject | long | 43.74 | 2.05 | — | geometry: entry_source_not_in_frozen_zones | — | geometry |
+| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 4 | NY | S2 | sweep_reclaim | long | 43.74 | 4.58 | REFUSE | — | — | min-SL |
+| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 4 | NY | S3 | breakdown_continue | short | 43.74 | 3.72 | REFUSE | — | — | min-SL |
+| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 5 | NY | S1 | reject | short | 35.83 | 5.51 | — | — | — | none |
+| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 6 | NY | S1 | reject | short | 29.07 | 2.92 | — | — | — | none |
+| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 7 | NY | S1 | reject | short | 23.89 | 3.43 | — | — | — | none |
+| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 8 | NY | S1 | reject | short | 21.42 | 2.25 | — | — | — | none |
+| 2026-09-14:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 8 | NY | S2 | reject | short | 21.42 | 2.10 | — | — | — | none |
 | 2026-09-14:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 2 | ASIA | S1 | reject | short | 14.70 | 4.57 | — | geometry: scenario_level_id_missing | — | geometry |
 | 2026-09-14:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 3 | ASIA | S1 | sweep_reclaim | short | 12.31 | 2.23 | — | — | — | none |
 | 2026-09-14:ASIA:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 | 3 | ASIA | S2 | sweep_reclaim | long | 12.31 | 2.56 | — | — | — | none |
@@ -184,7 +184,7 @@ rows=96 plans; MNQ 5m bars=285554; arm_rr=2.0; min_sl=1.5×ATR5m; session band/H
 ### counts
 - R:R: 3
 - geometry: 72
-- min-SL: 39
+- min-SL: 27
 - no_arm: 33
-- none: 59
-- stop_side: 3
+- none: 70
+- stop_side: 4

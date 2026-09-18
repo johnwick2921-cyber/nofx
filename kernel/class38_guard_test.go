@@ -88,7 +88,7 @@ func TestClass38LiveHintRegistryIsClean(t *testing.T) {
 // TestClass38PromptContractsAllStated is E3: every enumerated validator
 // restriction is stated in the rendered prompt.
 func TestClass38PromptContractsAllStated(t *testing.T) {
-	prompt := plannerOutputContract(8, 5, true, true)
+	prompt := plannerOutputContract(8, 5, true, true, false)
 	onPrompt := plannerOutputContract(8, 5, true, true, true) // knob ON (write-time feasibility clause rendered)
 	if err := ValidatePromptContracts(prompt); err != nil {
 		t.Fatalf("a validator restriction is NOT stated in the prompt (class 38): %v", err)
@@ -124,7 +124,7 @@ func TestClass38PromptContractsAllStated(t *testing.T) {
 // restriction's sentence from the prompt and the guard must fail. Without this
 // the contract test could pass vacuously.
 func TestClass38ContractTestFailsWhenPromptDropsARule(t *testing.T) {
-	prompt := plannerOutputContract(8, 5, true, true)
+	prompt := plannerOutputContract(8, 5, true, true, false)
 	onPrompt := plannerOutputContract(8, 5, true, true, true) // knob ON
 	for _, c := range PromptContracts() {
 		// Gated rows apply only to the rendering that carries their sentence.
