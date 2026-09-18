@@ -81,9 +81,12 @@ def main(outdir, dbpath):
 
     # ── Q3: displaced seat when not seated + usage cost ────────────────────
     print("\n== Q3: which seat gets displaced, and was it used ==")
-    displaced = defaultdict(lambda: [0, 0])  # (kind,tf) -> [n, n_used]
+    displaced = defaultdict(lambda: [0, 0, 0])  # (kind,tf) -> [n, n_measurable, n_used]
     by_year = defaultdict(lambda: defaultdict(int))
     conn = sqlite3.connect(f"file:{dbpath}?mode=ro", uri=True)
+    plan_days = set(conn.execute(
+        "SELECT DISTINCT trade_date||'|'||session FROM plans").fetchall())
+    plan_days = {r[0] for r in plan_days}
     for r in reads:
         for side in ("above", "below"):
             s = r.get("farthest_" + side)
@@ -93,22 +96,42 @@ def main(outdir, dbpath):
             key = (last["kind"], last["tf"])
             displaced[key][0] += 1
             by_year[r["day"][:4]][key] += 1
-            # usage: scenario authored on the displaced level in that session's plan
-            if level_used(conn, r["day"], r["session"], last["price"]):
+            if r["day"] + "|" + r["session"] in plan_days:
                 displaced[key][1] += 1
-    for (k, tf), (n, u) in sorted(displaced.items(), key=lambda x: -x[1][0]):
-        print(f"  {k} tf={tf or '-'}: displaced {n} times, used {u} ({u/n:.1%})" if n else "")
+                # usage: scenario authored on the displaced level in that session's plan
+                if level_used(conn, r["day"], r["session"], last["price"]):
+                    displaced[key][2] += 1
+    tot = sum(v[0] for v in displaced.values())
+    meas = sum(v[1] for v in displaced.values())
+    used = sum(v[2] for v in displaced.values())
+    print(f"  displacements total {tot} · measurable (plan exists) {meas} · used {used}"
+          f" ({used/meas:.1%} of measurable)" if meas else f"  displacements total {tot} · measurable 0 · usage NOT MEASURED")
+    for (k, tf), (n, m, u) in sorted(displaced.items(), key=lambda x: -x[1][0]):
+        print(f"  {k} tf={tf or '-'}: displaced {n} (measurable {m}, used {u})")
     print("  per year:")
     for y in sorted(by_year):
         parts = ", ".join(f"{k[0]}:{v}" for k, v in sorted(by_year[y].items(), key=lambda x: -x[1]))
         print(f"    {y}: {parts}")
 
-    # ── Q4: on big days, was the farthest in-band HTF level the reached target ──
-    print("\n== Q4: big-day reach of the farthest in-band HTF level ==")
+    # ── Q4: on big days that OVERSHOT the farthest SEATED level on a side,
+    # ── was the farthest in-band HTF level on that side the reached target ──
+    print("\n== Q4: overshot big-day sides — reach of the farthest in-band HTF level ==")
+    overshot_n = 0
     per_year = defaultdict(lambda: [0, 0])
     ids_reached, ids_missed = [], []
     for r in big:
+        hi, lo = session_extremes(conn, r)
+        if hi is None:
+            continue
         for side in ("above", "below"):
+            seats_on_side = [s for s in r["seats"] if (s["price"] > r["price"]) == (side == "above")]
+            if not seats_on_side:
+                continue
+            farthest_seat = max(seats_on_side, key=lambda s: abs(s["price"] - r["price"]))
+            overshot = (hi > farthest_seat["price"]) if side == "above" else (lo < farthest_seat["price"])
+            if not overshot:
+                continue
+            overshot_n += 1
             s = r.get("farthest_" + side)
             if not s:
                 continue
@@ -122,15 +145,34 @@ def main(outdir, dbpath):
             else:
                 if len(ids_missed) < 5:
                     ids_missed.append(f"{r['day']} {r['session']} {side}@{s['price']}")
+    print(f"  overshot big-day sides: {overshot_n}")
     tot = sum(v[0] for v in per_year.values())
     hit = sum(v[1] for v in per_year.values())
-    print(f"  reached {hit}/{tot} ({hit/tot:.1%})" if tot else "  NOT MEASURED")
+    print(f"  with a farthest in-band HTF on that side: {tot} · reached {hit} ({hit/tot:.1%})" if tot else "  NOT MEASURED (no farthest HTF on overshot sides)")
     for y in sorted(per_year):
         a, b = per_year[y]
         print(f"    {y}: {b}/{a} ({b/a:.1%})" if a else f"    {y}: NOT MEASURED")
     print("  reached ids:", ids_reached)
     print("  missed ids:", ids_missed)
     conn.close()
+
+
+SESSION_EXTREME_CACHE = {}
+
+
+def session_extremes(conn, r):
+    """(hi, lo) of the session window [read, flat) 1m bars."""
+    key = (r["day"], r["session"])
+    if key in SESSION_EXTREME_CACHE:
+        return SESSION_EXTREME_CACHE[key]
+    flat_ms = r["read_at_ms"] + FLAT_DELTA_MIN[r["session"]] * 60_000
+    q = conn.execute(
+        """SELECT MAX(h), MIN(l) FROM bars WHERE symbol='MNQ' AND tf='1m'
+           AND contract=? AND open_time_ms > ? AND open_time_ms < ?""",
+        (r["contract"], r["read_at_ms"], flat_ms)).fetchone()
+    res = (q[0], q[1]) if q and q[0] is not None else (None, None)
+    SESSION_EXTREME_CACHE[key] = res
+    return res
 
 
 def level_used(conn, day, session, price):
