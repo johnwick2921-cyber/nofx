@@ -5845,7 +5845,7 @@ READ from the resolver: `🔴 t1_blackout=USD(default)` / `USD,EUR(saved)` /
   `T1Currencies: [ALL]` explicitly — the class was born under the every-
   currency regime and the cap is asserted there, not the currency split.
 
-## CLASS NN — A KNOB WITH NO CONTROL CAN STILL CARRY A VALUE THE OWNER SET, AND A REMOVAL THAT IGNORES IT CHANGES LIVE BEHAVIOUR SILENTLY (born with the Day Plan knob census 2026-08-19, ruled by the owner 2026-09-18 00:3x CT "full fix 6" on the Round 23/24 verdicts, feat/knob-prune, W-KNOB-PRUNE; number assigned at merge — not a bug class, a prune protocol)
+## CLASS 151 — A KNOB WITH NO CONTROL CAN STILL CARRY A VALUE THE OWNER SET, AND A REMOVAL THAT IGNORES IT CHANGES LIVE BEHAVIOUR SILENTLY (born with the Day Plan knob census 2026-08-19, ruled by the owner 2026-09-18 00:3x CT "full fix 6" on the Round 23/24 verdicts, feat/knob-prune, W-KNOB-PRUNE — not a bug class, a prune protocol)
 
 **Shape.** Fourteen Day Plan knobs were ruled dead or unneeded (7 remove, 5
 fold, 2 dead fields). Five of them were stored NON-default on the owner's live
