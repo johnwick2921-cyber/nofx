@@ -31,12 +31,14 @@ package main
 
 import (
 	"bufio"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"nofx/kernel"
+	"nofx/market"
 )
 
 // live config (read from the DB copy strategies table; hardcoded here as the
@@ -89,7 +91,7 @@ type r25Read struct {
 }
 
 // runR25 executes the seat-displacement pass over the given reads.
-func runR25(bd *barDB, reads []*readSnapshot, outDir string) error {
+func runR25(bd *barDB, db *sql.DB, reads []*readSnapshot, outDir string) error {
 	out, err := os.Create(filepath.Join(outDir, "r25-reads.jsonl"))
 	if err != nil {
 		return err
@@ -100,7 +102,7 @@ func runR25(bd *barDB, reads []*readSnapshot, outDir string) error {
 
 	n, nBig := 0, 0
 	for _, r := range reads {
-		row, ok := buildR25(bd, r)
+		row, ok := buildR25(bd, db, r)
 		if !ok {
 			continue
 		}
@@ -119,16 +121,27 @@ func runR25(bd *barDB, reads []*readSnapshot, outDir string) error {
 	return nil
 }
 
-// buildR25 assembles one read with the production seating call.
-func buildR25(bd *barDB, r *readSnapshot) (r25Read, bool) {
+// buildR25 assembles one read with the production seating call, feeding
+// the SAME extras the live planner feeds (auto_trader_planner.go:2502-2518):
+// DetectHTFLevels over [D,4h,1h,15m] via a per-TF closed-bar fetch, plus the
+// nPOC extras from the store's session_profiles (installNakedPOCProvider shape).
+func buildR25(bd *barDB, db *sql.DB, r *readSnapshot) (r25Read, bool) {
 	bars := r.Bars1m
 	if len(bars) < 2 {
 		return r25Read{}, false
 	}
 	now := r.ReadTime
+	fetch := func(tf string, count int) []market.Kline {
+		return bd.lastClosed(r.Contract, tf, count, now)
+	}
+	htfLevels := kernel.DetectHTFLevels(fetch, plannerTFs, "MNQ", now)
+	extra := append([]kernel.DetectedLevel(nil), htfLevels...)
+	if pocs := npocFor(db, now); len(pocs) > 0 {
+		extra = append(extra, kernel.NakedPOCs(pocs, bars, now)...)
+	}
 	seated, pool, price, dATR, _ := kernel.AssembleResearchLevels(
 		r25TraderID, bars, kernel.DefaultSessionRegistry(), "MNQ",
-		r25MaxLevels, nil, r25HtfMult, now, r25ProxK, r25MinGrade)
+		r25MaxLevels, nil, r25HtfMult, now, r25ProxK, r25MinGrade, extra...)
 	if price <= 0 {
 		return r25Read{}, false
 	}

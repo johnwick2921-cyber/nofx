@@ -105,7 +105,7 @@ collected:
 	fmt.Printf("reads built: %d\n", len(reads))
 
 	if *r25 {
-		if err := runR25(bd, reads, *outDir); err != nil {
+		if err := runR25(bd, db, reads, *outDir); err != nil {
 			fatal("r25: %v", err)
 		}
 		fmt.Println("done")
