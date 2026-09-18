@@ -127,6 +127,14 @@ func TestFlipBreachClearsWakesResume(t *testing.T) {
 	if !strings.Contains(buf.String(), "waking the planner") || at.lastLevelWakeKey == "" {
 		t.Fatalf("once inside, the ordinary wake must fire:\n%s", buf.String())
 	}
+	// The wake's async read (no AI client → benign failure) must END before
+	// the test returns, or it races the next harness's clock seam (-race).
+	if !waitFor(t, 10*time.Second, func() bool {
+		_, open := anyPlannerStreamOpen()
+		return !open && strings.Contains(buf.String(), "wake re-read failed for")
+	}) {
+		t.Fatalf("the wake read did not finish:\n%s", buf.String())
+	}
 }
 
 // (3) a same-bias wake authored v2 with the flip line within tolerance (100 →
@@ -236,6 +244,15 @@ func TestFlipBreachScheduledReadsAndDeathUntouched(t *testing.T) {
 	barsAt(flipHoldTape(now, 40, 5))
 	if fired := at2.maybeRunSessionReadsAt(now); len(fired) != 1 || fired[0].Session != "NY" {
 		t.Fatalf("scheduled read must fire with no row on a breached tape: %+v", fired)
+	}
+	// Let the async read END (it fail-closes to a no_trade row) before the
+	// test returns — see the note in TestFlipBreachClearsWakesResume.
+	if !waitFor(t, 10*time.Second, func() bool {
+		row, _ := at2.store.Plan().GetLatestPlanForTraderSession(td, "NY", at2.id)
+		_, open := anyPlannerStreamOpen()
+		return row != nil && !open
+	}) {
+		t.Fatalf("the scheduled read did not finish")
 	}
 }
 
