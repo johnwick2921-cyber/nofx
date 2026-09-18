@@ -399,6 +399,7 @@ export function AskPlannerPanel({
     const shell = shellRef.current
     if (!shell) return
     const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) return // pinch-zoom / ctrl+wheel stays with the browser
       const list = bodyRef.current
       if (!list || list.contains(e.target as Node)) return // native + overscroll-contain
       e.preventDefault()
@@ -550,7 +551,7 @@ export function AskPlannerPanel({
           ref={bodyRef}
           data-testid="ask-thread"
           role="log"
-          aria-label={tp('askPlannerTitle', language)}
+          aria-label={`${tp('askPlannerTitle', language)} — thread`}
           tabIndex={0}
           onScroll={onThreadScroll}
           className="flex flex-col gap-2.5 px-3 py-3"
