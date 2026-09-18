@@ -291,6 +291,10 @@ export interface ScenarioDeath {
 
 export interface PlanToday {
   structural_geometry?: StructuralGeometryView[] | null
+  /** W-ARM-STATE-UI — WHY the plan is dormant (from plan_lifecycle_log):
+   * 'dormant:death:…' / 'dormant:flip:…'. ABSENT when there is no marker for
+   * the current lifecycle; trigger_reason stays the AUTHORING reason. */
+  lifecycle_reason?: string
   found: boolean
   trade_date: string
   session: string
