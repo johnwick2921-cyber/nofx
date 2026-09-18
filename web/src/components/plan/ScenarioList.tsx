@@ -450,6 +450,7 @@ export function ScenarioList({
                     scenario={s.id}
                     arm={armedStates?.[s.id]}
                     geometry={geometry}
+                    disabledAtWrite={s.arm?.arm_disabled_reason}
                   />
                   {/* W2 fade permission — a label, never a gate. */}
                   <FadePermissionChip id={s.id} v={fadeLabels?.[s.id]} />

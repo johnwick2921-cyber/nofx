@@ -61,7 +61,16 @@ export interface ScenarioEconomics {
 export interface PlanScenario {
   level_id?: string | null
   economics?: ScenarioEconomics
-  arm?: { enabled?: boolean; entry: number; stop: number; target: number }
+  arm?: {
+    enabled?: boolean
+    entry: number
+    stop: number
+    target: number
+    /** W-WRITE-TIME-FEASIBILITY (DS-101, 2026-09-18) — the write site
+     * disabled this arm with the reason instead of a silent WARN; ABSENT on
+     * legacy rows and when the arm was never judged. */
+    arm_disabled_reason?: string
+  }
   id: string // S1, S2, S3
   trigger: string
   condition: string // reclaim | hold | sweep_reclaim | reject | acceptance | breakout_retest

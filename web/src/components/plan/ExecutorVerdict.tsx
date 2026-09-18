@@ -15,6 +15,9 @@ export type ExecutorVerdictState =
   // superseded / shadowed / any other terminal ledger state — labelled
   // verbatim as "<state>: <state_reason>", never guessed into a category.
   | 'other'
+  // the WRITE SITE disabled the arm (arm.arm_disabled_reason) — the executor
+  // never ran for this scenario; sourced ONLY from that field.
+  | 'disabled_at_write'
 
 export interface ExecutorLine {
   state: ExecutorVerdictState
@@ -91,8 +94,20 @@ function lineForState(
 export function executorLinesFor(
   scenario: string,
   arm: PlanArmView | undefined,
-  geometry: StructuralGeometryView[] | null | undefined
+  geometry: StructuralGeometryView[] | null | undefined,
+  disabledAtWrite?: string
 ): ExecutorLine[] {
+  // A write-disabled arm was judged BEFORE any executor ran — it speaks first
+  // and alone (sourced ONLY from arm.arm_disabled_reason; absent → nothing).
+  if (disabledAtWrite) {
+    return [
+      {
+        state: 'disabled_at_write',
+        reason: disabledAtWrite,
+        label: `disabled at write: ${disabledAtWrite}`,
+      },
+    ]
+  }
   if (arm && arm.state !== 'UNKNOWN') {
     const legs = (arm.legs ?? []).filter((l) => l.state !== 'UNKNOWN')
     const lines =
@@ -150,7 +165,9 @@ const lineColor = (line: ExecutorLine) =>
     ? 'var(--vl-long)'
     : line.state === 'armed'
       ? 'var(--vl-gold)'
-      : line.state === 'refused' || line.state === 'cancelled'
+      : line.state === 'refused' ||
+          line.state === 'cancelled' ||
+          line.state === 'disabled_at_write'
         ? 'var(--vl-short)'
         : 'var(--vl-faint)'
 
@@ -158,12 +175,14 @@ export function ExecutorVerdict({
   scenario,
   arm,
   geometry,
+  disabledAtWrite,
 }: {
   scenario: string
   arm?: PlanArmView
   geometry?: StructuralGeometryView[] | null
+  disabledAtWrite?: string
 }) {
-  const lines = executorLinesFor(scenario, arm, geometry)
+  const lines = executorLinesFor(scenario, arm, geometry, disabledAtWrite)
   if (lines.length === 0) return null
   return (
     <span

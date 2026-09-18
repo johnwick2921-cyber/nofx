@@ -210,6 +210,23 @@ describe('executorLinesFor', () => {
     // No ledger row + admitted geometry = NOT an arm; renders nothing.
     expect(executorLinesFor('S1', { state: 'UNKNOWN' }, [admitted])).toEqual([])
   })
+
+  // W-WRITE-TIME-FEASIBILITY (DS-101) — a write-disabled arm speaks first,
+  // sourced ONLY from arm.arm_disabled_reason; absent -> nothing.
+  it('renders disabled at write from the scenario field alone', () => {
+    expect(
+      executorLinesFor('S1', { state: 'UNKNOWN' }, [], 'rr_floor_unreachable')
+    ).toEqual([
+      expect.objectContaining({
+        state: 'disabled_at_write',
+        label: 'disabled at write: rr_floor_unreachable',
+      }),
+    ])
+    // absent field -> nothing
+    expect(executorLinesFor('S1', { state: 'UNKNOWN' }, [], undefined)).toEqual(
+      []
+    )
+  })
 })
 
 describe('StrategyTradingBadge', () => {
