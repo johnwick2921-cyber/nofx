@@ -533,6 +533,7 @@ func (at *AutoTrader) describeActivePlanDeath(row *store.PlanDB) (kernel.PlanDea
 		return kernel.PlanDeathDetail{}, false
 	}
 	noteFlipDirectionInverted(at, row, &doc, "active")
+	noteLinesBeyondPrice(at, row, &doc, "active")
 	bars := market.FuturesBarsProvider(at.futuresSymbol(), kernel.AISVPBarInterval, kernel.AISVPBarCount)
 	if len(bars) == 0 {
 		return kernel.PlanDeathDetail{}, false
@@ -963,6 +964,7 @@ func (at *AutoTrader) describeDormantCleared(row *store.PlanDB) (bool, string) {
 		return false, ""
 	}
 	noteFlipDirectionInverted(at, row, &doc, "dormant")
+	noteLinesBeyondPrice(at, row, &doc, "dormant")
 	c := kernel.PlanCondition{}
 	if _, ok := at.dormantDeathKillerOf(row); ok {
 		if doc.DeathStructured != nil {
@@ -2385,6 +2387,14 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 	identityWarnings := at.stampPlanIdentity(doc, facts.IdentityMap)
 	doc.Zones = facts.Zones         // frozen presentation; never model-authored or used by validators
 	doc.Structure = facts.Structure // S1 — the STRUCTURE table the read saw; nil stays absent
+	// W-FLIP-LINE-SIDE-OF-PRICE (2026-09-17) — the authoring price the
+	// death/flip lines were judged against, so the read path can name a line
+	// on the wrong side of price without inventing one. Unknown price (legacy
+	// facts-less callers): the side-of-price rule was SKIPPED, say so once.
+	doc.PriceAtWrite = facts.Price
+	if facts.Price <= 0 && (doc.FlipStructured != nil || doc.DeathStructured != nil) {
+		at.logWarnf("⚠️ flip/death line side-of-price UNJUDGED: authoring price unknown (facts absent) — the write site never invents a price; the line may sit on the wrong side of price")
+	}
 	docJSON, _ := json.Marshal(doc)
 	version, err := at.store.Plan().AppendPlan(&store.PlanDB{
 		CreatedAt:       authoredAt,
@@ -3160,6 +3170,83 @@ func noteFlipDirectionInverted(at *AutoTrader, row *store.PlanDB, doc *kernel.Pl
 		return
 	}
 	at.logWarnf("flip_direction_inverted plan=%s v%d (%s) %v — this flip can never fire on the move it is meant to catch (written before W-FLIP-DIRECTION); printed once per plan version", row.PlanID, row.Version, site, err)
+}
+
+var (
+	linesBeyondPriceMu    sync.Mutex
+	linesBeyondPriceNoted = map[string]bool{}
+)
+
+// authoringPriceWindowMs bounds the tape fallback in authoringPriceFor: a
+// close older than this before the row's created_at is not the close the
+// write site judged against, so the price stays UNKNOWN rather than invented.
+const authoringPriceWindowMs = 10 * 60_000
+
+// authoringPriceFor returns the price the plan's death/flip lines were judged
+// against at write: the stamped doc.price_at_write when present, else the
+// last CLOSED bar of the tape at or before the row's created_at (the same
+// value AssembleResearchLevels handed the write site as facts.Price), and 0
+// when neither is known. Never invents a price.
+func authoringPriceFor(doc *kernel.PlanDoc, createdAt time.Time, bars []market.Kline) float64 {
+	if doc != nil && doc.PriceAtWrite > 0 {
+		return doc.PriceAtWrite
+	}
+	if createdAt.IsZero() {
+		return 0
+	}
+	atMs := createdAt.UnixMilli()
+	var best market.Kline
+	for _, b := range bars {
+		if b.CloseTime >= atMs || b.Close <= 0 {
+			continue
+		}
+		if b.CloseTime > best.CloseTime {
+			best = b
+		}
+	}
+	if best.CloseTime == 0 || atMs-best.CloseTime > authoringPriceWindowMs {
+		return 0
+	}
+	return best.Close
+}
+
+// noteLinesBeyondPrice (W-FLIP-LINE-SIDE-OF-PRICE, 2026-09-17) is the sibling
+// of noteFlipDirectionInverted: it names a stored plan whose flip or death
+// line already sat beyond price on its own side when it was written — a line
+// the touch gate can never fire. The write site now REJECTS that shape when
+// the authoring price is known; plans written before it (and the ASIA v2 row
+// that motivated it) are seen only by the two read-path evaluators, which
+// both call this first. WARN only, once per plan version per line; the
+// evaluation itself is unchanged. A row whose authoring price cannot be
+// established is left unjudged (and unmarked, so a later tape can judge it).
+func noteLinesBeyondPrice(at *AutoTrader, row *store.PlanDB, doc *kernel.PlanDoc, site string) {
+	if row == nil || doc == nil || (doc.FlipStructured == nil && doc.DeathStructured == nil) {
+		return
+	}
+	key := fmt.Sprintf("%s|%s|v%d", at.id, row.PlanID, row.Version)
+	linesBeyondPriceMu.Lock()
+	seen := linesBeyondPriceNoted[key]
+	linesBeyondPriceMu.Unlock()
+	if seen {
+		return
+	}
+	var bars []market.Kline
+	if doc.PriceAtWrite <= 0 && market.FuturesBarsProvider != nil {
+		bars = market.FuturesBarsProvider(at.futuresSymbol(), kernel.AISVPBarInterval, kernel.AISVPBarCount)
+	}
+	price := authoringPriceFor(doc, row.CreatedAt, bars)
+	if price <= 0 {
+		return // unknown authoring price: never invent one, never mark judged
+	}
+	linesBeyondPriceMu.Lock()
+	linesBeyondPriceNoted[key] = true
+	linesBeyondPriceMu.Unlock()
+	if err := kernel.FlipLineBeyondPrice(doc.FlipStructured, price); err != nil {
+		at.logWarnf("flip_line_beyond_price plan=%s v%d (%s) %v — this flip can never be touched from the near side, so it never fires (written before W-FLIP-LINE-SIDE-OF-PRICE or with the price unknown); printed once per plan version", row.PlanID, row.Version, site, err)
+	}
+	if err := kernel.DeathLineBeyondPrice(doc.DeathStructured, price); err != nil {
+		at.logWarnf("death_line_beyond_price plan=%s v%d (%s) %v — this plan was born dead by its own death line; printed once per plan version", row.PlanID, row.Version, site, err)
+	}
 }
 
 // notePlanProviderNil logs the reason the provider returns nil, once per
