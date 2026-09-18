@@ -237,6 +237,15 @@ const MODE_OPTS = (language: Language) => [
 // override EQUAL to the strategy-level value was never a deliberate override —
 // migrate it to inherit (drop the field). Pure + idempotent; the component
 // re-emits the cleaned config on mount so the next save persists the migration.
+// W-T1-CURRENCIES — "usd, eur ," → ["USD","EUR"]; the one parser the field
+// and its resync share.
+function parseT1Currencies(text: string): string[] {
+  return text
+    .split(',')
+    .map((c) => c.trim().toUpperCase())
+    .filter((c) => c.length > 0)
+}
+
 function migrateEqualOverrides(config?: DayPlanConfig): DayPlanConfig {
   const base = config ?? DEFAULT_DAY_PLAN
   const list = base.sessions
@@ -278,6 +287,15 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
   // W-T1-CURRENCIES — the comma-separated text the owner is typing; the
   // parsed, upper-cased list is what persists (empty → field absent = USD).
   const [t1Text, setT1Text] = useState((cfg.t1_currencies ?? []).join(','))
+  // Review of #171: the editor is not keyed by strategy id, so a strategy
+  // switch must resync the text or the previous strategy's currency filter
+  // (a no-trade gate) is shown — and could be saved — onto the next one. Only
+  // an EXTERNAL change resets it: while the owner types, the parsed list and
+  // the saved list agree and a trailing comma survives.
+  useEffect(() => {
+    const saved = (cfg.t1_currencies ?? []).join(',')
+    if (saved !== parseT1Currencies(t1Text).join(',')) setT1Text(saved)
+  }, [config])
 
   const update = <K extends keyof DayPlanConfig>(
     key: K,
@@ -577,10 +595,7 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
               disabled={bodyDisabled}
               onChange={(e) => {
                 setT1Text(e.target.value)
-                const list = e.target.value
-                  .split(',')
-                  .map((c) => c.trim().toUpperCase())
-                  .filter((c) => c.length > 0)
+                const list = parseT1Currencies(e.target.value)
                 update('t1_currencies', list.length > 0 ? list : undefined)
               }}
               className="vl-num text-[11px] w-40 px-1.5 py-0.5 text-right"
