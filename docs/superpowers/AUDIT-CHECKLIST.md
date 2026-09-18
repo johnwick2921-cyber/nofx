@@ -5704,7 +5704,7 @@ climbed) that CLASS 139 fixed only for the HOLD.
   with the evaluator, two-window evaluator byte-identical when the windows
   agree).
 
-## CLASS NN — A BAR STORE KEYED WITHOUT THE CONTRACT DROPS THE NEW CONTRACT'S OVERLAP AT EVERY ROLL (born 2026-08-26 with the bars table, made visible 2026-09-14 at the Sept→Dec roll as CLASS 143's hole, owner-authorized schema change 2026-09-18 00:3x CT "full fix 4", fix/bars-contract-key, W-BARS-CONTRACT-KEY; number assigned at merge)
+## CLASS 149 — A BAR STORE KEYED WITHOUT THE CONTRACT DROPS THE NEW CONTRACT'S OVERLAP AT EVERY ROLL (born 2026-08-26 with the bars table, made visible 2026-09-14 at the Sept→Dec roll as CLASS 143's hole, owner-authorized schema change 2026-09-18 00:3x CT "full fix 4", fix/bars-contract-key, W-BARS-CONTRACT-KEY; number assigned at merge)
 
 **Shape.** `bars` was keyed `(symbol, tf, open_time_ms)` with `contract`
 outside the key, and both writers resolved a collision on that key alone
