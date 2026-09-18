@@ -178,6 +178,34 @@ fixed head `4c923a76` after F1–F3 review fixes. **All PASS at 4c923a76** [A]:
 Spec-freshness note: the branch moved past the first named HEAD while I verified
 (89e4de3c → 4c923a76); both verified, verdicts reported per head.
 
+**Item 2 — PR #175 (DS-102, fix/geometry-refusal, HEAD fa9bad01).** Verified in a
+detached worktree (removed after). **Mixed verdict** [A]:
+
+1. **FLAG** — `trader/auto_trader_planner.go` IS touched (9 lines) although
+   DS-102's DONE message says "no auto_trader_planner.go write-time hint
+   (DS-101's)". Changed: (a) `runPlannerReadWithTriggerClaimedCtx` ~:1287 —
+   identityMap hoisted + `kernel.EnsureReferenceLevelIDs(identityMap)` gated on
+   `GeometryRefIDsEnabled()`; (b) `assemblePlannerInputWithCtx` ~:2919 —
+   `GeometryRefIDs` added to the planner input. Full diff = 18 files (listed in
+   the CTO message).
+2. PASS — all five named tests run and passed (`TestGeometryRefusalWarnOncePerKeyChange`,
+   `TestEnsureReferenceLevelIDsStableAndScoped`, `TestGeometryTFWildcardExecutorOnly`,
+   `TestGeometryReferenceLevelsKnobResolution`, `TestGeometryRefBootLineReadsResolvedKnob`),
+   `ok nofx/trader 1.137s`.
+3. PASS — `go build ./...` rc=0; `go vet ./...` rc=0.
+4. PASS with named gap — my independent replay via their exported
+   `trader.ArmGeometryVerdict` (scratch test under docs/, removed with the
+   worktree): backup copy n=109 reject scenarios; live DB adds today's
+   LONDON v2 S1/S2, NY v1 S1/S3, NY v2 S2 (live n=114 at query; their 113 = an
+   earlier snapshot). OFF split ARMED 35 / source_not_frozen 52 + zone_edges 3 =
+   55 / missing 19 (their 20). ON split ARMED 33 / zone_edges_unusable 55 /
+   missing 19 / ambiguous 2 — consistent with their 33/58/20/2 modulo live rows
+   and the missing bucket ±1.
+5. PASS — both named flips reproduced exactly: 09-13 ASIA v10 S2 long
+   OFF=ARMED → ON=`entry_zone_ambiguous`; 09-17 ASIA v2 S1 short same. No OTHER
+   ARMED→X flips. Classification-change count on the 109 backup rows = 54 (their
+   57 presumably includes the live rows).
+
 Nothing else bridged yet; rolling.
 
 ## E. UNKNOWNS / NOT MEASURED
