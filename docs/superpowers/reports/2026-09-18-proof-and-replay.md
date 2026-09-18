@@ -237,6 +237,29 @@ Verified in a detached worktree (removed after). **Mixed verdict** [A]:
    geometry bucket). #176 staying on the legacy geometry function cannot admit
    rows the fix would refuse.
 
+**Item 3b — PR #176 FIXED head 2f4168ee (CTO-REJECT rework).** Re-verified in a
+detached worktree (removed after). **All PASS + one merge finding** [A]:
+
+(a) PASS — full `go test ./... -count=1`: 35 ok, 0 FAIL (clean rerun; the first
+    run's 5 FAILs were MY contamination — I edited `store/strategy.go` mid-run
+    during the merged-head test; named for honesty). `gofmt -l` empty.
+(b) PASS — four named tests ran and passed (`ok nofx/trader 0.966s`; kernel
+    parity test green).
+(c) PASS — GUIDE_BUILT_REV == `249ff3a5…` (reverted in the PR).
+(d) PASS with named delta — reworked script HAS the contract filter
+    (`contract_at` tie-break; history from the pre-149 copy). Backup-only run:
+    min-SL 25 / geometry 67 / stop_side 4 / none 70 / no_arm 33 (93 plans) vs
+    their re-issued 27/72/4/70/33 — the delta is exactly the live-only rows
+    (93 vs 96 plans).
+(e) PASS + finding — dry-merge 2f4168ee+146baf1d CONFLICTS in 4 files
+    (store/strategy.go, guide settings, GuidePage.test, AUDIT-CHECKLIST).
+    Union-resolved throwaway merged head: build rc=0, vet rc=0. **Admit answer:
+    YES** — the write-time geometry leg calls
+    `ArmGeometryVerdict(doc, sc, GeometryRefIDsEnabled())`
+    (`trader/write_time_feasibility.go:31-34`) and ADMITS a ref| ONH reject play
+    with the knob ON at the merged head (throwaway `ds104_merged_admit_test.go`:
+    ON→ADMITTED, OFF→`identity_not_valid_in_frozen_map`).
+
 **Item 2b — PR #175 FIXED head 146baf1d (F1–F6).** Re-verified in a detached
 worktree (removed after). **All PASS + measured drift** [A]:
 
