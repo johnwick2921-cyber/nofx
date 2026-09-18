@@ -1239,14 +1239,9 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 	prompt := kernel.BuildPlannerPrompt(input)
 	at.logInfof("📝 prompt render (T2): %dms ~%d tokens", time.Since(p2Start).Milliseconds(), estimatePromptTokens(prompt))
 	hash := shortHash(prompt)
-	// W3 — HARD red-news blackout lines auto-written into the plan (§80).
-	t1Lines := kernel.T1NoTradeLines(input.Calendar)
-	// F6 — when the clock is measurably skewed (warn or critical band), widen
-	// the T1 windows by the drift so the red-news blackout survives it.
-	if holdHave && holdWiden > 0 {
-		t1Lines = kernel.T1NoTradeLinesDrift(input.Calendar, holdDrift)
-		at.logWarnf("🕰 clock-hold: T1 news windows widened by |drift| %dms for %s %s (F6)", holdWiden, tradeDate, session)
-	}
+	// W3 — HARD red-news blackout lines auto-written into the plan (§80),
+	// widened by the CAPPED clock measurement (F6 / CLASS 145).
+	t1Lines := at.plannerT1Lines(input.Calendar, holdHave, holdWiden, holdDrift, tradeDate, session)
 	// P0.1/P0.2 (2026-08-19) — write-time facts: both-side levels (0-on-a-side
 	// hard fail since the owner ruling 2026-08-31 removed the count concept),
 	// continuation scenario on gaps. PDH/PDL come from the detector universe
@@ -1347,6 +1342,26 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 		return raw, err
 	}, t1Lines...)
 	return true
+}
+
+// plannerT1Lines is the plan-write T1 step: the HARD red-news lines, widened
+// by the clock measurement through the SAME capped kernel.WidenCTWindows the
+// arm path uses (auto_trader_calendar.go t1WindowsFor). CLASS 145
+// (2026-09-17): the 16:38 CT ASIA read inside the CME halt measured a 2,326 s
+// "drift" — the 15:59 bar's age — and the uncapped path wrote "+31m (clock
+// drift)" into the plan; the cap holds the widening to ClockWidenCapMinutes
+// and the journal names staleness instead of the clock.
+func (at *AutoTrader) plannerT1Lines(cal []kernel.PlannerCalendarEvent, holdHave bool, holdWiden, holdDrift int64, tradeDate, session string) []string {
+	if !holdHave || holdWiden <= 0 {
+		return kernel.T1NoTradeLines(cal)
+	}
+	lines := kernel.T1NoTradeLinesDrift(cal, holdDrift)
+	at.logWarnf("🕰 clock-hold: T1 news windows widened by %dm (|drift| %dms, cap %dm) for %s %s (F6)",
+		kernel.ClockWidenMinutes(holdDrift), holdWiden, kernel.ClockWidenCapMinutes, tradeDate, session)
+	if note := kernel.ClockDriftStaleNote(holdDrift); note != "" {
+		at.logWarnf("🕰 clock-hold: %s — %s %s (CLASS 145)", note, tradeDate, session)
+	}
+	return lines
 }
 
 // clockHoldDriftFn is the F6 measurement seam: tests inject fake drift; the
