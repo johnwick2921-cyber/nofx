@@ -1035,6 +1035,14 @@ type DayPlanConfig struct {
 	// value is honoured and logged once; the Studio control is gone. When the
 	// owner clears it, a follow-up deletes kernel/levels_fresh_by_tf.go.
 	LevelsFreshByTF bool `json:"levels_fresh_by_tf,omitempty"`
+	// WriteTimeFeasibility (W-WRITE-TIME-FEASIBILITY, 2026-09-18, owner ruling
+	// "fix all" 08:3x CT) — at plan write, every armed scenario runs the SAME
+	// predicates the executor's gate-at-arm chain runs (min-SL floor, R:R at arm,
+	// geometry). Unarmable scenarios are repair-hinted first; after the last
+	// repair attempt they are written with arm.enabled=false + a disabled reason
+	// instead of a silent WARN. *bool: nil/unset = ON (the owner's default).
+	// Explicit false = today's WARN-only behaviour byte-identical.
+	WriteTimeFeasibility *bool `json:"write_time_feasibility,omitempty"`
 	// MinScenarioQuality (R4, 2026-08-25) — the per-strategy scenario quality
 	// floor (A | B | C). Default C = no restriction (today's behavior,
 	// byte-identical). Per-session override below (like min_grade).
@@ -1675,6 +1683,13 @@ func (c *DayPlanConfig) T1CurrenciesSaved() bool {
 // knob: nil config or unset → OFF (today's 1m-touch grading).
 func (c *DayPlanConfig) LevelsFreshByTFEnabled() bool {
 	return c != nil && c.LevelsFreshByTF
+}
+
+// WriteTimeFeasibilityEnabled is the ONE resolution seam for the write-time
+// feasibility knob: nil config or unset → ON (owner ruling "fix all",
+// 2026-09-18 08:3x CT). Explicit false = today's WARN-only behaviour.
+func (c *DayPlanConfig) WriteTimeFeasibilityEnabled() bool {
+	return c == nil || c.WriteTimeFeasibility == nil || *c.WriteTimeFeasibility
 }
 
 // MinScenarioQualityFor (R4, 2026-08-25) resolves the scenario quality floor:

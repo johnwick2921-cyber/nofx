@@ -229,6 +229,22 @@ const dayPlan: KnobSpec[] = [
       'Yes — session override wins; inherit (blank) = the strategy-level row above.',
   },
   {
+    label: 'Write-time feasibility (W-WRITE-TIME-FEASIBILITY)',
+    where: 'Strategy → Day Plan → write_time_feasibility toggle',
+    what: 'Before a plan is written, the write site runs the SAME gate-at-arm predicates the executor runs (min-SL 1.5×ATR5m, arm R:R floor, structural-geometry) on every enabled arm — plus the executor\'s stop-side placement guard for stop-entry arms (reclaim): a trigger already through the read-time price cancels at placement, so it is refused at write instead. Attempts 1–2: a scenario that would be refused is sent back as a repair hint naming the refusal, the numbers, and the fix ("widen the stop past the min-SL floor / raise the arm R:R / pick a mapped level with an id" — or for a stop entry: "author the trigger ahead of price, or author a reject/limit at the level"). The last attempt: the unarmable scenarios are written with arm.enabled=false + arm_disabled_reason (stop_side_wrong for wrong-side stop entries), so the plan ships instead of silently never arming. The session-risk band is NOT judged at write (it is time-based).',
+    trader:
+      "ON = the planner learns why its arm will not trade and can fix it; the last attempt never fail-closes for this — it writes the arm disabled. OFF = today's behaviour: an arm-feasibility WARN is logged and the plan is written as authored (the gate-at-arm chain still refuses at arm time).",
+    consumer:
+      'trader/auto_trader_planner.go (write-time feasibility check → armGateVerdictFor / ResolveEntryGeometryZone) · store.DayPlanConfig.WriteTimeFeasibilityEnabled',
+    range: 'ON | OFF',
+    systemDefault: 'ON (nil/unset = ON)',
+    recommended:
+      "⭐ ON. The verdicts reuse the executor's own functions, so the write site and the arm site cannot disagree.",
+    whenToTouch:
+      'OFF only to restore the old WARN-and-write behaviour while triaging; the boot line 🎛 entry law shows the resolved write_feas=on/off.',
+    perSession: 'No — strategy-level.',
+  },
+  {
     label:
       'Flip re-read (W-FLIP-REREAD, immediate since W-FLIP-REREAD-IMMEDIATE)',
     where: 'Strategy → Day Plan → flip_reread toggle',

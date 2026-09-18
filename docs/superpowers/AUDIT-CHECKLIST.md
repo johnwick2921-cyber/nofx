@@ -5921,3 +5921,43 @@ scheduler working as designed; only "no trade since yesterday" made it a bug.
 
 **Fix.** This docs wave (`.env.example` line, PARTNER-BUILD section, this
 class); the guide clause for the seam is OWED at the next boot (guide law).
+
+## CLASS NN — A WRITE-TIME FEASIBILITY WARN THAT SAYS "THE GATE WILL REFUSE IT" AND WRITES THE PLAN ANYWAY (born with the arm-feasibility WARN 2026-08-28, found by the owner 2026-09-18 08:3x CT "fix all", W-WRITE-TIME-FEASIBILITY, fix/write-time-feasibility; number assigned at merge)
+
+**Shape.** `kernel.ArmFeasibilityWarnings` (F4, 2026-08-28) computed, at plan
+write time, exactly which arms the gate-at-arm chain would refuse every cycle
+(R:R below ARM_MIN_RR, stop closer than 1.5×ATR5m) — and then logged one WARN
+per arm and wrote the plan anyway. The owner's persistent journal shows 5 such
+WARNs since 2026-09-17 22:38 CT, every one followed by a PLAN written in-session
+(LONDON v2 07:32:52, NY v1 08:06:20) — WARN-then-write 5/5. The model never saw
+the WARN (it is not in the prompt), so it re-authored the same shape; the
+executor then refused the arm at arm time, printing the refusal to a log the
+model also never reads. The system knew the plan was dead on arrival and wrote
+it anyway.
+
+**Why it hid.** A WARN is invisible to every consumer except a human reading the
+journal; the write path is the only place that both has the verdict AND can make
+the author do something about it. "Warn-first" was the right rule for the
+bias-coherent warning (owner ruling 2026-09-04) but was inherited, unreviewed,
+by the arm-feasibility WARN, where the warning's own text ("the gate will
+refuse it") made the write a knowing contradiction.
+
+**Probes.**
+- `journalctl -u nofx --since <window> | grep -E "arm feasibility"` — every
+  WARN whose session then wrote a plan is an instance of this class.
+- Any write-site warning whose text names a downstream refusal, but which does
+  not feed the repair prompt or a disabled-arm stamp, is this class.
+
+**Fix.** The write site now runs the executor's own gate-at-arm predicates
+(`armGateVerdictFor`, `ResolveEntryGeometryZone` — canon 53, no
+re-implementation) per enabled arm, plus the executor's OWN stop-side placement
+guard (`decideStopEntry`, CTO amendment 2026-09-18: 29 of 30 stop_entry arms
+since 09-04 were wrong-side at write): attempts 1..N-1 send the scenarios back
+as a restriction-with-hint repair error naming the refusal, the numbers and the
+fix vocabulary; the last attempt writes the unarmable arms with
+`arm.enabled=false` + `arm_disabled_reason` (`stop_side_wrong` for wrong-side
+stop entries) + one WARN + the
+`arm_disabled_at_write:<trader>:<date>:<session>:<reason>` counter. Knob
+`day_plan.write_time_feasibility`, nil/unset = ON; explicit false = the old
+WARN-only behaviour byte-identical (pinned by a parity test at the rendering
+seam). The session-risk band is deliberately NOT judged at write (time-based).

@@ -2114,6 +2114,27 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 		for _, w := range kernel.ArmFeasibilityWarnings(d, atr5m, at.armMinRRFor(nil), kernel.MinSLATRMult()) {
 			at.logWarnf("⚔️ arm feasibility: %s (WARN — write proceeds; the gate-at-arm chain enforces)", w)
 		}
+
+		// W-WRITE-TIME-FEASIBILITY (2026-09-18, owner "fix all") — judge
+		// the SAME predicates the gate-at-arm chain runs, at write time.
+		// Attempts 1..N-1: restriction-with-hint via the existing repair
+		// machinery (budget unchanged). The last attempt: the scenarios are
+		// written arm.enabled=false + arm_disabled_reason (spec c).
+		if feas := at.writeTimeFeasibilityVerdicts(d, atr5m, at.config.StrategyConfig, session, facts.Price); len(feas) > 0 {
+			if attempt < 3 {
+				lastErr = fmt.Errorf("%s", writeTimeFeasibilityHint(feas))
+				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
+				rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
+				rejectHistory = addDistinctReject(rejectHistory, lastErr)
+				at.logWarnf("📐 planner attempt %d/3 write-time feasibility: %v", attempt, lastErr)
+				if modeLabel == "repair" {
+					at.recordRepairOutcome(raw, lastErr, prevReason)
+				}
+				continue
+			}
+			// last attempt — write the unarmable arms disabled, never a silent write.
+			at.applyWriteTimeArmDisable(d, feas, tradeDate, session)
+		}
 		// D2 (arms-follow-bias) — WIRED 2026-09-05. BiasArmWarning shipped
 		// 2026-09-04 to answer the planner-shape finding and had ZERO
 		// production callers: it was written, tested, and never called, so a
@@ -2932,13 +2953,16 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		StopFloorMult:       kernel.MinSLATRMult(),
 		// Level-truth wave b2 (2026-08-27): the machine's fresh-gap candidate
 		// list — the ONLY gaps the planner may author fvg_entry from.
-		FreshFVGs:       kernel.FreshFvgCandidates(bars, symbol, now),
-		Calendar:        calEvents,
-		T1Currencies:    at.t1Currencies(),
-		DigestChain:     digestChain,
-		Warming:         warming,
-		IndicatorsBlock: indicatorsBlock,
-		AIConfigHash:    aiConfigHash,
+		FreshFVGs:    kernel.FreshFvgCandidates(bars, symbol, now),
+		Calendar:     calEvents,
+		T1Currencies: at.t1Currencies(),
+		// W-WRITE-TIME-FEASIBILITY (2026-09-18): the prompt renders the
+		// arm-disabled-at-write rule only when the knob is ON.
+		WriteFeasibilityOn: at.writeTimeFeasibilityOn(),
+		DigestChain:        digestChain,
+		Warming:            warming,
+		IndicatorsBlock:    indicatorsBlock,
+		AIConfigHash:       aiConfigHash,
 		// ADDENDUM (2) — bias-context facts line (VWAP/PDC/value area/magnet/
 		// liquidity). Facts only; the AI judges direction.
 		// S-dispatch (2026-08-27) — the BIAS-TREE facts must carry the

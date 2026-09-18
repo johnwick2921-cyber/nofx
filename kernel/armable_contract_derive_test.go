@@ -107,7 +107,7 @@ func TestContractFollowsTheSetWithoutEditing(t *testing.T) {
 	if !strings.Contains(rowFrag, "reclaim") {
 		t.Errorf("the contract row did not follow the set: %s", rowFrag)
 	}
-	if err := ValidatePromptContracts(plannerOutputContract(8, 3, true, true)); err != nil {
+	if err := ValidatePromptContracts(plannerOutputContract(8, 3, true, true, true)); err != nil {
 		t.Errorf("the rendered prompt must satisfy every contract row: %v", err)
 	}
 }
