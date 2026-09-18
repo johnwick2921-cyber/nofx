@@ -5431,7 +5431,8 @@ dropped. Adding `contract` to the key (or a partial unique index per
 contract) is a migration over the live `bars` table and every reader that
 assumes one row per open time — the owner's call, not a display wave's.
 
-## CLASS NN (assigned at merge) — A REACTION READ THROTTLED LIKE A SPECULATIVE WAKE (born 2026-09-17 with CLASS 141's flip re-read, reported by the owner 2026-09-17 22:5x CT "why does the plan go dormant when the bias flips", fix/flip-reread-immediate, W-FLIP-REREAD-IMMEDIATE)
+<<<<<<< HEAD
+## CLASS 146 — A REACTION READ THROTTLED LIKE A SPECULATIVE WAKE (born 2026-09-17 with CLASS 141's flip re-read, reported by the owner 2026-09-17 22:5x CT "why does the plan go dormant when the bias flips", fix/flip-reread-immediate, W-FLIP-REREAD-IMMEDIATE)
 
 **Shape.** The structure_flip read (CLASS 141) reused the level-wake gate
 verbatim: class-47 cooldown (30m since the last wake-authored version) and the
@@ -5479,3 +5480,61 @@ wrote nothing for `wake_min_interval_min` from that launch
 (`at.flipRereadLaunchAt`). Tests at the production call site
 (`maybeRunSessionReadsAt`, real read path, AI client scripted) in
 `trader/flip_reread_cto_test.go`.
+=======
+## CLASS 145 — A HALT'S AGE READ AS CLOCK DRIFT WIDENED A NEWS BLACKOUT BY HALF AN HOUR (born 2026-08-30 with F6's uncapped widening, reported by the owner 2026-09-17 21:4x CT "BOJ 21:30 ±15m +39m (clock drift) 20:36–22:24", fix/drift-widen-cap, W-DRIFT-WIDEN-CAP)
+
+**Shape.** F6 measures "clock drift" as local clock minus the freshest 1m
+bar's close (`kernel/clock_drift.go FeedClockDriftMs`: `now − (OpenTime +
+60s)`). Under a live feed that is skew; under a HALTED feed it is the AGE of
+the last bar. Class 36 lets a scheduled read author inside the CME 16:00–17:00
+halt, and on 2026-09-17 the ASIA read did: measured 1,810,527 ms at 16:30:11
+CT (journal 44334, the plan-write path → "+31m (clock drift)" stored in the
+plan's no_trade lines) and 2,326,426 ms at 16:38:46 CT (journal 45208, the
+arm path `t1WindowsFor` → "+39m" rendered on the card). `ClockHoldDecision`'s
+own comment said POSITIVE drift "is also exactly what a CLOSED market's old
+bars look like", and then returned `widenMs = |drift|` for it anyway;
+`WidenCTWindows` widened by `ceil(|drift|/60s)` with no cap and labelled it
+"(clock drift)" for anything ≥ 60 s. A ±15 min band became 20:36–22:24 CT,
+1h48m of a session blocked by a clock that was never wrong.
+
+**Why it hid.** (1) The label told the reader the CLOCK was the cause, so the
+card was self-consistent and the halt never came up. (2) The measurement was
+honest — the bar WAS 38 minutes old — so no clock-health line disagreed;
+clock-health at the 17:00 roll read −51 s with the feed back. (3) No journal
+line ever said "clock-hold" with the word "stale"; the F6 warn line printed
+the raw milliseconds and a grep for a 39-minute clock skew finds nothing
+because none existed. (4) Every F6 pin injected 41 s / 61 s / 90 s; the only
+pin with a large positive value (600 s, "positive drift never defers")
+asserted the DEFER verdict and never looked at the windows.
+
+**The rule.** A clock can honestly demand `ceil(tolerance/60s)` = 1 minute of
+widening plus one boundary-rounding minute: `ClockWidenCapMinutes = 2`, applied
+INSIDE `kernel.WidenCTWindows` so every caller is capped. A measurement is
+CALLED clock drift only when `60 s ≤ |drift| ≤ 5 min`; beyond that the card
+says nothing about the clock and `kernel.ClockDriftStaleNote` gives the
+journal the real cause ("feed stale 38m — halt or gap, not clock skew; news
+windows NOT widened beyond the 2m cap"). Both call sites — `plannerT1Lines`
+(plan write) and `t1WindowsFor` (arm) — go through the one function; the arm
+path now passes the SIGNED measurement.
+
+**Probes.**
+- Any consumer of `FeedClockDriftMs` / `LastClockDrift` that scales a
+  behaviour by the magnitude: grep `WidenCTWindows|ClockHoldDecision|
+  LastClockDrift`; a positive value is feed age until a live bar proves
+  otherwise, so no magnitude-scaled action may be uncapped.
+- The plan's stored `no_trade` lines vs the arm gate's windows: the plan
+  freezes "+Nm (clock drift)" text at write time; the arm gate re-reads the
+  live calendar slice (`t1WindowsFor` → `Calendar().GetSlice`) and re-measures
+  drift per evaluation, so a card and a gate can disagree — the card is the
+  write-time claim, the gate is live. Pinned:
+  `trader/clock_widen_cap_test.go TestArmPathFollowsLiveCalendarCorrection`.
+- Journal grep for the class: `clock-hold: T1 .* widened by |drift| [0-9]{7,}ms`
+  (≥ 1,000 s) on any read whose timestamp is inside 16:00–17:00 CT or a
+  weekend. Post-fix the line reads `widened by Nm (|drift| Xms, cap 2m)` and
+  is followed by the stale note.
+- A pin that injects a large positive measurement MUST assert the WINDOWS and
+  the LABEL, not only the defer verdict. Pinned: `kernel/clock_widen_cap_test.go`
+  (2,326,426 ms → +2m, unlabelled, note names 38m), `trader/clock_widen_cap_test.go`
+  (arm path via `currentT1Windows`, plan-write step via `plannerT1Lines`; 42 s
+  → +1m unlabelled, 90 s → "+2m (clock drift)" unchanged).
+>>>>>>> origin/dev
