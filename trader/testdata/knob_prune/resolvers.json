@@ -7,7 +7,7 @@
     "WakeInterval": 30,
     "StructureMap": false,
     "Freshness": "1m",
-    "HTFMult": 1.2,
+    "HTFMult": 1,
     "MaxLevels": 8
   },
   "empty": {
@@ -18,18 +18,18 @@
     "WakeInterval": 30,
     "StructureMap": false,
     "Freshness": "1m",
-    "HTFMult": 1.2,
+    "HTFMult": 1,
     "MaxLevels": 8
   },
   "nil": {
     "Acceptance": "5m_close",
     "RealignCap": 5,
     "ScenarioCap": 3,
-    "Digest": true,
+    "Digest": false,
     "WakeInterval": 30,
     "StructureMap": false,
     "Freshness": "1m",
-    "HTFMult": 1.2,
+    "HTFMult": 1,
     "MaxLevels": 8
   },
   "owner": {
@@ -40,7 +40,7 @@
     "WakeInterval": 30,
     "StructureMap": true,
     "Freshness": "by-tf",
-    "HTFMult": 1.2,
+    "HTFMult": 1,
     "MaxLevels": 12
   },
   "seed": {
@@ -51,7 +51,7 @@
     "WakeInterval": 30,
     "StructureMap": false,
     "Freshness": "1m",
-    "HTFMult": 1.2,
+    "HTFMult": 1,
     "MaxLevels": 8
   }
 }
