@@ -595,3 +595,54 @@ func TestFlipRereadExemptionNotePure(t *testing.T) {
 		}
 	}
 }
+
+// SELF-BACKOFF (W-FLIP-REREAD-IMMEDIATE): a flip read that LAUNCHED and wrote
+// nothing must not relaunch every scan cycle (3 model calls per cycle for as
+// long as the model fails). The retry is held for wake_min_interval_min from
+// the flip read's OWN launch — an ordinary wake never starts that clock — and
+// a refusal (preflight/cutoff/open stream) never does either (the defer test
+// above retries one minute later).
+func TestFlipRereadFailedLaunchBacksOffFromItsOwnLaunchOnly(t *testing.T) {
+	at, st, client := realPathTrader(t, true, func(int, string) (string, error) { return "not json", nil })
+	now := time.Date(2026, 8, 18, 14, 0, 0, 0, time.UTC)
+	flipRereadTestNow(t, now)
+	td := "2026-08-18"
+	row := seedActivePlan(t, at, td, "NY", now.Add(-40*time.Minute), flipFixtureDoc())
+	seedFlipBars(15500, 15470, 6*time.Minute, now)
+	logBuf := captureTraderLog(t)
+
+	at.maybeRunSessionReadsAt(now)
+	if !waitFor(t, 10*time.Second, func() bool { return client.calls() == 3 }) {
+		t.Fatalf("first launch must exhaust 3 attempts, got %d; log:\n%s", client.calls(), logBuf.String())
+	}
+	if !waitFor(t, 5*time.Second, func() bool {
+		_, running := flipRereadInFlight.Load(flipRereadInFlightKey(at, row))
+		return !running
+	}) {
+		t.Fatal("in-flight guard never cleared")
+	}
+	// +5m: still dormant, key clear, throttles exempt — but the row's OWN
+	// failed launch is 5 min old → held.
+	plus5 := now.Add(5 * time.Minute)
+	flipRereadTestNow(t, plus5)
+	seedFlipBars(15500, 15470, 6*time.Minute, plus5)
+	at.maybeRunSessionReadsAt(plus5)
+	time.Sleep(200 * time.Millisecond)
+	if client.calls() != 3 {
+		t.Fatalf("a failed launch must not relaunch 5 min later, got %d calls", client.calls())
+	}
+	if !strings.Contains(logBuf.String(), "🗓️ structure_flip read 2026-08-18 NY v1 — retry held: 5m since this row's last flip launch that wrote nothing < wake_min_interval_min (30m); refusals never start this clock.") {
+		t.Fatalf("expected the retry-held line; log:\n%s", logBuf.String())
+	}
+	// +31m from the launch: the hold has elapsed → relaunch.
+	plus31 := now.Add(31 * time.Minute)
+	flipRereadTestNow(t, plus31)
+	seedFlipBars(15500, 15470, 6*time.Minute, plus31)
+	at.maybeRunSessionReadsAt(plus31)
+	if !waitFor(t, 10*time.Second, func() bool { return client.calls() == 6 }) {
+		t.Fatalf("the retry must relaunch once the hold elapsed, got %d calls; log:\n%s", client.calls(), logBuf.String())
+	}
+	if v := sysCfgVal(t, st, flipRereadDoneKey(row)); v != "" && v != "0" {
+		t.Fatalf("once-key must still be clear, got %q", v)
+	}
+}

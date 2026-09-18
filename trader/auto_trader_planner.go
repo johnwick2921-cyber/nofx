@@ -674,6 +674,16 @@ func flipRereadDoneKey(row *store.PlanDB) string {
 // trader|plan|version; entries live only as long as the goroutine.
 var flipRereadInFlight sync.Map
 
+// at.flipRereadLaunchAt (W-FLIP-REREAD-IMMEDIATE) records, per plan|version,
+// WHEN a structure_flip read last LAUNCHED (reached the planner) and wrote
+// nothing. The flip read is exempt from the wake throttles, and the
+// dormant branch calls back every scan cycle, so without this a read that
+// launched and failed (3 model calls) would relaunch every cycle for as long
+// as the model kept failing. Only a LAUNCH starts this clock; a refusal
+// (preflight, cutoff, open stream) never does, so those retry next cycle. It
+// is measured from the flip read's OWN launch — an ordinary wake never sets
+// it, so an earlier ordinary wake still cannot delay a flip read.
+
 func flipRereadInFlightKey(at *AutoTrader, row *store.PlanDB) string {
 	return fmt.Sprintf("%s|%s|%d", at.id, row.PlanID, row.Version)
 }
@@ -809,10 +819,20 @@ func (at *AutoTrader) maybeRereadAfterFlip(now time.Time, session, tradeDate str
 		at.logWarnf("🗓️ structure_flip read %s %s v%d — immediate (flip reads are exempt from cooldown/min-interval; cutoff + stream guard still apply): %s",
 			tradeDate, session, row.Version, exempt)
 	}
+	// Self-backoff only: a previous flip LAUNCH for this row that wrote nothing
+	// holds the retry for wake_min_interval_min, measured from that launch.
+	if v, ok := at.flipRereadLaunchAt.Load(inflightKey); ok {
+		if last, isT := v.(time.Time); isT && now.Sub(last) < time.Duration(cfg.WakeMinIntervalMinutes())*time.Minute {
+			at.logWarnf("🗓️ structure_flip read %s %s v%d — retry held: %.0fm since this row's last flip launch that wrote nothing < wake_min_interval_min (%dm); refusals never start this clock.",
+				tradeDate, session, row.Version, now.Sub(last).Minutes(), cfg.WakeMinIntervalMinutes())
+			return
+		}
+	}
 	if _, busy := flipRereadInFlight.LoadOrStore(inflightKey, now); busy {
 		at.logInfof("🗓️ structure_flip read %s %s v%d already in flight — not launching a second.", tradeDate, session, row.Version)
 		return
 	}
+	at.flipRereadLaunchAt.Store(inflightKey, now)
 	// Ordinary wakes back off from THIS read; the flip read never backed off
 	// from them.
 	at.lastPlannerWakeAt = now
@@ -862,6 +882,7 @@ func (at *AutoTrader) maybeRereadAfterFlip(now time.Time, session, tradeDate str
 			return
 		}
 		_ = at.store.SetSystemConfig(flipRereadDoneKey(row), strconv.FormatInt(now.UnixMilli(), 10))
+		at.flipRereadLaunchAt.Delete(inflightKey) // done for this row; nothing to back off from
 		if fdoc, derr := kernel.ParsePlanDoc(fresh.Doc); derr == nil && strings.EqualFold(fdoc.Bias.Direction, oldBias) {
 			// Unreachable through the production write site (it rejects a
 			// plan whose bias is not the flipped one); a non-production writer
