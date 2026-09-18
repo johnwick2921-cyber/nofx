@@ -1035,6 +1035,14 @@ type DayPlanConfig struct {
 	// value is honoured and logged once; the Studio control is gone. When the
 	// owner clears it, a follow-up deletes kernel/levels_fresh_by_tf.go.
 	LevelsFreshByTF bool `json:"levels_fresh_by_tf,omitempty"`
+	// GeometryReferenceLevels (W-GEOMETRY-REFUSAL, 2026-09-18) — the owner ruled
+	// the contract fix ON by default ("both fix now", 2026-09-18 08:1x CT):
+	// the identity map assigns stable sha ids to session reference levels whose
+	// formation close is unknown (ONH/ONL and the other anchor kinds that
+	// today emit NULL), and an empty zone-source tf is a wildcard in the frozen
+	// geometry match. nil = ON (default); explicit false = today's behaviour
+	// byte-identical (OFF).
+	GeometryReferenceLevels *bool `json:"geometry_reference_levels,omitempty"`
 	// MinScenarioQuality (R4, 2026-08-25) — the per-strategy scenario quality
 	// floor (A | B | C). Default C = no restriction (today's behavior,
 	// byte-identical). Per-session override below (like min_grade).
@@ -1675,6 +1683,15 @@ func (c *DayPlanConfig) T1CurrenciesSaved() bool {
 // knob: nil config or unset → OFF (today's 1m-touch grading).
 func (c *DayPlanConfig) LevelsFreshByTFEnabled() bool {
 	return c != nil && c.LevelsFreshByTF
+}
+
+// GeometryRefIDsEnabled is the ONE resolution seam for the
+// day_plan.geometry_reference_levels knob (W-GEOMETRY-REFUSAL): nil config or
+// nil pointer → ON (the owner's default); explicit false → OFF (today's
+// behaviour byte-identical). The executor, the prompt map and the boot line all
+// resolve through this seam so they can never disagree.
+func (c *DayPlanConfig) GeometryRefIDsEnabled() bool {
+	return c == nil || c.GeometryReferenceLevels == nil || *c.GeometryReferenceLevels
 }
 
 // MinScenarioQualityFor (R4, 2026-08-25) resolves the scenario quality floor:

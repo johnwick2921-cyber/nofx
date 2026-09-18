@@ -229,6 +229,22 @@ const dayPlan: KnobSpec[] = [
       'Yes — session override wins; inherit (blank) = the strategy-level row above.',
   },
   {
+    label: 'Geometry reference levels (W-GEOMETRY-REFUSAL)',
+    where: 'Strategy → Day Plan → geometry_reference_levels (API/config field)',
+    what: "Since the 2026-09-12 structural-stop wave, a reject play at a session reference level (ONH/ONL and the other anchor kinds) was REFUSED at arm time 100% of the time: the identity map showed id=NULL for a reference whose source window was still developing (no formation close), the planner wrote level_id null as instructed, and the executor's frozen-zone match failed with no_provenance / scenario_level_id_missing. ON (default — owner ruling 2026-09-18 'both fix now') assigns a STABLE id to reference-anchor levels whose formation close is unknown, and treats an empty zone-source tf as a wildcard (VWAP-family sources). The arm gate now logs one ⚔️ arm REFUSED WARN line per (geometry key, reason) change instead of a silent INFO-only refusal. OFF = today's behaviour byte-identical.",
+    trader:
+      'ON = reject plays authored at ONH/ONL/VWAP-family reference levels can arm: a reference LINE (null-width zone in the frozen map) is admitted as a zero-width band at the line, and the stop composes from the structural stop rule (line − buffer); a non-empty mismatched source tf still refuses, and two matching zones refuse as ambiguous — never a pick. The counter labelled "93/95 refusals since 09-13" is measured on the owner\'s DB 2026-09-18. Stored plans with level_id null keep the legacy WARN-only resolution.',
+    consumer:
+      'trader/structural_geometry.go ArmGeometryVerdict (tf wildcard) · kernel/scenario_level_identity.go EnsureReferenceLevelIDs (stable ids) · trader/armed_executor.go geometry WARN · store.DayPlanConfig.GeometryRefIDsEnabled',
+    range: 'ON | OFF',
+    systemDefault: 'ON (owner ruling; explicit false = legacy)',
+    recommended:
+      '⭐ ON — the default; OFF only to reproduce the pre-fix behaviour.',
+    whenToTouch:
+      'Turn OFF to compare against the pre-fix refusals; turn back ON to trade reference levels.',
+    perSession: 'No.',
+  },
+  {
     label:
       'Flip re-read (W-FLIP-REREAD, immediate since W-FLIP-REREAD-IMMEDIATE)',
     where: 'Strategy → Day Plan → flip_reread toggle',
