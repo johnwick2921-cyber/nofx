@@ -674,6 +674,16 @@ func flipRereadDoneKey(row *store.PlanDB) string {
 // trader|plan|version; entries live only as long as the goroutine.
 var flipRereadInFlight sync.Map
 
+// at.flipRereadLaunchAt (W-FLIP-REREAD-IMMEDIATE) records, per plan|version,
+// WHEN a structure_flip read last LAUNCHED (reached the planner) and wrote
+// nothing. The flip read is exempt from the wake throttles, and the
+// dormant branch calls back every scan cycle, so without this a read that
+// launched and failed (3 model calls) would relaunch every cycle for as long
+// as the model kept failing. Only a LAUNCH starts this clock; a refusal
+// (preflight, cutoff, open stream) never does, so those retry next cycle. It
+// is measured from the flip read's OWN launch — an ordinary wake never sets
+// it, so an earlier ordinary wake still cannot delay a flip read.
+
 func flipRereadInFlightKey(at *AutoTrader, row *store.PlanDB) string {
 	return fmt.Sprintf("%s|%s|%d", at.id, row.PlanID, row.Version)
 }
@@ -720,9 +730,22 @@ var flipRereadRun = func(at *AutoTrader, session, tradeDate, prior string, row *
 
 // maybeRereadAfterFlip (W-FLIP-REREAD, 2026-09-17) — with day_plan.flip_reread
 // ON, a fired flip requests ONE free planner re-read in the flipped direction
-// (trigger structure_flip), under the same preflight and wake cadence as a
-// level-event wake. OFF = not called (the caller gates on the knob, and this
-// function double-checks it): today's dormant behaviour, byte-identical.
+// (trigger structure_flip). OFF = not called (the caller gates on the knob, and
+// this function double-checks it): today's dormant behaviour, byte-identical.
+//
+// W-FLIP-REREAD-IMMEDIATE (2026-09-17, owner: "why does the plan go dormant
+// when the bias flips"): a structure_flip read is a REACTION to a
+// machine-confirmed event (two 5m closes beyond the flip line with the ATR
+// buffer), not a speculative wake, so it is EXEMPT from the two LOAD rules a
+// level wake obeys — the class-47 30m cooldown (measured from the last
+// wake-authored version) and the shared wake_min_interval_min throttle on
+// at.lastPlannerWakeAt. Before this, a flip that fired inside either window sat
+// dormant for up to 30 minutes with no plan in the new direction. What STAYS:
+// the once-key, the in-flight guard, preflight (fresh bars), the class-47
+// CUTOFF (a SAFETY rule: no read within 25 min of the session flat — a plan
+// authored there can never be entered), and the one-planner-stream-at-a-time
+// defer. After the launch at.lastPlannerWakeAt is still set, so ORDINARY wakes
+// back off from the flip read; an earlier ordinary wake never delays it.
 //
 // Semantics after the 2026-09-17 review (BLOCKERs 2 + 3):
 //   - "ONE read" means one SUCCESSFUL read per fired flip. Success is decided
@@ -771,49 +794,47 @@ func (at *AutoTrader) maybeRereadAfterFlip(now time.Time, session, tradeDate str
 		at.logWarnf("🗓️ structure_flip read %s %s v%d — REFUSED by preflight (no fresh bars); the dormant plan stands.", tradeDate, session, row.Version)
 		return
 	}
-	// Rate-limit by the existing wake cadence: cutoff, 30m cooldown since the
-	// last wake-authored version, fast-market exempt — the same decision struct
-	// the level-event wake uses.
+	// Class-47 CUTOFF only (SAFETY rule — kept). CooldownMin is 0 on purpose:
+	// a flip read is a reaction, not a wake, and SkipForCooldown must never
+	// fire for it (W-FLIP-REREAD-IMMEDIATE).
 	dec := WakeCadenceDecision{
 		Session: session, Desc: "structure_flip: " + killer,
-		CutoffMin: wakeCutoffMinutes(), CooldownMin: wakeCooldownMinutes(),
-		FastMarketThreshold: fastMarketATR(),
-	}
-	if _, driftATR := at.fastMarketDrift(at.wakeTimePrice()); driftATR > 0 {
-		dec.FastMarketATR = driftATR
+		CutoffMin: wakeCutoffMinutes(), CooldownMin: 0,
 	}
 	if sess, okS := at.sessionRegistry(now).ActiveSession(now); okS {
 		dec.MinutesToFlat, dec.HaveFlat = minutesToSessionFlat(now, sess)
 	}
-	if dec.CooldownMin > 0 {
-		if last, lerr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, session, at.id); lerr == nil && last != nil &&
-			WakeCadenceGoverns(last.TriggerReason) && !last.CreatedAt.IsZero() {
-			dec.SinceLastWakeVersionMin = int(now.Sub(last.CreatedAt).Minutes())
-			dec.HaveLastWakeVersion = true
-		}
-	}
 	if dec.SkipForCutoff() {
 		at.logWarnf("%s", wakeCutoffLine(session, dec.Desc, dec.MinutesToFlat, dec.CutoffMin, 0))
-		return
-	}
-	if dec.SkipForCooldown() {
-		at.logWarnf("%s", wakeCooldownLine(session, dec.Desc, dec.SinceLastWakeVersionMin, dec.CooldownMin, 0))
 		return
 	}
 	if held, open := anyPlannerStreamOpen(); open {
 		at.logWarnf("%s", wakeStreamDeferLine(session, dec.Desc, held))
 		return
 	}
-	// Shared min-interval throttle: ANY planner wake resets the clock.
-	if !at.lastPlannerWakeAt.IsZero() && now.Sub(at.lastPlannerWakeAt) < time.Duration(cfg.WakeMinIntervalMinutes())*time.Minute {
-		at.logWarnf("🗓️ structure_flip read %s %s — SKIPPED: %.0fm elapsed < wake_min_interval_min (%dm).",
-			session, tradeDate, now.Sub(at.lastPlannerWakeAt).Minutes(), cfg.WakeMinIntervalMinutes())
-		return
+	// The two LOAD rules a level wake obeys are computed only to SAY that the
+	// exemption applied (never to refuse): the class-47 cooldown since the last
+	// wake-authored version, and the shared wake_min_interval_min throttle.
+	if exempt := flipRereadExemptionNote(now, at.lastPlannerWakeAt, cfg.WakeMinIntervalMinutes(), at.lastWakeAuthoredVersionAge(now, tradeDate, session), wakeCooldownMinutes()); exempt != "" {
+		at.logWarnf("🗓️ structure_flip read %s %s v%d — immediate (flip reads are exempt from cooldown/min-interval; cutoff + stream guard still apply): %s",
+			tradeDate, session, row.Version, exempt)
+	}
+	// Self-backoff only: a previous flip LAUNCH for this row that wrote nothing
+	// holds the retry for wake_min_interval_min, measured from that launch.
+	if v, ok := at.flipRereadLaunchAt.Load(inflightKey); ok {
+		if last, isT := v.(time.Time); isT && now.Sub(last) < time.Duration(cfg.WakeMinIntervalMinutes())*time.Minute {
+			at.logWarnf("🗓️ structure_flip read %s %s v%d — retry held: %.0fm since this row's last flip launch that wrote nothing < wake_min_interval_min (%dm); refusals never start this clock.",
+				tradeDate, session, row.Version, now.Sub(last).Minutes(), cfg.WakeMinIntervalMinutes())
+			return
+		}
 	}
 	if _, busy := flipRereadInFlight.LoadOrStore(inflightKey, now); busy {
 		at.logInfof("🗓️ structure_flip read %s %s v%d already in flight — not launching a second.", tradeDate, session, row.Version)
 		return
 	}
+	at.flipRereadLaunchAt.Store(inflightKey, now)
+	// Ordinary wakes back off from THIS read; the flip read never backed off
+	// from them.
 	at.lastPlannerWakeAt = now
 	// BLOCKER 2 — the once-key is NOT set here. It lands only after the
 	// goroutine below has seen a newer active version in the store.
@@ -861,6 +882,7 @@ func (at *AutoTrader) maybeRereadAfterFlip(now time.Time, session, tradeDate str
 			return
 		}
 		_ = at.store.SetSystemConfig(flipRereadDoneKey(row), strconv.FormatInt(now.UnixMilli(), 10))
+		at.flipRereadLaunchAt.Delete(inflightKey) // done for this row; nothing to back off from
 		if fdoc, derr := kernel.ParsePlanDoc(fresh.Doc); derr == nil && strings.EqualFold(fdoc.Bias.Direction, oldBias) {
 			// Unreachable through the production write site (it rejects a
 			// plan whose bias is not the flipped one); a non-production writer
@@ -880,6 +902,38 @@ func (at *AutoTrader) maybeRereadAfterFlip(now time.Time, session, tradeDate str
 		}
 		at.carryOwnerEditsInto(fresh.PlanID, row.Version, fresh.Version)
 	}()
+}
+
+// lastWakeAuthoredVersionAge returns whole minutes since the session's latest
+// version when that version was WAKE-authored (WakeCadenceGoverns), else -1 —
+// the same measurement the class-47 cooldown uses, taken here only to
+// describe the exemption (W-FLIP-REREAD-IMMEDIATE), never to refuse.
+func (at *AutoTrader) lastWakeAuthoredVersionAge(now time.Time, tradeDate, session string) int {
+	if at.store == nil {
+		return -1
+	}
+	last, err := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, session, at.id)
+	if err != nil || last == nil || !WakeCadenceGoverns(last.TriggerReason) || last.CreatedAt.IsZero() {
+		return -1
+	}
+	return int(now.Sub(last.CreatedAt).Minutes())
+}
+
+// flipRereadExemptionNote is the pure "which throttle WOULD have skipped this
+// flip read" renderer: empty when neither the wake_min_interval_min throttle
+// (sinceWake < minInterval) nor the class-47 cooldown (wakeAuthoredAgeMin in
+// [0, cooldown)) would have applied, so the immediate line prints only when
+// the exemption actually did something. A zero lastWake / negative age means
+// "no prior wake" and never manufactures a note (A24).
+func flipRereadExemptionNote(now, lastWake time.Time, minIntervalMin, wakeAuthoredAgeMin, cooldownMin int) string {
+	var parts []string
+	if !lastWake.IsZero() && minIntervalMin > 0 && now.Sub(lastWake) < time.Duration(minIntervalMin)*time.Minute {
+		parts = append(parts, fmt.Sprintf("%.0fm since the last planner wake < wake_min_interval_min (%dm)", now.Sub(lastWake).Minutes(), minIntervalMin))
+	}
+	if cooldownMin > 0 && wakeAuthoredAgeMin >= 0 && wakeAuthoredAgeMin < cooldownMin {
+		parts = append(parts, fmt.Sprintf("%d min since the last wake-authored version < cooldown (%dm)", wakeAuthoredAgeMin, cooldownMin))
+	}
+	return strings.Join(parts, "; ")
 }
 
 // dormantDeathKillerOf is the death counterpart of dormantFlipKillerOf:
