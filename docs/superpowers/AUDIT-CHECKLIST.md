@@ -5888,7 +5888,41 @@ self-consistency (class 53).
   (`TestKnobPrunePin_WakeCandidates_SingleSwitchOwnsOB`) and a registry note,
   even when inert for every stored strategy.
 
-## CLASS NN (assigned at merge) — A SILENT STRUCTURAL-GEOMETRY REFUSAL MADE EVERY reject PLAY AT A REFERENCE LEVEL UNARMABLE (born 2026-09-12 with 540c9e8d, found 2026-09-18 05:42 CT LONDON v1 S1, fix/geometry-refusal, W-GEOMETRY-REFUSAL)
+## CLASS 152 — A SWITCH RULED OFF "UNTIL ITS PRECONDITION LANDS" WAS NEVER BROUGHT BACK WHEN THE PRECONDITION LANDED (born 2026-09-05 with the STOP_ENTRY_SEAM ruling, precondition shipped 2026-09-06, found 2026-09-18 07:4x CT by the owner "no trade since NY yesterday", docs/stop-entry-seam, W-SEAM-DOCS)
+
+**Shape.** `STOP_ENTRY_SEAM` (`kernel/entry_law.go:StopEntrySeamOn`, only the
+literal `on`) was ruled OFF on 2026-09-05 because `nt.CancelOrder` reported
+success on a SEND and the broker once held nine working stops for one arm slot.
+The boot line said so in words: `seam=OFF — NO stop entry is placed (owner
+ruling 2026-09-05: cancel-confirmation wave owed; broker-side stacking)`. The
+cancel-confirmation wave shipped the next day (`🧾 cancels: confirm=
+broker-snapshot`) and nobody re-opened the ruling: every `kind=stop_entry` arm
+(reclaim / continuation) was written, logged and never sent. Owner's DB
+2026-09-18, since 09-04: 30 stop_entry arms / 0 fills vs 61 limit arms / 16
+fills. The switch lives in each machine's untracked `.env`; no tracked file
+(`.env.example`, `docs/PARTNER-BUILD.md`, `docs/partner-sync/*`) mentioned it,
+so the mirrors could not even know there was a value to set.
+
+**Why it hid.** The boot line was honest and READ, not literal — it printed the
+ruling and its reason every boot — but a line that says "until X" is a promise
+with no owner: the wave that delivers X has no reason to grep for the lines
+that were waiting on it. Twelve days of `⏳ armed … stop_entry` looked like a
+scheduler working as designed; only "no trade since yesterday" made it a bug.
+
+**Probes.**
+- For every env/config switch whose boot line, comment or ruling says "until
+  X" / "owed" / "precondition": `grep -rn 'until\|owed\|precondition' kernel/
+  trader/ .env.example` → list each X and check whether X has SHIPPED (a boot
+  line, a merged class). Shipped + switch still parked = this class.
+- A wave that ships a precondition greps the tree for the switches that named
+  it and either flips them or writes down, in its report, why not.
+- Any switch a machine sets in `.env` has its line in `.env.example` AND in
+  `docs/PARTNER-BUILD.md`; the mirror's boot line is pasted as proof.
+
+**Fix.** This docs wave (`.env.example` line, PARTNER-BUILD section, this
+class); the guide clause for the seam is OWED at the next boot (guide law).
+
+## CLASS 153 — A SILENT STRUCTURAL-GEOMETRY REFUSAL MADE EVERY reject PLAY AT A REFERENCE LEVEL UNARMABLE (born 2026-09-12 with 540c9e8d, found 2026-09-18 05:42 CT LONDON v1 S1, fix/geometry-refusal, W-GEOMETRY-REFUSAL)
 
 **Shape.** The geometry gate refuses with an INFO-only composition line plus a
 system_config counter — no WARN, no ⚔️ arm REFUSED. The evaluator meanwhile prints
