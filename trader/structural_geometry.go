@@ -62,6 +62,7 @@ func resolveEntryGeometryZone(doc *kernel.PlanDoc, sc kernel.PlanScenario, geome
 	}
 	identity := &identityValue
 	match := -1
+	wildcardMatch := false
 	for i, z := range doc.Zones.Zones {
 		for _, s := range z.Sources {
 			if math.Abs(s.Price-identity.Price) > 1e-7 {
@@ -80,6 +81,9 @@ func resolveEntryGeometryZone(doc *kernel.PlanDoc, sc kernel.PlanScenario, geome
 			if identity.TF != nil && *identity.TF != "" && s.TF != *identity.TF && !(geometryRefLevels && s.TF == "") {
 				continue
 			}
+			if geometryRefLevels && s.TF == "" && identity.TF != nil && *identity.TF != "" {
+				wildcardMatch = true // the wildcard was actually exercised
+			}
 			if match >= 0 && match != i {
 				return -1, "entry_zone_ambiguous"
 			}
@@ -90,25 +94,21 @@ func resolveEntryGeometryZone(doc *kernel.PlanDoc, sc kernel.PlanScenario, geome
 	if match < 0 {
 		return -1, "entry_source_not_in_frozen_zones"
 	}
-	if geometryRefLevels {
-		// W-GEOMETRY-REFUSAL (F4): in wildcard mode the tf no longer disambiguates,
-		// so ANY other zone carrying a same-price+label source makes the match
-		// ambiguous — refuse, never pick.
+	if geometryRefLevels && wildcardMatch {
+		// W-GEOMETRY-REFUSAL (F4, narrowed after the v9/v14 regressions): ONLY a
+		// match made through the empty-tf wildcard is checked for a competing
+		// zone, and only on the identity's PRIMARY label — the merged member
+		// names (an SWG candidate that also wears EQL·1h/EQL·4h) are the
+		// identity itself appearing under its aliases, not a second zone.
 		for i, z := range doc.Zones.Zones {
 			if i == match {
 				continue
 			}
 			for _, s := range z.Sources {
-				if math.Abs(s.Price-identity.Price) > 1e-7 {
+				if math.Abs(s.Price-identity.Price) > 1e-7 || s.Label != identity.Label {
 					continue
 				}
-				named := s.Label == identity.Label
-				for _, name := range identity.Names {
-					named = named || s.Label == name
-				}
-				if named {
-					return -1, "entry_zone_ambiguous"
-				}
+				return -1, "entry_zone_ambiguous"
 			}
 		}
 	}

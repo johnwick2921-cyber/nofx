@@ -353,9 +353,36 @@ func TestOneSetupRefIDRejectPlayArms(t *testing.T) {
 	}
 }
 
-// TestGeometryRefWildcardAmbiguousAcrossTF (F4): identity eVWAP tf 1m; zone0
-// tf "" (wildcard) + zone1 tf "1h" at the same price+label → ambiguous, never a
-// pick of zone0.
+// TestGeometryRefWildcardDoesNotFlagMergedNames is the 2026-09-13 ASIA v9 S1 /
+// v14 S1 regression pin (CTO 10:4x CT): the identity's merged member names
+// (SWG-H·5m that also wears EQL·1h/EQL·4h) live in their OWN zones at the same
+// price — that is the identity itself under aliases, NOT a competing entry
+// zone. The match is exact (tf matches), so no ambiguity may fire; the play
+// ADMITS.
+func TestGeometryRefWildcardDoesNotFlagMergedNames(t *testing.T) {
+	p := func(v float64) *float64 { return &v }
+	nowMs := time.Now().UnixMilli()
+	id, reason := levelidentity.ID(kernel.IdentityInputs(kernel.PlanLevel{
+		Symbol: refStr("MNQ"), Kind: refStr("SWG-H"), Lo: p(29038), Hi: p(29038),
+		OriginDate: refStr("2026-09-13"), TF: refStr("5m"), FormedCloseMs: &nowMs,
+	}))
+	if id == nil {
+		t.Fatalf("strict identity refused: %s", reason)
+	}
+	identity := kernel.PlanLevel{Symbol: refStr("MNQ"), Kind: refStr("SWG-H"), Lo: p(29038), Hi: p(29038), OriginDate: refStr("2026-09-13"), TF: refStr("5m"), Label: "SWG-H·5m", Price: 29038, ID: id, FormedCloseMs: &nowMs, Names: []string{"SWG-H·5m", "EQL", "EQL·4h", "EQL·1h"}}
+	doc := &kernel.PlanDoc{
+		IdentityLevels: []kernel.PlanLevel{identity},
+		Zones: &kernel.LevelZoneMap{Zones: []kernel.LevelZone{
+			{Anchor: 29038, Lo: p(29032.16), Hi: p(29055.5), Sources: []kernel.ZoneSource{{Kind: "SWG-H", Price: 29038, Label: "SWG-H·5m", TF: "5m"}}},
+			{Anchor: 29038, Lo: p(29032.16), Hi: p(29055.5), Sources: []kernel.ZoneSource{{Kind: "EQL", Price: 29038, Label: "EQL·4h", TF: "4h"}}},
+			{Anchor: 29038, Lo: p(29032.16), Hi: p(29055.5), Sources: []kernel.ZoneSource{{Kind: "EQL", Price: 29038, Label: "EQL·1h", TF: "1h"}}},
+		}},
+	}
+	sc := kernel.PlanScenario{ID: "S1", LevelID: id}
+	if idx, why := ArmGeometryVerdict(doc, sc, true); why != "" || idx != 0 {
+		t.Fatalf("merged-name zones must NOT flag ambiguity (v9/v14 regression): idx=%d why=%s", idx, why)
+	}
+}
 func TestGeometryRefWildcardAmbiguousAcrossTF(t *testing.T) {
 	doc, id := refAnchorDoc("")
 	doc.Zones.Zones = append(doc.Zones.Zones, kernel.LevelZone{
