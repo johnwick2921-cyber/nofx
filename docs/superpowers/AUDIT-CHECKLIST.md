@@ -5964,7 +5964,7 @@ half, the wildcard merely re-labelled the refusal (55 source_not_frozen became
 hint; the executor seam for both lanes is
 trader.ArmGeometryVerdict(doc, sc, geometryRefLevels).
 
-## CLASS NN — A WRITE-TIME FEASIBILITY WARN THAT SAYS "THE GATE WILL REFUSE IT" AND WRITES THE PLAN ANYWAY (born with the arm-feasibility WARN 2026-08-28, found by the owner 2026-09-18 08:3x CT "fix all", W-WRITE-TIME-FEASIBILITY, fix/write-time-feasibility; number assigned at merge)
+## CLASS 154 — A WRITE-TIME FEASIBILITY WARN THAT SAYS "THE GATE WILL REFUSE IT" AND WRITES THE PLAN ANYWAY (born with the arm-feasibility WARN 2026-08-28, found by the owner 2026-09-18 08:3x CT "fix all", W-WRITE-TIME-FEASIBILITY, fix/write-time-feasibility)
 
 **Shape.** `kernel.ArmFeasibilityWarnings` (F4, 2026-08-28) computed, at plan
 write time, exactly which arms the gate-at-arm chain would refuse every cycle
