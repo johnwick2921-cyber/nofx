@@ -5430,3 +5430,52 @@ contract lets two contracts fight for one slot and the loser is silently
 dropped. Adding `contract` to the key (or a partial unique index per
 contract) is a migration over the live `bars` table and every reader that
 assumes one row per open time — the owner's call, not a display wave's.
+
+## CLASS NN (assigned at merge) — A REACTION READ THROTTLED LIKE A SPECULATIVE WAKE (born 2026-09-17 with CLASS 141's flip re-read, reported by the owner 2026-09-17 22:5x CT "why does the plan go dormant when the bias flips", fix/flip-reread-immediate, W-FLIP-REREAD-IMMEDIATE)
+
+**Shape.** The structure_flip read (CLASS 141) reused the level-wake gate
+verbatim: class-47 cooldown (30m since the last wake-authored version) and the
+shared `wake_min_interval_min` throttle on `at.lastPlannerWakeAt`. Both are LOAD
+rules born from a 7-day measurement of wake FLOODS — a wake CONDITION that is
+continuously true and needs pacing. A flip read is not that: it reacts to a
+machine-confirmed event (two 5m closes beyond the flip line with the ATR
+buffer) that fires once. Live shape: a level wake authors a version, the flip
+fires minutes later, and the bot sits dormant with no plan in the new direction
+for up to 30 minutes — the dormant line is loud and correct, and the skip line
+reads like an ordinary wake being paced.
+
+**How it hid.** "Same preflight and wake cadence as a level wake" was written
+as a feature (reuse the proven gate) and reviewed as one. Nothing asked which of
+the gate's rules are SAFETY (cutoff: a plan authored inside 25 min of the flat
+can never be entered) and which are THROTTLE (cooldown, min-interval), so the
+throttles rode along.
+
+**Probes.**
+- For every read trigger that reuses a wake gate, classify each rule in the
+  gate as SAFETY or LOAD, and ask whether the trigger is a SPECULATIVE wake (a
+  continuously-true condition that needs pacing) or a REACTION to a confirmed
+  event (fires once, must not wait behind an unrelated earlier wake).
+- A reaction read may set the shared wake clock (ordinary wakes back off from
+  it) but must never READ it; grep the trigger's gate for
+  `lastPlannerWakeAt` and `SkipForCooldown`.
+- Removing a throttle from a retrying path needs its own bound: the dormant
+  branch calls back every scan cycle, so a LAUNCH that wrote nothing (3 model
+  calls) would relaunch every cycle. Bound it on the read's OWN last launch,
+  per trader (a process-global map keyed by plan id let one trader's — and
+  one test's — failed launch hold another's retry), and never on a refusal.
+- A fixture for "the flip fires N minutes after a wake version" must respect
+  `describeActivePlanDeath`'s `sinceMs = row.CreatedAt`: the condition's bars
+  are windowed from the VERSION's birth (CLASS 139 anchors only the hold), so
+  two 5m closes must fit after it — N is at least ~10–15, not 3.
+
+**Fix pattern.** W-FLIP-REREAD-IMMEDIATE: `maybeRereadAfterFlip` keeps the
+once-key, in-flight guard, preflight, class-47 CUTOFF and the one-stream defer;
+drops SkipForCooldown (CooldownMin: 0) and the min-interval read; logs
+"🗓️ structure_flip read … — immediate (flip reads are exempt from
+cooldown/min-interval; cutoff + stream guard still apply): <which would have
+held>" only when a throttle would have applied; still sets
+`at.lastPlannerWakeAt` at launch; and holds a relaunch after a launch that
+wrote nothing for `wake_min_interval_min` from that launch
+(`at.flipRereadLaunchAt`). Tests at the production call site
+(`maybeRunSessionReadsAt`, real read path, AI client scripted) in
+`trader/flip_reread_cto_test.go`.
