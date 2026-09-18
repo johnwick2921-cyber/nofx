@@ -243,7 +243,9 @@ const dayPlan: KnobSpec[] = [
     whenToTouch:
       'OFF only to restore the old WARN-and-write behaviour while triaging; the boot line 🎛 entry law shows the resolved write_feas=on/off.',
     perSession: 'No — strategy-level.',
-label: 'Geometry reference levels (W-GEOMETRY-REFUSAL)',
+  },
+  {
+    label: 'Geometry reference levels (W-GEOMETRY-REFUSAL)',
     where: 'Strategy → Day Plan → geometry_reference_levels (API/config field)',
     what: "Since the 2026-09-12 structural-stop wave, a reject play at a session reference level (ONH/ONL and the other anchor kinds) was REFUSED at arm time 100% of the time: the identity map showed id=NULL for a reference whose source window was still developing (no formation close), the planner wrote level_id null as instructed, and the executor's frozen-zone match failed with no_provenance / scenario_level_id_missing. ON (default — owner ruling 2026-09-18 'both fix now') assigns a STABLE id to reference-anchor levels whose formation close is unknown, and treats an empty zone-source tf as a wildcard (VWAP-family sources). The arm gate now logs one ⚔️ arm REFUSED WARN line per (geometry key, reason) change instead of a silent INFO-only refusal. OFF = today's behaviour byte-identical.",
     trader:
