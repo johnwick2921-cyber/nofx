@@ -5431,7 +5431,6 @@ dropped. Adding `contract` to the key (or a partial unique index per
 contract) is a migration over the live `bars` table and every reader that
 assumes one row per open time — the owner's call, not a display wave's.
 
-<<<<<<< HEAD
 ## CLASS 146 — A REACTION READ THROTTLED LIKE A SPECULATIVE WAKE (born 2026-09-17 with CLASS 141's flip re-read, reported by the owner 2026-09-17 22:5x CT "why does the plan go dormant when the bias flips", fix/flip-reread-immediate, W-FLIP-REREAD-IMMEDIATE)
 
 **Shape.** The structure_flip read (CLASS 141) reused the level-wake gate
@@ -5480,7 +5479,6 @@ wrote nothing for `wake_min_interval_min` from that launch
 (`at.flipRereadLaunchAt`). Tests at the production call site
 (`maybeRunSessionReadsAt`, real read path, AI client scripted) in
 `trader/flip_reread_cto_test.go`.
-=======
 ## CLASS 145 — A HALT'S AGE READ AS CLOCK DRIFT WIDENED A NEWS BLACKOUT BY HALF AN HOUR (born 2026-08-30 with F6's uncapped widening, reported by the owner 2026-09-17 21:4x CT "BOJ 21:30 ±15m +39m (clock drift) 20:36–22:24", fix/drift-widen-cap, W-DRIFT-WIDEN-CAP)
 
 **Shape.** F6 measures "clock drift" as local clock minus the freshest 1m
@@ -5537,4 +5535,3 @@ path now passes the SIGNED measurement.
   (2,326,426 ms → +2m, unlabelled, note names 38m), `trader/clock_widen_cap_test.go`
   (arm path via `currentT1Windows`, plan-write step via `plannerT1Lines`; 42 s
   → +1m unlabelled, 90 s → "+2m (clock drift)" unchanged).
->>>>>>> origin/dev
