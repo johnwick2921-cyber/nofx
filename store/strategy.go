@@ -963,6 +963,14 @@ type DayPlanConfig struct {
 	// re-read in the flipped direction (trigger structure_flip). OFF = today's
 	// behaviour byte-identical.
 	FlipReread bool `json:"flip_reread,omitempty"`
+	// DeathReread (W-DEATH-REREAD, 2026-09-18, owner ruling 12:3x CT "fix all"):
+	// when a DEATH condition fires, the plan still goes DORMANT exactly as
+	// before, and ON adds ONE BUDGETED planner re-read (trigger death_replan —
+	// it SPENDS one unit of the class-35 replan budget, unlike the flip read)
+	// that authors a FRESH plan, bias free, with the death evidence in the read
+	// prompt. A POINTER because the default is ON: nil = ON, explicit false =
+	// today's behaviour byte-identical (dormant only).
+	DeathReread *bool `json:"death_reread,omitempty"`
 	// T1Currencies (W-T1-CURRENCIES, 2026-09-18): the currencies whose T1
 	// (red) calendar events HARD-block entries (±T1BlackoutMinutes). Empty/nil
 	// = the shipped default ["USD"]. An explicit ["ALL"] (or ["*"]) restores
@@ -1692,6 +1700,16 @@ func (c *DayPlanConfig) LevelsFreshByTFEnabled() bool {
 // resolve through this seam so they can never disagree.
 func (c *DayPlanConfig) GeometryRefIDsEnabled() bool {
 	return c == nil || c.GeometryReferenceLevels == nil || *c.GeometryReferenceLevels
+}
+
+// DeathRereadEnabled is the ONE resolution seam for the day_plan.death_reread
+// knob (W-DEATH-REREAD, 2026-09-18): nil config or nil pointer → ON (the
+// owner's default per the 12:3x CT "fix all" ruling); explicit false → OFF
+// (today's behaviour byte-identical — a death only parks the plan). The death
+// branch, the dormant retry loop, the wick guard and the boot line all resolve
+// through this seam so they can never disagree.
+func (c *DayPlanConfig) DeathRereadEnabled() bool {
+	return c == nil || c.DeathReread == nil || *c.DeathReread
 }
 
 // MinScenarioQualityFor (R4, 2026-08-25) resolves the scenario quality floor:

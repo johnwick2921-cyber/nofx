@@ -283,6 +283,15 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) []SessionReadFired {
 					at.maybeRereadAfterFlip(now, s.Name, tradeDate, existing, killer)
 				}
 			}
+			// W-DEATH-REREAD (2026-09-18) — the death counterpart of the flip
+			// retry: while the row sleeps, a refused or failed death read
+			// retries next cycle (once-key + in-flight guard + budget gate all
+			// live inside maybeRereadAfterDeath).
+			if cfgDP := at.config.StrategyConfig.DayPlan; cfgDP != nil && cfgDP.DeathRereadEnabled() {
+				if killer, ok := at.dormantDeathKillerOf(existing); ok {
+					at.maybeRereadAfterDeath(now, s.Name, tradeDate, existing, killer)
+				}
+			}
 			// FIX 5 (F3, 2026-08-27) — DORMANT KEEPS EYES: while dormant, level
 			// events still wake the PLANNER for a FRESH read (new version). The
 			// dormant row is NEVER flipped active here — re-arm happens ONLY via
@@ -306,7 +315,11 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) []SessionReadFired {
 		// handled below.
 		handledDeath := false
 		// P3.6 — RE-PLAN ON DEATH (cap replan_cap/session → NO-TRADE).
-		if detail, dead := at.describeActivePlanDeath(existing); dead {
+		// W-DEATH-REREAD (c) — a death-born plan's first death check waits out
+		// its 10-minute birth wick (2 full 5m closes), so the SAME line's wick
+		// noise cannot kill the fresh plan. Inside the wick the death check is
+		// skipped entirely (MSS wakes still run).
+		if detail, dead := at.describeActivePlanDeath(existing); dead && !deathBornWickActive(existing, at.dayPlanCfg(), now) {
 			handledDeath = true
 			// PLAN-LIFECYCLE WAVE: a STRUCTURED flip/death-line hit goes DORMANT
 			// instead of burning a re-plan (wick-noise protection; the rearm
@@ -330,6 +343,12 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) []SessionReadFired {
 					// direction is the only way the flipped bias ever materializes.
 					if strings.HasPrefix(detail.Killer, "flip-condition:") {
 						at.maybeRereadAfterFlip(now, s.Name, tradeDate, existing, detail.Killer)
+					} else {
+						// W-DEATH-REREAD (2026-09-18) — a death only parks the
+						// plan; with the knob ON, ONE budgeted re-read authors a
+						// FRESH plan (bias free) with the death evidence. Gated
+						// inside on the knob + class-35 budget.
+						at.maybeRereadAfterDeath(now, s.Name, tradeDate, existing, detail.Killer)
 					}
 				}
 				continue // skip MSS/level wakes while dormant (re-arm path above runs first next cycle)
@@ -631,7 +650,11 @@ func (at *AutoTrader) executorPlanDeadReason() string {
 	if row.Lifecycle != "active" {
 		return fmt.Sprintf("plan lifecycle %q — entries refused", row.Lifecycle)
 	}
-	if detail, dead := at.describeActivePlanDeath(row); dead {
+	// W-DEATH-REREAD (c) — the wick guard the planner honours is honoured
+	// here too: inside a death-born plan's 10-minute birth wick the executor
+	// does not treat it as machine-dead (the same line's noise must not
+	// block the fresh plan's entries).
+	if detail, dead := at.describeActivePlanDeath(row); dead && !deathBornWickActive(row, sc.DayPlan, traderNow()) {
 		return "active plan is MACHINE-DEAD (" + detail.Killer + ") — entries refused until the planner re-plans"
 	}
 	return ""

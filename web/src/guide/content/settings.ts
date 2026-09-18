@@ -262,6 +262,22 @@ const dayPlan: KnobSpec[] = [
     perSession: 'No.',
   },
   {
+    label: 'Death re-read (W-DEATH-REREAD, owner ruling 2026-09-18 12:3x CT)',
+    where: 'Strategy → Day Plan → death_reread toggle',
+    what: "When the plan's DEATH condition fires, the plan ALWAYS goes dormant first (wick-noise protection — unchanged). ON (the default, nil=ON) adds ONE BUDGETED planner re-read that authors a FRESH plan, bias free, with the death evidence in the read prompt (the dead version, its kill line with the price at death, the direction of the break). Unlike the flip read (free), a death re-read SPENDS one class-35 replan unit — a death is the planner being wrong, and an unbounded loop of dead plans on a trend day must stop; at budget exhausted the plan stays dormant with one WARN naming the budget. The fresh version supersedes the dormant one (superseded:death) and is protected by the same 30-min flip hold anchor plus a 10-minute birth wick (its first death check runs only after 2 full 5m closes post-birth, so the same line's noise cannot kill it). What still gates it: preflight, the class-47 cutoff, one planner stream at a time, one successful read per fired death. OFF = today's behaviour: the plan sleeps until price closes back — and if price never does, the session sits out.",
+    trader:
+      'ON = a dead plan re-reads once (budgeted) instead of sitting the session out when price runs away from its line. A read REFUSED before launch is retried on the very next cycle while the row stays dormant; a read that LAUNCHED and wrote nothing backs off from its OWN launch for wake_min_interval_min before retrying. If price closes back first, the old plan re-arms as before and the re-read is skipped. The counter death_reread:<trader>:<date>:<session> records each landed re-read.',
+    consumer:
+      'trader/death_reread.go maybeRereadAfterDeath + deathBornWickActive · store.DayPlanConfig.DeathRereadEnabled',
+    range: 'ON | OFF',
+    systemDefault: 'ON (unset; nil=ON per the owner ruling)',
+    recommended:
+      '⭐ ON — the default; OFF only to reproduce the pre-fix dormant-only behaviour.',
+    whenToTouch:
+      'Turn OFF only for a side-by-side study of a dead plan sitting out the session.',
+    perSession: 'No.',
+  },
+  {
     label: 'Red-news hard-block currencies (W-T1-CURRENCIES)',
     where: 'Strategy → Day Plan → t1_currencies text field (comma-separated)',
     what: "Which currencies' T1 (red) calendar events open the HARD ±15m no-trade window. Default USD: only USD red events hard-block; a red event in any other currency (a BOJ rate decision, a BoE vote) is shown as an advisory line — on the plan card, in the plan's no_trade list and in the planner prompt — and blocks nothing. Set ALL to restore the old behaviour where every red event in the session's currency filter hard-blocked. Case-insensitive; blanks are ignored; a red event with NO currency still hard-blocks (fail closed) and is named once a day in the log.",

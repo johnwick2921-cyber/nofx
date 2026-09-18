@@ -5963,3 +5963,39 @@ half, the wildcard merely re-labelled the refusal (55 source_not_frozen became
 58 unusable and nothing became armable). DS-101 owns the write-time feasibility
 hint; the executor seam for both lanes is
 trader.ArmGeometryVerdict(doc, sc, geometryRefLevels).
+
+## CLASS NN (assigned at merge) — A DEATH LINE THAT PARKS THE PLAN UNTIL PRICE RETURNS SITS OUT THE SESSION WHEN IT DOESN'T (born 2026-08-25 with the plan-lifecycle wave, found 2026-09-18 09:10 CT NY v2, fix/death-reread, W-DEATH-REREAD)
+
+**Shape.** A structured death-condition kill writes `dormant:death:` and the
+planner stops there; only a `flip-condition:` kill ever re-reads
+(`maybeRereadAfterFlip`). When the market runs 100 pt away from a dead plan,
+"wait for it to close back" means no plan for the whole session. 2026-09-18 NY:
+v1 flipped short at 08:46:20, v2 (long, kill line 29767) died at 09:10:18, and
+price sat at 29746 three hours later — the bot authored nothing for the rest of
+the NY session. The owner: "why the fk my bot stop right here".
+
+**Probe.** `dormant:death:` rows in plan_lifecycle_log with no later
+`rearmed`/`superseded` for that plan_id during the session; count on the DB copy
+since 09-01 with ids. First probe [A] on pre-bars-key-20260918-022516.db
+(read-only): 15 `dormant:death:` events since 2026-09-01, 7 never re-armed (ids
+16, 27, 28, 39, 44, 51, 56).
+
+**How it hid.** Dormancy is a protection, not a decision: the log line says
+"auto re-arms when price closes back" and the re-arm predicate exists, so the
+dead plan looks handled — nothing ever states "and if price does NOT return,
+this session has no plan". The flip half of the hysteresis re-reads (the bias
+was wrong); the death half only parks.
+
+**Fix (W-DEATH-REREAD, owner ruling 2026-09-18 12:3x CT "fix all").**
+`day_plan.death_reread` *bool, nil = ON: a fired death-condition kill still goes
+dormant exactly as today AND launches ONE budgeted planner re-read (trigger
+`death_replan` — it SPENDS one class-35 replan unit, unlike the free flip read;
+at budget exhausted → dormant only with one WARN naming the budget). The read is
+bias free and carries the death evidence (dead version, kill line with the price
+at death, break direction); the fresh version supersedes the dormant one
+(`superseded:death`). Guards: the once-key, in-flight guard, preflight, class-47
+cutoff and self-backoff are the flip read's own body; a death-born plan carries
+the 30-min flip hold anchor (class-35 trigger is a replan anchor) and cannot
+itself die inside a 10-minute birth wick (its first death check runs only after
+2 full 5m closes post-birth). Explicit false = today's behaviour byte-identical.
+Counter: `death_reread:<trader>:<date>:<session>`.
