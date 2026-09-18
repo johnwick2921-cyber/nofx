@@ -5888,7 +5888,7 @@ self-consistency (class 53).
   (`TestKnobPrunePin_WakeCandidates_SingleSwitchOwnsOB`) and a registry note,
   even when inert for every stored strategy.
 
-## CLASS NN — A SWITCH RULED OFF "UNTIL ITS PRECONDITION LANDS" WAS NEVER BROUGHT BACK WHEN THE PRECONDITION LANDED (born 2026-09-05 with the STOP_ENTRY_SEAM ruling, precondition shipped 2026-09-06, found 2026-09-18 07:4x CT by the owner "no trade since NY yesterday", docs/stop-entry-seam, W-SEAM-DOCS; number assigned at merge)
+## CLASS 152 — A SWITCH RULED OFF "UNTIL ITS PRECONDITION LANDS" WAS NEVER BROUGHT BACK WHEN THE PRECONDITION LANDED (born 2026-09-05 with the STOP_ENTRY_SEAM ruling, precondition shipped 2026-09-06, found 2026-09-18 07:4x CT by the owner "no trade since NY yesterday", docs/stop-entry-seam, W-SEAM-DOCS)
 
 **Shape.** `STOP_ENTRY_SEAM` (`kernel/entry_law.go:StopEntrySeamOn`, only the
 literal `on`) was ruled OFF on 2026-09-05 because `nt.CancelOrder` reported
