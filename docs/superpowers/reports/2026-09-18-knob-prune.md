@@ -158,6 +158,13 @@ bumped to the shipped rev by the deploy lane before the boot.
    a legacy strategy with SOME switches off maps to ON (per-class suppression is not preserved
    — no live strategy stored one).
 6. `GUIDE_BUILT_REV` bump — deploy lane.
+6b. **New coupling (review of #172):** `WakeOnHTFOrderBlocks()` ANDs the legacy
+   `wake_on_htf_ob` with `wake_on_level_events`. Pre-prune the OB class was gated only by its
+   own field; now the single switch OFF disables OBs too (intended single-switch semantics).
+   Inert for every stored strategy today (none stores the new switch). Pinned by
+   `trader.TestKnobPrunePin_WakeCandidates_SingleSwitchOwnsOB`: `{wake_on_level_events:false,
+   wake_on_htf_ob:true}` → zero candidates, while the same fixture yields OBs with the switch
+   on. Named in the registry note for `wake_on_htf_ob`.
 7. Go layer committed as one commit (`fdce92e6`): the struct/registry edits are shared by
    every knob group, so a per-group split would have left non-compiling intermediate commits.
 

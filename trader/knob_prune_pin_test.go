@@ -102,6 +102,49 @@ func TestKnobPrunePin_WakeCandidates(t *testing.T) {
 	knobPruneGolden(t, "wake_candidates.json", append(data, '\n'))
 }
 
+// NEW coupling pinned (review of #172): WakeOnHTFOrderBlocks() ANDs the legacy
+// wake_on_htf_ob with the single switch. Pre-prune the OB class was gated only
+// by its own field, so {wake_on_level_events:false, wake_on_htf_ob:true} would
+// have yielded the two OB candidates; the intended single-switch semantics is
+// that OFF disables EVERY level-event class, OBs included. Inert for every
+// stored strategy today (none stores the new switch); pinned so it cannot
+// drift. Kept out of the pre-prune golden map on purpose — this is a new rule,
+// not a before/after identity.
+func TestKnobPrunePin_WakeCandidates_SingleSwitchOwnsOB(t *testing.T) {
+	now := time.Date(2026, 8, 25, 10, 0, 0, 0, kernel.CTLocation())
+	b15 := zonePattern15m(now.UnixMilli())
+	rows := make([][4]float64, 0, len(b15))
+	for _, b := range b15 {
+		rows = append(rows, [4]float64{b.Open, b.High, b.Low, b.Close})
+	}
+	byTF := map[string][]market.Kline{"15m": b15, "1h": wakeBars(60, now.UnixMilli(), rows), "4h": wakeBars(240, now.UnixMilli(), rows)}
+	fetch := func(tf string, count int) []market.Kline { return byTF[tf] }
+	row := &store.PlanDB{PlanID: "p1", Version: 1, CreatedAt: now.Add(-30 * 24 * time.Hour),
+		Doc: `{"levels":[{"label":"Demand 1h","price":104.0},{"label":"Supply 1h","price":99.0}]}`}
+	var dp store.DayPlanConfig
+	if err := json.Unmarshal([]byte(`{"plan_enabled":true,"wake_on_level_events":false,"wake_on_htf_ob":true}`), &dp); err != nil {
+		t.Fatal(err)
+	}
+	if dp.WakeOnHTFOrderBlocks() {
+		t.Fatal("wake_on_level_events=false must switch the OB class off too")
+	}
+	if cands := collectLevelWakeCandidates(&dp, fetch, "MNQ", row, now); len(cands) != 0 {
+		t.Fatalf("single switch OFF + legacy wake_on_htf_ob=true must yield ZERO wake candidates, got %+v", cands)
+	}
+	// And the fixture DOES produce OBs when the switch is on (so the zero above is the gate, not the fixture).
+	on := true
+	dp.WakeOnLevelEvents = &on
+	obs := 0
+	for _, c := range collectLevelWakeCandidates(&dp, fetch, "MNQ", row, now) {
+		if c.kind == "ob" {
+			obs++
+		}
+	}
+	if obs == 0 {
+		t.Fatal("fixture must yield OB candidates with the switch on")
+	}
+}
+
 // Config resolvers every folded knob feeds, per stored shape. Pins
 // acceptance_rule, realign_cap, evening_digest, scenario_cap,
 // wake_min_interval_min, structure_map, levels_fresh_by_tf and the HTF
