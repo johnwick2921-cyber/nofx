@@ -3,8 +3,8 @@
 // against GET /api/health revision and warns on drift.
 import type { ReactNode } from 'react'
 
-// Stamped from the dispatch-101 follow-up binary (hook race class 130 + 🖥 by rev; planner tape NT8-only; scale-check adjacency, chart across the roll,
-// full-data rehydrate); see docs/superpowers/reports/2026-09-16-nt8-history-and-chart-depth.md.
+// Stamped from the shipped binary at boot time; see deploy/ for the bump step.
+// The guide top banner compares this against GET /api/health revision.
 export const GUIDE_BUILT_REV = '249ff3a5eea6f499c3590559cdd9afa88e4dd0b0'
 
 export interface Card {
