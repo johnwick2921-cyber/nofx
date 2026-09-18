@@ -19,7 +19,13 @@ describe('DayPlanEditor', () => {
     const next = onChange.mock.calls[0][0] as DayPlanConfig
     expect(next.plan_enabled).toBe(true)
     expect(next.max_levels).toBe(8) // spec default carried through
-    expect(next.acceptance_rule).toBe('5m_close')
+    // W-KNOB-PRUNE: folded knobs are not seeded — the engine's constants apply.
+    expect(next.acceptance_rule).toBeUndefined()
+    expect(next.scenario_cap).toBeUndefined()
+    expect(next.realign_cap).toBeUndefined()
+    expect(next.evening_digest).toBeUndefined()
+    expect(next.wake_min_interval_min).toBeUndefined()
+    expect(next.wake_on_level_events).toBeUndefined()
   })
 
   it('changing max levels writes through onChange', () => {
@@ -33,7 +39,7 @@ describe('DayPlanEditor', () => {
     )
   })
 
-  it('W-KNOB-UI: renders the structure-map and by-TF freshness toggles', () => {
+  it('W-KNOB-PRUNE: the folded/removed controls are gone, flip re-read and the one wake switch remain', () => {
     const onChange = vi.fn()
     render(
       <DayPlanEditor
@@ -42,36 +48,56 @@ describe('DayPlanEditor', () => {
         language="en"
       />
     )
-    const sm = screen.getByTestId('structure-map-toggle')
-    const ft = screen.getByTestId('fresh-by-tf-toggle')
+    expect(screen.queryByTestId('structure-map-toggle')).toBeNull()
+    expect(screen.queryByTestId('fresh-by-tf-toggle')).toBeNull()
+    expect(screen.queryByText(/HTF score multiplier/)).toBeNull()
+    expect(screen.queryByText(/^Max scenarios$/)).toBeNull()
+    expect(screen.queryByText(/^Acceptance$/)).toBeNull()
+    expect(screen.queryByText(/^Digest$/)).toBeNull()
+    expect(screen.queryByText(/Max re-alignments/)).toBeNull()
+    expect(screen.queryByText(/Wake on 15m zones/)).toBeNull()
+    expect(screen.queryByText(/Min wake interval/)).toBeNull()
+    expect(screen.queryByText(/Guarantee a 1h S\/D seat/)).toBeNull()
     const fr = screen.getByTestId('flip-reread-toggle')
-    expect(sm.getAttribute('aria-checked')).toBe('false')
-    expect(ft.getAttribute('aria-checked')).toBe('false')
     expect(fr.getAttribute('aria-checked')).toBe('false')
+    // absent = ON (mirrors the Go pointer-bool)
+    const wk = screen.getByTestId('wake-on-level-events-toggle')
+    expect(wk.getAttribute('aria-checked')).toBe('true')
   })
 
-  it('W-KNOB-UI: toggling calls update with the right key', () => {
+  it('W-KNOB-PRUNE: a stored folded value passes through a save untouched', () => {
     const onChange = vi.fn()
     render(
       <DayPlanEditor
-        config={{ plan_enabled: true }}
+        config={
+          {
+            plan_enabled: true,
+            structure_map: true,
+            scenario_cap: 5,
+            realign_cap: 10,
+            levels_fresh_by_tf: true,
+            wake_on_htf_ob: true,
+          } as DayPlanConfig
+        }
         onChange={onChange}
         language="en"
       />
     )
-    fireEvent.click(screen.getByTestId('structure-map-toggle'))
-    expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({ structure_map: true })
-    )
-    onChange.mockClear()
-    fireEvent.click(screen.getByTestId('fresh-by-tf-toggle'))
-    expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({ levels_fresh_by_tf: true })
-    )
-    onChange.mockClear()
     fireEvent.click(screen.getByTestId('flip-reread-toggle'))
     expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({ flip_reread: true })
+      expect.objectContaining({
+        flip_reread: true,
+        structure_map: true,
+        scenario_cap: 5,
+        realign_cap: 10,
+        levels_fresh_by_tf: true,
+        wake_on_htf_ob: true,
+      })
+    )
+    onChange.mockClear()
+    fireEvent.click(screen.getByTestId('wake-on-level-events-toggle'))
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ wake_on_level_events: false })
     )
   })
 

@@ -5844,3 +5844,46 @@ READ from the resolver: `🔴 t1_blackout=USD(default)` / `USD,EUR(saved)` /
   `kernel/clock_widen_cap_test.go`) keep their JPY BOJ event by passing
   `T1Currencies: [ALL]` explicitly — the class was born under the every-
   currency regime and the cap is asserted there, not the currency split.
+
+## CLASS 151 — A KNOB WITH NO CONTROL CAN STILL CARRY A VALUE THE OWNER SET, AND A REMOVAL THAT IGNORES IT CHANGES LIVE BEHAVIOUR SILENTLY (born with the Day Plan knob census 2026-08-19, ruled by the owner 2026-09-18 00:3x CT "full fix 6" on the Round 23/24 verdicts, feat/knob-prune, W-KNOB-PRUNE — not a bug class, a prune protocol)
+
+**Shape.** Fourteen Day Plan knobs were ruled dead or unneeded (7 remove, 5
+fold, 2 dead fields). Five of them were stored NON-default on the owner's live
+MNQ strategy (`structure_map:true`, `scenario_cap:5`, `realign_cap:10`,
+`wake_on_htf_ob:true`, `levels_fresh_by_tf:true`) and one on every strategy
+(`evening_digest:true`). A removal that deletes the field, the accessor and
+the control also deletes the stored value's EFFECT — the prompt, the wake
+set and the caps of the live trader change on the next boot, with no log,
+no diff in the Studio, and a green suite (the suite tests the new default).
+
+**Rule (L3 + L8 of the dispatch, now canon).** Before removing a knob: read
+the live stored values (`sqlite3 -readonly data.db "select name,
+json_extract(config,'$.day_plan') from strategies"`). A knob that is stored
+non-default anywhere is FOLDED, not deleted: the code path keeps the shipped
+default as a constant, the control goes, the JSON field stays readable, the
+stored value is honoured at read and logged once at trader load —
+`⚙ folded knob <name>=<value> honoured from stored config`
+(`store.DayPlanConfig.FoldedKnobLines`, registry status `folded`). Every
+removed or folded knob is pinned by a golden WRITTEN AT THE BASE COMMIT and
+re-run after the change (`kernel/knob_prune_pin_test.go`,
+`trader/knob_prune_pin_test.go`, `KNOB_PRUNE_WRITE_GOLDEN=1`), per stored
+shape (nil / `{}` / the Studio seed / the owner's row verbatim / the only
+all-off shape). A pin that is generated after the change proves only
+self-consistency (class 53).
+
+**Probes.**
+- `grep -rn 'json:"<leaf>' store/` → if the field is gone, `sqlite3
+  -readonly … json_extract` for the leaf must return only NULL / the default.
+- Registry: a leaf still in the struct must be classified (`TestKnobRegistryIsComplete`);
+  `folded` rows must name the reader the method-level detector finds
+  (`TestWakeKnobsAreLiveThroughTheirAccessors`).
+- Boot: the owner's trader must print one `⚙ folded knob` line per stored
+  non-default; zero lines on a default-only strategy.
+- A DELIBERATE behaviour change inside a prune (here `htf_score_multiplier`
+  1.2 → 1.0) is measured before the golden is overwritten: identity tape 0
+  seat / 0 order changes; stage-A 64 fixtures 33 change seat membership, 112
+  seated grades move — in the report, not discovered at the boot.
+- A coupling the collapse introduces (here `WakeOnHTFOrderBlocks` ANDed
+  with the single switch) gets its own pin
+  (`TestKnobPrunePin_WakeCandidates_SingleSwitchOwnsOB`) and a registry note,
+  even when inert for every stored strategy.
