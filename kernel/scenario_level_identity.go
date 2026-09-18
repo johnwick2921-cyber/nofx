@@ -50,7 +50,7 @@ func ReferenceAnchorKind(kind string) bool { return referenceAnchorKinds[kind] }
 // id, so the planner can author it and the executor resolves it against the
 // frozen map. The "ref|" prefix keeps it disjoint from strict ids.
 func ReferenceLevelID(symbol, kind string, lo, hi float64, originDate, tf string) *string {
-	if strings.TrimSpace(kind) == "" || lo <= 0 || hi <= 0 || math.IsNaN(lo) || math.IsInf(lo, 0) || math.IsNaN(hi) || math.IsInf(hi, 0) {
+	if strings.TrimSpace(kind) == "" || strings.TrimSpace(originDate) == "" || lo <= 0 || hi <= 0 || math.IsNaN(lo) || math.IsInf(lo, 0) || math.IsNaN(hi) || math.IsInf(hi, 0) {
 		return nil
 	}
 	raw := fmt.Sprintf("ref|%s|%s|%g|%g|%s|%s", symbol, kind, lo, hi, originDate, tf)
@@ -354,6 +354,11 @@ func EpisodeLevelID(l DetectedLevel, doc *PlanDoc) *string {
 	for _, sc := range doc.Scenarios {
 		named, ok := LevelByID(sc.LevelID, doc.IdentityLevels)
 		if !ok {
+			// W-GEOMETRY-REFUSAL (F3): a ref| id resolves through the reference
+			// lookup, so episodes link to reference-anchor scenarios too.
+			named, ok = LevelByReferenceID(sc.LevelID, doc.IdentityLevels)
+		}
+		if !ok {
 			continue
 		}
 		match := *named.ID == *own.ID
@@ -379,7 +384,9 @@ func EpisodeScenarioByID(id *string, doc *PlanDoc) *string {
 		return nil
 	}
 	if _, ok := LevelByID(id, doc.IdentityLevels); !ok {
-		return nil
+		if _, ok := LevelByReferenceID(id, doc.IdentityLevels); !ok {
+			return nil // W-GEOMETRY-REFUSAL (F3): ref| ids are real identities
+		}
 	}
 	var found *string
 	for _, sc := range doc.Scenarios {

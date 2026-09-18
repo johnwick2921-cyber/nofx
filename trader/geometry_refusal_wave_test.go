@@ -268,4 +268,105 @@ func TestGeometryRefBootLineReadsResolvedKnob(t *testing.T) {
 	if strings.Contains(GeometryRefBootLine(nil), "geom_ref_ids=off") {
 		t.Fatal("nil config must read on(default)")
 	}
+	on := true
+	if line := GeometryRefBootLine(&store.DayPlanConfig{GeometryReferenceLevels: &on}); !strings.Contains(line, "on(saved)") {
+		t.Fatalf("an explicit true is a SAVED value and must read on(saved): %s", line)
+	}
+}
+
+// oneSetupOnhDoc builds the F3 fixture: S1 reject at ONH carrying the ref| id,
+// identity map with the ONH line AS THE MAP EMITS IT (lo=hi=price, tf 1m, no
+// formation close), frozen map with the null-width ONH line zone + one complete
+// target. Entry 29897, authored stop/target below/above.
+func oneSetupOnhDoc(t *testing.T) (string, *string) {
+	t.Helper()
+	p := func(v float64) *float64 { return &v }
+	id := kernel.ReferenceLevelID("MNQ", "ONH", 29897, 29897, "2026-09-17", "1m")
+	identity := kernel.PlanLevel{Symbol: refStr("MNQ"), Kind: refStr("ONH"), Lo: p(29897), Hi: p(29897), OriginDate: refStr("2026-09-17"), TF: refStr("1m"), Label: "ONH", Price: 29897, ID: id, Names: []string{"ONH"}}
+	d := kernel.PlanDoc{
+		Bias:           kernel.PlanBias{Direction: "long"},
+		IdentityLevels: []kernel.PlanLevel{identity},
+		// StampAuthoredIdentity copies the machine metadata (kind, lo/hi, id)
+		// onto the model's levels — the fixture mirrors that shape, because
+		// LevelByReferenceID refuses a ref id on a kind-less level entry.
+		Levels: []kernel.PlanLevel{{Price: 29897, Label: "ONH", ID: id, Symbol: refStr("MNQ"), Kind: refStr("ONH"), Lo: p(29897), Hi: p(29897), OriginDate: refStr("2026-09-17"), TF: refStr("1m")}},
+		Zones: &kernel.LevelZoneMap{Zones: []kernel.LevelZone{
+			{Anchor: 29897, Incomplete: true, Sources: []kernel.ZoneSource{{Kind: "ONH", Price: 29897, Label: "ONH", TF: ""}}},
+			{Anchor: 29950, Lo: p(29950), Hi: p(29954), Sources: []kernel.ZoneSource{{Kind: "SUPPLY", Price: 29952, Label: "Supply·1h", TF: "1h"}}},
+		}},
+		Scenarios: []kernel.PlanScenario{{ID: "S1", LevelID: id, Condition: "reject", Direction: "long", Quality: "A", Trigger: "overnight high rejection", Invalid: "below 29897", Confirm: &kernel.PlanConfirm{Rule: "touch", RefPrice: 29897, Side: "above"}, Arm: &kernel.PlanArmSpec{Enabled: true, Entry: 29897, Stop: 29860, Target: 29950}}},
+	}
+	b, err := json.Marshal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b), id
+}
+
+// TestOneSetupRefIDRejectPlayArms is the CTO's F3: with one-setup ON (its
+// shipped default) and the knob ON, the ref-id ONH reject play must pass the
+// one-setup consult (not level_unresolved) and ARM with the zone-edge stop
+// (29897 − buffer 5 = 29892). Knob OFF → refused as today. RED before the
+// oneSetupLevelRef fallback: declined every cycle with level_unresolved.
+func TestOneSetupRefIDRejectPlayArms(t *testing.T) {
+	docJSON, id := oneSetupOnhDoc(t)
+	drive := func(geomOff bool) armPathGolden {
+		oneSetupFixtureDocOverride = docJSON
+		mutate := func(c *store.StrategyConfig) {
+			// one-setup stays ON (the F3 point) — unlike the geometry-isolation
+			// tests, nothing calls oneSetupOff here.
+			structuralTestPolicy(c, 5)
+			if geomOff {
+				off := false
+				c.DayPlan.GeometryReferenceLevels = &off
+			}
+		}
+		hook := func(at *AutoTrader, _ *store.Store, _ string) {
+			at.oneSetupFactsForTest = func(now time.Time) oneSetupTestFacts {
+				return oneSetupTestFacts{Price: 29897, BandPts: 100, Candidates: []kernel.MapCandidate{{ID: id, Identity: kernel.PlanLevel{Symbol: refStr("MNQ"), Kind: refStr("ONH"), Lo: refPtr(29897), Hi: refPtr(29897), OriginDate: refStr("2026-09-17"), TF: refStr("1m"), Label: "ONH", Price: 29897, ID: id, Names: []string{"ONH"}}, Price: 29897, Names: []string{"ONH"}, Grade: "A"}}, Permission: map[string]kernel.FadeVerdict{"S1": {Evaluated: true, Permitted: true}}}
+			}
+			// Same tape trick as structuralFixture: close AT the entry so the
+			// fade's invalidated-through-the-level gate does not fire on a tape
+			// written for the other fixture's entry price.
+			originalTape := market.FuturesBarsProvider
+			market.FuturesBarsProvider = func(_ string, _ string, _ int) []market.Kline {
+				bars := originalTape("MNQ", "1m", 80)
+				for i := range bars {
+					bars[i].Open = 29897
+					bars[i].Close = 29897
+					bars[i].High = 29897 + 10
+					bars[i].Low = 29897 - 10
+				}
+				return bars
+			}
+		}
+		g, _, _, _ := driveOneSetupArmPath(t, mutate, hook)
+		return g
+	}
+	g := drive(false)
+	if len(g.Rows) != 1 || g.Rows[0]["stop"] != 29892.0 {
+		t.Fatalf("one-setup ON + knob ON must ARM the ONH reject play with the zone-edge stop 29892 (29897−5); rows=%+v", g.Rows)
+	}
+	goff := drive(true)
+	if len(goff.Rows) != 0 {
+		t.Fatalf("knob OFF must refuse as today; rows=%+v", goff.Rows)
+	}
+}
+
+// TestGeometryRefWildcardAmbiguousAcrossTF (F4): identity eVWAP tf 1m; zone0
+// tf "" (wildcard) + zone1 tf "1h" at the same price+label → ambiguous, never a
+// pick of zone0.
+func TestGeometryRefWildcardAmbiguousAcrossTF(t *testing.T) {
+	doc, id := refAnchorDoc("")
+	doc.Zones.Zones = append(doc.Zones.Zones, kernel.LevelZone{
+		Lo: refPtr(29400), Hi: refPtr(29410),
+		Sources: []kernel.ZoneSource{{Price: 29405, Label: "eVWAP", TF: "1h"}},
+	})
+	sc := kernel.PlanScenario{ID: "S1", LevelID: id}
+	if idx, why := ArmGeometryVerdict(doc, sc, true); idx != -1 || why != "entry_zone_ambiguous" {
+		t.Fatalf("wildcard must treat a same-price+label source at another tf as ambiguous, got idx=%d why=%s", idx, why)
+	}
+	if idx, why := ResolveEntryGeometryZone(doc, sc); why == "" {
+		t.Fatalf("legacy must not admit, got idx=%d", idx)
+	}
 }

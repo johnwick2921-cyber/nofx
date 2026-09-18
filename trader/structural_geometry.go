@@ -90,6 +90,28 @@ func resolveEntryGeometryZone(doc *kernel.PlanDoc, sc kernel.PlanScenario, geome
 	if match < 0 {
 		return -1, "entry_source_not_in_frozen_zones"
 	}
+	if geometryRefLevels {
+		// W-GEOMETRY-REFUSAL (F4): in wildcard mode the tf no longer disambiguates,
+		// so ANY other zone carrying a same-price+label source makes the match
+		// ambiguous — refuse, never pick.
+		for i, z := range doc.Zones.Zones {
+			if i == match {
+				continue
+			}
+			for _, s := range z.Sources {
+				if math.Abs(s.Price-identity.Price) > 1e-7 {
+					continue
+				}
+				named := s.Label == identity.Label
+				for _, name := range identity.Names {
+					named = named || s.Label == name
+				}
+				if named {
+					return -1, "entry_zone_ambiguous"
+				}
+			}
+		}
+	}
 	if !usableGeometryZone(doc.Zones.Zones[match]) {
 		// W-GEOMETRY-REFUSAL (b1, the admission half): a matched NULL-WIDTH
 		// reference LINE (ONH/ONL/RTH/VWAP-family — lo/hi nil, incomplete_width,

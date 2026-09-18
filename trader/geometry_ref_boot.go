@@ -1,8 +1,6 @@
 package trader
 
 import (
-	"fmt"
-
 	"nofx/store"
 )
 
@@ -12,9 +10,13 @@ import (
 // explicit false = OFF (today's behaviour byte-identical). The process-level
 // 🎛 entry law line prints n/a because the knob is per-strategy.
 func GeometryRefBootLine(dp *store.DayPlanConfig) string {
-	state := "on(default)"
-	if !dp.GeometryRefIDsEnabled() {
-		state = "off"
+	// nil config or nil pointer = the OWNER DEFAULT (ON, ruling 08:1x CT); an
+	// explicit true is a SAVED value and must read differently (F6).
+	if dp == nil || dp.GeometryReferenceLevels == nil {
+		return "🎛 geom_ref_ids=on(default) (day_plan.geometry_reference_levels; W-GEOMETRY-REFUSAL)"
 	}
-	return fmt.Sprintf("🎛 geom_ref_ids=%s (day_plan.geometry_reference_levels; W-GEOMETRY-REFUSAL)", state)
+	if !*dp.GeometryReferenceLevels {
+		return "🎛 geom_ref_ids=off (day_plan.geometry_reference_levels; W-GEOMETRY-REFUSAL)"
+	}
+	return "🎛 geom_ref_ids=on(saved) (day_plan.geometry_reference_levels; W-GEOMETRY-REFUSAL)"
 }
