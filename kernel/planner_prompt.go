@@ -46,7 +46,11 @@ type PlannerInput struct {
 	// ATR5m is the 5-minute Wilder ATR14 — the SAME series the confirm and stop
 	// paths use (StaleConfirmATR5m). W3 renders map distances in it. Zero means
 	// it could not be computed, and the map prints n/a rather than a 0 (A24).
-	ATR5m            float64
+	ATR5m float64
+	// GeometryRefIDs (W-GEOMETRY-REFUSAL, 2026-09-18) — the resolved
+	// day_plan.geometry_reference_levels knob: true = reference-anchor levels
+	// with an unknown formation close carry a stable id (never NULL).
+	GeometryRefIDs   bool
 	Regime           RegimeBlock
 	Levels           []ScoredLevel // Go-ranked, graded (P1.5) — the decision-critical block
 	StructureSummary []string      // one line per timeframe
@@ -570,6 +574,13 @@ func BuildPlannerPrompt(in PlannerInput) string {
 		// shortlist in reachability order. Rendered BELOW the ranked table, which
 		// is left exactly as the scorer produced it (the score is untouched).
 		candidates := BuildMapCandidates(in.Levels, in.Price, in.ATR5m, MapCandidateOpts{})
+		// W-GEOMETRY-REFUSAL (2026-09-18) — with day_plan.geometry_reference_levels
+		// ON (the owner's default), reference-anchor levels whose formation close
+		// is unknown get a STABLE sha id instead of NULL, so the planner can author
+		// ONH/ONL reject plays the executor can resolve. OFF → byte-identical map.
+		if in.GeometryRefIDs {
+			EnsureReferenceLevelIDs(candidates)
+		}
 		mb := RenderIdentityMapBlock(candidates, in.Price)
 		if in.Zones != nil {
 			mb = RenderScoredReferenceBlock(candidates, in.Price)

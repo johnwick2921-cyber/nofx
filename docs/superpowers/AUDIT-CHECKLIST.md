@@ -5922,6 +5922,48 @@ scheduler working as designed; only "no trade since yesterday" made it a bug.
 **Fix.** This docs wave (`.env.example` line, PARTNER-BUILD section, this
 class); the guide clause for the seam is OWED at the next boot (guide law).
 
+## CLASS 153 — A SILENT STRUCTURAL-GEOMETRY REFUSAL MADE EVERY reject PLAY AT A REFERENCE LEVEL UNARMABLE (born 2026-09-12 with 540c9e8d, found 2026-09-18 05:42 CT LONDON v1 S1, fix/geometry-refusal, W-GEOMETRY-REFUSAL)
+
+**Shape.** The geometry gate refuses with an INFO-only composition line plus a
+system_config counter — no WARN, no ⚔️ arm REFUSED. The evaluator meanwhile prints
+`🎯 scenario S1 → ≈triggered`, so the journal reads "condition met, executor idle".
+Two machine roots made every reject play at a session reference level unarmable:
+(1) the identity map emits id=NULL for reference levels whose source window is
+still developing (levelidentity.ID requires formed_close_ms; ONH/ONL mid-window
+have none), the prompt instructs null, and the resolver's legacy:no_level_id path
+accepts it WARN-only; (2) the frozen-zone match skips a source whose tf differs
+from the identity tf, and VWAP-family/ONH sources carry tf "" against identity
+tf "1m".
+
+**How it hid.** Refusal and evaluation lived in two different voices: a counter
+that no journal reader sees, and an evaluator that says the condition fired. 95
+refusals since 09-13, 0 WARN lines, 0 trades.
+
+**Probes.**
+- `SELECT count(*) FROM system_config WHERE key LIKE 'structural_geometry:%' AND
+  value LIKE '%"reason":"no_provenance"%'` vs the total; and in the journal
+  `grep -c '"reason":"no_provenance"'` vs `grep -c '⚔️ arm REFUSED.*geometry'` —
+  must NOT be N vs 0. Every refusal class needs a WARN voice de-duped by key.
+- For every identity id a map emits NULL, ask what the PLANNER is instructed to
+  write and whether the executor can resolve it — a WARN-only accept at the write
+  site is a refusal at the arm site.
+- A machine-written hint ("author null when the map id is NULL") is a contract
+  that downstream enforcers must be able to honour.
+
+**Fix shape.** W-GEOMETRY-REFUSAL (executor side): (a) one de-duped
+`⚔️ arm REFUSED … geometry_<reason> (<detail>) entry=… level_id=…` WARN per
+(geometry key, reason) change; (b) behind day_plan.geometry_reference_levels
+(default ON, owner ruling "both fix now" 2026-09-18): (b1) stable `ref|` sha ids
+for reference-anchor kinds without a formation close (resolved by
+LevelByReferenceID; strict LevelByID untouched; stored NULL ids keep the legacy
+path), (b2) an empty zone-source tf is a wildcard in the frozen-zone match, and
+a matched NULL-WIDTH reference LINE is admitted as a zero-width band at the
+anchor so the structural stop composes (line − buffer) — without the admission
+half, the wildcard merely re-labelled the refusal (55 source_not_frozen became
+58 unusable and nothing became armable). DS-101 owns the write-time feasibility
+hint; the executor seam for both lanes is
+trader.ArmGeometryVerdict(doc, sc, geometryRefLevels).
+
 ## CLASS NN — A WRITE-TIME FEASIBILITY WARN THAT SAYS "THE GATE WILL REFUSE IT" AND WRITES THE PLAN ANYWAY (born with the arm-feasibility WARN 2026-08-28, found by the owner 2026-09-18 08:3x CT "fix all", W-WRITE-TIME-FEASIBILITY, fix/write-time-feasibility; number assigned at merge)
 
 **Shape.** `kernel.ArmFeasibilityWarnings` (F4, 2026-08-28) computed, at plan
@@ -5958,7 +6000,9 @@ write — source: DS-104 replay, bridge msg 1789737991919-898085): attempts
 the refusal, the numbers and the fix vocabulary; the last attempt writes the
 unarmable arms with `arm.enabled=false` + `arm_disabled_reason` (the reason
 CLASS: min_sl / rr / geometry_<code> / stop_side_wrong) + one WARN + the
-`arm_disabled_at_write:<trader>:<date>:<session>:<class>` counter. The check
+`arm_disabled_at_write:<trader>:<date>:<session>:<class>` counter. The
+classes reuse the executor's own armRefusalClass, which can also yield
+`other` / `not_armable` / `veto` — the short list above is not exhaustive. The check
 runs LAST among the validators so it never pre-empts a hard reject — the
 cost of that ordering is one extra model round-trip when an earlier validator
 has already burned attempts 1..N-1 (a two-defect model writes on attempt 2

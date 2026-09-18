@@ -222,31 +222,121 @@ func TestGeometryRefIDsKnobResolution(t *testing.T) {
 	}
 }
 
-// CTO heads-up (msg 1789746728638-241104) — the doc's zone_map is byte-identical
-// before and after writeTimeFeasibilityVerdicts AND after the disable path: the
-// write site never mutates the frozen map.
+// CTO heads-up (msg 1789746728638-241104) + RECHECK item 2 — the doc's
+// zone_map is byte-identical before/after the verdicts AND after the disable
+// path, on a REJECT fixture that actually enters the geometry path; the STORED
+// row's zone_map equals facts.Zones exactly.
 func TestWriteTimeFeasibilityNeverMutatesZoneMap(t *testing.T) {
 	at := feasPlannerTrader(t, nil)
 	feasStubBars(t)
-	lo, hi := 15470.0, 15490.0
-	zones := &kernel.LevelZoneMap{Zones: []kernel.LevelZone{{
-		Anchor: 15480, Lo: &lo, Hi: &hi,
+	// In-memory half: verdicts + the disable path leave the map byte-identical.
+	uLo, uHi := 15470.0, 15490.0
+	unitZones := &kernel.LevelZoneMap{Zones: []kernel.LevelZone{{
+		Anchor:  15480,
+		Lo:      &uLo,
+		Hi:      &uHi,
 		Sources: []kernel.ZoneSource{{Price: 15480, Label: "PWL", TF: "1m"}},
 	}}}
-	var doc kernel.PlanDoc
-	if err := json.Unmarshal([]byte(infeasibleFeasPlanJSON), &doc); err != nil {
+	var unitDoc kernel.PlanDoc
+	if err := json.Unmarshal([]byte(infeasibleFeasPlanJSON), &unitDoc); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	doc.Zones = zones
-	before, _ := json.Marshal(zones)
-	_ = at.writeTimeFeasibilityVerdicts(&doc, 8, at.config.StrategyConfig, "NY")
-	mid, _ := json.Marshal(doc.Zones)
-	at.applyWriteTimeArmDisable(&doc, []writeTimeFeasibilityIssue{{Scenario: "S1", Class: "rr", Verbose: "R:R 1.00 below arm min 2.00"}}, "2026-08-14", "NY")
-	after, _ := json.Marshal(doc.Zones)
+	unitDoc.Zones = unitZones
+	before, _ := json.Marshal(unitZones)
+	_ = at.writeTimeFeasibilityVerdicts(&unitDoc, 8, at.config.StrategyConfig, "NY")
+	mid, _ := json.Marshal(unitDoc.Zones)
+	at.applyWriteTimeArmDisable(&unitDoc, []writeTimeFeasibilityIssue{{Scenario: "S1", Class: "rr", Verbose: "R:R 1.00 below arm min 2.00"}}, "2026-08-14", "NY")
+	after, _ := json.Marshal(unitDoc.Zones)
 	if string(mid) != string(before) || string(after) != string(before) {
 		t.Fatalf("zone_map mutated: before=%s mid=%s after=%s", before, mid, after)
 	}
+	// Stored-row half: a reject at a real zone runs the whole pipeline and the
+	// stored zone_map equals facts.Zones exactly.
+	now := time.Date(2026, 9, 10, 20, 0, 0, 0, kernel.CTLocation())
+	l := identityTestLevel(now, 15480)
+	l.Label = "PWL"
+	candidates := kernel.BuildMapCandidates([]kernel.ScoredLevel{{DetectedLevel: l, Grade: "A", Score: 1}}, 15480, 10, kernel.MapCandidateOpts{})
+	if len(candidates) != 1 || candidates[0].ID == nil {
+		t.Fatalf("map did not expose identity: %+v", candidates)
+	}
+	lo, hi := 15470.0, 15490.0
+	tLo, tHi := 15540.0, 15560.0
+	zones := &kernel.LevelZoneMap{Zones: []kernel.LevelZone{
+		{Anchor: 15480, Lo: &lo, Hi: &hi, Sources: []kernel.ZoneSource{{Price: 15480, Label: "PWL", TF: l.FormationTF}}},
+		{Anchor: 15550, Lo: &tLo, Hi: &tHi, Sources: []kernel.ZoneSource{{Price: 15550, Label: "RN 15550", TF: l.FormationTF}}},
+	}}
+	facts := kernel.PlanFacts{Price: 15550, DATR: 300, Zones: zones, IdentityMap: candidates}
+	plan := strings.Replace(class39LegsPlanJSON("15550"),
+		`"condition": "reject", "direction": "long"`,
+		`"condition": "reject", "level_id": "`+*candidates[0].ID+`", "direction": "long"`, 1)
+	_, lc, err := at.runPlannerReadCoreWithFactsGradesClock(feasClock(), "NY", "2026-08-14", "owner_reset",
+		"deepseek-v4-pro", "hashZP", "", "", "", "FULLPROMPT", facts, nil,
+		map[float64]string{15480: "PWL", 15700: "RN 15700"}, nil, true,
+		func(userPrompt string) (string, error) { return plan, nil })
+	if err != nil || lc != "active" {
+		t.Fatalf("real-zone reject must write active: lc=%q err=%v", lc, err)
+	}
+	want, _ := json.Marshal(zones)
+	row, _ := at.store.Plan().GetLatestPlanForSession("2026-08-14", "NY")
+	var doc kernel.PlanDoc
+	if err := json.Unmarshal([]byte(row.Doc), &doc); err != nil {
+		t.Fatalf("doc unmarshal: %v", err)
+	}
+	if doc.Zones == nil {
+		t.Fatalf("stored doc lost its zone_map: %s", row.Doc)
+	}
+	got, _ := json.Marshal(doc.Zones)
+	if string(got) != string(want) {
+		t.Fatalf("stored zone_map mutated: want=%s got=%s", want, got)
+	}
 }
+
+// CTO RECHECK item 5 (deferred parity, now buildable on the merged dev): the
+// write site and ArmGeometryVerdict agree on a ref| ONH reject play — knob ON
+// admits (no issue), OFF refuses. Same doc, same knob, both functions.
+func TestWriteTimeFeasibilityParityWithArmGeometryVerdict(t *testing.T) {
+	p := func(v float64) *float64 { return &v }
+	id := kernel.ReferenceLevelID("MNQ", "ONH", 29897, 29897, "2026-09-17", "1m")
+	sym, kind := "MNQ", "ONH"
+	identity := kernel.PlanLevel{Symbol: &sym, Kind: &kind, Lo: p(29897), Hi: p(29897),
+		OriginDate: pStr("2026-09-17"), TF: pStr("1m"), Label: "ONH", Price: 29897, ID: id, Names: []string{"ONH"}}
+	doc := &kernel.PlanDoc{
+		IdentityLevels: []kernel.PlanLevel{identity},
+		Zones: &kernel.LevelZoneMap{Zones: []kernel.LevelZone{
+			{Anchor: 29897, Incomplete: true, Sources: []kernel.ZoneSource{{Kind: "ONH", Price: 29897, Label: "ONH", TF: ""}}},
+			{Anchor: 29950, Lo: p(29950), Hi: p(29954), Sources: []kernel.ZoneSource{{Kind: "SUPPLY", Price: 29952, Label: "Supply·1h", TF: "1h"}}},
+		}},
+		Scenarios: []kernel.PlanScenario{{ID: "S1", LevelID: id, Condition: "reject", Direction: "long",
+			Arm: &kernel.PlanArmSpec{Enabled: true, Entry: 29897, Stop: 29887, Target: 29950}}},
+	}
+	for _, tc := range []struct {
+		name    string
+		on      bool
+		wantBad bool
+	}{
+		{"ON admits", true, false},
+		{"OFF refuses", false, true},
+	} {
+		at := feasPlannerTrader(t, nil)
+		if !tc.on {
+			f := false
+			at.config.StrategyConfig.DayPlan.GeometryReferenceLevels = &f
+		}
+		issues := at.writeTimeFeasibilityVerdicts(doc, 20, at.config.StrategyConfig, "NY")
+		if tc.wantBad && len(issues) == 0 {
+			t.Fatalf("%s: write site must refuse the null-width line", tc.name)
+		}
+		if !tc.wantBad && len(issues) != 0 {
+			t.Fatalf("%s: write site must admit the ref| ONH play, got %+v", tc.name, issues)
+		}
+		_, why := ArmGeometryVerdict(doc, doc.Scenarios[0], tc.on)
+		if (why != "") != tc.wantBad {
+			t.Fatalf("%s: ArmGeometryVerdict disagrees with the write site (why=%q)", tc.name, why)
+		}
+	}
+}
+
+func pStr(s string) *string { return &s }
 
 // (d) KNOB OFF → byte-identical behaviour: the arm writes enabled on attempt 1,
 // no repair, no disabled_reason stamp.

@@ -102,10 +102,9 @@ func (at *AutoTrader) writeTimeFeasibilityVerdicts(d *kernel.PlanDoc, atr5m floa
 			// cfg.DayPlan.GeometryRefIDsEnabled(), nil = ON).
 			policy := store.ResolveStructuralStop(cfg, at.futuresSymbol())
 			policy.MinRR = at.armMinRRFor(cfg)
-			refIDs := false
-			if dp := at.dayPlanCfg(); dp != nil {
-				refIDs = dp.GeometryRefIDsEnabled()
-			}
+			// ONE resolution site (CTO RECHECK item 1): the nil-receiver-safe
+			// seam, exactly the form the executor uses.
+			refIDs := at.dayPlanCfg().GeometryRefIDsEnabled()
 			comp := composeArmStop(sc.Direction, leg.Entry, leg.Stop, atr5m,
 				market.FuturesTickSize(at.futuresSymbol()), d.Levels, kernel.MinSLATRMult(),
 				kernel.MinSLTickClearance, armStopAnchorMaxATR(),
