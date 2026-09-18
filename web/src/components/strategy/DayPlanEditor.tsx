@@ -275,6 +275,10 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
     }
   }, [])
 
+  // W-T1-CURRENCIES — the comma-separated text the owner is typing; the
+  // parsed, upper-cased list is what persists (empty → field absent = USD).
+  const [t1Text, setT1Text] = useState((cfg.t1_currencies ?? []).join(','))
+
   const update = <K extends keyof DayPlanConfig>(
     key: K,
     value: DayPlanConfig[K]
@@ -562,6 +566,30 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
               onChange={(v) => update('flip_reread', v)}
               disabled={bodyDisabled}
               testId="flip-reread-toggle"
+            />
+          </FieldRow>
+          <FieldRow label={tp('t1Currencies', language)}>
+            <input
+              type="text"
+              data-testid="t1-currencies-input"
+              value={t1Text}
+              placeholder="USD"
+              disabled={bodyDisabled}
+              onChange={(e) => {
+                setT1Text(e.target.value)
+                const list = e.target.value
+                  .split(',')
+                  .map((c) => c.trim().toUpperCase())
+                  .filter((c) => c.length > 0)
+                update('t1_currencies', list.length > 0 ? list : undefined)
+              }}
+              className="vl-num text-[11px] w-40 px-1.5 py-0.5 text-right"
+              style={{
+                background: 'var(--vl-card-2)',
+                border: '1px solid var(--vl-hair)',
+                borderRadius: 'var(--vl-radius-chip)',
+                color: 'var(--vl-ivory)',
+              }}
             />
           </FieldRow>
           <FieldRow label={tp('maxReplans', language)}>

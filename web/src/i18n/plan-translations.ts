@@ -462,6 +462,12 @@ export const planStrings = {
     zh: '翻转重读 — 触发翻转条件时计划仍转入休眠，然后一次免费重读按翻转方向重新制定',
     id: 'Flip re-read — saat kondisi flip terpicu, plan tetap dormant, lalu SATU re-read gratis menyusun arah yang baru',
   },
+  t1Currencies: {
+    en: 'Red-news hard-block currencies — comma-separated (default USD: only USD red events block; others show as advisory; ALL = every currency)',
+    zh: '红色新闻硬封锁货币 — 逗号分隔（默认 USD：仅美元红色事件封锁；其他仅提示；ALL = 全部货币）',
+    id: 'Mata uang blokir keras berita merah — pisahkan koma (default USD: hanya event merah USD memblokir; lainnya hanya penasihat; ALL = semua)',
+  },
+  noTradeAdvisory: { en: 'Advisory', zh: '提示', id: 'Penasihat' },
   maxScenarios: { en: 'Max scenarios', zh: '最大情景数', id: 'Maks skenario' },
   maxReplans: {
     en: 'Max re-plans',

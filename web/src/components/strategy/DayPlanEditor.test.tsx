@@ -75,6 +75,41 @@ describe('DayPlanEditor', () => {
     )
   })
 
+  it('W-T1-CURRENCIES: the currency field parses a comma list, upper-cases, and clears to absent (default USD)', () => {
+    const onChange = vi.fn()
+    render(
+      <DayPlanEditor
+        config={{ plan_enabled: true }}
+        onChange={onChange}
+        language="en"
+      />
+    )
+    const input = screen.getByTestId('t1-currencies-input') as HTMLInputElement
+    expect(input.placeholder).toBe('USD')
+    expect(input.value).toBe('')
+    fireEvent.change(input, { target: { value: 'usd, eur ,' } })
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ t1_currencies: ['USD', 'EUR'] })
+    )
+    onChange.mockClear()
+    fireEvent.change(input, { target: { value: '' } })
+    const cleared = onChange.mock.calls[0][0] as DayPlanConfig
+    expect(cleared.t1_currencies).toBeUndefined()
+  })
+
+  it('W-T1-CURRENCIES: a saved list renders in the field', () => {
+    render(
+      <DayPlanEditor
+        config={{ plan_enabled: true, t1_currencies: ['ALL'] }}
+        onChange={vi.fn()}
+        language="en"
+      />
+    )
+    expect(
+      (screen.getByTestId('t1-currencies-input') as HTMLInputElement).value
+    ).toBe('ALL')
+  })
+
   it('a per-session tri-state knob sets then inherits (clears) the field', () => {
     const onChange = vi.fn()
     const cfg: DayPlanConfig = { plan_enabled: true }
