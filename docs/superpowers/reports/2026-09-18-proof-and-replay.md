@@ -283,7 +283,68 @@ worktree (removed after). **All PASS + measured drift** [A]:
    guard itself (ids computed with `levelidentity.ID`, so `LevelByID` succeeds
    and the guard is what fires).
 
-Nothing else bridged yet; rolling.
+**Item 2c — PR #175 final head 6adedf07 (DS-102 F8: local-band admission,
+local zones copy).** Verified in detached worktree (removed after). **All PASS**
+[A], sent 17:29:44Z:
+
+1. PASS — `go test ./... -count=1` FULL = 35 ok / 0 FAIL; `gofmt -l` empty over
+   the changed .go files. (My throwaway six-order test lives under docs/ and is
+   green; removed with the worktree.)
+2. Named tails: `TestGeometryRefAdmissionDoesNotMutateSharedDoc` PASS,
+   `TestGeometryRefWildcardDoesNotFlagMergedNames` PASS,
+   `TestGeometryRefIDsOnhRejectPlayAdmitted` PASS,
+   `TestOneSetupRefIDRejectPlayArms` **SKIP — inside the lunch no-trade window
+   12:00–13:30 CT (geometry_refusal_wave_test.go:416)**; reported as SKIP, not
+   PASS.
+3. PASS — six-order adversarial (throwaway `docs/ds104_sixorder_test.go`): doc
+   with three reject scenarios (ONH ref| long, Supply short, Demand long)
+   composed in all 6 orders → every scenario's (stop,target) identical across
+   orders and the marshalled `doc.Zones` byte-identical after each.
+   (onh 95.50/109.50, sup 140.00/0, dem 60.00/0 — the 0 targets are my synthetic
+   map having no complete zone on that side, not a mutation.)
+4. PASS — Replay Table 2 verdict maps at 6adedf07 vs 99768755 on the BACKUP:
+   **IDENTICAL, 0 rows moved** — 64 ADMIT / 24
+   `entry_zone_edges_or_provenance_unusable` / 19 `scenario_level_id_missing` /
+   2 ambiguous at BOTH heads. DS-102's 68/24/20/2 is the live DB (114 rows); the
+   backup is the 02:25 CT snapshot (109 rows), so my absolute counts are −4
+   ADMIT / −1 missing — population, not a head delta. No regressions.
+
+**Item 3c — PR #176 round-2 head 9018ca85 (DS-101 GeometryRefIDs in the
+write-site context).** Verified in detached worktree (removed after). **All PASS
+with one mandatory merge resolution** [A], sent 17:29:51Z:
+
+1. PASS — `go test ./... -count=1` FULL = 35 ok / 0 FAIL; `gofmt -l` empty over
+   the changed .go files.
+2. PASS — named tails: `TestWriteTimeFeasibilityNeverMutatesZoneMap`,
+   `TestWriteTimeFeasibilityHintRedToGreen`,
+   `TestWriteTimeFeasibilityLastAttemptDisablesArm`,
+   `TestGeometryRefIDsKnobResolution` all PASS.
+3. **MERGED HEAD FAILS TO COMPILE AS MERGED** — dry-merge 9018ca85 +
+   fix/geometry-refusal@6adedf07: `store/strategy.go` unions to ONE
+   `GeometryReferenceLevels` field + ONE `GeometryRefIDsEnabled()` resolver
+   (DS-101 named their copy identically on purpose — no duplicate there), BUT
+   `store/knob_registry_table.go:187` git-AUTO-MERGES with NO conflict marker
+   (both branches appended a `"geometry_reference_levels"` registry row at
+   different lines) and `go build` FAILS: `duplicate key
+   "geometry_reference_levels" in map literal`. DS-101's carried row claims
+   "identical to DS-102's row" — **FALSE**, the Consumers lists differ. This is
+   the silent-compile-break hazard class the CTO asked about, in a file outside
+   the 5-file conflict set. Resolution: delete the carried row, keep DS-102's
+   canonical row → `go build` rc=0, `go vet` rc=0.
+   Throwaway at the resolved merged tree: ONH ref| fixture knob ON → write site
+   issues EMPTY + executor ADMITS idx=0; knob OFF → write site
+   `geometry_no_provenance (identity_not_valid_in_frozen_map)` + executor
+   refusal (the SAME knob threads both); sweep_reclaim leg with raw stop inside
+   the 1.5×ATR5m floor → write-site geometry issues EMPTY (only an unrelated
+   wait_confirm class). One nuance recorded: the authored arm must still carry
+   exact stop/target (`PlanArmSpec.Validate`), geometry composes at gate time —
+   fixture authored 29892/29950.
+4. PASS-with-note — their re-issued replay numbers are TRUE on the LIVE DB
+   (read-only): R:R 3 / geometry 72 / stop_side 6 / none 95 / no_arm 33, exact.
+   On the BACKUP copy I get R:R 3 / geometry 67 / stop_side 6 / none 93 /
+   no_arm 33 — the −5 geometry / −2 none is population: 7 plans written after
+   the 02:25 CT snapshot. Recommendation for the real merge: delete the carried
+   registry row; nothing else blocks.
 
 ## E. UNKNOWNS / NOT MEASURED
 
