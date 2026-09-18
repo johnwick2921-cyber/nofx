@@ -7,13 +7,87 @@ import (
 	"time"
 
 	"nofx/kernel"
-	"nofx/market"
 	"nofx/levelidentity"
+	"nofx/market"
 	"nofx/store"
 )
 
 // W-GEOMETRY-REFUSAL (2026-09-18) — executor-side tests. (a) the WARN, (b1)
 // stable reference ids, (b2) the empty-tf wildcard, (b4) OFF byte-identical.
+
+// TestGeometryRefIDsOnhRejectPlayAdmitted is the CTO's merge question
+// (2026-09-18 09:2x CT): a plan authored TODAY at ONH carrying the ref| id must
+// be ADMITTED — the stop composed from the structural stop rule (line − buffer,
+// long), the target from the first distinct complete zone. The frozen map
+// stores a reference LINE as lo/hi NULL + incomplete_width (measured on the
+// owner's 09-18 LONDON v1 [A]); the knob synthesizes the zero-width band.
+// OFF refuses byte-identical.
+func TestGeometryRefIDsOnhRejectPlayAdmitted(t *testing.T) {
+	p := func(v float64) *float64 { return &v }
+	// The ONH identity line AS THE MAP EMITS IT for a reference kind:
+	// lo=hi=price, tf filled from the base (1m), no formation close, ref| id.
+	id := kernel.ReferenceLevelID("MNQ", "ONH", 29897, 29897, "2026-09-17", "1m")
+	identity := kernel.PlanLevel{Symbol: refStr("MNQ"), Kind: refStr("ONH"), Lo: p(29897), Hi: p(29897), OriginDate: refStr("2026-09-17"), TF: refStr("1m"), Label: "ONH", Price: 29897, ID: id, Names: []string{"ONH"}}
+	// The frozen map: ONH as a NULL-WIDTH line (lo/hi null, incomplete_width),
+	// source tf "" — and one complete target zone above.
+	doc := &kernel.PlanDoc{
+		IdentityLevels: []kernel.PlanLevel{identity},
+		Zones: &kernel.LevelZoneMap{Zones: []kernel.LevelZone{
+			{Anchor: 29897, Incomplete: true, Sources: []kernel.ZoneSource{{Kind: "ONH", Price: 29897, Label: "ONH", TF: ""}}},
+			{Anchor: 29950, Lo: p(29950), Hi: p(29954), Sources: []kernel.ZoneSource{{Kind: "SUPPLY", Price: 29952, Label: "Supply·1h", TF: "1h"}}},
+		}},
+	}
+	sc := kernel.PlanScenario{ID: "S1", LevelID: id, Condition: "reject", Direction: "long"}
+
+	// OFF (legacy): the line is unusable → refused.
+	if idx, why := ArmGeometryVerdict(doc, sc, false); why == "" {
+		t.Fatalf("knob OFF must refuse the null-width line (today's behaviour), got idx=%d", idx)
+	}
+	// ON: admitted at zone 0.
+	idx, why := ArmGeometryVerdict(doc, sc, true)
+	if why != "" || idx != 0 {
+		t.Fatalf("a NEW ONH reject play must be ADMITTED with the knob ON: idx=%d why=%s", idx, why)
+	}
+	// The stop must be composed from the structural stop rule: line − buffer,
+	// and the target = first distinct complete zone above.
+	policy := store.StructuralStopPolicy{BufferPoints: 5, BufferKnown: true, CostPoints: 2, CostKnown: true, MinRR: 2}
+	r := ComposeLevelFadeGeometryWith(doc, sc, kernel.PlanArmLeg{Entry: 29897}, policy, 20, 0.25, 2, true)
+	if r.Reason != "" {
+		t.Fatalf("the admitted ONH play must compose, got refuse: %s (%s)", r.Reason, r.Detail)
+	}
+	if r.Stop == nil || *r.Stop != 29892 {
+		t.Fatalf("stop must be ONH − buffer (29897−5=29892), got %v", r.Stop)
+	}
+	if r.Target == nil || *r.Target != 29950 {
+		t.Fatalf("target must be the first distinct complete zone (29950), got %v", r.Target)
+	}
+	if r.StopSource != "zone_edge" {
+		t.Fatalf("stop source must be zone_edge (the structural rule), got %s", r.StopSource)
+	}
+}
+
+// TestGeometryRefAmbiguousRefusesNeverPicks (a): when the wildcard makes a
+// second zone match, the verdict is entry_zone_ambiguous — a REFUSAL, never a
+// pick of either zone (fail-closed).
+func TestGeometryRefAmbiguousRefusesNeverPicks(t *testing.T) {
+	p := func(v float64) *float64 { return &v }
+	id := kernel.ReferenceLevelID("MNQ", "ONH", 29897, 29897, "2026-09-17", "1m")
+	identity := kernel.PlanLevel{Symbol: refStr("MNQ"), Kind: refStr("ONH"), Lo: p(29897), Hi: p(29897), OriginDate: refStr("2026-09-17"), TF: refStr("1m"), Label: "ONH", Price: 29897, ID: id, Names: []string{"ONH"}}
+	// Two zones BOTH match once the empty tf is a wildcard: zone 0 carries the
+	// empty-tf source (wildcard), zone 1 carries a source whose tf equals the
+	// identity tf (exact).
+	doc := &kernel.PlanDoc{
+		IdentityLevels: []kernel.PlanLevel{identity},
+		Zones: &kernel.LevelZoneMap{Zones: []kernel.LevelZone{
+			{Anchor: 29897, Incomplete: true, Sources: []kernel.ZoneSource{{Kind: "ONH", Price: 29897, Label: "ONH", TF: ""}}},
+			{Anchor: 29897, Incomplete: true, Sources: []kernel.ZoneSource{{Kind: "ONH", Price: 29897, Label: "ONH", TF: "1m"}}},
+		}},
+	}
+	sc := kernel.PlanScenario{ID: "S1", LevelID: id}
+	if idx, why := ArmGeometryVerdict(doc, sc, true); idx != -1 || why != "entry_zone_ambiguous" {
+		t.Fatalf("two matching zones must REFUSE as ambiguous, never pick: idx=%d why=%s", idx, why)
+	}
+}
 
 func refPtr(v float64) *float64 { return &v }
 func refStr(v string) *string   { return &v }

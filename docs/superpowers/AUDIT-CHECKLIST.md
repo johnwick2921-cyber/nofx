@@ -5922,6 +5922,10 @@ refusals since 09-13, 0 WARN lines, 0 trades.
 (default ON, owner ruling "both fix now" 2026-09-18): (b1) stable `ref|` sha ids
 for reference-anchor kinds without a formation close (resolved by
 LevelByReferenceID; strict LevelByID untouched; stored NULL ids keep the legacy
-path), (b2) an empty zone-source tf is a wildcard in the frozen-zone match.
-DS-101 owns the write-time feasibility hint; the executor seam for both lanes is
+path), (b2) an empty zone-source tf is a wildcard in the frozen-zone match, and
+a matched NULL-WIDTH reference LINE is admitted as a zero-width band at the
+anchor so the structural stop composes (line − buffer) — without the admission
+half, the wildcard merely re-labelled the refusal (55 source_not_frozen became
+58 unusable and nothing became armable). DS-101 owns the write-time feasibility
+hint; the executor seam for both lanes is
 trader.ArmGeometryVerdict(doc, sc, geometryRefLevels).

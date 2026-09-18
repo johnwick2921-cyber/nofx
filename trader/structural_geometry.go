@@ -91,9 +91,38 @@ func resolveEntryGeometryZone(doc *kernel.PlanDoc, sc kernel.PlanScenario, geome
 		return -1, "entry_source_not_in_frozen_zones"
 	}
 	if !usableGeometryZone(doc.Zones.Zones[match]) {
+		// W-GEOMETRY-REFUSAL (b1, the admission half): a matched NULL-WIDTH
+		// reference LINE (ONH/ONL/RTH/VWAP-family — lo/hi nil, incomplete_width,
+		// one source) is a real level with a real identity; the map just stores it
+		// without a band. With the knob ON the line is admitted as a zero-width
+		// band at the anchor, so the structural stop composes exactly like a zone
+		// edge: stop = line − buffer (long), target = first distinct complete zone.
+		// OFF = today's refusal byte-identical.
+		if geometryRefLevels && referenceLineZone(doc.Zones.Zones[match]) {
+			z := &doc.Zones.Zones[match]
+			a := z.Anchor
+			z.Lo, z.Hi = &a, &a
+			z.Incomplete = false
+			return match, ""
+		}
 		return -1, "entry_zone_edges_or_provenance_unusable"
 	}
 	return match, ""
+}
+
+// referenceLineZone reports whether a frozen zone is a NULL-WIDTH reference
+// LINE — lo/hi nil, incomplete_width, exactly one reference-anchor source at
+// the anchor price. That is the shape ONH/ONL/RTH/VWAP-family lines take in
+// the frozen map (BuildLevelZones marks any source without a width incomplete).
+func referenceLineZone(z kernel.LevelZone) bool {
+	if z.Anchor <= 0 || !z.Incomplete || z.Lo != nil || z.Hi != nil || len(z.Sources) != 1 {
+		return false
+	}
+	s := z.Sources[0]
+	if !kernel.ReferenceAnchorKind(string(s.Kind)) {
+		return false
+	}
+	return s.Price > 0 && math.Abs(s.Price-z.Anchor) <= 1e-7
 }
 
 // FirstGeometryTarget consumes the map's already merged intervals. It performs

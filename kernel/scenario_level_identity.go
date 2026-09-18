@@ -36,7 +36,7 @@ func identityValue(p *string) string {
 var referenceAnchorKinds = map[string]bool{
 	"ONH": true, "ONL": true, "AS-H": true, "AS-L": true,
 	"LDN-H": true, "LDN-L": true, "RTH-H": true, "RTH-L": true,
-	"OR-H": true, "OR-L": true, "eVWAP": true, "pdVWAP": true,
+	"OR-H": true, "OR-L": true, "eVWAP": true, "pdVWAP": true, "VWAP": true,
 }
 
 // ReferenceAnchorKind reports whether a kind may legitimately reach the map
