@@ -6014,3 +6014,22 @@ needs the live journals and is NOT claimed here. Knob
 `day_plan.write_time_feasibility`, nil/unset = ON; explicit false = the old
 WARN-only behaviour byte-identical (pinned by a parity test at the rendering
 seam). The session-risk band is deliberately NOT judged at write (time-based).
+
+## CLASS 155 — THE CARD SHOWED THE EVALUATOR'S VERDICT AND NEVER THE EXECUTOR'S (born 2026-08-27 with the scenario evaluator line, found 2026-09-18 by the owner — "why no trade" — feat/arm-state-ui, W-ARM-STATE-UI)
+
+**Shape.** The plan card's per-scenario verdict (🎯 scenario S1 → ≈armed / ≈triggered)
+is the EVALUATOR's: it is computed from price alone and can read "≈triggered" every
+cycle while the EXECUTOR refuses the arm every cycle. The executor's verdict — whether
+the arm was refused, and why — lived only in system_config counters and a single WARN
+line (2026-09-18 LONDON v1 S1: ≈triggered 05:42:24, refused
+`geometry_no_provenance/scenario_level_id_missing`, invalidated 05:46:24; 93 of 95
+geometry records since 09-13 are refusals). The owner read "armed"/"triggered" all day
+and believed the bot was about to trade; it was not.
+
+**Rule (probe).** A scenario rendered ≈armed/≈triggered for >2 cycles with an executor
+refusal record and no executor text on the card = this class. The card must show, per
+scenario, what the EXECUTOR decided for the displayed plan version — `not attempted` /
+`refused: <reason> (<detail>)` / `armed #<id>` / `filled #<id>` / `cancelled:
+<state_reason>` — sourced ONLY from armed_orders rows and the executor geometry records;
+when no record exists render nothing (no dash, no "ok"). An uncomputed executor state is
+absent, never fabricated.
