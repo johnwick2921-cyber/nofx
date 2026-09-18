@@ -66,6 +66,79 @@ func TestGeometryRefIDsOnhRejectPlayAdmitted(t *testing.T) {
 	}
 }
 
+// TestGeometryRefAdmissionDoesNotMutateSharedDoc is the CTO's F8 BLOCKER pin
+// (re-check 2026-09-18): the zero-width admission must compose from a LOCAL
+// copy of the zone. doc.Zones is a POINTER into the shared plan, and the old
+// in-place edge write made a short reject's composed target depend on whether
+// the ONH long had been composed first — Demand 29805 before, the
+// now-"complete" ONH line 29897 after. Two pins: (1) the frozen map is
+// byte-identical before and after a verdict; (2) composing the reject →
+// admitting the ONH → composing the reject again yields the IDENTICAL stop and
+// target.
+func TestGeometryRefAdmissionDoesNotMutateSharedDoc(t *testing.T) {
+	p := func(v float64) *float64 { return &v }
+	nowMs := time.Now().UnixMilli()
+	onhID := kernel.ReferenceLevelID("MNQ", "ONH", 29897, 29897, "2026-09-17", "1m")
+	onh := kernel.PlanLevel{Symbol: refStr("MNQ"), Kind: refStr("ONH"), Lo: p(29897), Hi: p(29897), OriginDate: refStr("2026-09-17"), TF: refStr("1m"), Label: "ONH", Price: 29897, ID: onhID, Names: []string{"ONH"}}
+	supID, reason := levelidentity.ID(kernel.IdentityInputs(kernel.PlanLevel{
+		Symbol: refStr("MNQ"), Kind: refStr("SUPPLY"), Lo: p(29950), Hi: p(29954),
+		OriginDate: refStr("2026-09-17"), TF: refStr("1h"), FormedCloseMs: &nowMs,
+	}))
+	if supID == nil {
+		t.Fatalf("supply identity refused: %s", reason)
+	}
+	sup := kernel.PlanLevel{Symbol: refStr("MNQ"), Kind: refStr("SUPPLY"), Lo: p(29950), Hi: p(29954), OriginDate: refStr("2026-09-17"), TF: refStr("1h"), Label: "Supply·1h", Price: 29952, ID: supID, FormedCloseMs: &nowMs, Names: []string{"Supply·1h"}}
+	doc := &kernel.PlanDoc{
+		IdentityLevels: []kernel.PlanLevel{onh, sup},
+		Zones: &kernel.LevelZoneMap{Zones: []kernel.LevelZone{
+			{Anchor: 29897, Incomplete: true, Sources: []kernel.ZoneSource{{Kind: "ONH", Price: 29897, Label: "ONH", TF: ""}}},
+			{Anchor: 29950, Lo: p(29950), Hi: p(29954), Sources: []kernel.ZoneSource{{Kind: "SUPPLY", Price: 29952, Label: "Supply·1h", TF: "1h"}}},
+			{Anchor: 29805, Lo: p(29801), Hi: p(29805), Sources: []kernel.ZoneSource{{Kind: "DEMAND", Price: 29803, Label: "Demand·1h", TF: "1h"}}},
+		}},
+	}
+	policy := store.StructuralStopPolicy{BufferPoints: 5, BufferKnown: true, CostPoints: 2, CostKnown: true, MinRR: 2}
+	onhSc := kernel.PlanScenario{ID: "S1", LevelID: onhID, Direction: "long"}
+	supSc := kernel.PlanScenario{ID: "S2", LevelID: supID, Direction: "short"}
+	reject := func() store.StructuralGeometryRecord {
+		return ComposeLevelFadeGeometryWith(doc, supSc, kernel.PlanArmLeg{Entry: 29950}, policy, 20, 0.25, 2, true)
+	}
+
+	before, err := json.Marshal(doc.Zones)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The short reject FIRST — targets the Demand zone at 29805.
+	r0 := reject()
+	if r0.Reason != "" {
+		t.Fatalf("short reject must compose, got refuse: %s (%s)", r0.Reason, r0.Detail)
+	}
+	if r0.Target == nil || *r0.Target != 29805 {
+		t.Fatalf("short reject must target the Demand zone (29805), got %v", r0.Target)
+	}
+	// The ONH long admission (zero-width band) — may NOT mutate the shared map.
+	radm := ComposeLevelFadeGeometryWith(doc, onhSc, kernel.PlanArmLeg{Entry: 29897}, policy, 20, 0.25, 2, true)
+	if radm.Reason != "" {
+		t.Fatalf("ONH long must admit and compose, got refuse: %s (%s)", radm.Reason, radm.Detail)
+	}
+	if radm.Stop == nil || *radm.Stop != 29892 {
+		t.Fatalf("ONH stop must be 29897−5=29892, got %v", radm.Stop)
+	}
+	// Pin 1: the frozen map is byte-identical after the admission verdict.
+	after, err := json.Marshal(doc.Zones)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Fatalf("admission mutated the shared zone map:\nbefore=%s\nafter =%s", before, after)
+	}
+	// Pin 2: the SAME reject composed again gets the SAME stop and target —
+	// scenario order must never change composed geometry.
+	r1 := reject()
+	if r1.Reason != "" || r1.Stop == nil || r0.Stop == nil || *r1.Stop != *r0.Stop || r1.Target == nil || *r1.Target != *r0.Target {
+		t.Fatalf("order dependence: reject after admission stop=%v target=%v, reject before stop=%v target=%v", r1.Stop, r1.Target, r0.Stop, r0.Target)
+	}
+}
+
 // TestGeometryRefAmbiguousRefusesNeverPicks (a): when the wildcard makes a
 // second zone match, the verdict is entry_zone_ambiguous — a REFUSAL, never a
 // pick of either zone (fail-closed).
