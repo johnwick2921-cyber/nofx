@@ -1,6 +1,7 @@
 package trader
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -51,17 +52,18 @@ func TestDeathRereadBootLineReadsResolvedKnob(t *testing.T) {
 	}
 }
 
-// TestDeathRereadPriorLineIsBiasFree pins (a): the death prior line carries the
-// dead version, the kill line and the break direction, and kernel.FlipToDirection
-// on it returns "" — the write site forces NO bias (the death read is bias free,
-// unlike the flip read whose prior line mandates the flipped bias).
+// TestDeathRereadPriorLineIsBiasFree pins (a) + SF-3: the death prior line
+// carries the dead version, the kill line, the break direction AND the price at
+// death, and kernel.FlipToDirection on it returns "" — the write site forces NO
+// bias (the death read is bias free, unlike the flip read whose prior line
+// mandates the flipped bias).
 func TestDeathRereadPriorLineIsBiasFree(t *testing.T) {
 	killer := "death-condition: 5m_close close below 29767.00 (buffer 0.5×ATR14, 2× 5m closes)"
-	prior := deathRereadPriorLine(2, "long", killer)
+	prior := deathRereadPriorLine(2, "long", killer, 29672.5)
 	if got := kernel.FlipToDirection(prior); got != "" {
 		t.Fatalf("FlipToDirection(death prior) = %q, want \"\" (no forced bias); prior:\n%s", got, prior)
 	}
-	for _, want := range []string{"v2", "bias long", "break down", killer} {
+	for _, want := range []string{"v2", "bias long", "break down", "price at death 29672.50", killer} {
 		if !strings.Contains(prior, want) {
 			t.Fatalf("prior line missing %q:\n%s", want, prior)
 		}
@@ -69,28 +71,47 @@ func TestDeathRereadPriorLineIsBiasFree(t *testing.T) {
 	if deathRereadKillerDirection("2x5m close above 29473.50") != "up" || deathRereadKillerDirection("close below 28981.00") != "down" {
 		t.Fatalf("killer direction parse broken: up=%q down=%q", deathRereadKillerDirection("2x5m close above 29473.50"), deathRereadKillerDirection("close below 28981.00"))
 	}
+	if deathKillLinePrice(killer) != 29767.00 || deathKillLinePrice("no line here") != 0 {
+		t.Fatalf("kill-line parse broken: %v / %v", deathKillLinePrice(killer), deathKillLinePrice("no line here"))
+	}
 }
 
-// TestDeathBornWickActive pins (c): the first death check of a death-born plan
-// runs only after the 10-minute birth wick; the knob OFF removes the guard
-// entirely (byte-identical to today); a non-death-born row is never guarded.
+// TestDeathBornWickActive pins (c) + SF-5: the first death check of a
+// death-born plan runs only after the 10-minute birth wick AND only on the SAME
+// death line the prior version died on (± FlipLineClusterTolerance) — a fresh
+// plan that authors a NEW death line dies normally; an unknown prior line never
+// suppresses. The knob OFF removes the guard entirely; a non-death-born row is
+// never guarded.
 func TestDeathBornWickActive(t *testing.T) {
 	on, off := true, false
 	birth := time.Date(2026, 9, 18, 9, 12, 0, 0, time.UTC)
-	row := &store.PlanDB{TriggerReason: store.TriggerDeathReplan, CreatedAt: birth}
+	born := func(doc string) *store.PlanDB {
+		return &store.PlanDB{TriggerReason: store.TriggerDeathReplan, CreatedAt: birth, Doc: doc}
+	}
+	blob, err := json.Marshal(deathFixtureDoc()) // DeathStructured.Price 15480
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := born(string(blob))
 	dpOn := &store.DayPlanConfig{DeathReread: &on}
 	dpOff := &store.DayPlanConfig{DeathReread: &off}
-	if !deathBornWickActive(row, dpOn, birth.Add(9*time.Minute)) {
-		t.Fatal("inside the 10-min wick the guard must be active")
+	if !deathBornWickActive(row, dpOn, birth.Add(9*time.Minute), 15480) {
+		t.Fatal("inside the 10-min wick on the SAME line the guard must be active")
 	}
-	if deathBornWickActive(row, dpOn, birth.Add(11*time.Minute)) {
+	if deathBornWickActive(row, dpOn, birth.Add(11*time.Minute), 15480) {
 		t.Fatal("after the 10-min wick the guard must clear")
 	}
-	if deathBornWickActive(row, dpOff, birth.Add(1*time.Minute)) {
+	if deathBornWickActive(row, dpOn, birth.Add(1*time.Minute), 15480+2*kernel.FlipLineClusterTolerance()) {
+		t.Fatal("a DIFFERENT death line must die normally (SF-5)")
+	}
+	if deathBornWickActive(row, dpOn, birth.Add(1*time.Minute), 0) {
+		t.Fatal("an unknown prior line must never suppress")
+	}
+	if deathBornWickActive(row, dpOff, birth.Add(1*time.Minute), 15480) {
 		t.Fatal("knob OFF must not guard (byte-identical to today)")
 	}
 	other := &store.PlanDB{TriggerReason: "structure_mss", CreatedAt: birth}
-	if deathBornWickActive(other, dpOn, birth.Add(1*time.Minute)) {
+	if deathBornWickActive(other, dpOn, birth.Add(1*time.Minute), 15480) {
 		t.Fatal("a non-death-born row is never guarded")
 	}
 }
@@ -163,6 +184,16 @@ func TestDeathRereadRealPathLandsFreshPlanAndSupersedes(t *testing.T) {
 	}
 	if client.calls() != 1 {
 		t.Fatalf("exactly ONE planner call (valid plan accepted first try), got %d", client.calls())
+	}
+	// SF-1 (2026-09-18 review): v2-active in the store is satisfied by the
+	// write itself, BEFORE the goroutine records the spend, sets the once-key,
+	// increments the counter and runs the supersede CAS — wait on the once-key
+	// (the last of its writes) before asserting ANY of them.
+	if !waitFor(t, 10*time.Second, func() bool {
+		v := sysCfgVal(t, st, deathRereadDoneKey(row))
+		return v != "" && v != "0"
+	}) {
+		t.Fatalf("the once-key never landed after the v2 write; log:\n%s", logBuf.String())
 	}
 	latest, _ := st.Plan().GetLatestPlanForTraderSession(td, "NY", at.id)
 	if latest.TriggerReason != store.TriggerDeathReplan {
@@ -277,4 +308,123 @@ func TestDeathBornPlanGetsHoldAnchor(t *testing.T) {
 		t.Fatalf("a death-born plan must anchor the hold at its replan version, got %+v", got)
 	}
 	_ = fmt.Sprintf // keep fmt if unused later
+}
+
+// TestDeathRereadHeldInsideFlapGuard pins SF-2 (money): a death re-read must NOT
+// launch while the dormant row is inside DORMANT_MIN_HOLD_MIN since the dormant
+// write — five of the six re-armed deaths on the DB copy re-armed at the first
+// permitted instant (5m27s–10m), and a 300–500 s planner call launched at +0
+// would land AFTER the re-arm: a spent unit and a zombie fresh version. The
+// runaway case loses the 5 minutes, the flap case spends nothing.
+func TestDeathRereadHeldInsideFlapGuard(t *testing.T) {
+	// Own harness (not deathRealPathTrader): the flap guard needs hold=5.
+	t.Setenv("FLIP_ATR_BUFFER", "0")
+	t.Setenv("DORMANT_MIN_HOLD_MIN", "5")
+	off := false
+	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{
+		PlanEnabled: true, ReplanCap: 4, SessionsEnabled: []string{"NY"}, DeathReread: nil,
+		WakeOn15mZone: &off, WakeOnHTFZone: &off, WakeOnHTFOB: false, WakeOnSeatedInvalidation: &off, WakeOnIFVG: &off,
+	}}
+	at, st := resetTrader(t, cfg)
+	client := &scriptedPlannerClient{respond: func(int, string) (string, error) { return validShortPlanJSON, nil }}
+	at.mcpClient = client
+	origDrift := clockHoldDriftFn
+	clockHoldDriftFn = func(string) (int64, bool) { return 0, false }
+	t.Cleanup(func() { clockHoldDriftFn = origDrift })
+	t.Cleanup(func() { market.FuturesBarsProvider = nil; traderTestBarsInstalled = false })
+
+	now := time.Date(2026, 8, 18, 14, 0, 0, 0, time.UTC)
+	flipRereadTestNow(t, now)
+	td := "2026-08-18"
+	row := seedActivePlan(t, at, td, "NY", now.Add(-40*time.Minute), deathFixtureDoc())
+	// The death branch wrote the dormant marker before this call; mirror it.
+	if err := st.Plan().UpdatePlanLifecycle(row.PlanID, 1, "dormant", "dormant:death:death-condition: 5m_close close below 15480.00"); err != nil {
+		t.Fatal(err)
+	}
+	seedFlipBars(15500, 15470, 6*time.Minute, now)
+	called := 0
+	orig := deathRereadRun
+	deathRereadRun = func(*AutoTrader, string, string, string, *store.PlanDB, bool) bool { called++; return true }
+	t.Cleanup(func() { deathRereadRun = orig })
+
+	// Inside the flap guard (dormant write 1 minute ago): HELD, no launch.
+	_ = st.SetSystemConfig(dormantSinceKey(row), fmt.Sprintf("%d", now.Add(-1*time.Minute).UnixMilli()))
+	at.maybeRereadAfterDeath(now, "NY", td, row, "death-condition: 5m_close close below 15480.00", 15470)
+	time.Sleep(300 * time.Millisecond)
+	if called != 0 {
+		t.Fatalf("inside the flap guard the read must be HELD (0 launches), got %d", called)
+	}
+	// After the guard elapses the same call launches.
+	_ = st.SetSystemConfig(dormantSinceKey(row), fmt.Sprintf("%d", now.Add(-6*time.Minute).UnixMilli()))
+	at.maybeRereadAfterDeath(now, "NY", td, row, "death-condition: 5m_close close below 15480.00", 15470)
+	if !waitFor(t, 5*time.Second, func() bool { return called == 1 }) {
+		t.Fatalf("after the flap guard the read must launch once, got %d", called)
+	}
+}
+
+// TestDeathRereadRealPathRearmedMeanwhileSupersedeRefused pins SF-4: v1 re-arms
+// (close-back) INSIDE the AI call; the fresh v2 still lands but the supersede
+// CAS (from dormant) is REFUSED — both rows stand and the newest version
+// governs at read time (the flip path's own BLOCKER-3 pin, mirrored).
+func TestDeathRereadRealPathRearmedMeanwhileSupersedeRefused(t *testing.T) {
+	var at *AutoTrader
+	var st *store.Store
+	at, st, client := deathRealPathTrader(t, nil, func(n int, _ string) (string, error) {
+		pid := store.MakePlanIDForTrader(at.id, "2026-08-18", "NY")
+		if err := st.Plan().UpdatePlanLifecycle(pid, 1, "active", "rearmed:2x5m close back above 15480"); err != nil {
+			return "", err
+		}
+		return validShortPlanJSON, nil
+	})
+	now := time.Date(2026, 8, 18, 14, 0, 0, 0, time.UTC)
+	flipRereadTestNow(t, now)
+	td := "2026-08-18"
+	row := seedActivePlan(t, at, td, "NY", now.Add(-40*time.Minute), deathFixtureDoc())
+	seedFlipBars(15500, 15470, 6*time.Minute, now)
+	logBuf := captureTraderLog(t)
+
+	at.maybeRunSessionReadsAt(now)
+	if !waitFor(t, 10*time.Second, func() bool {
+		return strings.Contains(logBuf.String(), "RE-ARMED meanwhile") &&
+			strings.Contains(logBuf.String(), "supersede REFUSED")
+	}) {
+		t.Fatalf("no supersede-REFUSED line; calls=%d log:\n%s", client.calls(), logBuf.String())
+	}
+	v1, _ := st.Plan().GetPlan(row.PlanID, 1)
+	v2, _ := st.Plan().GetPlan(row.PlanID, 2)
+	if v1 == nil || v1.Lifecycle != "active" {
+		t.Fatalf("the re-armed v1 must keep its active lifecycle, got %+v", v1)
+	}
+	if v2 == nil || v2.Lifecycle != "active" || v2.TriggerReason != store.TriggerDeathReplan {
+		t.Fatalf("the death read's v2 must stand as written, got %+v", v2)
+	}
+	latest, _ := st.Plan().GetLatestPlanForTraderSession(td, "NY", at.id)
+	if latest == nil || latest.Version != 2 {
+		t.Fatalf("the newest version governs at read time, got %+v", latest)
+	}
+}
+
+// TestDeathRereadPreReadRecheckSkipsRearmedRow pins SF-4: the goroutine re-reads
+// the row before the read; a row no longer dormant is skipped — no read launch.
+func TestDeathRereadPreReadRecheckSkipsRearmedRow(t *testing.T) {
+	at, st, _ := deathRealPathTrader(t, nil, func(int, string) (string, error) { return validShortPlanJSON, nil })
+	now := time.Date(2026, 8, 18, 14, 0, 0, 0, time.UTC)
+	flipRereadTestNow(t, now)
+	td := "2026-08-18"
+	row := seedActivePlan(t, at, td, "NY", now.Add(-40*time.Minute), deathFixtureDoc())
+	// Re-arm BEFORE the read is requested — the pre-read re-check must skip.
+	if err := st.Plan().UpdatePlanLifecycle(row.PlanID, 1, "active", "rearmed:close back"); err != nil {
+		t.Fatal(err)
+	}
+	seedFlipBars(15500, 15470, 6*time.Minute, now)
+	called := 0
+	orig := deathRereadRun
+	deathRereadRun = func(*AutoTrader, string, string, string, *store.PlanDB, bool) bool { called++; return true }
+	t.Cleanup(func() { deathRereadRun = orig })
+
+	at.maybeRereadAfterDeath(now, "NY", td, row, "death-condition: 5m_close close below 15480.00", 15470)
+	time.Sleep(300 * time.Millisecond)
+	if called != 0 {
+		t.Fatalf("the pre-read re-check must skip a non-dormant row (0 launches), got %d", called)
+	}
 }

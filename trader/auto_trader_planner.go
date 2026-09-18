@@ -289,7 +289,8 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) []SessionReadFired {
 			// live inside maybeRereadAfterDeath).
 			if cfgDP := at.config.StrategyConfig.DayPlan; cfgDP != nil && cfgDP.DeathRereadEnabled() {
 				if killer, ok := at.dormantDeathKillerOf(existing); ok {
-					at.maybeRereadAfterDeath(now, s.Name, tradeDate, existing, killer)
+					at.maybeRereadAfterDeath(now, s.Name, tradeDate, existing, killer,
+						priceOf(market.FuturesBarsProvider(at.futuresSymbol(), kernel.AISVPBarInterval, kernel.AISVPBarCount)))
 				}
 			}
 			// FIX 5 (F3, 2026-08-27) — DORMANT KEEPS EYES: while dormant, level
@@ -319,7 +320,7 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) []SessionReadFired {
 		// its 10-minute birth wick (2 full 5m closes), so the SAME line's wick
 		// noise cannot kill the fresh plan. Inside the wick the death check is
 		// skipped entirely (MSS wakes still run).
-		if detail, dead := at.describeActivePlanDeath(existing); dead && !deathBornWickActive(existing, at.dayPlanCfg(), now) {
+		if detail, dead := at.describeActivePlanDeath(existing); dead && !deathBornWickActive(existing, at.dayPlanCfg(), now, at.priorDeathLinePrice(existing)) {
 			handledDeath = true
 			// PLAN-LIFECYCLE WAVE: a STRUCTURED flip/death-line hit goes DORMANT
 			// instead of burning a re-plan (wick-noise protection; the rearm
@@ -348,7 +349,7 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) []SessionReadFired {
 						// plan; with the knob ON, ONE budgeted re-read authors a
 						// FRESH plan (bias free) with the death evidence. Gated
 						// inside on the knob + class-35 budget.
-						at.maybeRereadAfterDeath(now, s.Name, tradeDate, existing, detail.Killer)
+						at.maybeRereadAfterDeath(now, s.Name, tradeDate, existing, detail.Killer, detail.Price)
 					}
 				}
 				continue // skip MSS/level wakes while dormant (re-arm path above runs first next cycle)
@@ -654,7 +655,7 @@ func (at *AutoTrader) executorPlanDeadReason() string {
 	// here too: inside a death-born plan's 10-minute birth wick the executor
 	// does not treat it as machine-dead (the same line's noise must not
 	// block the fresh plan's entries).
-	if detail, dead := at.describeActivePlanDeath(row); dead && !deathBornWickActive(row, sc.DayPlan, traderNow()) {
+	if detail, dead := at.describeActivePlanDeath(row); dead && !deathBornWickActive(row, sc.DayPlan, traderNow(), at.priorDeathLinePrice(row)) {
 		return "active plan is MACHINE-DEAD (" + detail.Killer + ") — entries refused until the planner re-plans"
 	}
 	return ""
@@ -2370,7 +2371,11 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 		// the fail-closed marker killed a healthy ASIA v1). Wake failures keep
 		// the active plan and simply skip the wake.
 		if !failClosed {
-			at.logWarnf("🗓️ wake re-read failed for %s %s (benign — active plan kept): %v", tradeDate, session, lastErr)
+			if triggerOverride == store.TriggerDeathReplan {
+				at.logWarnf("🗓️ death re-read failed for %s %s (benign — the dormant plan stands): %v", tradeDate, session, lastErr)
+			} else {
+				at.logWarnf("🗓️ wake re-read failed for %s %s (benign — active plan kept): %v", tradeDate, session, lastErr)
+			}
 			return 0, "kept_active", nil
 		}
 		// P7 — the fail-closed doc still carries the map: levels from the current

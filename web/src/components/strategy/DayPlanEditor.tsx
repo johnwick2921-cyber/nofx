@@ -548,6 +548,16 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
               testId="flip-reread-toggle"
             />
           </FieldRow>
+          {/* W-DEATH-REREAD (2026-09-18) — default ON: the toggle reads ON
+              unless the strategy saved an explicit false. */}
+          <FieldRow label={tp('deathReread', language)}>
+            <Toggle
+              on={cfg.death_reread !== false}
+              onChange={(v) => update('death_reread', v)}
+              disabled={bodyDisabled}
+              testId="death-reread-toggle"
+            />
+          </FieldRow>
           <FieldRow label={tp('t1Currencies', language)}>
             <input
               type="text"

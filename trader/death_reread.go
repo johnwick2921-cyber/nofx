@@ -3,6 +3,9 @@ package trader
 import (
 	"encoding/json"
 	"fmt"
+	"math"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -53,13 +56,53 @@ func deathRereadInFlightKey(at *AutoTrader, row *store.PlanDB) string {
 var deathRereadInFlight sync.Map
 
 // deathRereadPriorLine is the ONE producer of the prior-plan context the death
-// re-read hands the write site as priorKiller: the dead version, its kill line
-// (which carries the price at death) and the direction of the break. No flip
-// vocabulary — kernel.FlipToDirection returns "" so the write site forces NO
-// bias (the death read is bias free).
-func deathRereadPriorLine(version int, oldBias, killer string) string {
-	return fmt.Sprintf("PRIOR PLAN v%d bias %s DIED — break %s — the plan is dormant and will be superseded by the version you author now. Kill line: %s. Author a FRESH plan from the tape; the bias is NOT forced.",
-		version, oldBias, deathRereadKillerDirection(killer), killer)
+// re-read hands the write site as priorKiller: the dead version, its kill line,
+// the price at death and the direction of the break. No flip vocabulary —
+// kernel.FlipToDirection returns "" so the write site forces NO bias (the death
+// read is bias free).
+func deathRereadPriorLine(version int, oldBias, killer string, priceAtDeath float64) string {
+	return fmt.Sprintf("PRIOR PLAN v%d bias %s DIED — break %s — price at death %.2f — the plan is dormant and will be superseded by the version you author now. Kill line: %s. Author a FRESH plan from the tape; the bias is NOT forced.",
+		version, oldBias, deathRereadKillerDirection(killer), priceAtDeath, killer)
+}
+
+// deathKillLineRe extracts the buffered kill LINE from a structured killer
+// ("death-condition: 5m_close close below 29767.00 (…)").
+var deathKillLineRe = regexp.MustCompile(`close (?:below|above) ([0-9]+(?:\.[0-9]+)?)`)
+
+// deathKillLinePrice parses the prior kill line's price; 0 when unparseable.
+func deathKillLinePrice(killer string) float64 {
+	m := deathKillLineRe.FindStringSubmatch(killer)
+	if m == nil {
+		return 0
+	}
+	var f float64
+	if _, err := fmt.Sscanf(m[1], "%f", &f); err != nil {
+		return 0
+	}
+	return f
+}
+
+// priorDeathLinePrice returns the price of the death line that killed the
+// plan VERSION BEFORE `row` (the born row's parent), from the chain's lifecycle
+// transitions. 0 when there is none or it is unparseable — the wick guard then
+// treats the lines as DIFFERENT (never suppresses a fresh plan's death).
+func (at *AutoTrader) priorDeathLinePrice(row *store.PlanDB) float64 {
+	if at.store == nil || row == nil {
+		return 0
+	}
+	_, transitions, _, ok := at.planChainFacts(row)
+	if !ok {
+		return 0
+	}
+	for i := len(transitions) - 1; i >= 0; i-- {
+		if transitions[i].Version >= row.Version {
+			continue
+		}
+		if strings.HasPrefix(transitions[i].Reason, "dormant:death:") {
+			return deathKillLinePrice(transitions[i].Reason)
+		}
+	}
+	return 0
 }
 
 // deathRereadRun is the read-call seam (fixtures substitute a recorder to
@@ -71,10 +114,12 @@ var deathRereadRun = func(at *AutoTrader, session, tradeDate, prior string, row 
 }
 
 // deathBornWickActive reports whether a death-born plan is inside its birth
-// wick (W-DEATH-REREAD (c)): the first death check for a death-born version
-// runs only after 2 full 5m closes post-birth, so the SAME line's wick noise
-// cannot kill the fresh plan. PURE — pinned directly in tests.
-func deathBornWickActive(row *store.PlanDB, dp *store.DayPlanConfig, now time.Time) bool {
+// wick ON ITS OWN LINE (W-DEATH-REREAD (c), SF-5): the first death check for a
+// death-born version runs only after 2 full 5m closes post-birth, and only when
+// the fresh plan authored the SAME death line the prior version died on (±
+// FlipLineClusterTolerance). A model that authors a NEW death line dies
+// normally. PURE — pinned directly in tests.
+func deathBornWickActive(row *store.PlanDB, dp *store.DayPlanConfig, now time.Time, priorKillLine float64) bool {
 	if row == nil || dp == nil || now.IsZero() || row.CreatedAt.IsZero() {
 		return false
 	}
@@ -84,19 +129,28 @@ func deathBornWickActive(row *store.PlanDB, dp *store.DayPlanConfig, now time.Ti
 	if !dp.DeathRereadEnabled() {
 		return false // OFF = today's behaviour: the wick guard does not exist
 	}
-	return now.Sub(row.CreatedAt) < time.Duration(deathRereadBirthWickMinutes())*time.Minute
+	if now.Sub(row.CreatedAt) >= time.Duration(deathRereadBirthWickMinutes())*time.Minute {
+		return false
+	}
+	if priorKillLine <= 0 {
+		return false // the prior line is unknown — never suppress on an unknown line
+	}
+	var doc kernel.PlanDoc
+	if json.Unmarshal([]byte(row.Doc), &doc) != nil || doc.DeathStructured == nil {
+		return false
+	}
+	return math.Abs(doc.DeathStructured.Price-priorKillLine) <= kernel.FlipLineClusterTolerance()
 }
 
-// maybeRereadAfterDeath is the death counterpart of maybeRereadAfterFlip. Same
-// body, parameterised by trigger: preflight, class-47 cutoff, in-flight guard,
-// once-key per plan+version, self-backoff — with THREE death-only differences:
-// (b) the read SPENDS one class-35 replan budget unit — at budget exhausted
-// the plan stays dormant (today's behaviour) with ONE WARN naming the budget;
-// (a) the prior line carries the DEATH evidence and forces no bias (the flip
-// read forces the flipped bias); (a) the dormant version is superseded with
-// superseded:death (the flip path writes superseded:flip). Knob OFF → not
+// maybeRereadAfterDeath is the death counterpart of maybeRereadAfterFlip.
+// Deliberately a SIBLING COPY (2026-09-18 review NIT): the trigger, the
+// class-35 budget, the price-at-death prior line, the flap-guard gate and the
+// superseded:death marker make a shared parameterised body more entangled than
+// the duplication costs; a future flip-guard fix must be propagated here too
+// (mirror, do not merge). Keeps the flip body's preflight, class-47 cutoff,
+// in-flight guard, once-key per plan+version and self-backoff. Knob OFF → not
 // called (the caller gates on the knob and this function double-checks it).
-func (at *AutoTrader) maybeRereadAfterDeath(now time.Time, session, tradeDate string, row *store.PlanDB, killer string) {
+func (at *AutoTrader) maybeRereadAfterDeath(now time.Time, session, tradeDate string, row *store.PlanDB, killer string, priceAtDeath float64) {
 	if at.store == nil || row == nil || market.FuturesBarsProvider == nil {
 		return
 	}
@@ -107,10 +161,28 @@ func (at *AutoTrader) maybeRereadAfterDeath(now time.Time, session, tradeDate st
 	if v, err := at.store.GetSystemConfig(deathRereadDoneKey(row)); err == nil && v != "" && v != "0" {
 		return // one SUCCESSFUL read per fired death (plan+version key)
 	}
-	// (b) BUDGET GATE FIRST — a death re-read SPENDS one class-35 replan unit;
-	// the flip read is free but a death is the planner being wrong, and an
-	// unbounded loop of dead plans on a trend day must stop. At budget
-	// exhausted → dormant only (today's behaviour) with ONE WARN naming it.
+	// SF-2 (2026-09-18 review; money) — LAUNCH TIMING VS THE FLAP GUARD: five of
+	// the six re-armed deaths on the DB copy re-armed 5m27s–10m after death, at
+	// the earliest instant DORMANT_MIN_HOLD_MIN=5 permits; a planner call is
+	// 300–500 s, so a read launched at +0 lands AFTER the re-arm — a spent unit
+	// (default cap 2) and a fresh version authored on a tape that already closed
+	// back. Do not launch until the flap guard has elapsed since the dormant
+	// write: the runaway case loses 5 minutes, the flap case spends nothing.
+	if v, err := at.store.GetSystemConfig(dormantSinceKey(row)); err == nil && v != "" {
+		if ms, perr := strconv.ParseInt(v, 10, 64); perr == nil && kernel.DormantMinHoldMin() > 0 {
+			if elapsed := now.Sub(time.UnixMilli(ms)); elapsed >= 0 && elapsed < time.Duration(kernel.DormantMinHoldMin())*time.Minute {
+				at.logInfof("🗓️ death re-read %s %s v%d — HELD: the dormant row is inside the %.0f-minute flap guard (%.1fm in); the re-arm predicate may clear it — retrying once the guard elapses.",
+					tradeDate, session, row.Version, float64(kernel.DormantMinHoldMin()), elapsed.Minutes())
+				return
+			}
+		}
+	}
+	// (b) BUDGET GATE — a death re-read SPENDS one class-35 replan unit; the
+	// flip read is free but a death is the planner being wrong, and an unbounded
+	// loop of dead plans on a trend day must stop. At budget exhausted → dormant
+	// only (today's behaviour) with ONE WARN naming it AND the same P1 alert the
+	// legacy consumed-death path raises (the owner must never see a silent
+	// dormant card).
 	replanCap := at.replanCapFor(session)
 	budget := store.GetReplanBudget(at.store, at.id, tradeDate, session, replanCap)
 	if !budget.May() {
@@ -118,6 +190,10 @@ func (at *AutoTrader) maybeRereadAfterDeath(now time.Time, session, tradeDate st
 			at.logWarnf("🗓️ death re-read %s %s v%d — BUDGET EXHAUSTED (%d/%d): the dormant plan stands, no re-read (today's behaviour). A death re-read spends one replan unit; the flip read is free.",
 				tradeDate, session, row.Version, budget.Used, budget.Cap)
 			_ = at.store.SetSystemConfig(deathRereadBudgetWarnKey(row), "1")
+			at.emitAlert("P1", "plan-death-streak",
+				fmt.Sprintf("deaths:%s:%s:v%d", tradeDate, session, row.Version),
+				fmt.Sprintf("%s plan died — re-plan budget exhausted (%d/%d)", session, budget.Used, budget.Cap),
+				fmt.Sprintf("Killed by: %s. The dormant plan stands (today's behaviour) — the session sits out unless price closes back on the valid side.", killer))
 		}
 		return
 	}
@@ -180,7 +256,7 @@ func (at *AutoTrader) maybeRereadAfterDeath(now time.Time, session, tradeDate st
 			oldBias = raw.Bias.Direction
 		}
 	}
-	prior := deathRereadPriorLine(row.Version, oldBias, killer)
+	prior := deathRereadPriorLine(row.Version, oldBias, killer, priceAtDeath)
 	at.logWarnf("🗓️ death re-read %s %s v%d — waking the planner (W-DEATH-REREAD, budget %d/%d): %s", tradeDate, session, row.Version, budget.Used, budget.Cap, killer)
 	// Non-fatal and async, exactly like the flip read: a read that does not
 	// land a newer active version keeps the dormant plan and clears the

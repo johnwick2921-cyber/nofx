@@ -5975,10 +5975,11 @@ price sat at 29746 three hours later — the bot authored nothing for the rest o
 the NY session. The owner: "why the fk my bot stop right here".
 
 **Probe.** `dormant:death:` rows in plan_lifecycle_log with no later
-`rearmed`/`superseded` for that plan_id during the session; count on the DB copy
-since 09-01 with ids. First probe [A] on pre-bars-key-20260918-022516.db
-(read-only): 15 `dormant:death:` events since 2026-09-01, 7 never re-armed (ids
-16, 27, 28, 39, 44, 51, 56).
+`rearmed`/`superseded` for that plan_id+version during the session; count on the
+DB copy since 09-01 with ids. First probe [A] on pre-bars-key-20260918-022516.db
+(read-only): 15 `dormant:death:` events since 2026-09-01, 6 re-armed, **9 never
+re-armed** (ids 16, 27, 28, 33, 39, 44, 51, 53, 56) — 60% of death lines sat the
+session out.
 
 **How it hid.** Dormancy is a protection, not a decision: the log line says
 "auto re-arms when price closes back" and the re-arm predicate exists, so the

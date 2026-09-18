@@ -447,6 +447,11 @@ export const planStrings = {
     zh: '翻转重读 — 触发翻转条件时计划仍转入休眠，然后一次免费重读按翻转方向重新制定',
     id: 'Flip re-read — saat kondisi flip terpicu, plan tetap dormant, lalu SATU re-read gratis menyusun arah yang baru',
   },
+  deathReread: {
+    en: 'Death re-read — when the death condition fires, the plan still goes dormant, then ONE budgeted re-read authors a fresh bias-free plan (spends one re-plan unit; default ON)',
+    zh: '死亡重读 — 触发死亡条件时计划仍转入休眠，然后一次计费重读重新制定无偏计划（消耗一次重计划额度；默认开启）',
+    id: 'Death re-read — saat kondisi death terpicu, plan tetap dormant, lalu SATU re-read ber-anggaran menyusun rencana baru (default ON)',
+  },
   t1Currencies: {
     en: 'Red-news hard-block currencies — comma-separated (default USD: only USD red events block; others show as advisory; ALL = every currency)',
     zh: '红色新闻硬封锁货币 — 逗号分隔（默认 USD：仅美元红色事件封锁；其他仅提示；ALL = 全部货币）',
