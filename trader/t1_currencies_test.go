@@ -70,7 +70,9 @@ func writeASIAPlan(t *testing.T, at *AutoTrader, st *store.Store) kernel.PlanDoc
 	t1Lines := at.plannerT1Lines(t1CcyEvents(t, st), false, 0, 0, t1CcyDate, "ASIA")
 	facts := kernel.PlanFacts{Price: 15550, DATR: 300}
 	machine := map[float64]string{15480: "PWL", 15700: "RN 15700"}
-	ver, lc, err := at.runPlannerReadCoreWithFactsGrades("ASIA", t1CcyDate, "owner_reset",
+	// The authoring clock is the test's (class 60/113): 16:55 CT on the trade
+	// date, the scheduled ASIA read.
+	ver, lc, err := at.runPlannerReadCoreWithFactsGradesClock(func() time.Time { return t1CcyAt(16, 55) }, "ASIA", t1CcyDate, "owner_reset",
 		"deepseek-v4-pro", "hashT1ccy", "", "", "", "PROMPT", facts, nil, machine, nil, true,
 		func(string) (string, error) { return class39LegsPlanJSON("15550"), nil }, t1Lines...)
 	if err != nil || lc != "active" {
