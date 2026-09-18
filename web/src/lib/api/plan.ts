@@ -412,6 +412,9 @@ export interface StructuralGeometryView {
   loss_usd?: number
   net_gain_points?: number
   target_names?: string[]
+  // W-ARM-STATE-UI — the raw record carries time_ms on the wire; declared here
+  // so the executor column can stamp its tooltip with the record's own time.
+  time_ms?: number
 }
 
 // W7 (weekly-bias wave) — /api/plan/today weekly payload.

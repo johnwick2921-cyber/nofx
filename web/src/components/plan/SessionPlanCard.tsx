@@ -878,6 +878,7 @@ export function SessionPlanCard({
               }
             ).armed
           }
+          geometry={plan.structural_geometry}
           fvgStates={
             (
               plan as {
