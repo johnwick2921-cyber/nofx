@@ -5535,3 +5535,84 @@ path now passes the SIGNED measurement.
   (2,326,426 ms → +2m, unlabelled, note names 38m), `trader/clock_widen_cap_test.go`
   (arm path via `currentT1Windows`, plan-write step via `plannerT1Lines`; 42 s
   → +1m unlabelled, 90 s → "+2m (clock drift)" unchanged).
+
+## CLASS 147 — A FLIP LINE AUTHORED ON THE WRONG SIDE OF PRICE CAN NEVER BE TOUCHED, SO IT NEVER FIRES (born 2026-08-27 with the P1c touch gate on the structured flip{} object, reported by the owner 2026-09-17 ~23:00 CT "at the flip point it re-reads and the bias is still the same", fix/flip-line-side-of-price, W-FLIP-LINE-SIDE-OF-PRICE)
+
+**Shape.** A structured line carries a price and a side, and the machine fires
+it only after price TOUCHES the line from the near side after the plan is born
+and then closes beyond it on the stated side (`PlanConditionFiredSince`, the
+P1c touch gate: `if !levelTouched(judge, c.Price, nowMs) { return false, "" }`).
+CLASS 140 taught the validator to judge the side against the BIAS; nothing
+judged it against PRICE. A short bias with flip{side above} is the right
+direction — but if the line already sits BELOW price when it is written, price
+is on the far side of it from birth: it can never be touched from the near
+side, so the flip can never fire and the plan cannot flip by construction. The
+plan re-reads at the "flip point", the model (correctly, on its own terms)
+keeps the bias, and the owner watches the same bias survive its own flip.
+
+**The live story (2026-09-17 ASIA v2, plans table read-only) [A].**
+Plan `2026-09-17:ASIA:8d5c8af5_…_deepseek_1781246265` v2, created 22:52:04 CT on
+the structure_mss wake: bias.direction="short", flip={29747.50, side "above",
+rule "5m_close", flip_to "long"}, death={29755.50, side "above", rule "2x5m"};
+the authoring price (facts.Price, the last closed 1m close
+`AssembleResearchLevels` handed the write site, levels_assemble.go:217) was
+29764. BOTH lines sat below price with side "above". The direction check
+passed (short → long on a close above IS the right side), the prose cross-check
+passed (29747.50 was in the prose), and the plan shipped un-flippable. v1
+(16:38, flip 29772.62) and v3 (23:18, flip 29769) had the line above price;
+only v2 was born impossible. The death line was also born crossed — a plan
+born dead — and the existing born-dead refusal (`validateAuthoredScenariosAt`)
+never saw it, because it evaluates ONLY the scenario `invalid` prose grammar
+on 1m closes and never reads the death object.
+
+**Why it hid.** (1) Two validators each answered a real question — side vs
+bias, number vs prose — and a reader assumes "the flip is validated". The
+third relation (side vs PRICE) was in nobody's list. (2) The touch gate is
+correct and necessary (wick-through immunity), and its precondition — the
+line starts on the far side — was an unstated assumption of the author, not a
+rule. (3) The failure is silent in the same way as CLASS 140: an impossible
+flip is indistinguishable in the journal from a flip whose level was never
+reached.
+
+**The fix shape.** ONE predicate, `kernel.lineBeyondPrice`, worn by two names:
+`FlipLineBeyondPrice(flip, price)` and `DeathLineBeyondPrice(death, price)`,
+siblings of `FlipDirectionContradiction`. Called from the write-site validator
+(`ValidatePlanDocWithFactsMachine`, AFTER its `facts.Price <= 0 → schema-only`
+skip, so an unknown authoring price NEVER rejects — the rule does not invent a
+price; the write site WARNs `flip/death line side-of-price UNJUDGED` instead)
+with the sentence `flip{above 29747.50 → long} is already below price 29764.00
+at authoring: a flip line must sit on the far side of price (it can never be
+touched from the near side)` (death: `… (the plan would be born dead)`; a line
+AT price reads "already at price"). Class-38 discipline: prompt-contract row
+(`MustAppear` guarded by `ValidatePromptContracts` for every
+`plannerOutputContract` variant), a rendered sentence, and a repair excerpt
+`RepairFlipSideOfPriceLaw` routed on the rejection's own words ("far side of
+price") and registered in `ValidatorHints`. The doc now carries
+`price_at_write` (the facts.Price the lines were judged against) so the read
+path can judge stored plans without inventing a price; a row without the stamp
+is judged from the tape's last close at or before its `created_at` (≤10 min),
+else left UNJUDGED and unmarked. Read path: `noteLinesBeyondPrice`, called first
+by BOTH stored-plan evaluators (`describeActivePlanDeath`,
+`describeDormantCleared`), once per plan version per line —
+`flip_line_beyond_price plan=… v… (site) …` / `death_line_beyond_price …` —
+the CLASS 140 once-per-version idiom; the evaluation itself is unchanged.
+Tests at the production call sites: the ASIA v2 shape rejected with the exact
+sentence and the v3 repair accepted; the below-side mirror; unknown price →
+WARN, no reject, no stamp (real attempt loop with a fake model); repair
+excerpt routed from both texts and NOT from the direction text; contract
+validated for 12 prompt variants; stored impossible lines named once across
+two evaluations at both evaluators; the unstamped-row tape fallback.
+
+**Probes.**
+- For every structured line with a side (`death{}`, `flip{}`, `confirm{}`,
+  arm legs), ask where PRICE was when it was authored and whether the
+  evaluator's precondition (touch from the near side, close beyond) is
+  satisfiable from that start. A rule that judges the side against another
+  FIELD (CLASS 140) has not judged it against the WORLD.
+- `sqlite3 -readonly data/data.db "select plan_id, version, json_extract(doc,'$.price_at_write'), json_extract(doc,'$.flip') from plans where json_extract(doc,'$.flip.side')='above' and json_extract(doc,'$.flip.price') < json_extract(doc,'$.price_at_write')"` (and the mirror) — a non-zero count on a shipped rule is the class in the store. Rows written before the stamp have no `price_at_write`; judge them from the tape at `created_at`, never from today's price.
+- A "never fired" flip in the journal must be distinguishable from a "could
+  never fire" one: `flip_line_beyond_price` is the probe. If the journal has no
+  such line for an old impossible plan whose tape is still in the ring, the
+  read path does not judge side-of-price.
+- A born-dead refusal that names only scenarios has not looked at the death
+  object. Grep the refusal's inputs, not its name.
