@@ -5703,3 +5703,72 @@ climbed) that CLASS 139 fixed only for the HOLD.
   `kernel/flip_breach_test.go` (resolver runs/breaks, breach-state parity
   with the evaluator, two-window evaluator byte-identical when the windows
   agree).
+
+## CLASS NN — A BAR STORE KEYED WITHOUT THE CONTRACT DROPS THE NEW CONTRACT'S OVERLAP AT EVERY ROLL (born 2026-08-26 with the bars table, made visible 2026-09-14 at the Sept→Dec roll as CLASS 143's hole, owner-authorized schema change 2026-09-18 00:3x CT "full fix 4", fix/bars-contract-key, W-BARS-CONTRACT-KEY; number assigned at merge)
+
+**Shape.** `bars` was keyed `(symbol, tf, open_time_ms)` with `contract`
+outside the key, and both writers resolved a collision on that key alone
+(InsertBars upsert; ImportBars DO NOTHING). At every quarterly roll NT8 serves
+the NEW contract's history (~2,000 bars per TF at subscribe) for minutes the
+OLD contract already holds: wherever the old contract had a row the new
+contract's bar was silently dropped, wherever it did not (holidays, Sunday
+evenings, NT8-off windows) it landed as a stray. Measured on the 2026-09-18
+copy of the live DB (read-only `.backup`, 1,906,992 rows): the LANDED
+complement — MNQ 12-26 rows older than 12-26's first live bar — is 1m 451 ·
+3m 12 · 5m 17 · 15m 10 · 1h 4 · 3d 14; the DROPPED overlap cannot be counted
+from the table at all, because the old key never stored it (the brief's
+12–26 rows per roll is [B]). The root is the key: a table that cannot hold
+two contracts on one minute cannot hold a roll.
+
+**How it hid.** (1) The drop was `ON CONFLICT … DO UPDATE … WHERE NOT
+(live overwrites)` / `DO NOTHING` — a silent, counted-nowhere path, exactly
+the shape of "silent refusal paths". (2) `BarsIntegrity` asserted dups=0 on
+the three-column key, so the table always looked clean. (3) Every decision
+reader is contract-scoped and never asked for the minutes it could not have.
+(4) CLASS 143 fixed the display symptom and named this as owner-gated.
+
+**Probes.**
+- Which key is live: `SELECT name FROM pragma_table_info('bars') WHERE pk>0
+  ORDER BY pk;` → `symbol tf contract open_time_ms` after the wave.
+- Roll overlaps (minutes held by two contracts): `SELECT symbol,tf,open_time_ms,
+  COUNT(DISTINCT contract) FROM bars GROUP BY 1,2,3 HAVING COUNT(*)>1;` —
+  EXPECTED non-empty after a roll on the new key; always empty on the old key
+  (by construction, not by health). The nightly `✅ bars integrity` line prints
+  `roll_overlaps=<n>`, read.
+- Boot line, first boot: `🗄 bars: key migrated to (symbol,tf,contract,open_time_ms)
+  — rows=<n> backup=<path> old_table=<name>`; later boots `🗄 bars:
+  key=(symbol,tf,contract,open_time_ms) (migrated <date>) rows=<n>`; refusal
+  `🗄 bars: migration FAILED — <err>; old table intact` (ERROR level, and the
+  bot keeps writing on the legacy key).
+- A time-only reader on the new key sees TWO rows per overlap minute. Every
+  reader must either name a contract or dedupe per open time with a stated
+  rank. The wave's audit table (PR body) lists each one; a NEW time-only
+  reader is a new instance of this class.
+- Any `ON CONFLICT(<columns>)` in this repo must name a key the table
+  ACTUALLY has: the writers read it (`barsConflictTarget`) so a migration that
+  failed open still writes. A hard-coded conflict target on a migrated table
+  is refused by SQLite ("does not match any PRIMARY KEY or UNIQUE constraint")
+  and persistence dies with one WARN per batch — which is what a
+  PRE-MIGRATION BINARY does on the migrated table (tested:
+  `TestBarsKeyOldBinaryStatementsOnTheMigratedTable`). Rollback is
+  `deploy/RESTORE.md` "Roll back the bars CONTRACT-KEY migration".
+- The renamed old table KEEPS its indexes on purpose: the old binary's Migrate
+  checks `idx_bars_sym_tf_time_unique` by NAME only, and with no such index it
+  runs the 2026-08-27 dedupe block that DELETEs every tf<>'1m' row. Dropping a
+  backup table's indexes to tidy up would arm that.
+
+**Fix.** `store/bar_contract_key.go` (detect · VACUUM INTO backup verified by
+row count, refused → migration refused · bars_v2 copy + rename in one
+transaction · idempotent · fail-open with the report's Err); `store/bar_history.go`
+(Contract in the PK, legacy dedupe gated on the legacy key, conflict targets
+from the live key, dups on the full key); `store/bar_contract_roll.go`
+(LatestContract/ContractAt: on a shared minute the row that TRADED wins, then
+the later expiry parsed from the broker's label); `api/handler_bar_truth.go`
+(one contract); `cmd/bars-export` (contract+source columns);
+`trader/ninjatrader/bar_persist_wire.go` (🗄 boot line, roll_overlaps).
+Pins: `store/bar_contract_key_test.go` (legacy-shape migration, idempotent
+second boot, backup-refused fail-open, fresh DB, two contracts one minute,
+tie-break, old-binary statements, opt-in live-copy run via
+`BARS_KEY_LIVE_COPY`), `trader/ninjatrader/bar_persist_contract_key_test.go`
+(the persister's call site), `store/history_import_test.go` E1 (same-contract
+collision skips; another contract lands beside).
