@@ -554,8 +554,18 @@ func (at *AutoTrader) describeActivePlanDeath(row *store.PlanDB) (kernel.PlanDea
 	// plan's STATE anchor (chain birth / re-plan / bias change / flip / re-arm,
 	// latest wins), NOT from this re-read version's created_at — sinceMs above
 	// still windows the condition's own bars, unchanged.
-	hold := at.flipHoldAnchor(row)
-	killer, fired, skipped := kernel.PlanDeathOrFlipSinceFreshHold(doc, bars, at.acceptanceRuleFor(row.Session), sinceMs, now.UnixMilli(), hold)
+	// W-FLIP-OWNS-THE-BREACH (2026-09-17): the FLIP condition window is the
+	// chain anchor when same-bias wake re-reads kept the line (R2) — the
+	// death window and the legacy consumption stay on this version's birth.
+	versions, transitions, fallback, okChain := at.planChainFacts(row)
+	hold := kernel.FlipHoldAnchor{SinceMs: fallback, Source: kernel.FlipHoldAnchorVersion}
+	cw := kernel.FlipConditionAnchor{SinceMs: fallback, Source: kernel.FlipWindowFallback, AnchorVersion: row.Version}
+	if okChain {
+		hold = kernel.ResolveFlipHoldAnchor(versions, transitions, row.Version, fallback)
+		cw = kernel.ResolveFlipConditionAnchor(versions, row.Version, kernel.FlipLineClusterTolerance(), fallback)
+	}
+	at.noteFlipWindow(row, &doc, cw)
+	killer, fired, skipped := kernel.PlanDeathOrFlipSinceFreshHoldWindows(doc, bars, at.acceptanceRuleFor(row.Session), sinceMs, cw.SinceMs, now.UnixMilli(), hold)
 	for _, s := range skipped {
 		at.logWarnf("flip_eval_skipped plan=%s v%d %s", row.PlanID, row.Version, s)
 	}
@@ -575,34 +585,9 @@ func (at *AutoTrader) describeActivePlanDeath(row *store.PlanDB) (kernel.PlanDea
 // A chain the store cannot read falls back to the row's own created_at,
 // tagged so the skip line reads "since version(fallback)".
 func (at *AutoTrader) flipHoldAnchor(row *store.PlanDB) kernel.FlipHoldAnchor {
-	fallback := int64(0)
-	if row != nil && !row.CreatedAt.IsZero() {
-		fallback = row.CreatedAt.UnixMilli()
-	}
-	if at.store == nil || row == nil || row.PlanID == "" {
+	versions, transitions, fallback, ok := at.planChainFacts(row)
+	if !ok {
 		return kernel.FlipHoldAnchor{SinceMs: fallback, Source: kernel.FlipHoldAnchorVersion}
-	}
-	facts, err := at.store.Plan().ListVersionFacts(row.PlanID)
-	if err != nil || len(facts) == 0 {
-		return kernel.FlipHoldAnchor{SinceMs: fallback, Source: kernel.FlipHoldAnchorVersion}
-	}
-	versions := make([]kernel.PlanVersionFact, 0, len(facts))
-	for _, f := range facts {
-		ms := int64(0)
-		if !f.CreatedAt.IsZero() {
-			ms = f.CreatedAt.UnixMilli()
-		}
-		versions = append(versions, kernel.PlanVersionFact{Version: f.Version, TriggerReason: f.TriggerReason, BiasDirection: f.BiasDirection, CreatedAtMs: ms})
-	}
-	var transitions []kernel.PlanTransitionFact
-	if events, lErr := at.store.Plan().LifecycleLogForPlan(row.PlanID); lErr == nil {
-		for _, e := range events {
-			ms := int64(0)
-			if !e.At.IsZero() {
-				ms = e.At.UnixMilli()
-			}
-			transitions = append(transitions, kernel.PlanTransitionFact{Version: e.Version, Event: e.Event, Reason: e.Reason, AtMs: ms})
-		}
 	}
 	return kernel.ResolveFlipHoldAnchor(versions, transitions, row.Version, fallback)
 }
