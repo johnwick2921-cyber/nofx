@@ -5536,7 +5536,7 @@ path now passes the SIGNED measurement.
   (arm path via `currentT1Windows`, plan-write step via `plannerT1Lines`; 42 s
   → +1m unlabelled, 90 s → "+2m (clock drift)" unchanged).
 
-## CLASS 147 — A FLIP LINE AUTHORED ON THE WRONG SIDE OF PRICE CAN NEVER BE TOUCHED, SO IT NEVER FIRES (born 2026-08-27 with the P1c touch gate on the structured flip{} object, reported by the owner 2026-09-17 ~23:00 CT "at the flip point it re-reads and the bias is still the same", fix/flip-line-side-of-price, W-FLIP-LINE-SIDE-OF-PRICE)
+## CLASS 148 — A FLIP LINE AUTHORED ON THE WRONG SIDE OF PRICE CAN NEVER BE TOUCHED, SO IT NEVER FIRES (born 2026-08-27 with the P1c touch gate on the structured flip{} object, reported by the owner 2026-09-17 ~23:00 CT "at the flip point it re-reads and the bias is still the same", fix/flip-line-side-of-price, W-FLIP-LINE-SIDE-OF-PRICE)
 
 **Shape.** A structured line carries a price and a side, and the machine fires
 it only after price TOUCHES the line from the near side after the plan is born
@@ -5616,3 +5616,90 @@ two evaluations at both evaluators; the unstamped-row tape fallback.
   read path does not judge side-of-price.
 - A born-dead refusal that names only scenarios has not looked at the death
   object. Grep the refusal's inputs, not its name.
+## CLASS 147 — A WAKE RE-READ DURING A FLIP BREACH RESTARTS THE FLIP WINDOW: THE FLIP NEVER FIRES (born 2026-08-25 with the W6 wakes, reported by the owner 2026-09-17 23:2x CT "why at the flip point it re-reads and the bias is still the same", fix/flip-owns-the-breach, W-FLIP-OWNS-THE-BREACH; number assigned at merge)
+
+**Shape.** CLASS 139 anchored the flip HOLD to the chain, and left the
+flip CONDITION WINDOW on the version's birth on purpose (a new line must be
+judged only on bars after it was written). But a wake re-read that keeps the
+bias AND the line is a new version too, so its window restarts and the
+confirm-close count returns to zero — and nothing stopped such a wake from
+authoring while the line was mid-breach, or on a tape the flip evaluator had
+just refused as stale. Two clocks were separated in CLASS 139; the third
+(the condition window) and the wake behaviour were not.
+
+**The live story (2026-09-17 ASIA, plan `2026-09-17:ASIA:…`, verified
+against the store's 1m/5m bars).** v1 16:38:46 `ASIA_scheduled_read`, bias
+short, flip `above 29772.62 → long` (5m_close), death `above 29797.88`. The
+line was NEVER breached before v2: the highest 5m close before 22:52 was
+29762.25 (22:45), the highest high 29764.5 (22:50). At 22:16:17 the 15m
+MSS-up (29737.00 @22:15) woke the planner; the machine rebooted 22:38:27 and
+the read was lost. At 22:42:33, on the post-boot cache, the journal reads
+
+	flip_eval_skipped plan=… v1 flip=stale_bars (age 453s)
+	🗓️ structure MSS on ASIA 2026-09-17 (MSS-up 29737.00 @22:15 CT …) — waking the planner
+
+in the SAME second: the flip evaluator refused the tape and the MSS wake
+authored on it (R3). v2 landed 22:52:04, bias short, flip MOVED to
+`above 29747.50` (Δ25.12 pt) — BELOW the price at authoring (22:50 close
+29764.0) — and no post-birth bar ever touched 29747.50 (22:55 low 29749.0,
+23:00 low 29754.75), so the P1c touch gate could never pass on v2's flip.
+At 23:10:46 v2 went `DORMANT — death-condition: 2x5m close above 29755.50`,
+never having flipped. So on 09-17 the hypothesis "price crossed the line,
+the wake restarted the count" is FALSE for v1; what the day shows is R3 (a
+wake authored on the stale tape) plus the moved-line case, and the owner's
+"re-read, bias same" is the same-bias v2. The count-restart (R2) is the
+09-16 shape (v10–v13 stepping the line DOWN 29500.25 → 29418.80 as the tape
+climbed) that CLASS 139 fixed only for the HOLD.
+
+**The rules (kernel/flip_breach.go, no knobs).**
+- R1 *the flip owns the breach*: while the ACTIVE plan's flip line is
+  breached — touched in-window and ≥1 rule-TF close beyond the buffered
+  line, the SAME measurement `PlanConditionFiredSince` fires on
+  (`conditionCloses`) — and has not fired, ordinary wakes (level_event,
+  structure_mss) are DEFERRED: `🗓️ wake deferred: flip line breached (<side>
+  <price>, closes N/2) — the flip evaluator owns this plan until it fires or
+  price closes back`, once per version; `🗓️ wakes resume …` once when price
+  closes back inside. Scheduled reads, death re-plans, owner reads: untouched.
+- R2 *a same-bias wake keeps the flip window*: `ResolveFlipConditionAnchor`
+  walks the chain back from the version while bias, flip side and a flip
+  price within `FlipLineClusterTolerance` (the level map's 12-tick / 3.00 pt
+  width) hold; the window opens at the EARLIEST run member's birth
+  (`🗓️ flip window: … keeps the chain's flip line … closes counted from vK's
+  birth`). A line moved further is a new line: window from the version's
+  birth, `🗓️ flip line MOVED on … Δ… > 3.00 pt tolerance`. A re-plan version
+  starts a run; a bias change or a version with no line breaks it. The hold
+  anchor (CLASS 139) is unchanged; death keeps the version window.
+- R3 *stale bars block wakes too*: when the flip evaluation is skipped (G7,
+  `flip=stale_bars`), ordinary wakes are deferred for the same reason
+  (`🗓️ wake deferred: flip evaluation skipped (stale_bars, age Ns) …`). This
+  closes the gap between the flip evaluator's 5m+90s staleness cap and the
+  planner preflight's `feedDownAfter()`, which is where the 22:42:33 wake got
+  through.
+- A breach the evaluator cannot fire on (a line born beyond price and never
+  touched — v2 above) is NOT a breach: deferring wakes on it would park the
+  plan forever behind a flip that cannot fire.
+
+**Probes.**
+- For every predicate windowed by a row's birth, ask what ELSE appends a row:
+  a wake re-read that changes no state restarts every window keyed on
+  `row.CreatedAt` (CLASS 139 asked this of the hold; ask it of the window).
+- A gate that refuses to JUDGE on a tape (G7 stale) must also refuse to
+  AUTHOR on it: grep the wake paths for a freshness check that is weaker
+  than the evaluator's (`FlipEvalMaxStaleMs` vs `feedDownAfter`).
+- Two measurements of one line (breach vs fire) must be ONE function; a
+  wake that measures the buffer or the touch gate differently from the
+  evaluator will defer on breaches that cannot fire, or author through ones
+  that can.
+- Journal counter-read: a `🗓️ level wake … waking the planner` or
+  `structure MSS … waking the planner` inside the minute of a
+  `flip_eval_skipped … stale_bars` line, or while `closes N/2` is climbing,
+  is this class.
+- Pinned at the production call sites: `trader/flip_breach_test.go` (1/2 →
+  deferred, 2/2 → dormant:flip + structure_flip read; closes back → resume;
+  same-bias wake within tolerance fires from the chain window while the
+  version window reproduces the miss; moved line → birth, logged; stale →
+  both wakes deferred; death-dormant and a no-row scheduled read untouched;
+  the ASIA 09-17 replay on the live tape `flip_breach_fixture_test.go`) and
+  `kernel/flip_breach_test.go` (resolver runs/breaks, breach-state parity
+  with the evaluator, two-window evaluator byte-identical when the windows
+  agree).
