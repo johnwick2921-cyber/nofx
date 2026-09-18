@@ -6015,7 +6015,7 @@ needs the live journals and is NOT claimed here. Knob
 WARN-only behaviour byte-identical (pinned by a parity test at the rendering
 seam). The session-risk band is deliberately NOT judged at write (time-based).
 
-## CLASS NN — THE CARD SHOWED THE EVALUATOR'S VERDICT AND NEVER THE EXECUTOR'S (born 2026-08-27 with the scenario evaluator line, found 2026-09-18 by the owner — "why no trade" — feat/arm-state-ui, W-ARM-STATE-UI; number assigned at merge)
+## CLASS 155 — THE CARD SHOWED THE EVALUATOR'S VERDICT AND NEVER THE EXECUTOR'S (born 2026-08-27 with the scenario evaluator line, found 2026-09-18 by the owner — "why no trade" — feat/arm-state-ui, W-ARM-STATE-UI)
 
 **Shape.** The plan card's per-scenario verdict (🎯 scenario S1 → ≈armed / ≈triggered)
 is the EVALUATOR's: it is computed from price alone and can read "≈triggered" every
