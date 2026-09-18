@@ -21,6 +21,7 @@
 - Observed on the same write [A]: `🪪 map 29647.50 id=NULL: missing formed_close_ms` and
   `🪪 map 29967.25 id=NULL: missing formed_close_ms` — NULL-id map entries in the NY v1 machine map (the DS-102 id-assignment surface, live today).
 - Also observed [A]: `⏱ wake SKIPPED` ×4 (08:08–08:14, "22→16 min to flat (cutoff 25m) — seated Demand·1h invalidated") — no re-read between 08:06 and the last-entry gate.
+- **NY v2 written 08:49:48 CT [A]:** `⚔️ arm feasibility: S1 arm stop 29795.25 too close (40.50 < 42.27 = 1.5×ATR5m)` and `S2 arm stop 29922.50 too close (40.88 < 42.27)` — the 1.5×ATR5m floor widened to 42.27 (ATR rose) and BOTH arms are again min-SL-refused at authoring. **Every authored arm today has been min-SL-refused at write; zero stop_entry rows exist to place (live check @ ~10:20 CT: only id 166).** The stop-entry seam is ON, the AddOn is proven (build_id match), and nothing reaches the wire because the gate-at-arm chain refuses each authored arm at write — the live proof of "the evaluator armed it, the executor never attempted it".
 
 ### A queries (re-runnable)
 
@@ -240,9 +241,34 @@ Nothing else bridged yet; rolling.
 
 ## E. UNKNOWNS / NOT MEASURED
 
-- Live-DB rows after 02:25 CT (beyond id 166) — none as of 08:25 CT.
 - Whether the bot's cache at 09-11 01:01 held 12-26 or 09-26 as newest — [B]
   inference from bars table; the gate's price source is the cache's newest bars
   (armed placement reads current price from the futures bars provider) [B, code
-  path `trader/armed_executor.go` placement + `market.FuturesBarsProvider`].
-- NY v1 S2 candidate outcome — not yet authored.
+  path `trader/armed_executor.go` placement + `market.FuturesBarsProvider`).
+- The 4 live-only reject rows at 08:55 CT were later 5; today's rows keep growing
+  during RTH — the C tables name the count at query time.
+- DS-102's replay "57 change" vs my 54 flips on the 109 backup rows — the delta
+  presumably their live-row inclusion; NOT re-derived from their artifact.
+
+## F. PROPOSED CLASS (per L6 — text proposed, checklist edit left to the coder lane)
+
+**CLASS NN (proposed): "the evaluator says triggered, the executor never
+attempts — and nothing on the card said so."** Born 2026-09-04 (first stop_entry
+arm written) and found 2026-09-18 by the owner ("why no trade"). Probe: a
+scenario that the evaluator/trigger surface renders ≈triggered or ≈armed while
+EVERY executor-side gate at the arm seam refused it — geometry provenance
+(65/95 verdict records), min-SL at write (every arm authored today, 29.25/40.50/40.88
+vs the 1.5×ATR5m floor), or wrong-side placement (29 of 30 stop_entry rows since
+09-04) — and the UI showed the evaluator's state, not the executor's, so the
+owner read "armed" while zero orders existed. The breadth: three distinct
+refusal sites, none surfaced on the card before DS-103's ExecutorVerdict column.
+
+## G. VERDICT — DONE_WITH_CONCERNS
+
+Report: `docs/superpowers/reports/2026-09-18-proof-and-replay.md` on branch
+`docs/proof-and-replay-0918` (report sha at the time of this line:
+`a5f67d35`; pushes follow every update). Concerns: (1) both coder lanes shipped
+review items that contradict their own DONE messages (DS-102's
+`auto_trader_planner.go` edit; DS-101's GUIDE_BUILT_REV bump + contract-unfiltered
+replay ATR) — both flagged, neither silent; (2) Part A is still open by nature
+(zero placements so far; watching until 14:45 CT).
