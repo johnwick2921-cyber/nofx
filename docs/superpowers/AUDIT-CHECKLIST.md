@@ -5963,7 +5963,10 @@ runs LAST among the validators so it never pre-empts a hard reject — the
 cost of that ordering is one extra model round-trip when an earlier validator
 has already burned attempts 1..N-1 (a two-defect model writes on attempt 2
 OFF and attempt 3 ON; a three-defect chain now fail-closes where it wrote
-before — measured in TestWriteTimeFeasibilityNeverPreemptsHardRejects). Knob
+before). TestWriteTimeFeasibilityNeverPreemptsHardRejects asserts that flow
+shape (hard reject attempt 1, the hint rides the attempt-3 prompt, the arm
+is disabled at attempt 3) — it does not measure the fail-closed rate, which
+needs the live journals and is NOT claimed here. Knob
 `day_plan.write_time_feasibility`, nil/unset = ON; explicit false = the old
 WARN-only behaviour byte-identical (pinned by a parity test at the rendering
 seam). The session-risk band is deliberately NOT judged at write (time-based).

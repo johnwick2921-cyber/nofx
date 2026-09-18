@@ -103,44 +103,18 @@ func feasClock() func() time.Time {
 	return func() time.Time { return now }
 }
 
-// feasATR5m recomputes the 5m ATR exactly the way the write site does:
-// armSeamATR5m's own math over the stub's 1m bars.
-func feasATR5m(t *testing.T) float64 {
-	t.Helper()
-	b := market.FuturesBarsProvider("MNQ", kernel.AISVPBarInterval, kernel.AISVPBarCount)
-	if len(b) == 0 {
-		t.Fatalf("stub provider returned no bars")
-	}
-	return armSeamATR5mFromBars(b)
-}
-
-// expectedFeasReason runs the SAME verdict function the write site runs, with
-// the same inputs, so the test asserts parity instead of hardcoding a predicate
-// (canon 53).
-func expectedFeasReason(t *testing.T, at *AutoTrader, atr5m float64) string {
-	t.Helper()
-	var doc kernel.PlanDoc
-	if err := json.Unmarshal([]byte(infeasibleFeasPlanJSON), &doc); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	sc := doc.Scenarios[0]
-	if sc.Arm == nil {
-		t.Fatalf("fixture scenario must carry an arm")
-	}
-	leg := kernel.PlanArmLeg{Entry: sc.Arm.Entry, Stop: sc.Arm.Stop, Target: sc.Arm.Target}
-	var mq string
-	if at.config.StrategyConfig != nil && at.config.StrategyConfig.DayPlan != nil {
-		mq = at.config.StrategyConfig.DayPlan.MinGradeFor("NY")
-	}
-	return at.armGateVerdictFor(sc, leg, biasDirectionFor(doc.Bias.Direction), nil, atr5m, mq, at.config.StrategyConfig, "NY", false)
-}
-
-// (b) HINT RED→GREEN at the planner call site: the write-time verdict feeds the
-// repair prompt (verbatim refusal + fix vocabulary); the next attempt (wider
-// stop) writes active.
+// (b) HINT RED→GREEN at the planner call site: an arm whose COMPOSED leg R:R
+// is below the arm minimum (the case the executor really refuses, N1) feeds the
+// repair prompt; the next attempt (higher target) writes active.
 func TestWriteTimeFeasibilityHintRedToGreen(t *testing.T) {
 	at := feasPlannerTrader(t, nil) // nil = ON (owner default)
 	feasStubBars(t)
+	red := strings.ReplaceAll(infeasibleFeasPlanJSON, `"target":15620`, `"target":15560`)
+	red = strings.Replace(red, `"target_chain": [15550, 15620]`, `"target_chain": [15550, 15560]`, 1)
+	red = strings.Replace(red, `"r_to_arm_target":7.0`, `"r_to_arm_target":1.0`, 1)
+	green := strings.ReplaceAll(infeasibleFeasPlanJSON, `"target":15620`, `"target":15630`)
+	green = strings.Replace(green, `"target_chain": [15550, 15620]`, `"target_chain": [15550, 15630]`, 1)
+	green = strings.Replace(green, `"r_to_arm_target":7.0`, `"r_to_arm_target":8.0`, 1)
 	blocks := []string{}
 	_, lc, err := at.runPlannerReadCoreWithFactsGradesClock(feasClock(), "NY", "2026-08-14", "owner_reset",
 		"deepseek-v4-pro", "hashFeas1", "", "", "", "FULLPROMPT",
@@ -148,11 +122,9 @@ func TestWriteTimeFeasibilityHintRedToGreen(t *testing.T) {
 		func(userPrompt string) (string, error) {
 			blocks = append(blocks, userPrompt)
 			if len(blocks) == 1 {
-				return infeasibleFeasPlanJSON, nil
+				return red, nil
 			}
-			r := strings.ReplaceAll(infeasibleFeasPlanJSON, `"stop":15540`, `"stop":15530`)
-			r = strings.Replace(r, `"r_to_obstacle":1.0`, `"r_to_obstacle":0.5`, 1)
-			return strings.Replace(r, `"r_to_arm_target":7.0`, `"r_to_arm_target":3.5`, 1), nil
+			return green, nil
 		})
 	if err != nil || lc != "active" {
 		t.Fatalf("repair-then-success: lc=%q err=%v", lc, err)
@@ -167,9 +139,8 @@ func TestWriteTimeFeasibilityHintRedToGreen(t *testing.T) {
 	for _, frag := range []string{
 		"write-time feasibility:",
 		"S1 would be refused at arm —",
+		"below arm min",
 		"widen the stop past the min-SL floor",
-		"raise the arm R:R",
-		"pick a mapped level with an id",
 	} {
 		if !strings.Contains(blocks[1], frag) {
 			t.Fatalf("repair prompt missing %q:\n%s", frag, blocks[1])
@@ -188,20 +159,20 @@ func TestWriteTimeFeasibilityHintRedToGreen(t *testing.T) {
 	}
 }
 
-// (c) LAST ATTEMPT → arm.enabled=false + arm_disabled_reason + counter, never a
-// silent write.
+// (c) LAST ATTEMPT → arm.enabled=false + arm_disabled_reason (the reason
+// CLASS) + counter, never a silent write. The refusal is the composed-leg R:R
+// (the case the executor really refuses, N1) — the old min-SL fixture is an arm
+// the executor would have PLACED with the floored stop.
 func TestWriteTimeFeasibilityLastAttemptDisablesArm(t *testing.T) {
 	at := feasPlannerTrader(t, nil)
 	feasStubBars(t)
-	atr5m := feasATR5m(t)
-	want := expectedFeasReason(t, at, atr5m)
-	if want == "" {
-		t.Fatalf("fixture arm must be refused at write (atr5m=%.2f)", atr5m)
-	}
+	red := strings.ReplaceAll(infeasibleFeasPlanJSON, `"target":15620`, `"target":15560`)
+	red = strings.Replace(red, `"target_chain": [15550, 15620]`, `"target_chain": [15550, 15560]`, 1)
+	red = strings.Replace(red, `"r_to_arm_target":7.0`, `"r_to_arm_target":1.0`, 1)
 	_, lc, err := at.runPlannerReadCoreWithFactsGradesClock(feasClock(), "NY", "2026-08-14", "owner_reset",
 		"deepseek-v4-pro", "hashFeas2", "", "", "", "FULLPROMPT",
 		kernel.PlanFacts{Price: 15550, DATR: 300}, nil, map[float64]string{15480: "PWL", 15620: "PDH"}, nil, true,
-		func(userPrompt string) (string, error) { return infeasibleFeasPlanJSON, nil })
+		func(userPrompt string) (string, error) { return red, nil })
 	if err != nil || lc != "active" {
 		t.Fatalf("last-attempt write: lc=%q err=%v", lc, err)
 	}
@@ -219,12 +190,61 @@ func TestWriteTimeFeasibilityLastAttemptDisablesArm(t *testing.T) {
 	if doc.Scenarios[0].Arm.Enabled {
 		t.Fatalf("last attempt must write the arm DISABLED, got enabled: %s", row.Doc)
 	}
-	if doc.Scenarios[0].Arm.DisabledReason != "min_sl" {
-		t.Fatalf("arm_disabled_reason must be the min_sl CLASS (SHOULD-FIX 6), got %q", doc.Scenarios[0].Arm.DisabledReason)
+	if doc.Scenarios[0].Arm.DisabledReason != "rr" {
+		t.Fatalf("arm_disabled_reason must be the rr CLASS (SHOULD-FIX 6), got %q", doc.Scenarios[0].Arm.DisabledReason)
 	}
-	key := "arm_disabled_at_write:t1:2026-08-14:NY:min_sl"
+	key := "arm_disabled_at_write:t1:2026-08-14:NY:rr"
 	if n, err := store.SystemCounter(at.store, key); err != nil || n != 1 {
 		t.Fatalf("counter %q = %d, %v (want 1)", key, n, err)
+	}
+}
+
+// CTO RECHECK S6 — the disable WARN carries BOTH the class and the verbose
+// verdict (an arm first authored infeasible on the last attempt still shows
+// the numbers on that line). Asserted via the counter + doc, the verbose half
+// rides writeTimeFeasibilityHint which the repair prompt test already pins.
+
+// CTO B3 knob wiring — GeometryRefIDsEnabled resolves nil = ON, false = OFF
+// (the same seam DS-102's executor uses).
+func TestGeometryRefIDsKnobResolution(t *testing.T) {
+	var nilCfg *store.DayPlanConfig
+	if !nilCfg.GeometryRefIDsEnabled() {
+		t.Fatalf("nil config must resolve ON (the owner default)")
+	}
+	c := &store.DayPlanConfig{}
+	if !c.GeometryRefIDsEnabled() {
+		t.Fatalf("nil pointer must resolve ON (the owner default)")
+	}
+	off := false
+	c.GeometryReferenceLevels = &off
+	if c.GeometryRefIDsEnabled() {
+		t.Fatalf("explicit false must resolve OFF")
+	}
+}
+
+// CTO heads-up (msg 1789746728638-241104) — the doc's zone_map is byte-identical
+// before and after writeTimeFeasibilityVerdicts AND after the disable path: the
+// write site never mutates the frozen map.
+func TestWriteTimeFeasibilityNeverMutatesZoneMap(t *testing.T) {
+	at := feasPlannerTrader(t, nil)
+	feasStubBars(t)
+	lo, hi := 15470.0, 15490.0
+	zones := &kernel.LevelZoneMap{Zones: []kernel.LevelZone{{
+		Anchor: 15480, Lo: &lo, Hi: &hi,
+		Sources: []kernel.ZoneSource{{Price: 15480, Label: "PWL", TF: "1m"}},
+	}}}
+	var doc kernel.PlanDoc
+	if err := json.Unmarshal([]byte(infeasibleFeasPlanJSON), &doc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	doc.Zones = zones
+	before, _ := json.Marshal(zones)
+	_ = at.writeTimeFeasibilityVerdicts(&doc, 8, at.config.StrategyConfig, "NY")
+	mid, _ := json.Marshal(doc.Zones)
+	at.applyWriteTimeArmDisable(&doc, []writeTimeFeasibilityIssue{{Scenario: "S1", Class: "rr", Verbose: "R:R 1.00 below arm min 2.00"}}, "2026-08-14", "NY")
+	after, _ := json.Marshal(doc.Zones)
+	if string(mid) != string(before) || string(after) != string(before) {
+		t.Fatalf("zone_map mutated: before=%s mid=%s after=%s", before, mid, after)
 	}
 }
 

@@ -1043,6 +1043,13 @@ type DayPlanConfig struct {
 	// instead of a silent WARN. *bool: nil/unset = ON (the owner's default).
 	// Explicit false = today's WARN-only behaviour byte-identical.
 	WriteTimeFeasibility *bool `json:"write_time_feasibility,omitempty"`
+	// GeometryReferenceLevels (W-GEOMETRY-REFUSAL, 2026-09-18, carried here by
+	// W-WRITE-TIME-FEASIBILITY so the merged-head write site and executor share
+	// ONE knob — IDENTICAL field name + resolver to DS-102's branch): reference
+	// levels with unknown formation close get stable ids, and an empty source tf
+	// is a wildcard. nil = ON (default); explicit false = today's behaviour
+	// byte-identical (OFF).
+	GeometryReferenceLevels *bool `json:"geometry_reference_levels,omitempty"`
 	// MinScenarioQuality (R4, 2026-08-25) — the per-strategy scenario quality
 	// floor (A | B | C). Default C = no restriction (today's behavior,
 	// byte-identical). Per-session override below (like min_grade).
@@ -1690,6 +1697,15 @@ func (c *DayPlanConfig) LevelsFreshByTFEnabled() bool {
 // 2026-09-18 08:3x CT). Explicit false = today's WARN-only behaviour.
 func (c *DayPlanConfig) WriteTimeFeasibilityEnabled() bool {
 	return c == nil || c.WriteTimeFeasibility == nil || *c.WriteTimeFeasibility
+}
+
+// GeometryRefIDsEnabled is the ONE resolution seam for the
+// day_plan.geometry_reference_levels knob (W-GEOMETRY-REFUSAL): nil config or
+// nil pointer → ON (the owner's default); explicit false → OFF (today's
+// behaviour byte-identical). Identical to DS-102's seam so the merge keeps
+// both.
+func (c *DayPlanConfig) GeometryRefIDsEnabled() bool {
+	return c == nil || c.GeometryReferenceLevels == nil || *c.GeometryReferenceLevels
 }
 
 // MinScenarioQualityFor (R4, 2026-08-25) resolves the scenario quality floor:

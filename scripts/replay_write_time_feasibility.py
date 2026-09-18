@@ -261,14 +261,16 @@ def main():
                     geo = geometry_refusal(doc, sc, arm)
                     if geo:
                         pred, geo_s = "geometry", geo
-                elif atr is not None:
-                    atr_s = f"{atr:.2f}"
-                    e, s = arm.get("entry"), arm.get("stop")
-                    dist = abs(e - s)
-                    if dist + 1e-9 < MIN_SL_MULT * atr:
-                        pred = "min-SL"
                 else:
-                    atr_s = f"NOT MEASURED ({nbars} bars)"
+                    # N1 (CTO RECHECK 2026-09-18): the executor composes the
+                    # stop for every NON-fade leg BEFORE its gates (legacy
+                    # composeArmStop, floored at MIN_SL_ATR_MULT×ATR5m, widest
+                    # wins) — min-SL can never fire at arm on the authored
+                    # stop, so the predicate is DROPPED for non-fade rows. The
+                    # R:R above is computed on the authored leg; the composed
+                    # stop can only LOWER R:R, so the none bucket is an upper
+                    # bound, not an exact admit.
+                    atr_s = f"{atr:.2f}" if atr else "NOT MEASURED"
                 if pred == "none" and cond == "reclaim":
                     price = doc.get("price_at_write")
                     if price is None:

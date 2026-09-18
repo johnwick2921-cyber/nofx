@@ -217,6 +217,11 @@ type armStructuralContext struct {
 	Leg        kernel.PlanArmLeg
 	Policy     store.StructuralStopPolicy
 	PointValue float64
+	// GeometryRefIDs (W-GEOMETRY-REFUSAL, 2026-09-18) — the resolved
+	// day_plan.geometry_reference_levels knob; true = empty source tf wildcard
+	// + stable ids for reference levels. Named IDENTICALLY to DS-102's field so
+	// the merged-head write site and executor thread the same knob.
+	GeometryRefIDs bool
 }
 
 func (at *AutoTrader) saveArmGeometry(r store.StructuralGeometryRecord) bool {

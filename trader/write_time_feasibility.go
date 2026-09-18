@@ -92,20 +92,25 @@ func (at *AutoTrader) writeTimeFeasibilityVerdicts(d *kernel.PlanDoc, atr5m floa
 			continue
 		}
 		leg := kernel.PlanArmLeg{Entry: sc.Arm.Entry, Stop: sc.Arm.Stop, Target: sc.Arm.Target}
-		// The executor applies the structural-geometry path only to the
-		// level-fade play and COMPOSES entry/stop/target before its gates
-		// (armed_executor.go composeArmStop). Mirror both through the SAME
-		// composition (CTO SHOULD-FIX 5 — never a different number than the
-		// executor).
 		structuralFade := sc.Condition == kernel.OneSetupPlay && !strings.EqualFold(leg.Kind, "exit")
 		if structuralFade {
+			// The executor applies the structural-geometry path only to the
+			// level-fade play and COMPOSES entry/stop/target before its gates.
+			// Mirror through the SAME composition (CTO SHOULD-FIX 5 — never a
+			// different number than the executor) and thread the SAME knob the
+			// executor threads (CTO BLOCKER 3: GeometryRefIDs =
+			// cfg.DayPlan.GeometryRefIDsEnabled(), nil = ON).
 			policy := store.ResolveStructuralStop(cfg, at.futuresSymbol())
 			policy.MinRR = at.armMinRRFor(cfg)
+			refIDs := false
+			if dp := at.dayPlanCfg(); dp != nil {
+				refIDs = dp.GeometryRefIDsEnabled()
+			}
 			comp := composeArmStop(sc.Direction, leg.Entry, leg.Stop, atr5m,
 				market.FuturesTickSize(at.futuresSymbol()), d.Levels, kernel.MinSLATRMult(),
 				kernel.MinSLTickClearance, armStopAnchorMaxATR(),
 				armStructuralContext{Doc: d, Scenario: *sc, Leg: leg, Policy: policy,
-					PointValue: market.FuturesPointValue(at.futuresSymbol())})
+					PointValue: market.FuturesPointValue(at.futuresSymbol()), GeometryRefIDs: refIDs})
 			if comp.Geometry != nil && comp.Geometry.Reason != "" {
 				out = append(out, writeTimeFeasibilityIssue{
 					Scenario: sc.ID,
@@ -124,9 +129,22 @@ func (at *AutoTrader) writeTimeFeasibilityVerdicts(d *kernel.PlanDoc, atr5m floa
 			if comp.Geometry != nil && comp.Geometry.Target != nil {
 				leg.Target = *comp.Geometry.Target
 			}
+		} else {
+			// N1 (CTO RECHECK 2026-09-18): for every NON-fade leg the executor
+			// composes the stop BEFORE its gates via the legacy composeArmStop
+			// branch (armed_executor.go:531-535 — ATR floor entry ∓ mult×ATR5m,
+			// nearest seated level + clearance, widest wins, never tighter than
+			// authored), so the min-SL leg can never fire at arm on the authored
+			// stop. Compose the SAME stop here and judge the composed leg.
+			comp := composeArmStop(sc.Direction, leg.Entry, leg.Stop, atr5m,
+				market.FuturesTickSize(at.futuresSymbol()), d.Levels, kernel.MinSLATRMult(),
+				kernel.MinSLTickClearance, armStopAnchorMaxATR())
+			if comp.Stop > 0 {
+				leg.Stop = comp.Stop
+			}
 		}
 		if v := at.armGateVerdictFor(*sc, leg, bias, nil, atr5m, minQuality, cfg, session, structuralFade); v != "" {
-			out = append(out, writeTimeFeasibilityIssue{Scenario: sc.ID, Class: verdictClass(v), Verbose: v, Kind: "gate"})
+			out = append(out, writeTimeFeasibilityIssue{Scenario: sc.ID, Class: armRefusalClass(v), Verbose: v, Kind: "gate"})
 			continue
 		}
 		// STOP-SIDE (CTO amendment 2026-09-18) — the executor's OWN placement
@@ -170,22 +188,9 @@ func lastTapeClose(symbol string) float64 {
 	return b[len(b)-1].Close
 }
 
-// verdictClass maps an armGateVerdictFor verdict to its reason CLASS for the
-// counter key (SHOULD-FIX 6): bounded cardinality, one row per class.
-func verdictClass(v string) string {
-	if strings.Contains(v, "too close") {
-		return "min_sl"
-	}
-	if strings.Contains(v, "R:R") {
-		return "rr"
-	}
-	// HTF veto / plan bias / quality / direction: slug the leading token.
-	tok := strings.Fields(v)
-	if len(tok) == 0 {
-		return "refused"
-	}
-	return strings.TrimSuffix(strings.Trim(tok[0], ":"), ":")
-}
+// verdictClass is REMOVED (CTO RECHECK S6): the executor's own
+// armRefusalClass (armed_executor.go:1746) is the ONE classifier — the dedup
+// vocabulary can never diverge again.
 
 // geometryClass maps a composeArmStop geometry refusal code to the counter
 // class geometry_<code> (SHOULD-FIX 6).
@@ -231,26 +236,29 @@ func (at *AutoTrader) applyWriteTimeArmDisable(d *kernel.PlanDoc, issues []write
 	if d == nil || len(issues) == 0 {
 		return
 	}
-	byID := make(map[string]string, len(issues))
+	byID := make(map[string]writeTimeFeasibilityIssue, len(issues))
 	for _, is := range issues {
-		byID[is.Scenario] = is.Class
+		byID[is.Scenario] = is
 	}
 	for i := range d.Scenarios {
 		sc := &d.Scenarios[i]
 		if sc.Arm == nil || !sc.Arm.Enabled {
 			continue
 		}
-		class, ok := byID[sc.ID]
+		issue, ok := byID[sc.ID]
 		if !ok {
 			continue
 		}
 		sc.Arm.Enabled = false
-		sc.Arm.DisabledReason = class
-		at.logWarnf("⚔️ arm disabled at write: %s %s %s", session, sc.ID, class)
+		sc.Arm.DisabledReason = issue.Class
+		// The WARN carries BOTH the class and the verbose verdict (CTO RECHECK
+		// S6): an arm first authored infeasible on the last attempt still shows
+		// the numbers on this line.
+		at.logWarnf("⚔️ arm disabled at write: %s %s %s (%s)", session, sc.ID, issue.Class, issue.Verbose)
 		if at.store == nil {
 			continue
 		}
-		key := fmt.Sprintf("arm_disabled_at_write:%s:%s:%s:%s", at.id, tradeDate, session, class)
+		key := fmt.Sprintf("arm_disabled_at_write:%s:%s:%s:%s", at.id, tradeDate, session, issue.Class)
 		if _, err := store.IncSystemCounter(at.store, key); err != nil {
 			at.logWarnf("⚔️ arm-disabled counter write failed: %v", err)
 		}

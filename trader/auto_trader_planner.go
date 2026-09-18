@@ -2237,9 +2237,13 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 		//
 		// CTO BLOCKER 1: stamp the frozen zone map + scenario identity
 		// into d BEFORE judging — the geometry predicate resolves against
-		// them and the final stamp runs only after the loop.
-		d.Zones = facts.Zones
-		kernel.StampAuthoredIdentity(d, facts.IdentityMap)
+		// them and the final stamp runs only after the loop. Gated behind
+		// the knob (OFF stays byte-identical, CTO NIT) and through the SAME
+		// stampPlanIdentity wrapper the final stamp uses (panic containment).
+		if at.writeTimeFeasibilityOn() {
+			d.Zones = facts.Zones
+			at.stampPlanIdentity(d, facts.IdentityMap)
+		}
 		if feas := at.writeTimeFeasibilityVerdicts(d, atr5m, at.config.StrategyConfig, session); len(feas) > 0 {
 			if attempt < plannerMaxAttempts {
 				lastErr = fmt.Errorf("%s", writeTimeFeasibilityHint(feas))
