@@ -156,7 +156,29 @@ python3 /tmp/ds104_replay2.py   # produces /tmp/ds104-replay2.txt (per-scenario 
 
 ## D. VERIFY OTHER LANES' CLAIMS
 
-Nothing bridged yet; rolling.
+**Item 1 — PR #174 (DS-103, feat/arm-state-ui).** Verified twice, in detached
+worktrees (removed after): at the CTO-named HEAD `89e4de3c` and re-run at the
+fixed head `4c923a76` after F1–F3 review fixes. **All PASS at 4c923a76** [A]:
+
+1. `git diff --stat b70fc6ca..4c923a76` = 11 files — FE (`web/src/**`), guide
+   content, i18n, AUDIT-CHECKLIST; zero Go/server files.
+2. Executor column sources ONLY: `plan.armed` served by `api/handler_plan.go:448`
+   via `armedMapFor` (impl `api/handler_plan_order_truth.go:63`, ledger rows,
+   row_id) and `plan.structural_geometry` served by `api/handler_plan.go:505`
+   via `planStructuralGeometry` (impl `api/handler_plan_geometry.go:6`, time_ms).
+   `ExecutorVerdict.tsx` imports only `PlanArmView` + `StructuralGeometryView`.
+3. `npx vitest run src/components/plan/ExecutorVerdict.test.tsx` — 9 passed (9), 517ms.
+4. `npx tsc --noEmit` rc=0; `npx vitest run src/components/plan src/components/strategy src/guide` — 53 files, 307 tests passed.
+5. Review pins present and green: `{reason:'entry_gate', quantity:0}` → refused
+   (test `refuses entry_gate and one_setup via the store rule`); superseded+admitted
+   → `superseded: …` (`a ledger row wins over an admitted geometry record`);
+   `traderNames` undefined → no badge (`renders no trading claim when the binding
+   is unloaded`; component gate `StrategyTradingBadge.tsx:17`).
+
+Spec-freshness note: the branch moved past the first named HEAD while I verified
+(89e4de3c → 4c923a76); both verified, verdicts reported per head.
+
+Nothing else bridged yet; rolling.
 
 ## E. UNKNOWNS / NOT MEASURED
 
