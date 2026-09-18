@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -342,23 +343,30 @@ func TestDeathRereadHeldInsideFlapGuard(t *testing.T) {
 		t.Fatal(err)
 	}
 	seedFlipBars(15500, 15470, 6*time.Minute, now)
-	called := 0
+	var called atomic.Int32
 	orig := deathRereadRun
-	deathRereadRun = func(*AutoTrader, string, string, string, *store.PlanDB, bool) bool { called++; return true }
+	deathRereadRun = func(*AutoTrader, string, string, string, *store.PlanDB, bool) bool { called.Add(1); return true }
 	t.Cleanup(func() { deathRereadRun = orig })
 
 	// Inside the flap guard (dormant write 1 minute ago): HELD, no launch.
 	_ = st.SetSystemConfig(dormantSinceKey(row), fmt.Sprintf("%d", now.Add(-1*time.Minute).UnixMilli()))
 	at.maybeRereadAfterDeath(now, "NY", td, row, "death-condition: 5m_close close below 15480.00", 15470)
 	time.Sleep(300 * time.Millisecond)
-	if called != 0 {
-		t.Fatalf("inside the flap guard the read must be HELD (0 launches), got %d", called)
+	if called.Load() != 0 {
+		t.Fatalf("inside the flap guard the read must be HELD (0 launches), got %d", called.Load())
 	}
 	// After the guard elapses the same call launches.
 	_ = st.SetSystemConfig(dormantSinceKey(row), fmt.Sprintf("%d", now.Add(-6*time.Minute).UnixMilli()))
 	at.maybeRereadAfterDeath(now, "NY", td, row, "death-condition: 5m_close close below 15480.00", 15470)
-	if !waitFor(t, 5*time.Second, func() bool { return called == 1 }) {
-		t.Fatalf("after the flap guard the read must launch once, got %d", called)
+	if !waitFor(t, 5*time.Second, func() bool { return called.Load() == 1 }) {
+		t.Fatalf("after the flap guard the read must launch once, got %d", called.Load())
+	}
+	// Drain the goroutine before the cleanup swaps the seam back (no data race).
+	if !waitFor(t, 5*time.Second, func() bool {
+		_, running := deathRereadInFlight.Load(deathRereadInFlightKey(at, row))
+		return !running
+	}) {
+		t.Fatal("the death re-read goroutine never drained")
 	}
 }
 
@@ -417,14 +425,14 @@ func TestDeathRereadPreReadRecheckSkipsRearmedRow(t *testing.T) {
 		t.Fatal(err)
 	}
 	seedFlipBars(15500, 15470, 6*time.Minute, now)
-	called := 0
+	var called atomic.Int32
 	orig := deathRereadRun
-	deathRereadRun = func(*AutoTrader, string, string, string, *store.PlanDB, bool) bool { called++; return true }
+	deathRereadRun = func(*AutoTrader, string, string, string, *store.PlanDB, bool) bool { called.Add(1); return true }
 	t.Cleanup(func() { deathRereadRun = orig })
 
 	at.maybeRereadAfterDeath(now, "NY", td, row, "death-condition: 5m_close close below 15480.00", 15470)
 	time.Sleep(300 * time.Millisecond)
-	if called != 0 {
-		t.Fatalf("the pre-read re-check must skip a non-dormant row (0 launches), got %d", called)
+	if called.Load() != 0 {
+		t.Fatalf("the pre-read re-check must skip a non-dormant row (0 launches), got %d", called.Load())
 	}
 }
