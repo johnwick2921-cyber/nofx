@@ -206,6 +206,36 @@ detached worktree (removed after). **Mixed verdict** [A]:
    ARMED→X flips. Classification-change count on the 109 backup rows = 54 (their
    57 presumably includes the live rows).
 
+**Item 3 — PR #176 (DS-101, fix/write-time-feasibility, HEAD 3e3c97d1, base 088020cf).**
+Verified in a detached worktree (removed after). **Mixed verdict** [A]:
+
+1. **FLAG** — `web/src/guide/types.ts` GUIDE_BUILT_REV changed IN the PR:
+   `249ff3a5eea6…` → `26087401ffbc…` (their branch build) — the CTO's rule says it
+   must not. Diff = 21 files (Go: kernel/plan_doc, planner_prompt,
+   prompt_contract + parity test; trader/write_time_feasibility(+test),
+   auto_trader_dayplan, auto_trader_planner; store/strategy, knob_registry_table;
+   scripts/replay_write_time_feasibility.py; web guide ×3; AUDIT-CHECKLIST; report).
+2. PASS — five named tests run and passed (tails `ok nofx/trader 4.062s`,
+   `ok nofx/kernel 0.027s`).
+3. PASS — `go build` rc=0, `go vet` rc=0, `npx tsc` rc=0, **FULL** `npx vitest run`
+   72 files / 468 tests passed.
+4. **FAIL with root cause proven** — their replay script
+   (`scripts/replay_write_time_feasibility.py:143`) reads the LIVE bars table
+   with NO contract filter AFTER the class-149 migration (live PK =
+   `(symbol,tf,contract,open_time_ms)`; both `MNQ 09-26` AND `MNQ 12-26` rows
+   exist at the same minutes in the 09-07..09-14 overlap — 25+25 on 09-13).
+   Their report's `atr5m=280.51` for 09-13 ASIA v1 is garbage; the same script
+   on the single-contract backup gives `32.80`. Their min-SL bucket (39) rides
+   the inflated ATR; my backup run of THEIR script gives min-SL=25. Their
+   "96 plans" = my 93 backup + 3 live-only plans (consistent). Python replay,
+   not the Go call site (their own flag stands).
+5. **False-negative risk = 0 (measured)** — of their 67 geometry-bucket rows
+   (backup run) plus the 5 live-only rows, **zero** are ADMITTED by DS-102's
+   knob-ON `ArmGeometryVerdict` (my per-row [A] map: 109 backup + 5 live rows;
+   the 33 knob-ON admits are all rows legacy also admitted — none sit in their
+   geometry bucket). #176 staying on the legacy geometry function cannot admit
+   rows the fix would refuse.
+
 Nothing else bridged yet; rolling.
 
 ## E. UNKNOWNS / NOT MEASURED
