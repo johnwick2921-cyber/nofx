@@ -1287,7 +1287,13 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 	// hard fail since the owner ruling 2026-08-31 removed the count concept),
 	// continuation scenario on gaps. PDH/PDL come from the detector universe
 	// (seated or raw).
-	facts := kernel.PlanFacts{Zones: input.Zones, IdentityMap: kernel.BuildMapCandidates(input.Levels, input.Price, input.ATR5m, kernel.MapCandidateOpts{}), Price: input.Price, DATR: input.DATR, Regime: input.Regime, Structure: input.Structure}
+	identityMap := kernel.BuildMapCandidates(input.Levels, input.Price, input.ATR5m, kernel.MapCandidateOpts{})
+	// W-GEOMETRY-REFUSAL (b1) — the SAME fill the prompt map gets, so the write-site
+	// stamp and the renderer can never disagree about a reference level's id.
+	if dp := at.dayPlanCfg(); dp.GeometryRefIDsEnabled() {
+		kernel.EnsureReferenceLevelIDs(identityMap)
+	}
+	facts := kernel.PlanFacts{Zones: input.Zones, IdentityMap: identityMap, Price: input.Price, DATR: input.DATR, Regime: input.Regime, Structure: input.Structure}
 	// 8.4 — machine grades from the Go-ranked candidate table, keyed by rounded
 	// price so the write-site stamp can match the model's levels.
 	machineGrades := map[float64]string{}
@@ -2913,6 +2919,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		Price:            price,
 		DATR:             dATR,
 		ATR5m:            kernel.StaleConfirmATR5m(bars),
+		GeometryRefIDs:   at.dayPlanCfg().GeometryRefIDsEnabled(), // W-GEOMETRY-REFUSAL (b1)
 		Regime:           regime,
 		Levels:           scored,
 		Pool:             pool,

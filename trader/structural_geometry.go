@@ -27,7 +27,23 @@ func geometryZoneNames(z kernel.LevelZone) []string {
 // ResolveEntryGeometryZone reads frozen source provenance. Matching an arbitrary
 // nearest price, rebuilding a historical map, and model-authored entry_zone are
 // not substitutes for the machine snapshot. Ambiguous identity fails closed.
+// This exported form is the LEGACY contract (no tf wildcard) and stays
+// byte-identical to today; the executor resolves through ArmGeometryVerdict.
 func ResolveEntryGeometryZone(doc *kernel.PlanDoc, sc kernel.PlanScenario) (int, string) {
+	return resolveEntryGeometryZone(doc, sc, false)
+}
+
+// ArmGeometryVerdict is the STABLE executor contract (W-GEOMETRY-REFUSAL,
+// 2026-09-18; also exported for DS-101's write-time feasibility): the
+// executor's own geometry verdict for a scenario, resolving
+// day_plan.geometry_reference_levels. geometryRefLevels=true → an EMPTY
+// zone-source tf is a wildcard (VWAP-family sources carry tf "" against
+// identity tf "1m"); false = today's exact-match behaviour.
+func ArmGeometryVerdict(doc *kernel.PlanDoc, sc kernel.PlanScenario, geometryRefLevels bool) (int, string) {
+	return resolveEntryGeometryZone(doc, sc, geometryRefLevels)
+}
+
+func resolveEntryGeometryZone(doc *kernel.PlanDoc, sc kernel.PlanScenario, geometryRefLevels bool) (int, string) {
 	if doc == nil || doc.Zones == nil {
 		return -1, "frozen_zone_map_missing"
 	}
@@ -35,6 +51,12 @@ func ResolveEntryGeometryZone(doc *kernel.PlanDoc, sc kernel.PlanScenario) (int,
 		return -1, "scenario_level_id_missing"
 	}
 	identityValue, valid := kernel.LevelByID(sc.LevelID, doc.IdentityLevels)
+	if !valid && geometryRefLevels {
+		// W-GEOMETRY-REFUSAL (b1): with the knob ON, a stable reference id
+		// (anchor kind whose formation close was unknown at authoring) resolves
+		// through the reference lookup. OFF = strict only, byte-identical.
+		identityValue, valid = kernel.LevelByReferenceID(sc.LevelID, doc.IdentityLevels)
+	}
 	if !valid {
 		return -1, "identity_not_valid_in_frozen_map"
 	}
@@ -52,7 +74,10 @@ func ResolveEntryGeometryZone(doc *kernel.PlanDoc, sc kernel.PlanScenario) (int,
 			if !named {
 				continue
 			}
-			if identity.TF != nil && *identity.TF != "" && s.TF != *identity.TF {
+			// W-GEOMETRY-REFUSAL (b2): with the knob ON an EMPTY source tf is a
+			// wildcard (matches any identity tf); a non-empty tf must still match
+			// exactly. OFF = today's exact-match behaviour byte-identical.
+			if identity.TF != nil && *identity.TF != "" && s.TF != *identity.TF && !(geometryRefLevels && s.TF == "") {
 				continue
 			}
 			if match >= 0 && match != i {
@@ -104,7 +129,15 @@ func FirstGeometryTarget(zones []kernel.LevelZone, entryIdx int, long bool) (int
 // Quantity remains zero here; only the production path can authorize one after
 // the remaining, unchanged entry gates have passed.
 func ComposeLevelFadeGeometry(doc *kernel.PlanDoc, sc kernel.PlanScenario, leg kernel.PlanArmLeg, p store.StructuralStopPolicy, atr, tick, pointValue float64) store.StructuralGeometryRecord {
-	idx, why := ResolveEntryGeometryZone(doc, sc)
+	idx, why := resolveEntryGeometryZone(doc, sc, false)
+	return composeGeometry(doc, sc, leg, p, atr, tick, pointValue, idx, why)
+}
+
+// ComposeLevelFadeGeometryWith is ComposeLevelFadeGeometry resolving the
+// geometry_reference_levels knob — the executor's arm path; the research
+// harness keeps the legacy form byte-identical.
+func ComposeLevelFadeGeometryWith(doc *kernel.PlanDoc, sc kernel.PlanScenario, leg kernel.PlanArmLeg, p store.StructuralStopPolicy, atr, tick, pointValue float64, geometryRefLevels bool) store.StructuralGeometryRecord {
+	idx, why := resolveEntryGeometryZone(doc, sc, geometryRefLevels)
 	return composeGeometry(doc, sc, leg, p, atr, tick, pointValue, idx, why)
 }
 
@@ -217,6 +250,9 @@ type armStructuralContext struct {
 	Leg        kernel.PlanArmLeg
 	Policy     store.StructuralStopPolicy
 	PointValue float64
+	// GeometryRefIDs (W-GEOMETRY-REFUSAL, 2026-09-18) — the resolved
+	// day_plan.geometry_reference_levels knob; true = empty source tf wildcard.
+	GeometryRefIDs bool
 }
 
 func (at *AutoTrader) saveArmGeometry(r store.StructuralGeometryRecord) bool {
