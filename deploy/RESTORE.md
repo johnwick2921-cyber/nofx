@@ -56,6 +56,10 @@ and core tables read back cleanly (`decision_records` 28042, `trader_positions` 
 
 ## Roll back the BINARY (and why you must re-arm `deploy/RELEASE`)
 
+**If the boot log's `🗄 bars` key line says `migrated`, run `deploy/bars-key-rollback.sh`
+BEFORE starting an older binary** (W-BARS-CONTRACT-KEY, 2026-09-18 — an older binary
+cannot write the migrated `bars` table; the section below has the detail).
+
 The DB restore above is only half a rollback. If you also go back to an earlier
 binary, **`deploy/RELEASE` must be re-armed to the revision you are actually
 running** — otherwise the boot assertion sees a mismatch and **REFUSES TRADING**
@@ -121,6 +125,13 @@ NOT run its destructive 2026-08-27 dedupe block (the name-only unique-index chec
 is satisfied by the renamed table's index, which the migration keeps on purpose).
 
 ### Option A — rename back (keeps the DB, loses bars written after the migration)
+
+Scripted: `deploy/bars-key-rollback.sh [--force] [--db PATH]` (rc 0 done · rc 4 nothing
+to do · rc 2 bot running · rc 3 unsafe state) — discovers the old table, refuses while
+`nofx-bin` runs unless `--force`, takes a `VACUUM INTO` backup, runs
+`deploy/bars-key-rollback.sql` (the rename pair in one transaction, new-shape indexes
+dropped from the parked copy so a later re-migration can recreate them), prints the counts.
+The CTO's unattended cutover calls it on a binary rollback. By hand:
 
 ```bash
 # 0. Stop the bot (nothing may write during the swap).

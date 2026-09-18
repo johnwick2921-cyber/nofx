@@ -1,11 +1,13 @@
 package store
 
 import (
+	"context"
 	"io"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -428,20 +430,26 @@ func TestBarsKeyMigrationOnLiveCopy(t *testing.T) {
 		t.Skip("BARS_KEY_LIVE_COPY not set")
 	}
 	dst := filepath.Join(t.TempDir(), "live-copy.db")
-	in, err := os.Open(src)
-	if err != nil {
-		t.Fatal(err)
+	if os.Getenv("BARS_KEY_LIVE_COPY_INPLACE") == "1" {
+		dst = src // the rollback drill: migrate the scratch copy itself
+	} else {
+		in, err := os.Open(src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, err := os.Create(dst)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := io.Copy(out, in); err != nil {
+			t.Fatal(err)
+		}
+		_ = in.Close()
+		_ = out.Close()
 	}
-	out, err := os.Create(dst)
-	if err != nil {
-		t.Fatal(err)
+	if os.Getenv("BARS_KEY_BACKUP_DIR") == "" {
+		t.Setenv("BARS_KEY_BACKUP_DIR", filepath.Join(t.TempDir(), "backups"))
 	}
-	if _, err := io.Copy(out, in); err != nil {
-		t.Fatal(err)
-	}
-	_ = in.Close()
-	_ = out.Close()
-	t.Setenv("BARS_KEY_BACKUP_DIR", filepath.Join(t.TempDir(), "backups"))
 	barsKeyed.Store(false)
 	st, err := New(dst)
 	if err != nil {
@@ -487,5 +495,121 @@ func TestBarsKeyMigrationOnLiveCopy(t *testing.T) {
 		t.Fatal(err)
 	} else {
 		t.Logf("backup %s size=%d bytes", rep.Backup, fi.Size())
+	}
+}
+
+// ── review fixes 1 + 2 (2026-09-18) ──────────────────────────────────────────
+
+// TestBarsKeyBackupVerifyIsPinnedToOneConnection proves the ATTACH / COUNT /
+// DETACH sequence executes on the connection it was given: the ATTACH is
+// visible to the COUNT on that conn (deterministic), and a pool hammered by
+// concurrent SELECTs on other connections cannot come between them.
+func TestBarsKeyBackupVerifyIsPinnedToOneConnection(t *testing.T) {
+	t.Setenv("BARS_KEY_BACKUP_DIR", t.TempDir())
+	bh := newBarStore(t)
+	if err := bh.InsertBars([]BarHistoryDB{mkBar("MNQ", "1m", 1000, 1), mkBar("MNQ", "1m", 2000, 2)}); err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, err := bh.db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	// hammer the pool from other goroutines for the whole verify
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					var n int64
+					_ = bh.db.Raw("SELECT COUNT(*) FROM bars").Scan(&n).Error
+				}
+			}
+		}()
+	}
+	defer func() { close(stop); wg.Wait() }()
+	conn, err := sqlDB.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	path := filepath.Join(t.TempDir(), "copy.db")
+	if _, err := conn.ExecContext(ctx, "VACUUM INTO ?", path); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 20; i++ {
+		n, err := verifyBackupOnConn(ctx, conn, path)
+		if err != nil || n != 2 {
+			t.Fatalf("iteration %d: rows=%d err=%v — the ATTACH was not visible to the COUNT", i, n, err)
+		}
+	}
+	// and the pinned conn is the only place the attachment ever existed: on
+	// the pool at large the schema name is unknown
+	var n int64
+	if err := bh.db.Raw("SELECT COUNT(*) FROM barskey_backup.bars").Scan(&n).Error; err == nil {
+		t.Fatalf("barskey_backup leaked onto the pool (still attached somewhere)")
+	}
+	// the whole migration-side backup under the same hammer
+	if p, rows, err := bh.backupBeforeKeyMigration(time.Now()); err != nil || rows != 2 || p == "" {
+		t.Fatalf("backupBeforeKeyMigration under pool load: path=%q rows=%d err=%v", p, rows, err)
+	}
+}
+
+// TestBarsKeyMigrationRefusedWhenDiskIsShort injects a required-free limit no
+// disk can meet: the migration is refused BEFORE VACUUM INTO writes a byte,
+// with a line naming the dir, the free bytes, the db size and the need.
+func TestBarsKeyMigrationRefusedWhenDiskIsShort(t *testing.T) {
+	bh, seeded := newLegacyBarStore(t)
+	prev := barsKeyRequiredFree
+	barsKeyRequiredFree = func(dbBytes int64) int64 { return 1 << 60 }
+	t.Cleanup(func() { barsKeyRequiredFree = prev })
+	rep, err := bh.MigrateWithReport(time.Date(2026, 9, 18, 1, 2, 3, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Err == nil || rep.Migrated {
+		t.Fatalf("report = %+v, want refused", rep)
+	}
+	if !strings.Contains(rep.Err.Error(), "insufficient disk for the backup") || !strings.Contains(rep.Err.Error(), "2× the file") {
+		t.Fatalf("refusal = %v", rep.Err)
+	}
+	if files, _ := filepath.Glob(filepath.Join(os.Getenv("BARS_KEY_BACKUP_DIR"), "pre-bars-key-*")); len(files) != 0 {
+		t.Fatalf("a refused backup wrote a file: %v", files)
+	}
+	if got := pkOf(t, bh, "bars"); !sameColumns(got, barsKeyLegacyColumns) || countOf(t, bh, "SELECT COUNT(*) FROM bars") != seeded {
+		t.Fatalf("old table not intact: pk=%v", got)
+	}
+	// the precheck reads a real number for a real dir
+	if free, err := barsKeyFreeBytes(os.Getenv("BARS_KEY_BACKUP_DIR")); err != nil || free <= 0 {
+		t.Fatalf("free bytes = %d err=%v", free, err)
+	}
+}
+
+// TestBarsKeyIndexNameHeldByAnotherTableIsAnError: a rollback's renamed copy
+// that kept idx_bars_v2_* would make CREATE INDEX IF NOT EXISTS a silent
+// no-op on the new bars; the migration must say so instead.
+func TestBarsKeyIndexNameHeldByAnotherTableIsAnError(t *testing.T) {
+	bh, _ := newLegacyBarStore(t)
+	if err := bh.db.Exec("CREATE TABLE leftover(symbol text, tf text, open_time_ms integer)").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := bh.db.Exec("CREATE INDEX " + idxBarsV2Time + " ON leftover(symbol, tf, open_time_ms)").Error; err != nil {
+		t.Fatal(err)
+	}
+	rep, err := bh.MigrateWithReport(time.Date(2026, 9, 18, 1, 2, 3, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Err == nil || !strings.Contains(rep.Err.Error(), "already belongs to table leftover") {
+		t.Fatalf("report = %+v", rep)
+	}
+	if got := pkOf(t, bh, "bars"); !sameColumns(got, barsKeyLegacyColumns) {
+		t.Fatalf("transaction did not roll back: pk=%v", got)
 	}
 }

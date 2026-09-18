@@ -1,12 +1,15 @@
 package store
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"gorm.io/gorm"
@@ -222,12 +225,36 @@ func barsKeyBackupDir() (string, error) {
 	return filepath.Join(home, "nofx-backups"), nil
 }
 
+// barsKeyRequiredFree is the free space the backup dir must have before
+// VACUUM INTO runs, as a function of the database's size (review fix 2:
+// 2× the file — the copy plus headroom). A test overrides it to inject a
+// limit no disk can meet.
+var barsKeyRequiredFree = func(dbBytes int64) int64 { return 2 * dbBytes }
+
+// barsKeyFreeBytes reports the free space available to this user on the
+// filesystem holding dir.
+func barsKeyFreeBytes(dir string) (int64, error) {
+	var st syscall.Statfs_t
+	if err := syscall.Statfs(dir, &st); err != nil {
+		return 0, err
+	}
+	return int64(st.Bavail) * int64(st.Bsize), nil
+}
+
 // backupBeforeKeyMigration writes a consistent whole-database copy with
 // VACUUM INTO (SQLite's online backup as a statement: a read transaction on
 // the source, nothing locked for writers) and verifies it by comparing the
 // bars row count of the copy with the source. Any failure is returned and
 // the migration is refused — a schema change with no backup is not a
 // guarded write.
+//
+// REVIEW FIX 1 (2026-09-18): the whole sequence — VACUUM INTO, ATTACH, COUNT,
+// DETACH — runs on ONE *sql.Conn. ATTACH is connection-scoped, and the gorm
+// pool (MaxOpenConns 4) hands connections out per call: under live API
+// traffic the COUNT could land on a connection that never saw the ATTACH
+// ("no such table: barskey_backup.bars") and refuse a good backup. VACUUM
+// INTO is not allowed inside a transaction, so a dedicated connection is
+// the pin, not a Transaction.
 func (s *BarHistoryStore) backupBeforeKeyMigration(now time.Time) (path string, srcRows int64, err error) {
 	dir, err := barsKeyBackupDir()
 	if err != nil {
@@ -240,32 +267,76 @@ func (s *BarHistoryStore) backupBeforeKeyMigration(now time.Time) (path string, 
 	if _, err := os.Stat(path); err == nil {
 		return "", 0, fmt.Errorf("backup %s already exists — refusing to overwrite", path)
 	}
-	if err := s.db.Raw("SELECT COUNT(*) FROM bars").Scan(&srcRows).Error; err != nil {
+	sqlDB, err := s.db.DB()
+	if err != nil {
+		return "", 0, fmt.Errorf("sql.DB: %w", err)
+	}
+	ctx := context.Background()
+	conn, err := sqlDB.Conn(ctx)
+	if err != nil {
+		return "", 0, fmt.Errorf("dedicated connection for the backup: %w", err)
+	}
+	defer conn.Close()
+	// REVIEW FIX 2: disk-space precheck — the copy needs the database's size
+	// again, plus headroom; a backup that would run the disk out is refused
+	// before a byte is written.
+	var pageCount, pageSize int64
+	if err := conn.QueryRowContext(ctx, "PRAGMA page_count").Scan(&pageCount); err != nil {
+		return "", 0, fmt.Errorf("page_count: %w", err)
+	}
+	if err := conn.QueryRowContext(ctx, "PRAGMA page_size").Scan(&pageSize); err != nil {
+		return "", 0, fmt.Errorf("page_size: %w", err)
+	}
+	dbBytes := pageCount * pageSize
+	free, err := barsKeyFreeBytes(dir)
+	if err != nil {
+		return "", 0, fmt.Errorf("free space on %s: %w", dir, err)
+	}
+	if need := barsKeyRequiredFree(dbBytes); free < need {
+		return "", 0, fmt.Errorf("insufficient disk for the backup: %s has %d bytes free, the database is %d bytes and the backup needs %d (2× the file)", dir, free, dbBytes, need)
+	}
+	if err := conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM bars").Scan(&srcRows); err != nil {
 		return "", 0, fmt.Errorf("count source rows: %w", err)
 	}
-	if err := s.db.Exec("VACUUM INTO ?", path).Error; err != nil {
+	if _, err := conn.ExecContext(ctx, "VACUUM INTO ?", path); err != nil {
 		_ = os.Remove(path) // never leave a partial copy that looks complete
 		return "", 0, fmt.Errorf("VACUUM INTO %s: %w", path, err)
 	}
-	// Verify the copy by reading it back through the same connection.
-	var copyRows int64
-	if err := s.db.Exec("ATTACH DATABASE ? AS barskey_backup", path).Error; err != nil {
+	copyRows, err := verifyBackupOnConn(ctx, conn, path)
+	if err != nil {
 		_ = os.Remove(path)
-		return "", 0, fmt.Errorf("attach backup for verification: %w", err)
-	}
-	verr := s.db.Raw("SELECT COUNT(*) FROM barskey_backup.bars").Scan(&copyRows).Error
-	if derr := s.db.Exec("DETACH DATABASE barskey_backup").Error; derr != nil && verr == nil {
-		verr = derr
-	}
-	if verr != nil {
-		_ = os.Remove(path)
-		return "", 0, fmt.Errorf("verify backup: %w", verr)
+		return "", 0, err
 	}
 	if copyRows != srcRows {
 		_ = os.Remove(path)
 		return "", 0, fmt.Errorf("backup verification: copy holds %d bars rows, source %d", copyRows, srcRows)
 	}
 	return path, srcRows, nil
+}
+
+// barsBackupConn is the subset of *sql.Conn the verification uses — ONE
+// connection, so ATTACH is visible to the COUNT that follows it.
+type barsBackupConn interface {
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
+}
+
+// verifyBackupOnConn attaches the copy ON THE GIVEN CONNECTION, counts its
+// bars rows there, and detaches — three statements that only make sense
+// together on one connection.
+func verifyBackupOnConn(ctx context.Context, conn barsBackupConn, path string) (int64, error) {
+	if _, err := conn.ExecContext(ctx, "ATTACH DATABASE ? AS barskey_backup", path); err != nil {
+		return 0, fmt.Errorf("attach backup for verification: %w", err)
+	}
+	var copyRows int64
+	verr := conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM barskey_backup.bars").Scan(&copyRows)
+	if _, derr := conn.ExecContext(ctx, "DETACH DATABASE barskey_backup"); derr != nil && verr == nil {
+		verr = derr
+	}
+	if verr != nil {
+		return 0, fmt.Errorf("verify backup: %w", verr)
+	}
+	return copyRows, nil
 }
 
 // migrateContractKey moves a legacy-keyed bars table onto the contract key.
@@ -367,12 +438,24 @@ func (s *BarHistoryStore) migrateContractKey(now time.Time) BarsKeyReport {
 }
 
 // ensureKeyedIndexes creates the new table's secondary indexes (idempotent).
+// Index names are global: a name already held by ANOTHER table (a rollback's
+// renamed copy that kept them) would make CREATE INDEX IF NOT EXISTS a silent
+// no-op and leave bars unindexed — so that case is an error naming the table.
 func (s *BarHistoryStore) ensureKeyedIndexes(tx *gorm.DB) error {
-	if err := tx.Exec("CREATE INDEX IF NOT EXISTS " + idxBarsV2Time + " ON bars(symbol, tf, open_time_ms)").Error; err != nil {
-		return fmt.Errorf("index %s: %w", idxBarsV2Time, err)
-	}
-	if err := tx.Exec("CREATE INDEX IF NOT EXISTS " + idxBarsV2Source + " ON bars(symbol, tf, source, open_time_ms)").Error; err != nil {
-		return fmt.Errorf("index %s: %w", idxBarsV2Source, err)
+	for _, ix := range []struct{ name, ddl string }{
+		{idxBarsV2Time, "CREATE INDEX IF NOT EXISTS " + idxBarsV2Time + " ON bars(symbol, tf, open_time_ms)"},
+		{idxBarsV2Source, "CREATE INDEX IF NOT EXISTS " + idxBarsV2Source + " ON bars(symbol, tf, source, open_time_ms)"},
+	} {
+		var holder string
+		if err := tx.Raw("SELECT tbl_name FROM sqlite_master WHERE type='index' AND name=?", ix.name).Scan(&holder).Error; err != nil {
+			return err
+		}
+		if holder != "" && holder != "bars" {
+			return fmt.Errorf("index %s already belongs to table %s — drop it there first (deploy/bars-key-rollback.sh does)", ix.name, holder)
+		}
+		if err := tx.Exec(ix.ddl).Error; err != nil {
+			return fmt.Errorf("index %s: %w", ix.name, err)
+		}
 	}
 	return nil
 }
