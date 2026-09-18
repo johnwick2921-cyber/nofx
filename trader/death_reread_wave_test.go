@@ -188,13 +188,14 @@ func TestDeathRereadRealPathLandsFreshPlanAndSupersedes(t *testing.T) {
 	}
 	// SF-1 (2026-09-18 review): v2-active in the store is satisfied by the
 	// write itself, BEFORE the goroutine records the spend, sets the once-key,
-	// increments the counter and runs the supersede CAS — wait on the once-key
-	// (the last of its writes) before asserting ANY of them.
+	// increments the counter and runs the supersede CAS — and the once-key is
+	// written BEFORE the CAS, so waiting on the key alone still races the
+	// supersede. Wait on the SUPERSEDED line (emitted only after the CAS
+	// succeeds) before asserting ANY of the goroutine's writes.
 	if !waitFor(t, 10*time.Second, func() bool {
-		v := sysCfgVal(t, st, deathRereadDoneKey(row))
-		return v != "" && v != "0"
+		return strings.Contains(logBuf.String(), "SUPERSEDED by the death re-read")
 	}) {
-		t.Fatalf("the once-key never landed after the v2 write; log:\n%s", logBuf.String())
+		t.Fatalf("the supersede never landed; log:\n%s", logBuf.String())
 	}
 	latest, _ := st.Plan().GetLatestPlanForTraderSession(td, "NY", at.id)
 	if latest.TriggerReason != store.TriggerDeathReplan {
