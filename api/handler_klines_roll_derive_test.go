@@ -68,13 +68,15 @@ func newRollDeriveServer(t *testing.T, withGap bool) (*Server, string) {
 		add("MNQ 12-26", "1m", tm, pNew, store.BarSourceLive)
 		pNew += 0.25
 	}
-	// Current sparse 15m from 08:30.
+	// Current sparse 15m from 08:30 — priced as the prior contract's 1m price
+	// at that minute + the 290 roll basis, so the PER-TF seam basis measures
+	// ~290 (the old flat 30290 rows implied a different basis per tf).
 	for tm := rollMinute(14, 8, 30); tm <= rollMinute(14, 11, 0); tm += 15 * 60_000 {
-		add("MNQ 12-26", "15m", tm, 30290, store.BarSourceLive)
+		add("MNQ 12-26", "15m", tm, 30000+float64((tm-rollMinute(14, 8, 0))/60_000)*0.25+290, store.BarSourceLive)
 	}
 	// Current sparse 5m from 10:00 (the real 5m seam hour).
 	for tm := rollMinute(14, 10, 0); tm <= rollMinute(14, 11, 0); tm += 5 * 60_000 {
-		add("MNQ 12-26", "5m", tm, 30290, store.BarSourceLive)
+		add("MNQ 12-26", "5m", tm, 30000+float64((tm-rollMinute(14, 8, 0))/60_000)*0.25+290, store.BarSourceLive)
 	}
 	if err := st.BarHistory().InsertBars(rows); err != nil {
 		t.Fatalf("insert fixture: %v", err)
@@ -165,7 +167,9 @@ func TestRollDeriveClosesTheSeamHole(t *testing.T) {
 	}
 }
 
-// (2) basis measured and applied to every prior bar; current untouched.
+// (2) basis measured at THIS tf's seam (the new contract's first tf-bar open
+// vs the last prior 1m close before it) and applied to every prior bar;
+// current untouched.
 func TestRollDeriveAppliesBasisAndLeavesCurrentAlone(t *testing.T) {
 	s, tok := newRollDeriveServer(t, false)
 	env := mustEnvelope(t, rollDeriveGet(t, s, tok, "5m", 500))
@@ -189,6 +193,45 @@ func TestRollDeriveAppliesBasisAndLeavesCurrentAlone(t *testing.T) {
 			if got < want-0.001 || got > want+0.001 {
 				t.Errorf("derived 08:00 close = %.3f, want %.3f (raw + basis)", got, want)
 			}
+		}
+	}
+}
+
+// (5) the per-tf seam is CONTINUOUS: the last shifted prior close equals the
+// new contract's first open of that tf (the owner's acceptance: no cliff at
+// the seam on any timeframe).
+func TestRollDeriveSeamContinuous(t *testing.T) {
+	for _, tc := range []struct {
+		tf  string
+		gap bool
+	}{
+		{"15m", false}, {"15m", true}, {"5m", false}, {"5m", true},
+	} {
+		s, tok := newRollDeriveServer(t, tc.gap)
+		env := mustEnvelope(t, rollDeriveGet(t, s, tok, tc.tf, 500))
+		if env.Roll == nil || !env.Roll.Adjusted || env.Roll.Basis == nil {
+			t.Fatalf("%s(gap=%v): roll must be adjusted with a basis: %+v", tc.tf, tc.gap, env.Roll)
+		}
+		var lastPriorClose, firstNewOpen float64
+		var havePrior, haveNew bool
+		for _, k := range env.Klines {
+			c, _ := k["contract"].(string)
+			cl, _ := k["close"].(float64)
+			op, _ := k["open"].(float64)
+			if c == "MNQ 09-26" {
+				lastPriorClose = cl
+				havePrior = true
+			}
+			if c == "MNQ 12-26" && !haveNew {
+				firstNewOpen = op
+				haveNew = true
+			}
+		}
+		if !havePrior || !haveNew {
+			t.Fatalf("%s(gap=%v): need both segments, prior=%v new=%v", tc.tf, tc.gap, havePrior, haveNew)
+		}
+		if diff := lastPriorClose - firstNewOpen; diff < -0.01 || diff > 0.01 {
+			t.Errorf("%s(gap=%v): seam cliff of %.2f — last prior close %.2f vs first new open %.2f", tc.tf, tc.gap, diff, lastPriorClose, firstNewOpen)
 		}
 	}
 }

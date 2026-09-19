@@ -130,22 +130,32 @@ func klinesAcrossRollDerived(base []market.Kline, bh *store.BarHistoryStore, cur
 		derived[i].Derived = true
 		derived[i].Contract = prior // the bucket helper carries no contract
 	}
-	// BASIS: (first live current-contract 1m close) − (last prior-contract 1m
-	// close at or before that minute). Both must exist within 5 minutes; else
-	// NO adjustment, reason in the envelope. Volume is never touched.
+	// BASIS at THIS timeframe's own seam (the 2026-09-19 owner fix): the prior
+	// segment ends at this tf's display boundary (the new contract's first live
+	// bar in this tf), so the shift must be measured THERE — the new contract's
+	// first tf-bar open vs the last prior-contract 1m close before it. The
+	// shipped version measured at the TRUE 1m switch (10:33/10:34), hours after
+	// the 15m/30m/1h seam: the Sep/Dec basis decays from ~290 in the morning to
+	// ~15 at the 1m switch, so one 15.25 shift left a ~274–280-point cliff at
+	// the 15m/30m/1h seam (the owner: "chart on 14 no good on all tf" STILL
+	// after the first boot). The pair IS the visual join (prior close shifted →
+	// new open), so a measured pair makes the seam continuous by construction.
+	// The last prior 1m row sits <1 minute before the boundary, inside the
+	// 5-minute window the spec bounds every honest pair with.
 	info := &rollStitchInfo{Derived: true, Adjusted: false}
 	adjust := false
-	if firstNew, okNew, errNew := bh.FirstLiveOn(symbol, "1m", current); errNew == nil && okNew {
+	if len(base) > 0 {
+		firstNewOpen := base[0].Open
 		var lastPrior market.Kline
 		for _, k := range bars1mFull {
-			if k.OpenTime <= firstNew {
+			if k.OpenTime < boundary {
 				lastPrior = k
 			} else {
 				break
 			}
 		}
-		if lastPrior.OpenTime > 0 && firstNew-lastPrior.OpenTime <= basisPairWindowMs {
-			basis := firstCloseOn(bh, symbol, current, firstNew) - lastPrior.Close
+		if lastPrior.OpenTime > 0 && boundary-lastPrior.OpenTime <= basisPairWindowMs {
+			basis := firstNewOpen - lastPrior.Close
 			if !math.IsNaN(basis) {
 				shiftKlines(derived, basis)
 				for i := range derived {
@@ -158,7 +168,7 @@ func klinesAcrossRollDerived(base []market.Kline, bh *store.BarHistoryStore, cur
 		}
 	}
 	if !adjust {
-		info.Reason = "basis pair unmeasurable within 5 minutes"
+		info.Reason = "basis pair unmeasurable within 5 minutes at this timeframe's seam"
 	}
 
 	out := append(derived, base...)
