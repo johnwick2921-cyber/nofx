@@ -26,7 +26,10 @@ func rollMinute(d, h, min int) int64 {
 
 // newRollDeriveServer seeds the derive fixture and returns the real Server +
 // token. The ring serves the current contract's bars for the asked tf.
-func newRollDeriveServer(t *testing.T, withGap bool) (*Server, string) {
+// curCoverGap seeds CURRENT-contract 1m rows inside the 09:35-09:58 gap (the
+// real Sept-11 shape: the prior rung was off, the imported current rung covers
+// it) so the hole-fill path can prove itself.
+func newRollDeriveServer(t *testing.T, withGap, curCoverGap bool) (*Server, string) {
 	t.Helper()
 	orig := market.FuturesBarsProvider
 	t.Cleanup(func() { market.FuturesBarsProvider = orig })
@@ -67,6 +70,12 @@ func newRollDeriveServer(t *testing.T, withGap bool) (*Server, string) {
 	for tm := firstNew; tm <= rollMinute(14, 11, 5); tm += 60_000 {
 		add("MNQ 12-26", "1m", tm, pNew, store.BarSourceLive)
 		pNew += 0.25
+	}
+	// Current-contract 1m rows INSIDE the gap (the hole the fill must close).
+	if curCoverGap {
+		for tm := rollMinute(14, 9, 35); tm <= rollMinute(14, 9, 58); tm += 60_000 {
+			add("MNQ 12-26", "1m", tm, 30000+float64((tm-rollMinute(14, 8, 0))/60_000)*0.25+290, store.BarSourceLive)
+		}
 	}
 	// Current sparse 15m from 08:30 — priced as the prior contract's 1m price
 	// at that minute + the 290 roll basis, so the PER-TF seam basis measures
@@ -140,7 +149,7 @@ func mustEnvelope(t *testing.T, body []byte) rollEnvelope {
 // (1) the derived 15m prior side runs up to the 08:15 bucket and the new
 // contract starts at 08:30 — NO hole at the seam.
 func TestRollDeriveClosesTheSeamHole(t *testing.T) {
-	s, tok := newRollDeriveServer(t, true)
+	s, tok := newRollDeriveServer(t, true, false)
 	env := mustEnvelope(t, rollDeriveGet(t, s, tok, "15m", 500))
 	if env.Roll == nil || !env.Roll.Derived {
 		t.Fatalf("roll envelope must say derived: %+v", env.Roll)
@@ -171,7 +180,7 @@ func TestRollDeriveClosesTheSeamHole(t *testing.T) {
 // vs the last prior 1m close before it) and applied to every prior bar;
 // current untouched.
 func TestRollDeriveAppliesBasisAndLeavesCurrentAlone(t *testing.T) {
-	s, tok := newRollDeriveServer(t, false)
+	s, tok := newRollDeriveServer(t, false, false)
 	env := mustEnvelope(t, rollDeriveGet(t, s, tok, "5m", 500))
 	if env.Roll == nil || !env.Roll.Adjusted || env.Roll.Basis == nil {
 		t.Fatalf("roll must be adjusted with basis: %+v", env.Roll)
@@ -207,7 +216,7 @@ func TestRollDeriveSeamContinuous(t *testing.T) {
 	}{
 		{"15m", false}, {"15m", true}, {"5m", false}, {"5m", true},
 	} {
-		s, tok := newRollDeriveServer(t, tc.gap)
+		s, tok := newRollDeriveServer(t, tc.gap, false)
 		env := mustEnvelope(t, rollDeriveGet(t, s, tok, tc.tf, 500))
 		if env.Roll == nil || !env.Roll.Adjusted || env.Roll.Basis == nil {
 			t.Fatalf("%s(gap=%v): roll must be adjusted with a basis: %+v", tc.tf, tc.gap, env.Roll)
@@ -238,7 +247,7 @@ func TestRollDeriveSeamContinuous(t *testing.T) {
 
 // (3) the 09:35–09:58 gap stays a gap in the derived series.
 func TestRollDerivePreservesTheGap(t *testing.T) {
-	s, tok := newRollDeriveServer(t, true)
+	s, tok := newRollDeriveServer(t, true, false)
 	env := mustEnvelope(t, rollDeriveGet(t, s, tok, "5m", 500))
 	for _, k := range env.Klines {
 		if k["contract"] != "MNQ 09-26" {
@@ -261,7 +270,7 @@ func TestRollDeriveLegacyKnobByteIdentical(t *testing.T) {
 	chartRollStitchDerive = false
 	t.Cleanup(func() { chartRollStitchDerive = old })
 
-	s, tok := newRollDeriveServer(t, false)
+	s, tok := newRollDeriveServer(t, false, false)
 	body := rollDeriveGet(t, s, tok, "15m", 500)
 	var arr []map[string]any
 	if err := json.Unmarshal(body, &arr); err != nil {
@@ -278,5 +287,45 @@ func TestRollDeriveLegacyKnobByteIdentical(t *testing.T) {
 	}
 	if !sawPrior {
 		t.Fatalf("legacy prior segment missing")
+	}
+}
+
+// (6) the prior 1m HOLE is filled from the CURRENT contract's 1m rows
+// converted into the prior space (the real Sept-11 shape: the prior rung was
+// off while the imported current rung covers the minutes): the 09:35-09:58 gap
+// is closed when the current rung has those rows, and the seam stays
+// continuous. Without the current rows (test 3) the gap stays a gap.
+func TestRollDeriveFillsPrior1mHoleFromCurrent(t *testing.T) {
+	s, tok := newRollDeriveServer(t, true, true)
+	env := mustEnvelope(t, rollDeriveGet(t, s, tok, "5m", 500))
+	if env.Roll == nil || !env.Roll.Derived || !env.Roll.Adjusted || env.Roll.Basis == nil {
+		t.Fatalf("roll must be derived+adjusted: %+v", env.Roll)
+	}
+	present := map[int64]bool{}
+	var lastPriorClose, firstNewOpen float64
+	var haveNew bool
+	for _, k := range env.Klines {
+		c, _ := k["contract"].(string)
+		cl, _ := k["close"].(float64)
+		op, _ := k["open"].(float64)
+		if c == "MNQ 09-26" {
+			present[int64(k["openTime"].(float64))] = true
+			lastPriorClose = cl
+		}
+		if c == "MNQ 12-26" && !haveNew {
+			firstNewOpen = op
+			haveNew = true
+		}
+	}
+	// The gap buckets 09:35..09:50 must be PRESENT now (filled), except the
+	// 09:50 bucket is always present via the 09:59 row — check 09:35/09:40/09:45.
+	for _, mm := range []int{35, 40, 45} {
+		at := rollMinute(14, 9, mm)
+		if !present[at] {
+			t.Errorf("hole-fill: bucket %02d missing from the derived prior series", mm)
+		}
+	}
+	if diff := lastPriorClose - firstNewOpen; diff < -0.01 || diff > 0.01 {
+		t.Errorf("hole-fill broke the seam: last prior close %.2f vs first new open %.2f", lastPriorClose, firstNewOpen)
 	}
 }

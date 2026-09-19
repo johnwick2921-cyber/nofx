@@ -3,6 +3,7 @@ package api
 import (
 	"math"
 	"os"
+	"sort"
 	"strings"
 
 	"nofx/kernel"
@@ -117,6 +118,19 @@ func klinesAcrossRollDerived(base []market.Kline, bh *store.BarHistoryStore, cur
 		// bare array — byte-identical to the legacy wire.
 		return klinesAcrossRoll(base, bh, current, symbol, tf, limit), nil
 	}
+	// HOLE-FILL (2026-09-19, owner: "5m day 11" hole on every tf): where the
+	// prior contract's 1m rows have INTERIOR gaps but the CURRENT contract's
+	// 1m rows cover those minutes (Sept 11: NT8 was off ~00:29-07:45 CT on the
+	// 09-26 rung while the imported 12-26 rows cover it), fill the gap with the
+	// current rows CONVERTED into the prior contract's price space — the basis
+	// measured at the nearest minute where BOTH contracts have a row (or, when
+	// no shared minute exists at all, the 1m seam pair). One price space inside
+	// the segment, so the per-tf seam shift still applies uniformly. Gaps the
+	// current contract cannot cover (the 09:35-09:58 hole on the roll morning)
+	// stay gaps — never fabricated.
+	if filled, ok := fillPrior1mHoles(bh, symbol, prior, current, bars1mFull); ok {
+		bars1mFull = filled
+	}
 	// Derivation subset: only 1m rows STRICTLY before THIS tf's display
 	// boundary become derived bars of that tf (the boundary never moves).
 	var subset []market.Kline
@@ -223,6 +237,102 @@ func firstCloseOn(bh *store.BarHistoryStore, symbol, current string, openMs int6
 		return math.NaN()
 	}
 	return rows[0].C
+}
+
+// fillPrior1mHoles fills interior gaps of the prior contract's 1m series with
+// the current contract's 1m rows converted into the prior contract's price
+// space. The conversion basis is measured at the nearest minute where BOTH
+// contracts have a row (per gap: the last shared minute at or before the gap's
+// left edge); with NO shared minute anywhere, the seam pair (last prior row vs
+// first current row within the 5-minute window) is the fallback. Returns
+// (rows, false) unchanged when the current contract has no rows over the span
+// or no pair exists.
+func fillPrior1mHoles(bh *store.BarHistoryStore, symbol, prior, current string, priorRows []market.Kline) ([]market.Kline, bool) {
+	if bh == nil || len(priorRows) < 2 {
+		return priorRows, false
+	}
+	first, last := priorRows[0].OpenTime, priorRows[len(priorRows)-1].OpenTime
+	curRows, err := bh.BarsBetweenOn(symbol, "1m", current, first, last+60_000)
+	if err != nil || len(curRows) == 0 {
+		return priorRows, false
+	}
+	curByMin := make(map[int64]market.Kline, len(curRows))
+	for _, r := range curRows {
+		curByMin[r.OpenTimeMs] = market.Kline{
+			OpenTime: r.OpenTimeMs, CloseTime: r.OpenTimeMs + 60_000 - 1,
+			Open: r.O, High: r.H, Low: r.L, Close: r.C, Volume: r.V,
+			Contract: r.Contract,
+		}
+	}
+	priorByMin := make(map[int64]market.Kline, len(priorRows))
+	var shared []int64
+	for _, k := range priorRows {
+		priorByMin[k.OpenTime] = k
+		if _, ok := curByMin[k.OpenTime]; ok {
+			shared = append(shared, k.OpenTime)
+		}
+	}
+	// basisAt returns the pair basis for a gap starting at `minute`: the last
+	// shared minute at or before it, else the first shared minute after it,
+	// else the seam pair (last prior vs first current within 5 minutes).
+	seamBasis := func() (float64, bool) {
+		pl := priorRows[len(priorRows)-1]
+		cf, ok := curByMin[curRows[0].OpenTimeMs]
+		if !ok || curRows[0].OpenTimeMs-pl.OpenTime > basisPairWindowMs {
+			return 0, false
+		}
+		return cf.Close - pl.Close, true
+	}
+	basisAt := func(minute int64) (float64, bool) {
+		best := int64(0)
+		for _, s := range shared {
+			if s <= minute {
+				best = s
+			} else {
+				break
+			}
+		}
+		if best == 0 && len(shared) > 0 {
+			best = shared[0]
+		}
+		if best != 0 {
+			if c, ok := curByMin[best]; ok {
+				if p, ok := priorByMin[best]; ok {
+					return c.Close - p.Close, true
+				}
+			}
+		}
+		return seamBasis()
+	}
+	out := make([]market.Kline, 0, len(priorRows)+len(curRows))
+	for i, k := range priorRows {
+		out = append(out, k)
+		if i == len(priorRows)-1 {
+			break
+		}
+		next := priorRows[i+1]
+		if next.OpenTime-k.OpenTime <= 60_000 {
+			continue
+		}
+		basis, ok := basisAt(k.OpenTime)
+		if !ok {
+			continue
+		}
+		for minute := k.OpenTime + 60_000; minute < next.OpenTime; minute += 60_000 {
+			c, ok := curByMin[minute]
+			if !ok {
+				continue
+			}
+			c.Open -= basis
+			c.High -= basis
+			c.Low -= basis
+			c.Close -= basis
+			c.Contract = prior
+			out = append(out, c)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].OpenTime < out[j].OpenTime })
+	return out, true
 }
 
 // shiftKlines adds basis to O/H/L/C of every bar (volume untouched).
