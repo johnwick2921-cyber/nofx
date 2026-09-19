@@ -151,6 +151,13 @@ type Kline struct {
 	// high-cascade type — that is the whole reason it is a trailing optional
 	// field and nothing else).
 	Contract string `json:"contract,omitempty"`
+	// Derived (W-ROLL-DAY-CHART, 2026-09-19) marks a prior-contract bar
+	// aggregated from THAT contract's stored 1m rows instead of its stored
+	// higher-TF rows. ADDITIVE + omitempty (same trailing-optional rule).
+	Derived bool `json:"derived,omitempty"`
+	// Adjusted (W-ROLL-DAY-CHART, 2026-09-19) marks a prior-contract bar whose
+	// OHLC was shifted by the measured roll basis. ADDITIVE + omitempty.
+	Adjusted bool `json:"adjusted,omitempty"`
 }
 
 type KlineResponse []interface{}
