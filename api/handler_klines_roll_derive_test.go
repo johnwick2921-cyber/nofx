@@ -245,7 +245,9 @@ func TestRollDeriveSeamContinuous(t *testing.T) {
 	}
 }
 
-// (3) the 09:35–09:58 gap stays a gap in the derived series.
+// (3) with NO current-contract rows covering it, the 09:35–09:58 gap stays a
+// gap in the derived series (production FILLS it when the current rung has
+// those minutes — test 6).
 func TestRollDerivePreservesTheGap(t *testing.T) {
 	s, tok := newRollDeriveServer(t, true, false)
 	env := mustEnvelope(t, rollDeriveGet(t, s, tok, "5m", 500))
