@@ -74,11 +74,22 @@ func deathRereadPriorLineKey(row *store.PlanDB) string {
 	return fmt.Sprintf("death_reread_prior_line:%s:%d", row.PlanID, row.Version)
 }
 
+// priorDeathLinePriceSeam is the test seam the verifier's sabotage control
+// overrides (2026-09-18 independent review): returning 0 must disable the wick
+// guard end-to-end, which the chain test proves by observing v2 die.
+var priorDeathLinePriceSeam = func(at *AutoTrader, row *store.PlanDB) float64 {
+	return at.priorDeathLinePriceImpl(row)
+}
+
 // priorDeathLinePrice returns the RAW death line of the version BEFORE `row`,
 // from the key recorded at that version's dormant write. 0 when absent — the
 // wick guard then treats the lines as DIFFERENT (never suppresses a fresh
 // plan's death).
 func (at *AutoTrader) priorDeathLinePrice(row *store.PlanDB) float64 {
+	return priorDeathLinePriceSeam(at, row)
+}
+
+func (at *AutoTrader) priorDeathLinePriceImpl(row *store.PlanDB) float64 {
 	if at.store == nil || row == nil {
 		return 0
 	}

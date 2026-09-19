@@ -497,3 +497,100 @@ func TestDeathRereadRealPathFlapGuardHoldsLaunch(t *testing.T) {
 	}
 	_ = row
 }
+
+// TestDeathRereadWickThroughProductionCallSite is the independent review's last
+// ask (2026-09-18): a REAL two-version chain driven through the production call
+// site (maybeRunSessionReadsAt → describeActivePlanDeath → the
+// deathBornWickActive expression with at.priorDeathLinePrice), plus the
+// return-0 sabotage as a negative control. FLIP_CONFIRM_CLOSES=1 lets the death
+// fire with ONE closed 5m bucket, so the predicate can fire INSIDE the 10-minute
+// wick (the production 2-close floor makes the evidence window equal the wick —
+// boundary-untestable). With the recorded RAW prior line the same-line wick
+// keeps v2 ALIVE; with the seam sabotaged to 0 the SAME tape kills v2.
+func TestDeathRereadWickThroughProductionCallSite(t *testing.T) {
+	run := func(sabotage bool) {
+		t.Helper()
+		t.Setenv("FLIP_ATR_BUFFER", "0")
+		t.Setenv("FLIP_CONFIRM_CLOSES", "1")
+		t.Setenv("DORMANT_MIN_HOLD_MIN", "0")
+		off := false
+		cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{
+			PlanEnabled: true, ReplanCap: 4, SessionsEnabled: []string{"NY"}, DeathReread: nil,
+			WakeOn15mZone: &off, WakeOnHTFZone: &off, WakeOnHTFOB: false, WakeOnSeatedInvalidation: &off, WakeOnIFVG: &off,
+		}}
+		at, st := resetTrader(t, cfg)
+		client := &scriptedPlannerClient{respond: func(int, string) (string, error) { return "not json", nil }}
+		at.mcpClient = client
+		origDrift := clockHoldDriftFn
+		clockHoldDriftFn = func(string) (int64, bool) { return 0, false }
+		t.Cleanup(func() { clockHoldDriftFn = origDrift })
+		t.Cleanup(func() { market.FuturesBarsProvider = nil; traderTestBarsInstalled = false })
+		origSeam := priorDeathLinePriceSeam
+		if sabotage {
+			priorDeathLinePriceSeam = func(*AutoTrader, *store.PlanDB) float64 { return 0 }
+		}
+		t.Cleanup(func() { priorDeathLinePriceSeam = origSeam })
+
+		now := time.Date(2026, 8, 18, 14, 0, 0, 0, time.UTC)
+		flipRereadTestNow(t, now)
+		td := "2026-08-18"
+
+		// Version 1: active, dies below its 15480 death line on the first cycle.
+		row := seedActivePlan(t, at, td, "NY", now.Add(-40*time.Minute), deathFixtureDoc())
+		seedFlipBars(15500, 15470, 6*time.Minute, now)
+		at.maybeRunSessionReadsAt(now)
+		if got := versionLifecycle(t, st, td, "NY", at.id, 1); got != "dormant" {
+			t.Fatalf("v1 must park dormant first, got %q", got)
+		}
+		// The dormant write records the RAW prior line (B2 production path).
+		if v := sysCfgVal(t, st, deathRereadPriorLineKey(row)); v != "15480.000000" {
+			t.Fatalf("the RAW prior line must be recorded at the dormant write, got %q", v)
+		}
+
+		// Version 2: SEEDED death-born (the read would author it with the real
+		// clock, which the wick compares against — seeded CreatedAt = now keeps
+		// the chain and the clock in one space). SAME raw death line.
+		v2doc, _ := json.Marshal(kernel.PlanDoc{Bias: kernel.PlanBias{Direction: "short"}, DeathStructured: &kernel.PlanCondition{Price: 15480, Side: "below", Rule: "5m_close"}})
+		pid := store.MakePlanIDForTrader(at.id, td, "NY")
+		if _, err := at.store.Plan().AppendPlan(&store.PlanDB{PlanID: pid, TradeDate: td, Session: "NY", StrategyID: at.id, TriggerReason: store.TriggerDeathReplan, Lifecycle: "active", Doc: string(v2doc), CreatedAt: now}); err != nil {
+			t.Fatal(err)
+		}
+
+		// Cycle 2, six minutes later — INSIDE the 10-minute wick. A hand-built
+		// tape whose first post-birth bar straddles the raw line (touch gate)
+		// and whose next five close below it: one closed 5m bucket = death
+		// evidence with FLIP_CONFIRM_CLOSES=1.
+		now2 := now.Add(6 * time.Minute)
+		flipRereadTestNow(t, now2)
+		t0 := now.UnixMilli()
+		bars := []market.Kline{
+			{OpenTime: t0, CloseTime: t0 + 60_000 - 1, Open: 15500, High: 15500, Low: 15470, Close: 15470},
+		}
+		for i := 1; i <= 5; i++ {
+			ot := t0 + int64(i)*60_000
+			bars = append(bars, market.Kline{OpenTime: ot, CloseTime: ot + 60_000 - 1, Open: 15470, High: 15470, Low: 15470, Close: 15470})
+		}
+		barsAt(bars)
+		logBuf := captureTraderLog(t)
+		at.maybeRunSessionReadsAt(now2)
+
+		if sabotage {
+			// The SAME tape must kill v2 — the guard is gone (seam returns 0),
+			// so the death check proceeds normally.
+			if got := versionLifecycle(t, st, td, "NY", at.id, 2); got != "dormant" {
+				t.Fatalf("SABOTAGE CONTROL: with priorDeathLinePrice returning 0, v2 must DIE on the same tape, got %q; log:\n%s", got, logBuf.String())
+			}
+			if !strings.Contains(logBuf.String(), "plan 2026-08-18 NY v2 DORMANT — death-condition") {
+				t.Fatalf("SABOTAGE CONTROL: the v2 dormant line must print; log:\n%s", logBuf.String())
+			}
+			return
+		}
+		// POSITIVE: the recorded RAW prior line makes the same-line wick active
+		// — v2 survives the tape that would otherwise kill it.
+		if got := versionLifecycle(t, st, td, "NY", at.id, 2); got != "active" {
+			t.Fatalf("the production wick (priorDeathLinePrice through the call site) must keep the same-line v2 active inside the 10-minute wick, got %q; log:\n%s", got, logBuf.String())
+		}
+	}
+	t.Run("positive-same-line-wick", func(t *testing.T) { run(false) })
+	t.Run("negative-return-0-sabotage", func(t *testing.T) { run(true) })
+}
