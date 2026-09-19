@@ -6034,7 +6034,7 @@ scenario, what the EXECUTOR decided for the displayed plan version — `not atte
 when no record exists render nothing (no dash, no "ok"). An uncomputed executor state is
 absent, never fabricated.
 
-## CLASS NN (assigned at merge) — A DEATH LINE THAT PARKS THE PLAN UNTIL PRICE RETURNS SITS OUT THE SESSION WHEN IT DOESN'T (born 2026-08-25 with the plan-lifecycle wave, found 2026-09-18 09:10 CT NY v2, fix/death-reread, W-DEATH-REREAD)
+## CLASS 157 — A DEATH LINE THAT PARKS THE PLAN UNTIL PRICE RETURNS SITS OUT THE SESSION WHEN IT DOESN'T (born 2026-08-25 with the plan-lifecycle wave, found 2026-09-18 09:10 CT NY v2, fix/death-reread, W-DEATH-REREAD)
 
 **Shape.** A structured death-condition kill writes `dormant:death:` and the
 planner stops there; only a `flip-condition:` kill ever re-reads
@@ -6070,3 +6070,9 @@ the 30-min flip hold anchor (class-35 trigger is a replan anchor) and cannot
 itself die inside a 10-minute birth wick (its first death check runs only after
 2 full 5m closes post-birth). Explicit false = today's behaviour byte-identical.
 Counter: `death_reread:<trader>:<date>:<session>`.
+
+## CLASS 156 — A ROLL STITCH THAT TRUSTS THE OLD CONTRACT'S STORED AGGREGATES AND SHIFTS NOTHING SHOWS A HOLE AND A 290-POINT CLIFF ON EVERY TIMEFRAME OF THE ROLL DAY (born 2026-09-14 at the Sep→Dec roll with the per-timeframe AddOn switch, found 2026-09-18 16:5x CT by the owner "chart on 14 no good on all tf", fix/roll-day-chart, W-ROLL-DAY-CHART)
+
+**Shape.** Each timeframe rolled at a different hour, so the old contract's stored bars stop early on every tf (1m 10:33 · 3m 10:36 · 5m 09:55 · 15m 08:15 · 30m 06:00 · 1h 01:00) while the new contract's first live bars start at their own hour — the stitch showed a hole at the seam on every tf. And the stitch shifted nothing, so every tf showed the ~290-point Sep/Dec basis as a price cliff. The 1m rows of the old contract were otherwise complete.
+
+**Rule (probe).** Per contract per tf, compare the last stored bar time on the roll day against the 1m last bar: any tf whose last bar is earlier than the 1m last bar is this class. The display fix derives the prior segment from that contract's 1m rows with the planner's own bucket helper, shifts it by the measured roll basis (the pair within 5 minutes), marks derived/adjusted on each bar and the envelope, never touches the current contract or volume, and keeps CHART_ROLL_STITCH=legacy byte-identical.
