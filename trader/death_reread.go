@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -65,44 +64,46 @@ func deathRereadPriorLine(version int, oldBias, killer string, priceAtDeath floa
 		version, oldBias, deathRereadKillerDirection(killer), priceAtDeath, killer)
 }
 
-// deathKillLineRe extracts the buffered kill LINE from a structured killer
-// ("death-condition: 5m_close close below 29767.00 (…)").
-var deathKillLineRe = regexp.MustCompile(`close (?:below|above) ([0-9]+(?:\.[0-9]+)?)`)
-
-// deathKillLinePrice parses the prior kill line's price; 0 when unparseable.
-func deathKillLinePrice(killer string) float64 {
-	m := deathKillLineRe.FindStringSubmatch(killer)
-	if m == nil {
-		return 0
-	}
-	var f float64
-	if _, err := fmt.Sscanf(m[1], "%f", &f); err != nil {
-		return 0
-	}
-	return f
+// deathRereadPriorLineKey keys the RAW death line of the killed version in
+// system_config (B2, 2026-09-18 review): the killer string carries the BUFFERED
+// line and the fresh plan's doc carries the RAW one — two different price spaces
+// that differ by the ATR buffer (12 pts on a real row against a 3-pt tolerance),
+// so the "same line" wick never fired exactly where plans flap. The RAW line is
+// recorded at the dormant write and compared in the SAME space.
+func deathRereadPriorLineKey(row *store.PlanDB) string {
+	return fmt.Sprintf("death_reread_prior_line:%s:%d", row.PlanID, row.Version)
 }
 
-// priorDeathLinePrice returns the price of the death line that killed the
-// plan VERSION BEFORE `row` (the born row's parent), from the chain's lifecycle
-// transitions. 0 when there is none or it is unparseable — the wick guard then
-// treats the lines as DIFFERENT (never suppresses a fresh plan's death).
+// priorDeathLinePrice returns the RAW death line of the version BEFORE `row`,
+// from the key recorded at that version's dormant write. 0 when absent — the
+// wick guard then treats the lines as DIFFERENT (never suppresses a fresh
+// plan's death).
 func (at *AutoTrader) priorDeathLinePrice(row *store.PlanDB) float64 {
 	if at.store == nil || row == nil {
 		return 0
 	}
-	_, transitions, _, ok := at.planChainFacts(row)
+	versions, _, _, ok := at.planChainFacts(row)
 	if !ok {
 		return 0
 	}
-	for i := len(transitions) - 1; i >= 0; i-- {
-		if transitions[i].Version >= row.Version {
-			continue
-		}
-		if strings.HasPrefix(transitions[i].Reason, "dormant:death:") {
-			return deathKillLinePrice(transitions[i].Reason)
+	prior := 0
+	for _, v := range versions {
+		if v.Version < row.Version && v.Version > prior {
+			prior = v.Version
 		}
 	}
-	return 0
+	if prior == 0 {
+		return 0
+	}
+	v, err := at.store.GetSystemConfig(deathRereadPriorLineKey(&store.PlanDB{PlanID: row.PlanID, Version: prior}))
+	if err != nil || v == "" {
+		return 0
+	}
+	f, ferr := strconv.ParseFloat(v, 64)
+	if ferr != nil {
+		return 0
+	}
+	return f
 }
 
 // deathRereadRun is the read-call seam (fixtures substitute a recorder to
@@ -114,11 +115,13 @@ var deathRereadRun = func(at *AutoTrader, session, tradeDate, prior string, row 
 }
 
 // deathBornWickActive reports whether a death-born plan is inside its birth
-// wick ON ITS OWN LINE (W-DEATH-REREAD (c), SF-5): the first death check for a
-// death-born version runs only after 2 full 5m closes post-birth, and only when
-// the fresh plan authored the SAME death line the prior version died on (±
-// FlipLineClusterTolerance). A model that authors a NEW death line dies
-// normally. PURE — pinned directly in tests.
+// wick ON ITS OWN LINE (W-DEATH-REREAD (c), SF-5/B2): the first death check for
+// a death-born version runs only after 2 full 5m closes post-birth, and only
+// when the fresh plan authored the SAME death line the prior version died on
+// (± FlipLineClusterTolerance), both compared in the RAW price space — the
+// prior line is the RAW death price recorded at the dormant write (the killer's
+// buffered number is a DIFFERENT space, off by the ATR buffer). A model that
+// authors a NEW death line dies normally. PURE — pinned directly in tests.
 func deathBornWickActive(row *store.PlanDB, dp *store.DayPlanConfig, now time.Time, priorKillLine float64) bool {
 	if row == nil || dp == nil || now.IsZero() || row.CreatedAt.IsZero() {
 		return false
@@ -170,7 +173,16 @@ func (at *AutoTrader) maybeRereadAfterDeath(now time.Time, session, tradeDate st
 	// write: the runaway case loses 5 minutes, the flap case spends nothing.
 	if v, err := at.store.GetSystemConfig(dormantSinceKey(row)); err == nil && v != "" {
 		if ms, perr := strconv.ParseInt(v, 10, 64); perr == nil && kernel.DormantMinHoldMin() > 0 {
-			if elapsed := now.Sub(time.UnixMilli(ms)); elapsed >= 0 && elapsed < time.Duration(kernel.DormantMinHoldMin())*time.Minute {
+			elapsed := now.Sub(time.UnixMilli(ms))
+			if elapsed < 0 {
+				// B1 (2026-09-18 review, money): the dormant timestamp is written
+				// a few milliseconds AFTER the cycle's clock was captured, so at
+				// the +0 launch `elapsed` is negative — negative means "just now",
+				// still INSIDE the guard. The old elapsed>=0 clause let exactly the
+				// launch that matters fall through.
+				elapsed = 0
+			}
+			if elapsed < time.Duration(kernel.DormantMinHoldMin())*time.Minute {
 				at.logInfof("🗓️ death re-read %s %s v%d — HELD: the dormant row is inside the %.0f-minute flap guard (%.1fm in); the re-arm predicate may clear it — retrying once the guard elapses.",
 					tradeDate, session, row.Version, float64(kernel.DormantMinHoldMin()), elapsed.Minutes())
 				return

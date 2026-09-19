@@ -340,6 +340,16 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) []SessionReadFired {
 					_ = at.store.SetSystemConfig(dormantSinceKey(existing), strconv.FormatInt(time.Now().UnixMilli(), 10))
 					at.logInfof("😴 plan %s %s v%d DORMANT — %s (entries blocked; auto re-arms when price closes back; replan budget untouched)",
 						tradeDate, s.Name, existing.Version, detail.Killer)
+					// B2 (2026-09-18 review): record the RAW death line of the killed
+					// version — the wick guard compares the born plan's line against
+					// THIS raw number (the killer's buffered line is another price
+					// space, off by the ATR buffer, and must never be compared).
+					// Lenient parse: the raw price is metadata and must be readable
+					// even from a doc strict validation refuses.
+					var rawDoc kernel.PlanDoc
+					if json.Unmarshal([]byte(existing.Doc), &rawDoc) == nil && rawDoc.DeathStructured != nil {
+						_ = at.store.SetSystemConfig(deathRereadPriorLineKey(existing), fmt.Sprintf("%.6f", rawDoc.DeathStructured.Price))
+					}
 					// W-FLIP-REREAD (2026-09-17) — the dormant marker protects
 					// entries; with the knob ON, ONE free re-read in the flipped
 					// direction is the only way the flipped bias ever materializes.

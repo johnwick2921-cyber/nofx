@@ -72,9 +72,6 @@ func TestDeathRereadPriorLineIsBiasFree(t *testing.T) {
 	if deathRereadKillerDirection("2x5m close above 29473.50") != "up" || deathRereadKillerDirection("close below 28981.00") != "down" {
 		t.Fatalf("killer direction parse broken: up=%q down=%q", deathRereadKillerDirection("2x5m close above 29473.50"), deathRereadKillerDirection("close below 28981.00"))
 	}
-	if deathKillLinePrice(killer) != 29767.00 || deathKillLinePrice("no line here") != 0 {
-		t.Fatalf("kill-line parse broken: %v / %v", deathKillLinePrice(killer), deathKillLinePrice("no line here"))
-	}
 }
 
 // TestDeathBornWickActive pins (c) + SF-5: the first death check of a
@@ -104,6 +101,22 @@ func TestDeathBornWickActive(t *testing.T) {
 	}
 	if deathBornWickActive(row, dpOn, birth.Add(1*time.Minute), 15480+2*kernel.FlipLineClusterTolerance()) {
 		t.Fatal("a DIFFERENT death line must die normally (SF-5)")
+	}
+	// B2 (2026-09-18 review): the comparison is in the RAW price space — the
+	// prior kill line is the recorded RAW death price (29755). The buffered
+	// killer number on the same real row was 29767 (12 pts off against a 3-pt
+	// tolerance), which is why the old buffered-space compare never fired where
+	// plans flap. Same raw line → guarded; the raw line ± buffer → not.
+	rawPrior := 29755.0
+	rawRow := &store.PlanDB{TriggerReason: store.TriggerDeathReplan, CreatedAt: birth, Doc: func() string {
+		b, _ := json.Marshal(kernel.PlanDoc{Bias: kernel.PlanBias{Direction: "short"}, DeathStructured: &kernel.PlanCondition{Price: rawPrior, Side: "below", Rule: "2x5m"}})
+		return string(b)
+	}()}
+	if !deathBornWickActive(rawRow, dpOn, birth.Add(1*time.Minute), rawPrior) {
+		t.Fatal("B2: the SAME raw line must be guarded even when the buffered killer number would differ by the ATR buffer")
+	}
+	if deathBornWickActive(rawRow, dpOn, birth.Add(1*time.Minute), rawPrior+12.0) {
+		t.Fatal("B2: a line 12 pts away in the raw space is a DIFFERENT line and must die normally")
 	}
 	if deathBornWickActive(row, dpOn, birth.Add(1*time.Minute), 0) {
 		t.Fatal("an unknown prior line must never suppress")
@@ -175,6 +188,10 @@ func TestDeathRereadRealPathLandsFreshPlanAndSupersedes(t *testing.T) {
 
 	if got := versionLifecycle(t, st, td, "NY", at.id, 1); got != "dormant" {
 		t.Fatalf("death must park dormant first, got %q", got)
+	}
+	// B2: the dormant write records the RAW prior death line (the wick's space).
+	if v := sysCfgVal(t, st, deathRereadPriorLineKey(row)); v != "15480.000000" {
+		t.Fatalf("the RAW prior line must be recorded at the dormant write, got %q", v)
 	}
 	if !waitFor(t, 10*time.Second, func() bool {
 		latest, err := st.Plan().GetLatestPlanForTraderSession(td, "NY", at.id)
@@ -436,4 +453,47 @@ func TestDeathRereadPreReadRecheckSkipsRearmedRow(t *testing.T) {
 	if called.Load() != 0 {
 		t.Fatalf("the pre-read re-check must skip a non-dormant row (0 launches), got %d", called.Load())
 	}
+}
+
+// TestDeathRereadRealPathFlapGuardHoldsLaunch pins B1 on the REAL path: the
+// dormant timestamp is written a few milliseconds AFTER the cycle's clock, so
+// `elapsed` is NEGATIVE at the +0 launch — negative must mean "just now" and
+// HOLD. With DORMANT_MIN_HOLD_MIN=5 the death branch parks the plan and NO
+// read launches this cycle (before the fix the negative elapsed fell through
+// and the read launched at +0 — reproduced by the review).
+func TestDeathRereadRealPathFlapGuardHoldsLaunch(t *testing.T) {
+	t.Setenv("FLIP_ATR_BUFFER", "0")
+	t.Setenv("DORMANT_MIN_HOLD_MIN", "5")
+	off := false
+	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{
+		PlanEnabled: true, ReplanCap: 4, SessionsEnabled: []string{"NY"}, DeathReread: nil,
+		WakeOn15mZone: &off, WakeOnHTFZone: &off, WakeOnHTFOB: false, WakeOnSeatedInvalidation: &off, WakeOnIFVG: &off,
+	}}
+	at, st := resetTrader(t, cfg)
+	client := &scriptedPlannerClient{respond: func(int, string) (string, error) { return validShortPlanJSON, nil }}
+	at.mcpClient = client
+	origDrift := clockHoldDriftFn
+	clockHoldDriftFn = func(string) (int64, bool) { return 0, false }
+	t.Cleanup(func() { clockHoldDriftFn = origDrift })
+	t.Cleanup(func() { market.FuturesBarsProvider = nil; traderTestBarsInstalled = false })
+
+	now := time.Date(2026, 8, 18, 14, 0, 0, 0, time.UTC)
+	flipRereadTestNow(t, now)
+	td := "2026-08-18"
+	row := seedActivePlan(t, at, td, "NY", now.Add(-40*time.Minute), deathFixtureDoc())
+	seedFlipBars(15500, 15470, 6*time.Minute, now)
+	logBuf := captureTraderLog(t)
+
+	at.maybeRunSessionReadsAt(now)
+	if got := versionLifecycle(t, st, td, "NY", at.id, 1); got != "dormant" {
+		t.Fatalf("death must park dormant first, got %q", got)
+	}
+	if !strings.Contains(logBuf.String(), "HELD: the dormant row is inside the 5-minute flap guard") {
+		t.Fatalf("the +0 launch must be HELD (the dormant timestamp lands AFTER the cycle clock); log:\n%s", logBuf.String())
+	}
+	time.Sleep(300 * time.Millisecond)
+	if client.calls() != 0 {
+		t.Fatalf("B1: no read may launch inside the flap guard, got %d AI calls", client.calls())
+	}
+	_ = row
 }
