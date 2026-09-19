@@ -537,6 +537,28 @@ func TestDeathRereadWickThroughProductionCallSite(t *testing.T) {
 
 		// Version 1: active, dies below its 15480 death line on the first cycle.
 		row := seedActivePlan(t, at, td, "NY", now.Add(-40*time.Minute), deathFixtureDoc())
+		// The death re-read launches ASYNC (production behavior). Its goroutine
+		// reads market.FuturesBarsProvider through kernel.ResolveVoidScope; the
+		// cleanup above nils that global, and under -race the pair is a DATA
+		// RACE (read kernel/void_scope.go:91 vs the nil write — caught by the
+		// first race run at 5198452c). Join the goroutines before returning: an
+		// empty in-flight map means each goroutine has run its deferred Delete,
+		// its last act, so no provider read remains. Bounded so a stuck
+		// goroutine fails the test loudly instead of hanging the package.
+		joinReReads := func() {
+			deadline := time.Now().Add(10 * time.Second)
+			for {
+				n := 0
+				deathRereadInFlight.Range(func(_, _ any) bool { n++; return true })
+				if n == 0 {
+					return
+				}
+				if time.Now().After(deadline) {
+					t.Fatalf("async death re-read goroutines never drained before teardown (they read market.FuturesBarsProvider — the cleanup would nil it)")
+				}
+				time.Sleep(5 * time.Millisecond)
+			}
+		}
 		seedFlipBars(15500, 15470, 6*time.Minute, now)
 		at.maybeRunSessionReadsAt(now)
 		if got := versionLifecycle(t, st, td, "NY", at.id, 1); got != "dormant" {
@@ -546,6 +568,14 @@ func TestDeathRereadWickThroughProductionCallSite(t *testing.T) {
 		if v := sysCfgVal(t, st, deathRereadPriorLineKey(row)); v != "15480.000000" {
 			t.Fatalf("the RAW prior line must be recorded at the dormant write, got %q", v)
 		}
+		// Cycle 1 launched the v1 re-read goroutine. Join it BEFORE the next
+		// global write: flipRereadTestNow(now2) and barsAt(bars) below touch
+		// the clock and provider globals, and the goroutine still reads the
+		// provider inside assemblePlannerInputWithCtx → detectHTFLevels
+		// (-race caught barsAt-write vs goroutine-read — the second pair at
+		// 5198452c). An empty in-flight map = the goroutine ran its deferred
+		// Delete, its last act, so no further read remains.
+		joinReReads()
 
 		// Version 2: SEEDED death-born (the read would author it with the real
 		// clock, which the wick compares against — seeded CreatedAt = now keeps
@@ -583,6 +613,7 @@ func TestDeathRereadWickThroughProductionCallSite(t *testing.T) {
 			if !strings.Contains(logBuf.String(), "plan 2026-08-18 NY v2 DORMANT — death-condition") {
 				t.Fatalf("SABOTAGE CONTROL: the v2 dormant line must print; log:\n%s", logBuf.String())
 			}
+			joinReReads()
 			return
 		}
 		// POSITIVE: the recorded RAW prior line makes the same-line wick active
@@ -590,6 +621,7 @@ func TestDeathRereadWickThroughProductionCallSite(t *testing.T) {
 		if got := versionLifecycle(t, st, td, "NY", at.id, 2); got != "active" {
 			t.Fatalf("the production wick (priorDeathLinePrice through the call site) must keep the same-line v2 active inside the 10-minute wick, got %q; log:\n%s", got, logBuf.String())
 		}
+		joinReReads()
 	}
 	t.Run("positive-same-line-wick", func(t *testing.T) { run(false) })
 	t.Run("negative-return-0-sabotage", func(t *testing.T) { run(true) })
