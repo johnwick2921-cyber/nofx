@@ -131,7 +131,8 @@ go test ./... -count=1                          → /tmp/gofinal5.log  exit 0, 3
 go test ./trader/ -count=1 -race -run TestPictureHtf … (race surfaces) → clean
 go test ./... -count=1 (wave 18, pre-CTO-review) → /tmp/gofinal7.log  exit 0, 35/35 packages
 go test ./... -count=1 (wave 18, CTO round-2 corrections) → /tmp/gofinal8.log  exit 0, 35/35 packages
-go test ./trader/ -count=1 -run 'TestPictureHtfConsume|TestPictureHtfReconcile|TestPictureConsumerAndArmed' → 9/9 PASS
+go test ./... -count=1 (wave 20, CTO round-3 finding 4) → /tmp/gofinal9.log  exit 0, 35/35 packages
+go test ./trader/ -count=1 -run 'TestPictureHtfConsume|TestPictureHtfReconcile|TestPictureConsumerAndArmed' → 13/13 PASS
 go test ./provider/ninjatrader/ -count=1 -run 'TestOrderUpdateFanout' → 2/2 PASS (coordinated dispatch)
 cd web && npx tsc --noEmit                     → clean
 cd web && npx vitest run                       → /tmp/webfinal5.log 76 files / 492 tests, exit 0
@@ -175,6 +176,9 @@ duplicate orders** (same file + real router/snapshot paths):
 | `TestPictureHtfReconcileRecoversFillFromReceivedHistory` | a filled frame received BEFORE the row existed is recovered to filled with the frame's actual fill price and R:R; the recovered row blocks re-entry |
 | `TestPictureHtfReconcileRecoversRejectionFromReceivedHistory` | a rejection received before the row existed is recovered with its reason |
 | `TestPictureHtfReconcileRecoversFillFromFillStream` | a fill on the real fill router → received-fill ring recovers the row with the actual fill price (never a limit) |
+| `TestPictureHtfReconcileWorkingReceiptThenFillFrameRecovers` | FINDING 4(a): a working order_update moved the row to working, then a fill frame arrived with NO filled order_update — the sweep recovers the actual fill for a WORKING row and no additional entry is submitted |
+| `TestPictureHtfReconcilePendingPrefersFillOverOlderWorkingHistory` | FINDING 4(b): a pending row with older working history + newer fill evidence — the fill wins; execution evidence outranks working receipts |
+| `TestPictureHtfReconcileRestartPersistedWorkingRecoversFill` | FINDING 4(c): a persisted working row survives the restart, stays working with no new evidence (restart limitation explicit), and settles when post-restart execution evidence is received — no additional entry |
 | `TestPictureHtfReconcileAbsentBookStaysUnknownNeverResends` | with an explicitly empty wire book and no received history the row STAYS place_pending, marked `outcome unknown` exactly once, fill price 0 — a filled order is absent from the snapshot exactly like a never-placed one, so absence proves nothing |
 | `TestPictureHtfReconcileWorkingBookLeavesFillPriceUnknown` | a present working book entry is a working receipt; its `LimitPrice` must NEVER become the fill price (the snapshot carries no fill price) |
 | `TestPictureConsumerAndArmedStreamCoexistOnOneSubscription` | the picture consumer and the armed listener share ONE subscription through the real router: every fed frame reaches BOTH, neither channel is closed by the other |
@@ -224,6 +228,24 @@ The prior wave-18 pin names
 `TestPictureHtfReconcileRejectedAndAbsent`) are REMOVED — their fixtures
 injected wire-impossible states.
 
+### Round 3 (finding 4, 2026-09-20) — working evidence must not mask execution evidence
+
+4. **An older working receipt can hide a received fill.**
+   `pictureHtfReconcilePending` read order-update history first and `continue`d
+   after a working/accepted receipt, before the fill ring was ever consulted;
+   and `PictureHtfPendingByTrader` only swept `place_pending`, so rows already
+   marked working had the same coverage gap. FIXED: the sweep now scans
+   `PictureHtfRecoverableByTrader` (place_pending AND working — a working
+   receipt is not a terminal outcome), the working branch falls THROUGH to
+   the fill ring instead of exiting, and a place_pending row with both older
+   working history and newer fill evidence settles to the fill. Quantity and
+   terminal-state correctness preserved (fill price/qty from the wire, R:R
+   from the row geometry, re-entry blocked by the atomic claim). Pins:
+   WorkingReceiptThenFillFrameRecovers / PendingPrefersFillOverOlderWorkingHistory /
+   RestartPersistedWorkingRecoversFill. The restart limitation stays explicit:
+   process-local history disappears on restart; unreceived outcomes remain
+   UNKNOWN — this is duplicate prevention, not complete broker-history recovery.
+
 ## 7. Gap register — classified (per CTO request, 2026-09-20)
 
 Each activation-relevant gap carries exactly one status:
@@ -235,9 +257,9 @@ evidence.
 | # | Gap | Status | Evidence | Remaining owner/runtime step |
 |---|---|---|---|---|
 | 1 | Broker-state consumer (received entry / rejection / fill / protective-order events update the correct opportunity) | **implemented, pinned (unit + real subscription)** | `trader/picture_htf_broker.go` consumer, a coordinated fan-out listener per trader; pins: EntryLifecycle (forward-only, wire fill price + actual-fill R:R), RejectionCarriesReason, ConsumeProtectiveLegsUpdateProtectionNotFill (append, never clobber), Isolation, CoexistOnOneSubscription (real router — the armed listener receives every frame too) — all green (`/tmp/gofinal8.log`, exit 0, 35/35) | receive a real order_update set on NT8 SIM (owner's copy → F5 → restart) |
-| 2 | Reconciliation sweep (pending/ambiguous submissions recover across disconnects/restarts without another entry) | **implemented, pinned (unit + real paths)** | sweep runs every cycle from RECEIVED evidence only: consumer-populated order_update history → received-fill ring → working-order book (presence only; absence proves nothing); pins: RecoversFillFromReceivedHistory (frame before the row existed → filled with the frame's actual price, re-entry blocked), RecoversRejectionFromReceivedHistory, RecoversFillFromFillStream (real fill router), AbsentBookStaysUnknownNeverResends (explicit empty wire book + no history → place_pending, `outcome unknown`, never resent), WorkingBookLeavesFillPriceUnknown (LimitPrice is never a fill) — green | live NT8 snapshot + order_update sets on SIM (owner step above) |
+| 2 | Reconciliation sweep (pending/ambiguous submissions recover across disconnects/restarts without another entry) | **implemented, pinned (unit + real paths)** | sweep runs every cycle over place_pending AND working rows from RECEIVED evidence only, execution evidence outranking working receipts: consumer-populated order_update history → received-fill ring → working-order book (presence only; absence proves nothing); pins: RecoversFillFromReceivedHistory, RecoversRejectionFromReceivedHistory, RecoversFillFromFillStream, WorkingReceiptThenFillFrameRecovers, PendingPrefersFillOverOlderWorkingHistory, RestartPersistedWorkingRecoversFill, AbsentBookStaysUnknownNeverResends, WorkingBookLeavesFillPriceUnknown — green. Restart limitation explicit: process-local history is gone after a restart; unreceived outcomes stay UNKNOWN (duplicate prevention, not broker-history recovery) | live NT8 snapshot + order_update sets on SIM (owner step above) |
 | 3 | Partial fills (filled quantity receives protection through the actual AddOn path) | **implemented in the AddOn, untested live** | C# audit [A]: VLTraderTCPClient.cs:1445 `SubmitBracketOnEntryFill(signalId, e.Filled, e.AverageFillPrice)`; :2089+ refuses filledQty ≤ 0, sizes SL/TP legs by filledQty, `AmendBracketQuantity` on later fills — protective orders follow the FILLED quantity | NT8 partial-fill scenario (limit-touch) — owner/runtime |
-| 4 | Native 4h | **live input available; historical storage absent (replay limitation, NOT a live blocker)** | live: `defaultAutoBarsTimeframes` (`provider/ninjatrader/tcp_server.go:518`) includes `"4h"`, so the live native 4H subscription exists [B]; storage: no native-4h rows in the DB, replay uses the disclosed ETH-grid proxy | none for activation; importing native 4h history is a replay-quality choice |
+| 4 | Native 4h | **live input available; historical storage absent (replay limitation, NOT a live blocker) — but subscription config is NOT data readiness** | live: `defaultAutoBarsTimeframes` (`provider/ninjatrader/tcp_server.go:518`) includes `"4h"`, so the live native 4H subscription exists [B]; storage: no native-4h rows in the DB, replay uses the disclosed ETH-grid proxy. CTO ruling: at ACTIVATION, verify actual RECEIVED native 4H bars + sufficient completed history (runbook Step 4.5) — the subscription request alone proves nothing | activation gate: verify received native 4h rows + completed-4h depth in the pivot window; importing native 4h history remains a replay-quality choice |
 | 5 | AddOn build/capability receipt | **owner/runtime** | wire pins green both sides; VL_BUILD_ID="2026-09-20-p1" floor on both ends | owner: copy → F5 → full NT8 restart → boot line receipt |
 | 6 | Merged-HEAD/release checks + attended cutover | **owner/runtime (held)** | runbook: `docs/superpowers/runbooks/2026-09-20-picture-htf-activation.md`; merged-HEAD full suite required by canon before release | owner present for NT8 steps; owner's explicit "go" |
 | 7 | Natural-market opportunity (category D) | **pending, separate** | none occurred; categories A–C pinned; the decision body itself is proven by the replay body (Sept-17 tape) | a live category-D opportunity when it occurs |
@@ -261,6 +283,10 @@ optimums; a faithful implementation does not establish profitability.
 - Wave-19 code commit: `c2ba4388bcee1bb29809c57bb196bfa306fd55d2` — the CTO's
   three production-integration findings fixed (received-evidence recovery,
   fill-price honesty, coordinated dispatch), the fixes this §6b/§6c state.
+- Wave-20 code commit: `9a1044df2b0ec4a1bdf453599148d55e4ae86095` — finding 4
+  (working evidence masking execution evidence) fixed: the sweep scans
+  place_pending AND working rows and execution evidence outranks working
+  receipts.
 - This report lives on the same branch; the raw URL is pinned to the full
   commit SHA with the byte count quoted in the dispatch reply, and the pinned
   blob was curl-fetched and byte-compared against the working tree.

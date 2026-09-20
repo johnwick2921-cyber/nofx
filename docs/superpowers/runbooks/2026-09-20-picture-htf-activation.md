@@ -73,6 +73,24 @@ Strategy Studio → Day Plan → Picture HTF → toggle ON (knobs blank = resolv
 defaults; min R:R blank = inherit the risk-control floor, live 2.0). Quote
 the saved config again after saving.
 
+## Step 4.5 — native 4H data readiness (subscription config is NOT proof)
+
+`defaultAutoBarsTimeframes` including `"4h"` proves only that the
+SUBSCRIPTION was requested. Before relying on the mode, verify RECEIVED
+data:
+
+1. **Received native 4H bars** — the bars store must hold native `4h` rows
+   for the live contract (query by symbol+tf). The replay only ever had a
+   disclosed ETH-grid proxy because no native 4h rows existed in the store.
+2. **Sufficient completed history** — at least the pivot window (default
+   120) of COMPLETED 4h bars ending at the latest completed bar, so the
+   level picture is real rather than bootstrapped from a few frames.
+3. Quote the counts in the post-activation evidence (Step 5): newest 4h open
+   time, completed-4h count in the window, freshest 4h bar age.
+
+Until 1–2 hold, treat the mode as data-unready regardless of what the boot
+line prints.
+
 ## Step 5 — evidence to collect after activation (report these back)
 
 1. The received AddOn build id on the heartbeat (`build=2026-09-20-p1` in the
@@ -86,5 +104,7 @@ the saved config again after saving.
    explicit test-seam command). Quote the opportunity row (intended
    geometry), the signal frame, and the received order_update/fill frames
    showing the bracket legs.
-5. Natural-market setup evidence is reported SEPARATELY. If none occurs,
+5. Native 4H readiness counts from Step 4.5: newest 4h open time, completed
+   4h count in the pivot window, freshest 4h bar age.
+6. Natural-market setup evidence is reported SEPARATELY. If none occurs,
    state that it remains pending.
