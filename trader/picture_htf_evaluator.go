@@ -6,8 +6,11 @@ import (
 	"time"
 
 	"nofx/kernel"
+	"nofx/logger"
 	"nofx/market"
+	ntwire "nofx/provider/ninjatrader"
 	"nofx/store"
+	ntTrader "nofx/trader/ninjatrader"
 )
 
 // PICTURE-HTF EVALUATOR (2026-09-20) — the deterministic half of the owner's
@@ -37,6 +40,9 @@ type PictureHtfEvaluator struct {
 
 	// H1 close series for the advisory momentum stall (last three closes).
 	h1Closes []float64
+
+	// capWarned dedupes the once-per-state "mode unavailable" log.
+	capWarned bool
 }
 
 // NewPictureHtfEvaluator builds the evaluator from the resolved strategy knob.
@@ -55,6 +61,20 @@ var pictureHtfSubmitSeam = func(e *PictureHtfEvaluator, row *store.PictureHtfOpp
 	return fmt.Errorf("picture_htf submit seam unbound (the NT8 market-entry method is wired in the next wave commit)")
 }
 
+// pictureHtfCapabilityProven gates the mode on the AddOn's evidence surface
+// (final + emitted_at bar markers, rejection reasons) — proven by RECEIPT of
+// the far-side build id, never assumed. Tests override it.
+var pictureHtfCapabilityProven = func(at *AutoTrader) bool {
+	if at == nil {
+		return false
+	}
+	tcp, ok := at.trader.(*ntTrader.TCPTrader)
+	if !ok {
+		return false
+	}
+	return tcp.FarSideProves(ntwire.MinAddonBuildPictureHtf)
+}
+
 // bars reads completed bars of a timeframe from the live provider (nil-guarded).
 func (e *PictureHtfEvaluator) bars(symbol, tf string, n int, nowMs int64) []market.Kline {
 	if market.FuturesBarsProvider == nil {
@@ -63,7 +83,10 @@ func (e *PictureHtfEvaluator) bars(symbol, tf string, n int, nowMs int64) []mark
 	raw := market.FuturesBarsProvider(symbol, tf, n)
 	var out []market.Kline
 	for _, b := range raw {
-		if b.CloseTime < nowMs {
+		// Only bars the AddOn PROVED closed count. The mode is gated on the
+		// capability that guarantees final markers, so an unmarked bar is a
+		// forming one — wall-clock inference is not the law here.
+		if b.CloseTime < nowMs && b.Final {
 			out = append(out, b)
 		}
 	}
@@ -124,6 +147,14 @@ type EvaluateResult struct {
 
 func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) EvaluateResult {
 	nowMs := now.UnixMilli()
+	if !pictureHtfCapabilityProven(e.at) {
+		if !e.capWarned {
+			e.capWarned = true
+			logger.Warnf("picture-htf: mode unavailable — AddOn evidence missing (need build ≥ %s; F5-compile + full NT8 restart with the new AddOn)", ntwire.MinAddonBuildPictureHtf)
+		}
+		return EvaluateResult{Stage: "watching", Reason: "mode unavailable — AddOn evidence missing"}
+	}
+	e.capWarned = false
 	e.rebuildLevels(symbol, nowMs)
 
 	// --- H1 completion scan + advisory momentum ---

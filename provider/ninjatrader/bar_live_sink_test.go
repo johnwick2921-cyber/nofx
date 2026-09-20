@@ -2,6 +2,8 @@ package ninjatrader
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -68,5 +70,30 @@ func TestDrainBarIngestHistoricalNeverFansOut(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("live frame never delivered")
+	}
+}
+
+func TestBarFinalEvidenceRoundTrip(t *testing.T) {
+	b := Bar{T: 1, O: 2, H: 3, L: 1.5, C: 2.5, V: 10, Final: true, EmittedAt: 1750000000123}
+	body, err := json.Marshal(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), `"final":true`) || !strings.Contains(string(body), `"emitted_at":1750000000123`) {
+		t.Fatalf("final/emitted_at must ride the wire: %s", body)
+	}
+	var back Bar
+	if err := json.Unmarshal(body, &back); err != nil {
+		t.Fatal(err)
+	}
+	if !back.Final || back.EmittedAt != 1750000000123 {
+		t.Fatalf("evidence lost in roundtrip: %+v", back)
+	}
+	// A forming bar without the markers stays unproven (zero value), never
+	// "closed".
+	fb := Bar{T: 2, C: 3}
+	body, _ = json.Marshal(fb)
+	if strings.Contains(string(body), "final") {
+		t.Fatalf("an unproven bar must not claim finality: %s", body)
 	}
 }

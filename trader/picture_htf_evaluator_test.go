@@ -33,7 +33,13 @@ func newPictureHtfEnv(t *testing.T, cfg store.PictureHtfConfig) *pictureHtfTestE
 		env.submits = append(env.submits, row.OppKey)
 		return nil
 	}
-	t.Cleanup(func() { pictureHtfSubmitSeam = orig; market.FuturesBarsProvider = nil })
+	origCap := pictureHtfCapabilityProven
+	pictureHtfCapabilityProven = func(*AutoTrader) bool { return true }
+	t.Cleanup(func() {
+		pictureHtfSubmitSeam = orig
+		pictureHtfCapabilityProven = origCap
+		market.FuturesBarsProvider = nil
+	})
 	return env
 }
 
@@ -48,7 +54,7 @@ func newPictureHtfEnv(t *testing.T, cfg store.PictureHtfConfig) *pictureHtfTestE
 var t4h0 = time.Date(2026, 9, 13, 1, 0, 0, 0, time.UTC).UnixMilli()
 
 func mkBar(open, span int64, o, h, l, c float64) market.Kline {
-	return market.Kline{OpenTime: open, CloseTime: open + span - 1, Open: o, High: h, Low: l, Close: c}
+	return market.Kline{OpenTime: open, CloseTime: open + span - 1, Open: o, High: h, Low: l, Close: c, Final: true}
 }
 
 func tailOf(bars []market.Kline, n int) []market.Kline {
@@ -268,5 +274,35 @@ func TestPictureHtfEvaluatorDisabledDoesNothing(t *testing.T) {
 	}
 	if len(env.submits) != 0 {
 		t.Fatalf("disabled mode must never submit")
+	}
+}
+
+func TestPictureHtfEvaluatorCapabilityGateBlocks(t *testing.T) {
+	// The DEFAULT capability seam reads the concrete trader — resetTrader has
+	// none, so capability is NOT proven and the mode must stay unavailable.
+	at, _ := resetTrader(t, store.StrategyConfig{DayPlan: &store.DayPlanConfig{PictureHtf: &store.PictureHtfConfig{Enabled: true}}})
+	ev := NewPictureHtfEvaluator(at, store.PictureHtfResolved(&store.PictureHtfConfig{Enabled: true}))
+	res := ev.Evaluate("MNQ", time.Now())
+	if res.Stage != "watching" || !strings.Contains(res.Reason, "mode unavailable") {
+		t.Fatalf("an unproven AddOn must gate the mode off, got %+v", res)
+	}
+}
+
+func TestPictureHtfEvaluatorIgnoresUnfinalizedBars(t *testing.T) {
+	env := newPictureHtfEnv(t, store.PictureHtfConfig{Enabled: true, MinRR: 2.5})
+	env.seedPictureTape()
+	// Override the 5m ladder: the NEWEST bar is time-complete (CloseTime < now)
+	// but the AddOn never finalized it — it must not count as a completed bar,
+	// so the previous interval's window is past and the evaluation expires.
+	bars5m := pictureBars5M(true)
+	bars5m[len(bars5m)-1].Final = false
+	env.seed(pictureBars4H(), pictureBarsH1(), bars5m)
+	env.eval.OnBars("MNQ", "5m", tailOf(bars5m, 1), env.now)
+	res := env.eval.Evaluate("MNQ", env.now)
+	if res.Stage != "expired" {
+		t.Fatalf("an unfinalized bar must not establish the current interval, got %+v", res)
+	}
+	if len(env.submits) != 0 {
+		t.Fatalf("an unfinalized newest bar must never submit")
 	}
 }

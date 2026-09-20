@@ -274,6 +274,16 @@ func (t *TCPTrader) activeAccountName() string {
 	return ""
 }
 
+// FarSideProves reports whether the AddOn on the wire has proven a capability
+// floor (FarSideProven over the build id reported on the heartbeat). Capability
+// is proven by RECEIPT, never assumed — no build id means no.
+func (t *TCPTrader) FarSideProves(minBuild string) bool {
+	if t == nil || t.server == nil {
+		return false
+	}
+	return ntwire.FarSideProven(t.server.FarSideBuildID(), minBuild)
+}
+
 // feedNowUTC is the latest market bar close, falling back to wall time when
 // absent. It is a market fact, never the creation timestamp of an entry command.
 func (t *TCPTrader) feedNowUTC(symbol string) time.Time {
