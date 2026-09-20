@@ -67,31 +67,43 @@ prints `addon=not proven` and the mode refuses every evaluation — by design.
 6. Flat-gate re-check post-boot. Push the post-boot marker BEFORE releasing
    the lock. Rollback = restore `nofx-bin.old.<prev>` + release + restart.
 
-## Step 4 — enable the mode
+## Step 4 — native 4H data readiness (BEFORE enabling; subscription config and DB storage are NOT proof)
+
+`defaultAutoBarsTimeframes` including `"4h"` proves only that the
+SUBSCRIPTION was requested, and bars persisted in the store prove only that
+storage worked. Readiness is what the EVALUATOR actually consumes — the live
+native bar cache the evaluator reads. Verify all of the following BEFORE
+touching the mode toggle:
+
+1. **Bars actually consumed by the evaluator** — the live cache the
+   evaluator feeds from (`market/data.go` futures branch reads BarCache) must
+   hold native `4h` bars for the LIVE symbol root (MNQ), delivered by the
+   AddOn over TCP (not imported, not derived).
+2. **Contract** — the resolved front-month contract those bars carry (the
+   AddOn's subscription root resolves via VLContractResolver; quote the
+   contract the received 4h bars report).
+3. **Completion evidence** — the bars carry final + emitted_at (the
+   receipt-freshness fields the evaluator gates on); quote the newest
+   completed 4h open time and the freshest bar age.
+4. **History depth** — at least the pivot window (default 120) of COMPLETED
+   4h bars ending at the latest completed bar, so the level picture is real
+   rather than bootstrapped from a few frames.
+5. **DB is corroboration only** — query the bars store for the same symbol+tf
+   as supporting evidence, never as the readiness verdict.
+
+Until 1–4 hold, the mode stays OFF and is treated as data-unready regardless
+of what the boot line prints. Automatic entries remain disabled until ALL
+three gates pass: AddOn capability receipt (build=2026-09-20-p1 on the wire),
+native-data readiness (this step), and the release checks (merged-HEAD suite,
+Step 2).
+
+## Step 5 — enable the mode (only after Step 4 passes)
 
 Strategy Studio → Day Plan → Picture HTF → toggle ON (knobs blank = resolved
 defaults; min R:R blank = inherit the risk-control floor, live 2.0). Quote
 the saved config again after saving.
 
-## Step 4.5 — native 4H data readiness (subscription config is NOT proof)
-
-`defaultAutoBarsTimeframes` including `"4h"` proves only that the
-SUBSCRIPTION was requested. Before relying on the mode, verify RECEIVED
-data:
-
-1. **Received native 4H bars** — the bars store must hold native `4h` rows
-   for the live contract (query by symbol+tf). The replay only ever had a
-   disclosed ETH-grid proxy because no native 4h rows existed in the store.
-2. **Sufficient completed history** — at least the pivot window (default
-   120) of COMPLETED 4h bars ending at the latest completed bar, so the
-   level picture is real rather than bootstrapped from a few frames.
-3. Quote the counts in the post-activation evidence (Step 5): newest 4h open
-   time, completed-4h count in the window, freshest 4h bar age.
-
-Until 1–2 hold, treat the mode as data-unready regardless of what the boot
-line prints.
-
-## Step 5 — evidence to collect after activation (report these back)
+## Step 6 — evidence to collect after activation (report these back)
 
 1. The received AddOn build id on the heartbeat (`build=2026-09-20-p1` in the
    boot line / `AddonBuildLine`).
@@ -104,7 +116,8 @@ line prints.
    explicit test-seam command). Quote the opportunity row (intended
    geometry), the signal frame, and the received order_update/fill frames
    showing the bracket legs.
-5. Native 4H readiness counts from Step 4.5: newest 4h open time, completed
-   4h count in the pivot window, freshest 4h bar age.
+5. Native 4H readiness counts from Step 4: newest 4h open time, completed
+   4h count in the pivot window, freshest 4h bar age, the contract the bars
+   carry.
 6. Natural-market setup evidence is reported SEPARATELY. If none occurs,
    state that it remains pending.
