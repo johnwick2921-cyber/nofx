@@ -226,25 +226,41 @@ func pictureHtfApplyTerminal(at *AutoTrader, row store.PictureHtfOpportunityDB, 
 	_ = at.store.PictureHtfMarkBrokerState(row.OppKey, stage, "", status, reason, fillPrice, fillQty, rr)
 }
 
-// pictureHtfReconcilePending recovers place_pending rows across disconnects
-// and restarts WITHOUT another entry, from RECEIVED evidence only:
+// pictureHtfReconcilePending recovers unresolved rows — place_pending AND
+// working — across disconnects and restarts WITHOUT another entry, from
+// RECEIVED evidence only.
 //
-//  1. The received order_update history — terminal outcomes with the wire's
-//     actual fill price, or a working receipt.
-//  2. The received fill ring — actual fill price/quantity for a signal.
+// PRIORITY: received EXECUTION evidence outranks working receipts. A working
+// order_update recorded earlier must never mask a newer received fill: a fill
+// frame can arrive with no matching filled order_update, and a row already
+// marked working is still an open outcome.
+//
+//  1. The received order_update history — terminal fill (wire fill price, or
+//     the fill ring when the frame carried none) / terminal refusal settle
+//     the row; a working/accepted receipt moves the row forward and the sweep
+//     CONTINUES to the fill ring instead of exiting.
+//  2. The received fill ring — actual fill price/quantity for the signal,
+//     checked for place_pending AND working rows (finding 4: this runs even
+//     after a working receipt was recorded).
 //  3. The broker's WORKING-order book — presence proves the order rests at
 //     the broker (working receipt); the snapshot carries no fill price, so a
 //     part-filled entry records its filled quantity with the price UNKNOWN.
 //     ABSENCE proves nothing (the AddOn excludes terminal orders from the
 //     snapshot, so a filled order and a never-placed order look identical).
-//  4. Nothing received → the row stays place_pending with a one-time
-//     "outcome unknown" marker. The ambiguous case is never blindly resent
+//  4. Nothing received at all → place_pending rows stay place_pending with a
+//     one-time "outcome unknown" marker; working rows stay working (their
+//     receipt is the row itself). The ambiguous case is never blindly resent
 //     (the atomic claim already blocks re-entry; this sweep only observes).
+//
+// RESTART LIMITATION (explicit): the received history and the fill ring are
+// process-local and disappear on restart. A terminal outcome the machine
+// never received stays UNKNOWN after a restart — this sweep is duplicate
+// PREVENTION, not complete recovery of broker history.
 func pictureHtfReconcilePending(at *AutoTrader) {
 	if at == nil || at.store == nil {
 		return
 	}
-	rows, err := at.store.PictureHtfPendingByTrader(at.id)
+	rows, err := at.store.PictureHtfRecoverableByTrader(at.id)
 	if err != nil || len(rows) == 0 {
 		return
 	}
@@ -252,8 +268,10 @@ func pictureHtfReconcilePending(at *AutoTrader) {
 		if row.SignalID == "" {
 			continue
 		}
+		haveReceipt := false
 		// 1) RECEIVED order_update evidence (the wire's actual events).
 		if rec, ok := pictureReceivedRecord(at, row.SignalID); ok {
+			haveReceipt = true
 			stage := pictureEntryStage(rec.State)
 			if stage == store.StateRejected {
 				pictureHtfApplyTerminal(at, row, rec.State, 0, 0, rec.Reason)
@@ -269,20 +287,23 @@ func pictureHtfReconcilePending(at *AutoTrader) {
 				pictureHtfApplyTerminal(at, row, rec.State, px, qty, rec.Reason)
 				continue
 			}
-			// working/accepted receipt — forward progress, no fill.
+			// working/accepted receipt — forward progress, NOT terminal:
+			// record it and FALL THROUGH so newer fill evidence still wins.
 			_ = at.store.PictureHtfMarkBrokerState(row.OppKey, store.StateWorking, "", rec.State, "", 0, 0, 0)
-			continue
 		}
-		// 2) RECEIVED fill frames (actual execution prices on the fill stream).
+		// 2) RECEIVED fill frames (actual execution prices on the fill
+		// stream). Checked for place_pending AND working rows — an older
+		// working receipt must never mask this evidence.
 		if px, qty, ok := pictureRecentFillFor(at, row.SignalID); ok {
 			pictureHtfApplyTerminal(at, row, "filled", px, qty, "reconciled from received fill")
 			continue
 		}
 		// 3) The broker's WORKING-order book. Terminal orders are excluded
 		// from the wire snapshot, so only a PRESENT working order is evidence;
-		// absence here proves nothing and falls through to unknown.
+		// absence here proves nothing and falls through.
 		if tcp := pictureHtfBroker(at); tcp != nil {
 			if ord, ok := tcp.OrderSnapshotLookup(row.SignalID); ok && ord.IsWorking() {
+				haveReceipt = true
 				note := "working on broker book"
 				if ord.Filled > 0 {
 					note = fmt.Sprintf("working on broker book (filled qty %d; fill price unknown — the snapshot carries no fill price)", ord.Filled)
@@ -291,8 +312,12 @@ func pictureHtfReconcilePending(at *AutoTrader) {
 				continue
 			}
 		}
-		// 4) No received evidence — outcome unknown. Record once; never resend.
-		_ = at.store.PictureHtfAppendBrokerStatus(row.OppKey, "reconcile:no_received_evidence (outcome unknown — will not resend)")
+		// 4) Nothing received at all. Only an UNEVIDENCED place_pending row
+		// gets the unknown marker; a working row already carries its receipt
+		// (the row itself) and stays working.
+		if !haveReceipt && row.Stage == store.StatePlacePending {
+			_ = at.store.PictureHtfAppendBrokerStatus(row.OppKey, "reconcile:no_received_evidence (outcome unknown — will not resend)")
+		}
 	}
 }
 

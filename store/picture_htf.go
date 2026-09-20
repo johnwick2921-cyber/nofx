@@ -282,6 +282,22 @@ func (s *Store) PictureHtfPendingByTrader(traderID string) ([]PictureHtfOpportun
 	return rows, err
 }
 
+// PictureHtfRecoverableByTrader lists the rows whose broker outcome is still
+// unresolved and may be settled by the reconciliation sweep: place_pending
+// (submission in flight, no receipt yet) AND working (a receipt was received
+// but no terminal outcome — a later fill may arrive on the fill stream with
+// no matching order_update frame, so a working receipt must never be treated
+// as settled). Canonical stage constants only.
+func (s *Store) PictureHtfRecoverableByTrader(traderID string) ([]PictureHtfOpportunityDB, error) {
+	if s == nil || s.gdb == nil {
+		return nil, fmt.Errorf("store unavailable")
+	}
+	var rows []PictureHtfOpportunityDB
+	err := s.gdb.Where("trader_id = ? AND (stage = ? OR stage = ?)", traderID, StatePlacePending, StateWorking).
+		Order("created_at ASC").Find(&rows).Error
+	return rows, err
+}
+
 // PictureHtfByTrader lists the trader's opportunity ledger, newest first.
 func (s *Store) PictureHtfByTrader(traderID string, limit int) ([]PictureHtfOpportunityDB, error) {
 	if s == nil || s.gdb == nil {

@@ -297,6 +297,110 @@ func TestPictureHtfReconcileRecoversFillFromFillStream(t *testing.T) {
 	}
 }
 
+// pictureWaitForRingFill polls the trader's received-fill ring until the
+// fill frame routed through the REAL fill router has been recorded.
+func pictureWaitForRingFill(t *testing.T, at *AutoTrader, signalID string) {
+	t.Helper()
+	broker := at.trader.(*nttrader.TCPTrader)
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, _, ok := broker.RecentFillFor(signalID); ok {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the fill frame never reached the received-fill ring")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// FINDING 4 (a): a working order_update arrives and moves the row to working,
+// then a FILL frame arrives — with NO filled order_update ever received. The
+// sweep must recover the actual fill for a WORKING row (working is not a
+// terminal outcome) and no additional entry may be submitted.
+func TestPictureHtfReconcileWorkingReceiptThenFillFrameRecovers(t *testing.T) {
+	at, st := resetTrader(t, store.StrategyConfig{})
+	pictureBrokerTestReset(at)
+	s := pictureWireBroker(t, at)
+	r := pictureSeedOnePending(t, st, "broker|wf", "sig-wf")
+	pictureHtfConsumeOrderUpdate(at, ntwire.OrderUpdatePayload{SignalID: "sig-wf", OrderName: "sig-wf", State: "working"})
+	got, _, _ := st.PictureHtfGet(r.OppKey)
+	if got.Stage != "working" {
+		t.Fatalf("the working receipt must move the row forward: %+v", got)
+	}
+	// The fill arrives on the FILL stream only — no filled order_update.
+	s.FeedFillForTest(ntwire.FillPayload{SignalID: "sig-wf", Symbol: "MNQ", Account: "Sim101", Status: "filled", FillPrice: 101.60, Quantity: 1})
+	pictureWaitForRingFill(t, at, "sig-wf")
+	pictureHtfReconcilePending(at)
+	got, _, _ = st.PictureHtfGet(r.OppKey)
+	if got.Stage != "filled" || got.FillPrice != 101.60 || got.FillQty != 1 {
+		t.Fatalf("a working row must still recover the received fill: %+v", got)
+	}
+	if won, _ := st.PictureHtfClaimSubmission(r.OppKey, "retry"); won {
+		t.Fatalf("the recovered row must block re-entry — no additional entry")
+	}
+}
+
+// FINDING 4 (b): a pending row with OLDER working history and NEWER fill
+// evidence. The working receipt must NOT mask the fill — execution evidence
+// outranks working receipts.
+func TestPictureHtfReconcilePendingPrefersFillOverOlderWorkingHistory(t *testing.T) {
+	at, st := resetTrader(t, store.StrategyConfig{})
+	pictureBrokerTestReset(at)
+	s := pictureWireBroker(t, at)
+	// The working receipt arrives BEFORE the row exists — the history records
+	// it (the row write racing the wire).
+	pictureHtfConsumeOrderUpdate(at, ntwire.OrderUpdatePayload{SignalID: "sig-pw", OrderName: "sig-pw", State: "working"})
+	r := pictureSeedOnePending(t, st, "broker|pw", "sig-pw")
+	// Newer execution evidence on the fill stream.
+	s.FeedFillForTest(ntwire.FillPayload{SignalID: "sig-pw", Symbol: "MNQ", Account: "Sim101", Status: "filled", FillPrice: 101.60, Quantity: 1})
+	pictureWaitForRingFill(t, at, "sig-pw")
+	pictureHtfReconcilePending(at)
+	got, _, _ := st.PictureHtfGet(r.OppKey)
+	if got.Stage != "filled" || got.FillPrice != 101.60 || got.FillQty != 1 {
+		t.Fatalf("older working history must not mask the received fill: %+v", got)
+	}
+	if won, _ := st.PictureHtfClaimSubmission(r.OppKey, "retry"); won {
+		t.Fatalf("the recovered row must block re-entry — no additional entry")
+	}
+}
+
+// FINDING 4 (c): restart with a PERSISTED working row, then received
+// execution evidence. The process-local history disappears on restart (that
+// limitation is explicit and intended — unreceived outcomes stay unknown);
+// the persisted working row remains recoverable and post-restart execution
+// evidence settles it.
+func TestPictureHtfReconcileRestartPersistedWorkingRecoversFill(t *testing.T) {
+	at, st := resetTrader(t, store.StrategyConfig{})
+	pictureBrokerTestReset(at)
+	s := pictureWireBroker(t, at)
+	r := pictureSeedOnePending(t, st, "broker|rs", "sig-rs")
+	pictureHtfConsumeOrderUpdate(at, ntwire.OrderUpdatePayload{SignalID: "sig-rs", OrderName: "sig-rs", State: "working"})
+	got, _, _ := st.PictureHtfGet(r.OppKey)
+	if got.Stage != "working" {
+		t.Fatalf("the row must be persisted working before the restart: %+v", got)
+	}
+	// RESTART: the received-history is process-local and gone. The DB row is
+	// the only survivor.
+	pictureBrokerHistories.Delete(at.id)
+	pictureHtfReconcilePending(at)
+	got, _, _ = st.PictureHtfGet(r.OppKey)
+	if got.Stage != "working" {
+		t.Fatalf("a persisted working row with no new evidence stays working: %+v", got)
+	}
+	// Post-restart execution evidence arrives and settles the row.
+	s.FeedFillForTest(ntwire.FillPayload{SignalID: "sig-rs", Symbol: "MNQ", Account: "Sim101", Status: "filled", FillPrice: 101.60, Quantity: 1})
+	pictureWaitForRingFill(t, at, "sig-rs")
+	pictureHtfReconcilePending(at)
+	got, _, _ = st.PictureHtfGet(r.OppKey)
+	if got.Stage != "filled" || got.FillPrice != 101.60 || got.FillQty != 1 {
+		t.Fatalf("a persisted working row must recover post-restart fill evidence: %+v", got)
+	}
+	if won, _ := st.PictureHtfClaimSubmission(r.OppKey, "retry"); won {
+		t.Fatalf("the recovered row must block re-entry — no additional entry")
+	}
+}
+
 // FINDING 3 (integration): the picture consumer rides the REAL subscription —
 // router → fan-out listener → consumer → ledger — and coexists with the armed
 // executor's listener on the same (symbol, account): every fed frame reaches
