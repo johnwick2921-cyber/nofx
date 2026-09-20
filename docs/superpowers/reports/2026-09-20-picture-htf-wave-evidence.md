@@ -1,6 +1,6 @@
 # W-PICTURE-HTF — wave evidence (2026-09-20)
 
-Branch `fix/picture-htf` @ **939b4507**, base `origin/dev` @ d7ca3846 (rebased).
+Branch `fix/picture-htf`, wave head **8c0ad05c** (code head 939b4507), base `origin/dev` @ d7ca3846 (rebased).
 **Not merged, not deployed.** Every "works" claim below is scoped: code-level
 proof is green; live SIM activation is the owner's next step.
 
