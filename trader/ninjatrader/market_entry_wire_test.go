@@ -48,8 +48,9 @@ func TestMarketEntryWithProtectionFrameOnLoopback(t *testing.T) {
 			if p.StopLoss != tc.sl || p.TakeProfit != tc.tp {
 				t.Fatalf("%s: bracket wrong: SL %.2f TP %.2f", tc.side, p.StopLoss, p.TakeProfit)
 			}
-			if p.Entry != (tc.sl+tc.tp)/2 {
-				t.Fatalf("%s: wire entry must be the midpoint reference %.2f, got %.2f", tc.side, (tc.sl+tc.tp)/2, p.Entry)
+			wantEntry := RoundToTick((tc.sl+tc.tp)/2, InstrumentTickSize("MNQ"))
+			if p.Entry != wantEntry {
+				t.Fatalf("%s: wire entry must be the tick-rounded midpoint reference %.2f, got %.2f", tc.side, wantEntry, p.Entry)
 			}
 			if p.Account != "Sim101" || p.TraderID != tr.traderID {
 				t.Fatalf("%s: identity stamp missing: acct=%q trader=%q", tc.side, p.Account, p.TraderID)

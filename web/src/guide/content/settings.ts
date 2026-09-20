@@ -327,6 +327,23 @@ const dayPlan: KnobSpec[] = [
       'Turn OFF only for a deliberately quiet, read-once session study.',
     perSession: 'No.',
   },
+  {
+    label: 'Picture HTF (two-picture mode)',
+    where: 'Strategy → Day Plan → Picture HTF block',
+    what: "The owner's two-picture method as a DETERMINISTIC mode (2026-09-20): a 4H body pivot → the H1 close breaks it by at least one tick → the next 5m interval (entry window, default 10s) searches a strict 5m swing for the stop and the nearest opposing 4H zone for the target. R:R below the configured minimum refuses — the nearer zone is never skipped. The AI is commentary only; timing is the rule, not the model.",
+    trader:
+      'OFF by default; enabling it gates on the AddOn proving build ≥ 2026-09-20-p1 (final+emitted_at bar markers, rejection reasons) — below that the evaluator logs "mode unavailable" and never submits. Sends a 1-contract SIM market entry with its protective bracket only when the book is flat, the feed is fresh, and no unreconciled submission blocks re-entry.',
+    consumer:
+      'store/strategy.go PictureHtfResolved · trader/picture_htf_evaluator.go (evaluation + pictureHtfCapabilityProven) · trader/picture_htf_live.go (live-bar fan-out) · trader/picture_htf_send.go (send-side re-checks) · trader/ninjatrader/tcp_trader.go MarketEntryWithProtection · store/picture_htf.go (opportunity ledger)',
+    range:
+      'switch + tick size / pivot window / swing lookback / entry window (s) / freshness (s) / min R:R (blank = inherit risk control)',
+    systemDefault: 'OFF · defaults 0.25 / 120 / 24 / 10s / 2s / inherit',
+    recommended:
+      '⭐ run it on SIM and read the Picture HTF panel on the dashboard — the ledger shows intended vs broker answer side by side; the mode earns real-money trust only from recorded fills.',
+    whenToTouch:
+      'When activating the two-picture setup in SIM, or tightening the freshness/window to the tape.',
+    perSession: 'No.',
+  },
 ]
 
 const risk: KnobSpec[] = [
