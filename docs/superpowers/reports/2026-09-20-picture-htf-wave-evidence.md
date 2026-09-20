@@ -138,6 +138,36 @@ go run ./cmd/picture_htf_replay --db /tmp/picture-htf-replay.db \
                                                → /tmp/replay-final.log
 ```
 
+## 6b. Broker-state pins — wave 18 (commit de2527918f730e89871402c70350f6baa9a14d1b)
+
+All six in `trader/picture_htf_broker_test.go`, all green in the wave-18 run
+(`/tmp/gofinal7.log`, `go test ./... -count=1` exit 0, 35/35 packages).
+
+**Received broker events update the correct opportunity and protection state:**
+
+| Pin | Proves |
+|---|---|
+| `TestPictureHtfConsumeOrderUpdateEntryLifecycle` | received entry events move the SIGNAL-NAMED row forward-only: accepted/partfilled → working → filled with fill price/qty + actual-fill R:R computed from the row's own geometry; a stale working event cannot downgrade a filled row |
+| `TestPictureHtfConsumeOrderUpdateRejectionCarriesReason` | a rejected entry closes the row with the wire rejection reason recorded |
+| `TestPictureHtfConsumeProtectiveLegsUpdateProtectionNotFill` | a filled SL leg records `protection_sl_filled` WITHOUT touching the entry's stage or fill (entry fill price preserved) — protection state is recorded, never clobbered |
+| `TestPictureHtfConsumeOrderUpdateIsolation` | an order_update for a different signal never touches the row |
+
+**Restart/disconnect reconciliation resolves ambiguous submissions without duplicate orders:**
+
+| Pin | Proves |
+|---|---|
+| `TestPictureHtfReconcileRecoversFilledAcrossRestart` | a place_pending row whose order FILLED on the broker's book while the bot was down is recovered to filled with the book fill — the recovered row blocks re-entry (no second order) |
+| `TestPictureHtfReconcileRejectedAndAbsent` | a rejected/cancelled order on the book closes the row with "reconciled from broker book"; an order ABSENT from the book stays place_pending — ambiguous is NEVER resent |
+| `TestPictureHtfAmbiguousSendStaysPending` (evaluator suite) | the seam reports "send ambiguous" and re-entry is refused at the store |
+| `TestPictureHtfRestartAfterClaimSingleSubmission` (evaluator suite) | restart after claim produces exactly one submission |
+| `TestPictureHtfClaimSubmissionExactlyOneWinner` (store suite) | atomic claim ownership — 12 concurrent claimers, one winner |
+
+**Consumer wiring:** `ensurePictureHtfBrokerConsumer` starts one consumer per
+picture trader from the evaluator build, draining `tcp.OrderUpdates()`;
+`pictureHtfReconcilePending` runs each cycle via the tick fallback.
+`TCPTrader.OrderSnapshotLookup` reads the bound account's RECEIVED order
+snapshot book.
+
 ## 7. Gap register — classified (per CTO request, 2026-09-20)
 
 Each activation-relevant gap carries exactly one status:
@@ -170,5 +200,8 @@ optimums; a faithful implementation does not establish profitability.
 
 ## 9. Report pinning
 
-This file is committed on `fix/picture-htf`; the raw URL pinned to the full
-commit SHA with the byte count is quoted in the dispatch reply.
+- Wave-18 code commit: `de2527918f730e89871402c70350f6baa9a14d1b` (broker-state
+  consumer + reconciliation sweep + pins, pushed to `fix/picture-htf`).
+- This report lives on the same branch; the raw URL is pinned to the full
+  commit SHA with the byte count quoted in the dispatch reply, and the pinned
+  blob was curl-fetched and byte-compared against the working tree.
