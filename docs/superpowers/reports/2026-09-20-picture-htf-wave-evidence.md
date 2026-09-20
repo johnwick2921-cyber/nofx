@@ -1,9 +1,15 @@
-# W-PICTURE-HTF — wave evidence (2026-09-20, final)
+# W-PICTURE-HTF — wave evidence (2026-09-20, corrected after CTO findings)
 
 Branch `fix/picture-htf`, base `origin/dev` @ d7ca3846.
-**Not merged, not deployed — status: implemented, awaiting verification and activation.**
-Every claim below is scoped: code-level proof green; the strategy replay ran on
-real stored bars; live SIM activation is the owner's next step.
+**Not merged, not deployed — status: implemented, awaiting verification and
+activation. Cutover is HELD on the CTO's order.**
+
+This revision REPLACES the replay claims of the previous report revision
+(d6fe3341). The CTO's four replay-harness findings were all confirmed,
+fixed in the harness (e55fea50), and audited against the PRODUCTION evaluator
+first — the production path is clean on all four (see §4). The previous
+Sept-17 outcome claim (target touched, stop never) is WITHDRAWN; the
+corrected replay reaches the OPPOSITE outcome (stop-first).
 
 ## Status lines (dispatch protocol)
 
@@ -13,123 +19,155 @@ real stored bars; live SIM activation is the owner's next step.
   (provider), AddOn evidence surface (C# `final`/`emitted_at`/rejection reason,
   build `2026-09-20-p1`), labeled replay harness (`cmd/picture_htf_replay`),
   UI mode selector + dashboard ledger, guide entry, boot line.
-- **Tests passed:** see "Tests at the wave head" — Go 35/35, web 76 files /
-  492 tests, race clean.
-- **Active in SIM:** **no** — requires the owner's AddOn deploy (copy → F5 →
-  full NT8 restart), merge to dev, and the owner-attended cutover (runbook:
-  `docs/superpowers/runbooks/2026-09-20-picture-htf-activation.md`).
-- **Natural qualifying opportunity observed:** none on the live tape (the mode
-  has never been enabled). **Reported separately; remains pending.**
+- **Tests passed:** Go 35/35 packages exit 0 · web 76 files / 492 tests exit 0
+  · `tsc` clean · race clean — all re-run at e55fea50.
+- **Active in SIM:** **no** — cutover HELD. Owner AddOn steps + CTO review of
+  this corrected evidence required first.
+- **Controlled synthetic SIM execution:** loopback wire pins + evaluator
+  admission pins only — reported SEPARATELY in §5. It is not natural-market
+  evidence and no such claim is made.
+- **Natural-market execution evidence:** **none — pending.** The mode has
+  never been enabled on a live tape.
 - **Entry and protective orders verified:** code + loopback frame pins yes;
-  real NT8 fill: **not yet applicable** (mode gated off until the AddOn
+  real NT8 fill: not yet applicable (mode gated off until the AddOn
   capability frame arrives).
 
 ## 1. Branch incorporates current dev (proof)
 
-- `git fetch origin dev` at report time; `origin/dev` tip = **d7ca3846**
-  (`release: 5cf53c56 live 2026-09-19 …`).
-- `git merge-base --is-ancestor origin/dev HEAD` → **exit 0**: the wave head
-  contains the entire current dev history (the branch was cut and rebased on
-  d7ca3846; dev has not moved since).
-- Full suites re-run at the wave head itself (below) — the same discipline as
-  the merged-head law, applied to a branch that provably contains dev.
+- `origin/dev` tip = `d7ca3846cf8df7610f09162be7583c05b7a85f47` (fetched
+  fresh); `git merge-base origin/dev HEAD` returns that exact SHA → the wave
+  head contains all of current dev; dev has not moved.
 
-## 2. Tests at the wave head
+## 2. Tests at the wave head (e55fea50)
 
-- `go test ./... -count=1` → **exit 0, 35/35 packages**.
-- `cd web && npx tsc --noEmit` → clean; `npx vitest run` → **76 files,
-  492 tests, exit 0**.
+- `go test ./... -count=1` → **exit 0, 35/35 packages** (`/tmp/gofinal3.log`).
+- `npx tsc --noEmit` clean; `npx vitest run` → **76 files, 492 tests, exit 0**
+  (`/tmp/webfinal3.log`).
 - Race: evaluator + ledger concurrency surfaces `-race` clean.
 - Wave pins: kernel 11 · store 5 (+12-way concurrency under `-race`) ·
   evaluator 10 · seam 6 (+ boot-line pin) · wire/loopback 4 · provider sink +
   labeled Sept-17 mechanism pin 5 · panel 2.
 
-## 3. September 17 strategy replay (requested item 3)
+## 3. September 17 strategy replay — CORRECTED (e55fea50)
 
-Harness: `cmd/picture_htf_replay` (committed). It re-runs the SAME kernel
-functions the live evaluator calls, on real stored bars: a read-only COPY of
-the live `data.db` (2.27 GB, `sqlite3 .backup`), window
-**2026-09-16 22:00Z → 2026-09-17 22:00Z** (the 09-17 CME session day), 30-day
-context ladder for level detection (mirrors the live cache), 5m/1h/4h derived
-from 1m on read, partial buckets dropped, levels rebuilt **as-of each H1
-boundary** (time-faithful retirement). It never writes the ledger, never fans
-out to the evaluator, never sends a frame — the label is printed on every run.
-The mechanism proof that historical receipts cannot trigger live entries is
-the SEPARATE pin `TestSept17ReplayNeverMintsOpportunities`.
+Harness `cmd/picture_htf_replay`, run on a read-only 2.27 GB copy of the live
+`data.db`. Window **2026-09-16 22:00Z → 2026-09-17 22:00Z** (the 09-17 CME
+session day).
 
-**Tape:** 1,380 in-window 1m bars, contract MNQ 12-26 · 5m=276 · 1h=23 ·
-4h=5 full in-window bars (context: 31,501 1m rows).
+**Data law applied (the CTO's four corrections):**
+1. **Knowable entry price:** entryRef = close of the 5m bar COMPLETED at the
+   entry boundary (knowable at the entry instant) — the previous revision used
+   the entry interval's own bar close, a price known five minutes later.
+2. **Native bars:** 5m and 1h ladders are the STORED NT8-native rows
+   (session-aligned by NT8 trading hours). 4h is derived from the native 1h
+   ladder on the ETH 22:00Z grid (4×1h, all four present) — a DISCLOSED proxy;
+   no stored native 4h exists. UTC-modulo 1m aggregation is gone; the harness
+   refuses eligibility claims outright when native 5m/1h rows are absent.
+3. **Symmetric one-tick stop buffer:** long −1 tick, short +1 tick (the
+   previous revision used +2 ticks for shorts).
+4. **Contract purity:** the whole context ladder is `WHERE contract =
+   'MNQ 12-26'` (the window's dominant contract) — no cross-contract timestamp
+   merging anywhere.
 
-**Detected 4H levels (25 in force at window start, 26 surviving at end — full
-inventory in the replay log):** representative entries —
+**Tape:** 1m(window)=1,380 · native 5m=1,757 (context incl.) · native
+1h=529 · 4h(proxy)=118, all contract-pure MNQ 12-26.
 
-| role | body | wick | source (Z) | status in window |
-|---|---|---|---|---|
-| support | 29352.25–29293.75 | 29399.75/29290.50 | 08-21 00:00 | retired 09-16 16:00 |
-| resistance | 29500.00–29446.50 | 29539.75/29390.50 | 08-21 08:00 | retired 09-17 16:00 |
-| resistance | 29647.00–29538.00 | 29655.75/29432.25 | 08-27 00:00 | retired 09-17 16:00 |
-| resistance | 29682.25–29515.25 | 29720.00/29477.75 | 09-04 12:00 | retired 09-17 16:00 |
-| resistance | 29742.50–29535.00 | 29764.75/29529.50 | 09-08 04:00 | retired 09-17 16:00 |
-| resistance | 29620.00–29449.75 | 29686.00/29334.00 | 09-11 12:00 | retired 09-17 16:00 |
-| support | 29016.25–28916.75 | 29036.50/28905.00 | 09-14 04:00 | **active all window** |
-| support | 29278.00–29252.00 | 29302.75/29208.75 | 09-15 16:00 | **active all window** |
-| resistance | 29500.00–29415.50 | 29552.50/29364.00 | 09-16 12:00 | retired 09-17 16:00 |
-| support | 29499.75–29254.50 | 29538.75/29052.75 | 09-16 16:00 | **active all window** |
+**Detected 4H levels — 21 in force at window start, 23 surviving at end**
+(native 1h-derived ETH-grid 4h; full inventory in the replay log):
 
-**H1 confirmations:** 23 completed in-window H1 boundaries evaluated against
-levels active at each boundary — **3 one-tick close breaks fired** (all long):
+| role | body | wick | source (Z) |
+|---|---|---|---|
+| resistance | 29951.25–29892.25 | 29970.00/29889.00 | 08-20 02:00 |
+| support | 29600.75–29418.00 | 29605.75/29385.50 | 08-25 22:00 |
+| resistance | 29973.00–29894.00 | 30001.25/29894.00 | 08-28 02:00 |
+| resistance | 29860.00–29503.50 | 29862.25/29475.25 | 09-01 06:00 |
+| support | 29355.75–29260.00 | 29441.25/29218.50 | 09-02 10:00 |
+| resistance | 29986.00–29961.25 | 30000.00/29800.00 | 09-04 10:00 |
+| resistance | 30004.00–29919.50 | 30006.75/29821.25 | 09-07 22:00 |
+| resistance | 29779.00–29703.75 | 29802.00/29668.00 | 09-10 02:00 |
+| support | 29478.50–29387.25 | 29566.25/29387.25 | 09-10 14:00 |
+| resistance | 29767.00–29607.25 | 29794.00/29500.00 | 09-11 10:00 |
+| resistance | 29581.50–29292.75 | 29604.25/29246.50 | 09-14 14:00 |
+| support | 29268.50–29229.75 | 29290.00/29225.75 | 09-15 22:00 |
 
-1. 09-17 **07:59:59Z**: prev 29468.75 → new 29517.50, break long over
-   resistance **29500.00**.
-2. 09-17 **11:59:59Z**: prev 29585.50 → new 29620.75, break long over
-   resistance **29620.00** (2 levels crossed — the extreme wins).
-3. 09-17 **15:59:59Z**: prev 29680.00 → new 29743.25, break long over
-   resistance **29742.50**.
+**H1 confirmations:** 22 completed in-window boundaries, levels rebuilt
+as-of each boundary — **2 one-tick breaks fired** (both long):
 
-**Geometry + verdicts** (min R:R = the resolved picture default **2.5**):
+1. 09-17 **07:59:59Z**: prev 29468.75 → new 29517.50, break over resistance
+   **29479.25**.
+2. 09-17 **10:59:59Z**: prev 29558.25 → new 29585.50, break over resistance
+   **29581.50**.
 
-| # | break | entry ref | swing stop (adj) | opposing zone | R:R | verdict |
+**Geometry + verdicts** (identical at the 2.5 default AND the live 2.0 floor):
+
+| # | break | entry ref (knowable at entry) | swing stop (adj) | opposing zone | R:R | verdict |
 |---|---|---|---|---|---|---|
-| 1 | 29500.00 long | 29528.75 | 29376.00 (29375.75) | 29604.50 | 0.50 | **refused** — rr_below_min |
-| 2 | 29620.00 long | 29619.00 | 29565.00 (29564.75) | 29742.50 | 2.28 | **refused** — rr_below_min |
-| 3 | 29742.50 long | — | — | none above (top of range) | — | **refused** — no_opposing_zone |
+| 1 | 29479.25 long | 29517.50 | 29376.00 (29375.75) | 29581.50 | 0.45 | **refused** — rr_below_min |
+| 2 | 29581.50 long | 29585.50 | 29561.50 (29561.25) | 29767.00 | 7.48 | **ELIGIBLE** |
 
-At the live configuration floor (`ai_config.risk_control.min_risk_reward_ratio`
-= **2.0** on the bound strategy a5b7662e-7bf7…, read from the DB copy;
-`day_plan.picture_htf` absent → resolved defaults): **#2 becomes ELIGIBLE** —
-entry ref 29619.00, stop 29564.75, target 29742.50, R:R 2.28. Result:
-**eligible=1, refused=2** (rr_below_min ×1, no_opposing_zone ×1).
+Result: **eligible=1 · refused=1** at both floors.
 
-**Outcome of the one eligible setup on the real tape (informational, not a
-claim of a fill):** from the 12:00Z interval, target 29742.50 was first
-touched at **12:32Z** (+123.50 pts); the stop 29564.75 was **never** touched
-(min 1m low after 12:00Z = 29596.00). Target-first, no stop intrusion. Entry
-would be a market fill near the 12:00 5m close (slippage not modeled).
+**Outcome of the one eligible setup on the real tape (informational — not a
+claim of a fill; slippage not modeled):** the STOP 29561.25 was touched first
+at **11:44Z** (min 1m low after 11:00Z = 29555.00); the target 29767.00 was
+only touched at 17:00Z. **Stop-first loss.** This REPLACES the previous
+revision's outcome claim (target touched 12:32Z, stop never), which was an
+artifact of the corrected defects. The previous claim is withdrawn.
 
-**Replay limitations (stated honestly):** stored 1m rows only (NT8's own
-higher-TF bars were not re-derived from its ladder); level detection sees the
-STORED tape, not the live cache; freshness is simulated (an eligible setup
-still needs a fresh live frame + the send-side re-checks to actually submit).
+**Replay limitations (stated honestly):** 4h is a disclosed proxy (derived
+from native 1h on the ETH grid — no stored native 4h); freshness is simulated
+(an eligible setup still needs a fresh live frame + the send-side re-checks
+to actually submit); the mechanism proof that historical receipts cannot
+trigger live entries remains the SEPARATE pin
+`TestSept17ReplayNeverMintsOpportunities`.
 
-## 4. AddOn backup/copy + cutover procedure
+## 4. The four CTO findings — production evaluator audit (file:line)
 
-Exact commands and the owner-attended cutover steps:
+The findings were replay-harness defects. The PRODUCTION evaluator was
+audited against each before any fix was written:
+
+| # | CTO finding | Harness (now fixed) | Production evaluator |
+|---|---|---|---|
+| (a) | entry uses a price known 5 min later while elapsed=0 | FIXED: entryRef = close of the 5m bar completed at the boundary | **CLEAN**: `trader/picture_htf_evaluator.go` — `newest5m` is the last bar with `CloseTime < nowMs` (completed BEFORE now), so its close is knowable at the entry instant; the entry interval's own forming bar is excluded by the same filter |
+| (b) | UTC-modulo aggregation ≠ native session-aligned candles | FIXED: native stored 5m/1h rows; 4h disclosed ETH-grid proxy; refuses when native rows absent | **CLEAN**: the evaluator reads `market.FuturesBarsProvider` → `trader/ninjatrader/bars_market_bridge.go` `barsFromCache` — the live NT8 BarCache (AddOn session-aligned bars). No aggregation anywhere on the live path |
+| (c) | short buffer +2 ticks | FIXED: symmetric ±1 tick | **CLEAN**: `trader/picture_htf_evaluator.go` — long `stopPx −= TickSize`; short `stopPx −= TickSize` then `+= 2*TickSize` → net **+1 tick** both sides |
+| (d) | cross-contract timestamp merging (largest rowid) | FIXED: contract in the WHERE clause for the whole ladder | **CLEAN by construction**: the evaluator reads the cache keyed by the subscribed symbol; NT8 serves the platform's front-month contract; the opportunity key binds `currentContract(symbol)` (`trader/picture_htf_evaluator.go`, `OppKey`). No SQL timestamp merging exists on the live path |
+
+## 5. Execution evidence — two SEPARATE tracks (not conflated)
+
+**A. Controlled synthetic SIM execution (harness/pins — NOT market evidence):**
+- Loopback wire pins (`trader/ninjatrader/market_entry_wire_test.go`): the
+  market entry frame, bracket prices, tick-rounded midpoint, stamp ordering,
+  no-send on stamp failure/incomplete bracket.
+- Evaluator admission pins (`trader/picture_htf_evaluator_test.go`): the
+  synthetic fixture trace (101 level, 110 target) — a CONSTRUCTED tape
+  proving the admission sequence, not a market event.
+- Sept-17 replay (§3): labeled, read-only, receipts not claimed.
+
+**B. Natural-market execution evidence:**
+- **None — pending.** No live setup has been observed (the mode has never been
+  enabled). It will be reported separately when one occurs.
+
+## 6. AddOn backup/copy + cutover procedure
+
 `docs/superpowers/runbooks/2026-09-20-picture-htf-activation.md` — backup the
 running AddOn sources first, copy `ninjascript/*.cs` to the NT8 AddOns folder
 with md5 verification, F5 compile, FULL NT8 restart, merge at the merged-head
 suite, five-leg flat gate, clean-clone build (vcs stamp), swap + `kill -9`,
-boot-line read (`📷 picture-htf: …`), post-boot marker before lock release.
+boot-line read, post-boot marker before lock release.
 
-## 5. After activation — evidence still required (pending)
+**Cutover is HELD** until the CTO reviews this corrected evidence and the
+owner is present for the NT8 compile/restart.
+
+## 7. After activation — evidence still required (pending)
 
 1. Received AddOn build/capability evidence (heartbeat `build=2026-09-20-p1`).
 2. Actual Go boot/readiness output (integrity line, picture boot line, UI
    bundle match).
 3. Selected strategy mode + saved knob values (quoted).
 4. Controlled SIM entry + protection receipts (opportunity row, signal frame,
-   received order_update/fill frames with bracket legs) — from a natural
-   qualifying setup; the loopback pins are the pre-activation proof.
-5. Natural-market setup evidence — **reported separately; none yet, pending.**
+   received order_update/fill frames with bracket legs) — track A only.
+5. Natural-market setup evidence — track B; none yet, pending.
 
 ## What shipped (fix/picture-htf)
 
@@ -150,6 +188,7 @@ boot-line read (`📷 picture-htf: …`), post-boot marker before lock release.
 | 13 | 5dbf59eb | GUIDE_BUILT_REV bump |
 | 14 | 939b4507 | boot line: mode, rule v1, SIM, data readiness, capability |
 | 15 | 0dedc0e8 | labeled historical replay harness (`cmd/picture_htf_replay`) |
+| 16 | e55fea50 | corrected replay: native contract-pure bars, knowable entry price, symmetric buffer |
 
 ## Verification table (file:line)
 
@@ -159,14 +198,18 @@ boot-line read (`📷 picture-htf: …`), post-boot marker before lock release.
 | Level knowable only after the far-edge candle opens | `kernel/picture_htf.go:141` `ActiveLevels` | kernel pins |
 | H1 close break, one tick, extreme crossed level wins | `kernel/picture_htf.go:199` `H1CloseBreak` | kernel + evaluator pins + replay breaks |
 | 5m structural swing, strict wicks, deadline-gated | `kernel/picture_htf.go:251` `StructuralSwing5M` | kernel + evaluator pins + replay geometry |
-| Nearest opposing zone, role-respecting, nearer never skipped | `kernel/picture_htf.go:283` `NearestOpposingZone` | kernel + evaluator pins + replay (break #3: no zone above → refused) |
+| Nearest opposing zone, role-respecting, nearer never skipped | `kernel/picture_htf.go:283` `NearestOpposingZone` | kernel + evaluator pins + replay (nearer zone honored) |
 | Advisory momentum stall | `kernel/picture_htf.go` `H1MomentumStall` | kernel pin |
 | Mode surface + rule validation | `store/strategy.go:926` `PictureHtfResolved`, `kernel/entry_law.go` `ValidatePictureHtfRule` | store pins |
 | Durable uniqueness: one row per opportunity | `store/picture_htf.go` `PictureHtfOppKey`/`PictureHtfClaim` | store pins incl. 12-way `-race` |
 | Exactly one execution owner | `store/picture_htf.go` `PictureHtfClaimSubmission` (atomic `UPDATE … WHERE stage='confirmed' AND signal_id=''`) | 12 claimers, 1 winner, `-race` |
 | Broker signal stamped only by the owner | `store/picture_htf.go` `PictureHtfStampSignal` | store pin |
 | Event-driven evaluation from native bars | `trader/picture_htf_evaluator.go` `OnBars`/`Evaluate` | 10 evaluator pins at the production call sites |
-| Late frame can never enter | `trader/picture_htf_evaluator.go` `evaluateLocked` freshness + window | `LateFrameExpires`, `PastWindowExpires` |
+| Entry price knowable at entry time | `trader/picture_htf_evaluator.go` — `newest5m` filtered `CloseTime < nowMs` | audited §4(a); harness corrected |
+| Native session-aligned bars, no UTC aggregation | `trader/ninjatrader/bars_market_bridge.go` `barsFromCache` (live cache) | audited §4(b); harness uses native rows |
+| Symmetric one-tick stop buffer | `trader/picture_htf_evaluator.go` long/short branches | audited §4(c); harness corrected |
+| Contract isolation | AddOn front-month + `currentContract(symbol)` in `OppKey` | audited §4(d); harness contract-pure |
+| Late frame can never enter | `trader/picture_htf_evaluator.go` freshness + window | `LateFrameExpires`, `PastWindowExpires` |
 | Duplicate frame/restart single submission | durable claim | `SubmitsOnceAndAdmits` |
 | Unfinalized bar cannot establish an interval | `trader/picture_htf_evaluator.go` `bars()` (Final-only) | `IgnoresUnfinalizedBars` |
 | AddOn capability gate | `trader/picture_htf_evaluator.go` `pictureHtfCapabilityProven` vs `MinAddonBuildPictureHtf` | `CapabilityGateBlocks` |
