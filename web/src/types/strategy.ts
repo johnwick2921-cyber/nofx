@@ -144,7 +144,26 @@ export interface DayPlanConfig {
   /** Lowest merged-candidate grade the best level may carry: A | B | C.
    *  Absent = B (mirrors Go). */
   one_setup_min_grade?: string
+  /** W-PICTURE-HTF (2026-09-20) — the owner's two-picture method: a
+   *  deterministic 4H-pivot → H1-close-break → 5m-swing setup evaluated from
+   *  NATIVE bar events (the AI is commentary only). Absent/disabled = off.
+   *  Zero/blank knobs inherit the Go resolved defaults (tick 0.25, pivot
+   *  window 120, swing lookback 24, entry window 10s, freshness 2s); min_rr
+   *  blank inherits the strategy's risk-control minimum. */
+  picture_htf?: PictureHtfConfig
   sessions?: DayPlanSessionOverride[]
+}
+
+/** W-PICTURE-HTF (2026-09-20) — deterministic two-picture knobs. */
+export interface PictureHtfConfig {
+  enabled?: boolean
+  tick_size?: number
+  pivot_window?: number
+  swing_lookback?: number
+  entry_window_sec?: number
+  freshness_sec?: number
+  /** blank = inherit the risk-control minimum R:R */
+  min_rr?: number
 }
 
 export interface AIStrategyConfig {

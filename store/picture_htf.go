@@ -221,6 +221,27 @@ func (s *Store) PictureHtfPendingByTrader(traderID string) ([]PictureHtfOpportun
 	return rows, err
 }
 
+// PictureHtfByTrader lists the trader's opportunity ledger, newest first.
+func (s *Store) PictureHtfByTrader(traderID string, limit int) ([]PictureHtfOpportunityDB, error) {
+	if s == nil || s.gdb == nil {
+		return nil, fmt.Errorf("store unavailable")
+	}
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	var rows []PictureHtfOpportunityDB
+	err := s.gdb.Where("trader_id = ?", traderID).
+		Order("created_at DESC, id DESC").
+		Limit(limit).Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		rows = []PictureHtfOpportunityDB{} // an empty computed list is [], never null
+	}
+	return rows, nil
+}
+
 // MigratePictureHtf creates/updates the opportunity table.
 func (s *Store) MigratePictureHtf() error {
 	if s == nil || s.gdb == nil {
