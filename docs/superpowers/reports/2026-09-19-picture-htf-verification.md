@@ -1,6 +1,8 @@
-# W-PICTURE-HTF — Verification Trace (DS-102, 2026-09-19)
+# W-PICTURE-HTF — Verification Trace (DS-102, 2026-09-19/20)
 
-Inspection base: `30db2e25ae9ce564198d37d629cb729884449bd5` (the dispatch's own inspected commit — it is the live main-tree tip; `git log -1 -- .` = this sha at accept). Branch `fix/picture-htf` @ `ceb894b9` (claim), worktree `/home/hoang/nofx-102-picture`.
+Inspection base (dispatch's historical context): `30db2e25ae9ce564198d37d629cb729884449bd5`.
+**Acceptance base (fresh dev tip):** `origin/dev = d7ca3846` — the wave was REBASED onto it 2026-09-20 (branch `fix/picture-htf` @ `1aa1733d`); the earlier base diverged below the #177 merge and has been corrected. `git log -1 -- docs/superpowers/reports/2026-09-19-picture-htf-verification.md` at accept = the claim commit `ceb894b9` rebased onto d7ca3846.
+Worktree `/home/hoang/nofx-102-picture` is `git worktree lock`-ed; the main-tree deployment lock is NOT held during implementation (released 2026-09-20; it will be re-acquired only for the owner-attended cutover).
 
 ## 1. Verification table
 
@@ -17,7 +19,22 @@ Inspection base: `30db2e25ae9ce564198d37d629cb729884449bd5` (the dispatch's own 
 | Protection (bracket) | `ModifyBracketPayload` (tcp_framing.go:145); C# `SubmitBracketOnEntryFill` | verify from RECEIVED frames, never infer from submit | bracket receipt pin |
 | Dashboard decisions | `store.DecisionAction` + `/api/decisions/*` | add opportunity detail endpoint + cards | handler test |
 
-## 2. Addendum resolutions (code-evidenced where possible)
+## 2. Addendum resolutions — status table
+
+DESIGN-RESOLVED = the rule is documented and implemented in code where it exists; IMPLEMENTED+VERIFIED = production-path tests prove it. Integration items stay OPEN until their evidence lands.
+
+| Item | Status | Notes |
+|---|---|---|
+| 1 simultaneous H1/4H close | DESIGN-RESOLVED | snapshot over completed bars only; retirements applied before target selection, after confirmation |
+| 2 native completion evidence | OPEN (needs C# wire) | requires `final` + `emitted_at` on bar frames; Go consumes only final bars |
+| 3 freshness / clock skew | DESIGN-RESOLVED, OPEN (integration) | four stamps separated; skew bounds defined; recheck at send — evaluator wires it |
+| 4 one execution owner | DESIGN-RESOLVED, OPEN (integration) | unique row claim + atomic confirmed→place_pending transition; must still be proven against BOTH executors |
+| 5 swing / target semantics | DESIGN-RESOLVED, OPEN (integration) | strict comparisons + freeze; target re-evaluated at submit, nearer never skipped |
+| 6 market fills & protection | OPEN | pre-submit vs actual R:R stored separately; protection timeout/recovery needs an owner ruling if the existing bracket path does not already define it |
+| 7 activation & rollback | DESIGN-RESOLVED | strategy/account quoted at cutover; capability floor for the AddOn; config backup first |
+| 8 verification outcomes | PARTIAL | replay/tests/controlled-SIM/natural categories kept separate |
+
+Resolutions in detail:
 
 1. **Simultaneous H1/4H close.** Resolved by ordering: eligibility of levels is frozen from a snapshot of COMPLETED 4H candles only (the 120-bar window excludes the forming 4H); the H1 evaluation uses that snapshot; 4H retirements (completed 4H closes through the far edge) are applied to the snapshot BEFORE target selection, AFTER confirmation evaluation. Order-independent because both read only completed bars and the snapshot is immutable per evaluation.
 

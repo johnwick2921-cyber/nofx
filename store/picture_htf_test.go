@@ -85,3 +85,57 @@ func TestPictureHtfPendingByTrader(t *testing.T) {
 		t.Fatalf("pending sweep must find the ambiguous row: n=%d err=%v", len(pending), err)
 	}
 }
+
+// The atomic submission claim: exactly ONE caller across both executors and
+// concurrent callbacks may move confirmed → place_pending and register its
+// signal. The losers must not send.
+func TestPictureHtfClaimSubmissionExactlyOneWinner(t *testing.T) {
+	st := newPictureHtfStore(t)
+	key := PictureHtfOppKey("strat-a", "Sim101", "MNQ 12-26", "long", "resistance", 1789000000000, 1789100000000)
+	if _, ok, err := st.PictureHtfClaim(&PictureHtfOpportunityDB{OppKey: key, TraderID: "trader-1", Stage: "confirmed"}); err != nil || !ok {
+		t.Fatalf("claim: %v", err)
+	}
+	const n = 12
+	type result struct {
+		id  int
+		won bool
+	}
+	results := make(chan result, n)
+	for i := 0; i < n; i++ {
+		go func(id int) {
+			won, err := st.PictureHtfClaimSubmission(key, "sig-"+string(rune('a'+id)))
+			if err != nil {
+				results <- result{id: id, won: false}
+				return
+			}
+			results <- result{id: id, won: won}
+		}(i)
+	}
+	winners := 0
+	for i := 0; i < n; i++ {
+		r := <-results
+		if r.won {
+			winners++
+		}
+	}
+	if winners != 1 {
+		t.Fatalf("exactly one submission owner may win; got %d of %d", winners, n)
+	}
+	row, _, _ := st.PictureHtfGet(key)
+	if row.Stage != "place_pending" || row.SignalID == "" {
+		t.Fatalf("the winning signal must be registered: %+v", row)
+	}
+	// A second attempt (e.g. another callback, or a restart) must NOT re-win
+	// while the row is place_pending — the ambiguous send blocks re-entry.
+	if won, err := st.PictureHtfClaimSubmission(key, "sig-retry"); err != nil || won {
+		t.Fatalf("place_pending must block a second submission until reconciled: won=%v err=%v", won, err)
+	}
+	// After the broker frame establishes filled, a LATER opportunity with the
+	// SAME key is still blocked (the key is durable).
+	if err := st.PictureHtfMarkBroker(key, "filled", "nt8-1", "filled", "", 29676.25, 1); err != nil {
+		t.Fatalf("mark broker: %v", err)
+	}
+	if won, _ := st.PictureHtfClaimSubmission(key, "sig-again"); won {
+		t.Fatalf("a filled opportunity must never re-submit")
+	}
+}

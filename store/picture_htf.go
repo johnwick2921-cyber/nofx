@@ -27,13 +27,13 @@ type PictureHtfOpportunityDB struct {
 	// restarts cannot produce a duplicate entry.
 	OppKey string `gorm:"uniqueIndex;size:256"`
 
-	TraderID  string `gorm:"index"`
+	TraderID   string `gorm:"index"`
 	StrategyID string `gorm:"index"`
-	Account   string `gorm:"index"`
-	Contract  string
-	Symbol    string
-	Direction string // long | short
-	RuleVer   int    // the picture_htf rule version this row was evaluated under
+	Account    string `gorm:"index"`
+	Contract   string
+	Symbol     string
+	Direction  string // long | short
+	RuleVer    int    // the picture_htf rule version this row was evaluated under
 
 	// Stage: watching | confirmed | place_pending | working | filled |
 	// refused | expired | rejected | lost.
@@ -58,23 +58,23 @@ type PictureHtfOpportunityDB struct {
 	H1Completion int64 // when the completed H1 bar was received (ms)
 
 	// Eligibility.
-	WindowOpen   int64 // the new 5m interval start (ms)
-	WindowClose  int64 // windowOpen + entry_window_sec (ms)
+	WindowOpen   int64  // the new 5m interval start (ms)
+	WindowClose  int64  // windowOpen + entry_window_sec (ms)
 	FreshVerdict string // fresh | stale | future | unknown
 
 	// Geometry.
-	EntryRef    float64 // intended reference (5m open at evaluation)
-	StopPx      float64
-	StopSource  string // swing candle evidence, e.g. "5m swing low @<ts>"
-	TargetPx    float64
-	TargetZone  string
-	Qty         float64
-	RREstimate  float64 // pre-submit estimate
+	EntryRef     float64 // intended reference (5m open at evaluation)
+	StopPx       float64
+	StopSource   string // swing candle evidence, e.g. "5m swing low @<ts>"
+	TargetPx     float64
+	TargetZone   string
+	Qty          float64
+	RREstimate   float64 // pre-submit estimate
 	RRConfigured float64
 
 	// Submission + broker evidence.
-	SignalID   string `gorm:"index"`
-	SubmittedAt int64 // wall clock at command creation
+	SignalID      string `gorm:"index"`
+	SubmittedAt   int64  // wall clock at command creation
 	BrokerOrderID string
 	BrokerStatus  string
 	FillPrice     float64
@@ -100,9 +100,11 @@ func PictureHtfOppKey(strategyID, account, contract, direction, levelRole string
 
 // PictureHtfClaim atomically inserts the row if the opportunity key is new.
 // Returns (row, true) on a fresh claim, (nil, false) when the key already
-// exists (duplicate frame/restart — never a second entry), and an error on
-// store failure. This is the ONE-EXECUTION-OWNER claim: no other path may
-// admit an entry for the same key once this insert wins.
+// exists (duplicate frame/restart — never a second ROW), and an error on
+// store failure. NOTE: row uniqueness is NOT submission uniqueness — a second
+// broker order is prevented by PictureHtfClaimSubmission (the atomic
+// confirmed→place_pending transition below), which is the actual
+// one-execution-owner claim.
 func (s *Store) PictureHtfClaim(row *PictureHtfOpportunityDB) (*PictureHtfOpportunityDB, bool, error) {
 	if s == nil || s.gdb == nil {
 		return nil, false, fmt.Errorf("store unavailable")
@@ -166,6 +168,25 @@ func (s *Store) PictureHtfMarkBroker(oppKey, stage, brokerOrderID, brokerStatus,
 	return s.gdb.Model(&PictureHtfOpportunityDB{}).
 		Where("opp_key = ?", oppKey).
 		Updates(updates).Error
+}
+
+// PictureHtfClaimSubmission is the atomic submission-ownership claim (addendum
+// #4): it moves an opportunity from confirmed to place_pending ONLY when no
+// signal is registered yet, in one SQL statement. Exactly ONE caller (across
+// both executors, concurrent callbacks, and restarts) wins; the losers must
+// not send. An ambiguous place_pending row (signal set, no broker evidence)
+// blocks re-entry until reconciled — it is never blindly resent.
+func (s *Store) PictureHtfClaimSubmission(oppKey, signalID string) (bool, error) {
+	if s == nil || s.gdb == nil {
+		return false, fmt.Errorf("store unavailable")
+	}
+	res := s.gdb.Model(&PictureHtfOpportunityDB{}).
+		Where("opp_key = ? AND stage = ? AND (signal_id = '' OR signal_id IS NULL)", oppKey, "confirmed").
+		Updates(map[string]any{"stage": "place_pending", "signal_id": signalID})
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected == 1, nil
 }
 
 // PictureHtfPendingByTrader lists rows awaiting reconciliation (an ambiguous
