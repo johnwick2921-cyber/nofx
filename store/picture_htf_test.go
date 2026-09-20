@@ -139,3 +139,30 @@ func TestPictureHtfClaimSubmissionExactlyOneWinner(t *testing.T) {
 		t.Fatalf("a filled opportunity must never re-submit")
 	}
 }
+
+func TestPictureHtfStampSignalOwnership(t *testing.T) {
+	st := newPictureHtfStore(t)
+	row := &PictureHtfOpportunityDB{OppKey: "stamp|1", TraderID: "t1", Stage: "confirmed", Direction: "long"}
+	if _, fresh, err := st.PictureHtfClaim(row); err != nil || !fresh {
+		t.Fatalf("claim: %v fresh=%v", err, fresh)
+	}
+	if won, err := st.PictureHtfClaimSubmission(row.OppKey, "claim-sig"); err != nil || !won {
+		t.Fatalf("submission ownership: won=%v err=%v", won, err)
+	}
+	// The owner stamps the broker signal under its claim marker.
+	if err := st.PictureHtfStampSignal(row.OppKey, "claim-sig", "nt8-uuid-1"); err != nil {
+		t.Fatalf("the atomic owner must be able to stamp: %v", err)
+	}
+	got, ok, _ := st.PictureHtfGet(row.OppKey)
+	if !ok || got.SignalID != "nt8-uuid-1" || got.SubmittedAt == 0 {
+		t.Fatalf("stamp must persist the broker signal + send clock: %+v", got)
+	}
+	// A non-owner (wrong claim marker) is refused — never silently restamped.
+	if err := st.PictureHtfStampSignal(row.OppKey, "someone-elses-claim", "nt8-uuid-2"); err == nil {
+		t.Fatalf("a non-owner must be refused")
+	}
+	got, _, _ = st.PictureHtfGet(row.OppKey)
+	if got.SignalID != "nt8-uuid-1" {
+		t.Fatalf("a refused stamp must not change the row: %+v", got)
+	}
+}

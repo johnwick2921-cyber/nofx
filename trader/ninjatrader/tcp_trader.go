@@ -430,6 +430,72 @@ func (t *TCPTrader) placeEntry(symbol, side string, quantity float64) (map[strin
 	}, nil
 }
 
+// MarketEntryWithProtection (W-PICTURE-HTF, 2026-09-20) places a MARKET entry
+// with an explicit protective bracket — the two-picture mode's wire call. It
+// carries the same safety rails as placeEntry (bound account + SIM + B3
+// guard + identity assertion) but takes the bracket prices and the beforeSend
+// persistence callback as arguments instead of reading the AI-set stop maps.
+// The entry price on the wire is the SL/TP midpoint reference (market orders
+// fill at NT8's price); the AddOn defers SL/TP to SubmitBracketOnEntryFill,
+// identical to every other entry path. On the CONCRETE type only — the
+// 19-method trader/types.Trader interface is untouched.
+func (t *TCPTrader) MarketEntryWithProtection(side string, quantity float64, sl, tp float64, beforeSend ...func(string) error) (string, error) {
+	tradeAcct := t.boundAccount
+	if tradeAcct == "" {
+		return "", fmt.Errorf("ninjatrader/tcp: refusing picture %s entry on %s — trader has no bound account", side, t.symbol)
+	}
+	if !t.isAccountTradeable(tradeAcct) {
+		return "", fmt.Errorf("ninjatrader/tcp: refusing picture %s entry — account %q is not tradeable (not on allow-list / not SIM)", side, tradeAcct)
+	}
+	if t.guard != nil {
+		key := fmt.Sprintf("picture|%s|%s|%s|%.0f", tradeAcct, upperSideStr(side), t.symbol, quantity)
+		if _, ok := t.guard.admit(key, time.Now().UnixMilli()); !ok {
+			return "", fmt.Errorf("ninjatrader/tcp: picture entry not admitted — B3 dupe/rate guard")
+		}
+	}
+	if sl <= 0 || tp <= 0 {
+		return "", fmt.Errorf("ninjatrader/tcp: refusing picture %s entry — protective bracket incomplete (sl=%.2f tp=%.2f)", side, sl, tp)
+	}
+	tick := InstrumentTickSize(t.symbol)
+	entry := RoundToTick((sl+tp)/2.0, tick)
+	sl = RoundToTick(sl, tick)
+	tp = RoundToTick(tp, tick)
+	tid := t.traderID
+	signalID := uuid.NewString()
+	payload := ntwire.SignalPayload{
+		Symbol:     t.symbol,
+		Account:    t.boundAccount,
+		TraderID:   tid,
+		Side:       side,
+		Quantity:   int(quantity),
+		Entry:      entry,
+		StopLoss:   sl,
+		TakeProfit: tp,
+		SignalID:   signalID,
+		Timestamp:  time.Now().UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano),
+	}
+	if err := assertBoundAccount("picture-entry", t.symbol, payload.Account, t.boundAccount); err != nil {
+		logger.Errorf("🚨 %v — REFUSING to submit picture entry", err)
+		return "", err
+	}
+	for _, register := range beforeSend {
+		if err := register(signalID); err != nil {
+			return "", fmt.Errorf("ninjatrader/tcp: register picture placement: %w", err)
+		}
+	}
+	t.pendingMu.Lock()
+	t.pending[signalID] = upperSideStr(side)
+	t.pendingAt[signalID] = time.Now().UTC().UnixMilli()
+	t.pendingMu.Unlock()
+	t.mu.Lock()
+	t.lastEntrySignalID = signalID
+	t.mu.Unlock()
+	if err := t.server.SendSignal(payload); err != nil {
+		return "", fmt.Errorf("ninjatrader/tcp: send picture signal: %w", err)
+	}
+	return signalID, nil
+}
+
 // PlaceLimitEntry (PHASE 2 armed orders) places a RESTING limit entry with its
 // bracket prices — the armed-order engine's wire call. Same safety rails as
 // placeEntry (bound account + SIM + B3 guard); the AddOn submits OrderType.Limit

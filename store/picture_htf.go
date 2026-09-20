@@ -189,6 +189,26 @@ func (s *Store) PictureHtfClaimSubmission(oppKey, signalID string) (bool, error)
 	return res.RowsAffected == 1, nil
 }
 
+// PictureHtfStampSignal records the broker signal ID the atomic owner SENT,
+// guarded by the claim's ownership marker (the synthetic signal set by
+// PictureHtfClaimSubmission). It refuses to stamp a row the caller does not
+// own. submitted_at is the send-side clock, distinct from broker evidence.
+func (s *Store) PictureHtfStampSignal(oppKey, claimID, brokerSignalID string) error {
+	if s == nil || s.gdb == nil {
+		return fmt.Errorf("store unavailable")
+	}
+	res := s.gdb.Model(&PictureHtfOpportunityDB{}).
+		Where("opp_key = ? AND signal_id = ?", oppKey, claimID).
+		Updates(map[string]any{"signal_id": brokerSignalID, "submitted_at": time.Now().UnixMilli()})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected != 1 {
+		return fmt.Errorf("picture_htf: signal stamp refused — the row is not owned by claim %q", claimID)
+	}
+	return nil
+}
+
 // PictureHtfPendingByTrader lists rows awaiting reconciliation (an ambiguous
 // send that never got broker evidence) for the boot/restart sweep.
 func (s *Store) PictureHtfPendingByTrader(traderID string) ([]PictureHtfOpportunityDB, error) {

@@ -1602,6 +1602,9 @@ func (s *TCPServer) drainBarIngest(ctx context.Context) {
 				s.barCache.SeedHistorical(msg.symbol, msg.timeframe, msg.bars)
 			} else {
 				s.barCache.Upsert(msg.symbol, msg.timeframe, msg.bars)
+				// LIVE-only fan-out to deterministic evaluators (two-picture
+				// mode). Historical replays must NOT mint opportunities.
+				fanOutLiveBars(msg.symbol, msg.timeframe, msg.bars)
 			}
 			// Bar persistence (2026-08-26) — fan-out AFTER the cache write, in
 			// its own goroutine: a slow/failing DB must never stall the drain
