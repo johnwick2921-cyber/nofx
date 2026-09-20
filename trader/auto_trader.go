@@ -384,10 +384,10 @@ type AutoTrader struct {
 
 	// Two-picture mode (W-PICTURE-HTF): the deterministic evaluator, lazily
 	// built from the strategy knobs and rebuilt when they change.
-	pictureHtfMu  sync.Mutex
-	pictureHtfSig string
-	pictureHtf    *PictureHtfEvaluator
-	ai402OutageStartMs     int64        // P5 402-outage latch (0 = no outage) — one banner per outage
+	pictureHtfMu       sync.Mutex
+	pictureHtfSig      string
+	pictureHtf         *PictureHtfEvaluator
+	ai402OutageStartMs int64 // P5 402-outage latch (0 = no outage) — one banner per outage
 	// G4 (regime wave 2026-08-21) — transition stand-down state + the G4.6 MSS
 	// wake dedupe key (plan:version:eventInstant — one planner wake per MSS).
 	transition           kernel.TransitionState
@@ -844,7 +844,7 @@ func (at *AutoTrader) Run() error {
 	at.isRunningMutex.Lock()
 	at.isRunning = true
 	at.isRunningMutex.Unlock()
-		at.registerPictureHtf() // live-bar routing for the two-picture mode
+	at.registerPictureHtf() // live-bar routing for the two-picture mode
 	if at.exchange == "ninjatrader" {
 		if _, ok := kernel.TFDurationMs(at.primaryTimeframe()); !ok {
 			return fmt.Errorf("primary_timeframe %q is not in the timeframe table (kernel/timeframes.go) — refusing to run on a corrupt bar clock", at.primaryTimeframe())
@@ -863,9 +863,10 @@ func (at *AutoTrader) Run() error {
 	at.logLedgerBootBlock(time.Now())
 	at.logLevelIdentityBootAt(time.Now())
 	at.logLevelZonesBootAt(time.Now())
-
-	logger.Info("🚀 AI-driven automatic trading system started")
-	at.logInfof("💰 Initial balance: %.2f USDT", at.initialBalance)
+	// W-PICTURE-HTF — the mode's own boot line: mode, rule version,
+	// SIM status, native-data readiness, AddOn capability (READ, never
+	// assumed).
+	at.logPictureHtfBootLine()
 	at.logInfof("⚙️  Scan interval: %v", at.config.ScanInterval)
 	logger.Info("🤖 AI will make full decisions on leverage, position size, stop loss/take profit, etc.")
 

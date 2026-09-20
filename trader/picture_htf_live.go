@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"nofx/kernel"
+	"nofx/logger"
 	"nofx/market"
 	ntwire "nofx/provider/ninjatrader"
 	"nofx/store"
@@ -96,4 +97,28 @@ func (at *AutoTrader) pictureHtfTickFallback(now time.Time) {
 	if ev := at.pictureHtfEvaluator(); ev != nil {
 		ev.Evaluate(at.futuresSymbol(), now)
 	}
+}
+
+// pictureHtfBootLine is the mode's boot line: mode, rule version, SIM status,
+// native-data readiness, and the AddOn capability verdict — READ from the
+// live far side, never assumed.
+func (at *AutoTrader) pictureHtfBootLine() string {
+	ev := at.pictureHtfEvaluator()
+	mode := "off"
+	if ev != nil && ev.Enabled() {
+		mode = "on"
+	}
+	sim := "SIM-only"
+	native := "native NT8 bars (final+emitted_at)"
+	cap := "not proven"
+	if pictureHtfCapabilityProven(at) {
+		cap = "proven"
+	}
+	return fmt.Sprintf("picture-htf: mode=%s rule=v1 %s data=%s addon=%s (build=%q, need ≥ %s)",
+		mode, sim, native, cap, at.farSideBuildID(), ntwire.MinAddonBuildPictureHtf)
+}
+
+// logPictureHtfBootLine prints the boot line at trader start.
+func (at *AutoTrader) logPictureHtfBootLine() {
+	logger.Info("📷 " + at.pictureHtfBootLine())
 }

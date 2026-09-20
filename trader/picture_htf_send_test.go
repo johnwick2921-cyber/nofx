@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	ntwire "nofx/provider/ninjatrader"
 	"nofx/store"
 )
 
@@ -62,5 +63,19 @@ func TestPictureHtfContractSizeNeverExceedsClamp(t *testing.T) {
 	at, _ := resetTrader(t, store.StrategyConfig{})
 	if got := pictureHtfContractSize(at); got != 1 {
 		t.Fatalf("the two-picture mode sizes 1 contract by design, got %.0f", got)
+	}
+}
+
+func TestPictureHtfBootLineNamesEverything(t *testing.T) {
+	at, _ := resetTrader(t, store.StrategyConfig{DayPlan: &store.DayPlanConfig{PictureHtf: &store.PictureHtfConfig{Enabled: true}}})
+	line := at.pictureHtfBootLine()
+	for _, want := range []string{"picture-htf:", "mode=on", "rule=v1", "SIM-only", "final+emitted_at", "addon=not proven", ntwire.MinAddonBuildPictureHtf} {
+		if !strings.Contains(line, want) {
+			t.Fatalf("boot line must name %q, got %q", want, line)
+		}
+	}
+	off, _ := resetTrader(t, store.StrategyConfig{})
+	if l := off.pictureHtfBootLine(); !strings.Contains(l, "mode=off") {
+		t.Fatalf("disabled mode must read off: %q", l)
 	}
 }
