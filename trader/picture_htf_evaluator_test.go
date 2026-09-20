@@ -1,6 +1,7 @@
 package trader
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -304,5 +305,231 @@ func TestPictureHtfEvaluatorIgnoresUnfinalizedBars(t *testing.T) {
 	}
 	if len(env.submits) != 0 {
 		t.Fatalf("an unfinalized newest bar must never submit")
+	}
+}
+
+// W-PICTURE-HTF (2026-09-20) — the AGREED sequence, proven at the production
+// call site with native-grid candles: H1 close → the 5m bar completing AT that
+// close → intervalStart = that bar's open + 5m (the production formula) →
+// evaluation at the interval's first instant, using ONLY prices knowable then.
+// The fixture adds a FORMING 19:00 5m bar with a decoy close/high/low — a
+// price knowable only AFTER the entry instant — and asserts it never leaks
+// into the interval computation, the entry reference, or the stop.
+func TestPictureHtfH1CloseToNext5mSequenceNativeAlignment(t *testing.T) {
+	env := newPictureHtfEnv(t, store.PictureHtfConfig{Enabled: true, MinRR: 2.5})
+	env.seedPictureTape() // qualifies at now = 19:00:00.5Z, H1 cur closes 18:59:59.999Z
+
+	bars5m := pictureBars5M(true) // last completed bar: open 18:55, close 18:59:59.999 @ 101.49
+	h1 := pictureBarsH1()
+	if bars5m[len(bars5m)-1].CloseTime != h1[41].CloseTime {
+		t.Fatalf("fixture grid misaligned: 5m close %d != H1 close %d", bars5m[len(bars5m)-1].CloseTime, h1[41].CloseTime)
+	}
+	forming := mkBar(t4h0+42*3600*1000, 5*60*1000, 101.5, 150.0, 101.0, 150.0) // decoy, Final=false
+	env.seed(pictureBars4H(), h1, append(bars5m, forming))
+
+	// The entry trigger is the first 5m frame of the next interval.
+	env.eval.OnBars("MNQ", "5m", tailOf(append(bars5m, forming), 1), env.now)
+	if len(env.submits) != 1 {
+		t.Fatalf("the qualifying sequence must submit once, got %d", len(env.submits))
+	}
+	row, ok, _ := env.st.PictureHtfGet(env.submits[0])
+	if !ok {
+		t.Fatalf("admitted row missing")
+	}
+	// The production interval formula: previous completed 5m bar's open + 5m.
+	wantInterval := bars5m[len(bars5m)-1].OpenTime + 5*60_000
+	if row.WindowOpen != wantInterval || row.WindowOpen != t4h0+42*3600*1000 {
+		t.Fatalf("interval must be the completed bar's open + 5m (19:00:00.000), got %d", row.WindowOpen)
+	}
+	// EntryRef is the close of the bar COMPLETED at the H1 close — knowable at
+	// the entry instant. The forming bar's decoy close (150) must not leak in.
+	if row.EntryRef != 101.49 {
+		t.Fatalf("entry ref must be the completed bar's close 101.49 (knowable at entry), got %.2f", row.EntryRef)
+	}
+	if row.H1CloseTime != t4h0+42*3600*1000-1 {
+		t.Fatalf("H1 close must be 18:59:59.999, got %d", row.H1CloseTime)
+	}
+	// The stop comes from the confirmed swing low (98.5 → 98.25 after the
+	// one-tick buffer); the forming bar's decoy low (101.0) must not distort it.
+	if row.StopPx != 98.25 {
+		t.Fatalf("stop must be the swing low − tick (98.25), got %.2f", row.StopPx)
+	}
+}
+
+// ── Short-direction mirrors ──────────────────────────────────────────────
+
+// pictureBars4HShort: an OLD support at 90 (i=0), a rally, and the RECENT
+// support at 94.5 (i=3) the H1 pair later breaks down through. No later 4H
+// close trades below 94.5, so the level is still active at the break; the 90
+// support is the opposing target below.
+func pictureBars4HShort() []market.Kline {
+	vals := [][4]float64{
+		{92, 92.5, 90.5, 91}, {91.5, 91.8, 90.2, 90}, {95, 96, 94, 95.5},
+		{95.5, 96.8, 95, 96.5}, {96, 96.5, 94, 94.5}, {95.25, 96.2, 95, 95.5},
+		{95.5, 96.3, 95.2, 95.9}, {95.75, 96.4, 95.4, 96},
+	}
+	out := make([]market.Kline, 0, len(vals))
+	for i, v := range vals {
+		out = append(out, mkBar(t4h0+int64(i)*4*3600*1000, 4*3600*1000, v[0], v[1], v[2], v[3]))
+	}
+	return out
+}
+
+func pictureBarsH1Short() []market.Kline {
+	out := make([]market.Kline, 0, 42)
+	for i := 0; i < 42; i++ {
+		c := 96.3 - float64(i)*0.05
+		out = append(out, mkBar(t4h0+int64(i)*3600*1000, 3600*1000, c+0.2, c+0.5, c-0.5, c))
+	}
+	out[40] = mkBar(t4h0+40*3600*1000, 3600*1000, 95.2, 95.6, 94.6, 95.0)  // prev (>= boundary)
+	out[41] = mkBar(t4h0+41*3600*1000, 3600*1000, 94.9, 95.2, 94.0, 94.25) // cur (<= boundary − tick)
+	return out
+}
+
+func pictureBars5MShort(withSwing bool) []market.Kline {
+	base := t4h0 + 39*3600*1000 + 40*60*1000 // 16:40Z
+	out := make([]market.Kline, 0, 28)
+	for i := 0; i < 28; i++ {
+		c := 96.0 - float64(i)*0.057
+		hi := c + 0.5
+		if withSwing && i == 22 {
+			hi = 96.0 // the strict swing HIGH (neighbors' highs strictly lower)
+		}
+		out = append(out, mkBar(base+int64(i)*5*60*1000, 5*60*1000, c, hi, c-0.5, c-0.01))
+	}
+	return out
+}
+
+// Mirrored short end-to-end at the production call site: break down through
+// the 94.5 support → swing HIGH stop + ONE tick (symmetric) → nearest support
+// below (90) as the target. The broken level can never become its own target.
+func TestPictureHtfEvaluatorMirroredShortEndToEnd(t *testing.T) {
+	env := newPictureHtfEnv(t, store.PictureHtfConfig{Enabled: true, MinRR: 2.0})
+	bars4h := pictureBars4HShort()
+	barsH1 := pictureBarsH1Short()
+	bars5m := pictureBars5MShort(true)
+	env.seed(bars4h, barsH1, bars5m)
+	env.now = time.UnixMilli(t4h0 + 42*3600*1000 + 500) // 19:00:00.5Z
+	env.eval.OnBars("MNQ", "5m", tailOf(bars5m, 1), env.now)
+	if len(env.submits) != 1 {
+		t.Fatalf("the mirrored short must submit once, got %d", len(env.submits))
+	}
+	row, ok, _ := env.st.PictureHtfGet(env.submits[0])
+	if !ok {
+		t.Fatalf("admitted row missing")
+	}
+	if row.Direction != "short" || row.LevelRole != "support" || row.LevelBodyBot != 94.5 {
+		t.Fatalf("must be a short over the 94.5 support: %+v", row)
+	}
+	// ONE tick beyond the swing high, symmetrically: 96.0 + 0.25.
+	if row.StopPx != 96.25 {
+		t.Fatalf("short stop must be swing high + one tick (96.25), got %.2f", row.StopPx)
+	}
+	// Nearest support below entry — and never the broken 94.5 itself.
+	if row.TargetPx != 90 {
+		t.Fatalf("target must be the 90 support, got %.2f", row.TargetPx)
+	}
+	if row.TargetPx >= row.EntryRef {
+		t.Fatalf("short target must be below entry: target %.2f entry %.2f", row.TargetPx, row.EntryRef)
+	}
+}
+
+// ── Simultaneous H1/4H completion + arrival-order independence ───────────
+
+// The last 4H candle completes AT the same boundary as the confirming H1 and
+// closes ABOVE the broken resistance (but below the higher target): its
+// retirement must NOT retro-kill the breakout (the pre-close reference is
+// preserved), while it IS applied to target selection. Frame arrival order
+// must not change anything.
+func TestPictureHtfSimultaneousH1And4HCompletionPreservesBreakoutReference(t *testing.T) {
+	for _, order := range []string{"4h-first", "5m-first"} {
+		t.Run(order, func(t *testing.T) {
+			env := newPictureHtfEnv(t, store.PictureHtfConfig{Enabled: true, MinRR: 2.5})
+			bars4h := pictureBars4H()
+			// Replace the last 4H candle: open 38h, close == the H1 confirm
+			// close (42h−1ms), close 103 — above the 101 resistance (would
+			// retire it) but below the 110 target (stays active).
+			bars4h = bars4h[:len(bars4h)-1]
+			bars4h = append(bars4h, mkBar(t4h0+38*3600*1000, 4*3600*1000, 101.5, 104, 101, 103))
+			barsH1 := pictureBarsH1()
+			bars5m := pictureBars5M(true)
+			env.seed(bars4h, barsH1, bars5m)
+			env.now = time.UnixMilli(t4h0 + 42*3600*1000 + 500)
+			if order == "4h-first" {
+				env.eval.OnBars("MNQ", "4h", tailOf(bars4h, 1), env.now.Add(-400*time.Millisecond))
+				env.eval.OnBars("MNQ", "5m", tailOf(bars5m, 1), env.now)
+			} else {
+				env.eval.OnBars("MNQ", "5m", tailOf(bars5m, 1), env.now)
+				env.eval.OnBars("MNQ", "4h", tailOf(bars4h, 1), env.now.Add(100*time.Millisecond))
+			}
+			if len(env.submits) != 1 {
+				t.Fatalf("the breakout must fire on the pre-close reference: %d submits", len(env.submits))
+			}
+			row, ok, _ := env.st.PictureHtfGet(env.submits[0])
+			if !ok {
+				t.Fatalf("admitted row missing")
+			}
+			if row.LevelBodyTop != 101 {
+				t.Fatalf("the breakout reference must be the 101 resistance as it stood before the H1 opened, got %.2f", row.LevelBodyTop)
+			}
+			if row.TargetPx != 110 {
+				t.Fatalf("target must still be the 110 zone (the simultaneous close did not cross it): %.2f", row.TargetPx)
+			}
+		})
+	}
+}
+
+// A new evaluator instance over the same trader/store (a restart) must not
+// produce a second submission for an already-claimed opportunity.
+func TestPictureHtfRestartAfterClaimSingleSubmission(t *testing.T) {
+	env := newPictureHtfEnv(t, store.PictureHtfConfig{Enabled: true, MinRR: 2.5})
+	env.seedPictureTape()
+	env.eval.OnBars("MNQ", "5m", tailOf(market.FuturesBarsProvider("MNQ", "5m", 28), 1), env.now)
+	if len(env.submits) != 1 {
+		t.Fatalf("first evaluation must submit once, got %d", len(env.submits))
+	}
+	// Restart: a brand-new evaluator with fresh in-memory state.
+	env2 := &pictureHtfTestEnv{t: t, at: env.at, st: env.st, eval: NewPictureHtfEvaluator(env.at, store.PictureHtfResolved(&store.PictureHtfConfig{Enabled: true, MinRR: 2.5}))}
+	orig := pictureHtfSubmitSeam
+	pictureHtfSubmitSeam = func(e *PictureHtfEvaluator, row *store.PictureHtfOpportunityDB, stopPx, targetPx, qty float64) error {
+		env2.submits = append(env2.submits, row.OppKey)
+		return nil
+	}
+	defer func() { pictureHtfSubmitSeam = orig }()
+	env2.eval.OnBars("MNQ", "5m", tailOf(market.FuturesBarsProvider("MNQ", "5m", 28), 1), env.now)
+	res := env2.eval.Evaluate("MNQ", env.now)
+	if len(env2.submits) != 0 {
+		t.Fatalf("a restarted evaluator must not re-submit: %d", len(env2.submits))
+	}
+	if res.Stage != "watching" || !strings.Contains(res.Reason, "already claimed") {
+		t.Fatalf("the restart must report the durable claim, got %+v", res)
+	}
+}
+
+// An ambiguous send (the wire call failed AFTER the claim) keeps the row
+// place_pending and is NEVER blindly retried.
+func TestPictureHtfAmbiguousSendStaysPending(t *testing.T) {
+	env := newPictureHtfEnv(t, store.PictureHtfConfig{Enabled: true, MinRR: 2.5})
+	orig := pictureHtfSubmitSeam
+	pictureHtfSubmitSeam = func(e *PictureHtfEvaluator, row *store.PictureHtfOpportunityDB, stopPx, targetPx, qty float64) error {
+		env.submits = append(env.submits, row.OppKey)
+		return fmt.Errorf("send ambiguous — wire refused after the claim")
+	}
+	defer func() { pictureHtfSubmitSeam = orig }()
+	env.seedPictureTape()
+	// Drive the FIRST evaluation through Evaluate (freshest receipt seeded the
+	// same way OnBars would) so its verdict is observable.
+	env.eval.freshest5mAt = env.now
+	res := env.eval.Evaluate("MNQ", env.now)
+	if res.Stage != "submitted" || !strings.Contains(res.Reason, "ambiguous") {
+		t.Fatalf("an ambiguous send must be reported as such, got %+v", res)
+	}
+	row, ok, _ := env.st.PictureHtfGet(env.submits[0])
+	if !ok || row.Stage != "place_pending" {
+		t.Fatalf("the row must stay place_pending for reconciliation, got %+v", row)
+	}
+	// The blocked re-entry: the atomic claim requires stage='confirmed'.
+	if won, err := env.st.PictureHtfClaimSubmission(row.OppKey, "retry-sig"); err != nil || won {
+		t.Fatalf("an ambiguous place_pending row must block re-entry until reconciled: won=%v err=%v", won, err)
 	}
 }

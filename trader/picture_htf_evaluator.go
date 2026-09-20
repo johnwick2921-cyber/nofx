@@ -181,7 +181,19 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 		return EvaluateResult{Stage: "watching", Momentum: stall}
 	}
 	prev, cur := h1[len(h1)-2], h1[len(h1)-1]
-	breakVerdict := kernel.H1CloseBreak(kernel.ActiveLevels(e.levels, cur.OpenTime), prev, cur, e.cfg.TickSize)
+	// SIMULTANEOUS H1/4H COMPLETION (spec): the breakout reference is the
+	// level set as it stood BEFORE the confirming H1 opened — retirements
+	// from a 4h candle closing AT the same boundary as the H1 (which contains
+	// the H1's own move) must NOT retro-kill the breakout. So the break check
+	// uses a snapshot rebuilt from 4H bars completed before cur.OpenTime.
+	// Target selection, below, uses the as-of-now snapshot — retirements ARE
+	// applied before target selection, per the same clause. Both snapshots
+	// are time-derived from the cache, so frame arrival order cannot change
+	// either verdict.
+	breakLevels := kernel.ActiveLevels(
+		kernel.BodyPivots4H(e.bars(symbol, "4h", e.cfg.PivotWindow+4, cur.OpenTime), e.cfg.PivotWindow),
+		cur.OpenTime)
+	breakVerdict := kernel.H1CloseBreak(breakLevels, prev, cur, e.cfg.TickSize)
 	if !breakVerdict.Fired {
 		return EvaluateResult{Stage: "watching", Momentum: stall}
 	}
@@ -199,7 +211,7 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 		// The next interval has not begun — wait for its boundary frame.
 		return EvaluateResult{Stage: "watching", Momentum: stall}
 	}
-	level := e.levels[breakVerdict.LevelIdx]
+	level := breakLevels[breakVerdict.LevelIdx]
 	// The system's strategy identity IS the trader id (plans.strategy_id =
 	// trader id) — the opportunity key uses the same binding.
 	strategyID := e.at.id
@@ -208,7 +220,16 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 	if elapsed > windowMs {
 		return e.refuse(oppKey, "expired", fmt.Sprintf("entry window passed (%dms > %dms)", elapsed, windowMs), stall)
 	}
-	if e.freshest5mAt.IsZero() || now.Sub(e.freshest5mAt).Milliseconds() > int64(e.cfg.FreshnessSec)*1000 {
+	// ARRIVAL-ORDER INDEPENDENCE: the first 5m frame of the interval has not
+	// been received yet. The entry cannot be sent without a fresh receipt, so
+	// the mode WAITS — it must NOT write a refusal row that a qualifying
+	// in-window frame arriving milliseconds later would have to live with.
+	// (A 4h/1h frame landing just before the 5m boundary frame must not kill
+	// the setup.)
+	if e.freshest5mAt.IsZero() {
+		return EvaluateResult{Stage: "watching", Reason: "awaiting the first 5m frame of the interval", Momentum: stall}
+	}
+	if now.Sub(e.freshest5mAt).Milliseconds() > int64(e.cfg.FreshnessSec)*1000 {
 		return e.refuse(oppKey, "expired", "data age exceeds the freshness limit — a late frame cannot enter", stall)
 	}
 
