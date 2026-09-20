@@ -10,16 +10,30 @@
 // never fans out to the evaluator, never sends a wire frame. Historical
 // receipts cannot trigger live entries — that is the separate mechanism pin
 // (TestSept17ReplayNeverMintsOpportunities); THIS harness is the requested
-// strategy replay: what the rules would have seen and done on that tape.
+// strategy replay.
+//
+// DATA LAW (CTO corrections, 2026-09-20):
+//   - CONTRACT PURE: the ladder is built from ONE contract (the window's
+//     dominant contract) for the whole context. Cross-contract timestamp
+//     merging is refused — the Sep→Dec roll must never leak into one ladder.
+//   - NATIVE BARS: 5m/1h come from the STORED NT8-native rows (session-aligned
+//     by NT8 trading hours), never UTC-modulo aggregation of 1m. 4h has no
+//     stored native rows → derived from the native 1h ladder on the ETH grid
+//     (22:00Z-anchored 4-bar groups, all four 1h present) — a DISCLOSED proxy.
+//     If native 5m/1h rows are absent the harness refuses eligibility claims
+//     ("native replay unavailable").
+//   - ENTRY-PRICE TIMING: entryRef is the close of the last 5m bar COMPLETED
+//     BEFORE the entry interval opens — a price knowable at the entry instant,
+//     never the close of the entry interval's own bar.
+//   - STOP BUFFER: symmetric ONE tick — long stop −1 tick, short stop +1 tick
+//     (mirrors the production evaluator).
 //
 // Usage:
 //
 //	go run ./cmd/picture_htf_replay --db /tmp/picture-htf-replay.db \
 //	  --start 2026-09-16T22:00:00Z --end 2026-09-17T22:00:00Z
 //
-// The DB argument must be a COPY of the live data.db (mode=ro). It reads
-// 1m rows and derives 5m/1h/4h on read — the same derive-on-read convention
-// as the chart path.
+// The DB argument must be a COPY of the live data.db (mode=ro).
 package main
 
 import (
@@ -42,7 +56,7 @@ func main() {
 	endS := flag.String("end", "2026-09-17T22:00:00Z", "window end (RFC3339, UTC)")
 	symbol := flag.String("symbol", "MNQ", "symbol to replay")
 	minRR := flag.Float64("min-rr", 2.5, "R:R gate (the resolved picture_htf minimum)")
-	contextDays := flag.Int("context-days", 30, "days of 4H/1H history BEFORE --start used for level detection (mirrors the live cache)")
+	contextDays := flag.Int("context-days", 30, "days of 4H/1H context BEFORE --start for level detection (native 1h rows reach further back than the 5m/1m store)")
 	flag.Parse()
 
 	if *dbPath == "" {
@@ -70,23 +84,40 @@ func main() {
 	fmt.Printf("  min R:R : %.2f\n", *minRR)
 	fmt.Println()
 
-	m1, contracts, err := load1m(*dbPath, *symbol, start.Add(-time.Duration(*contextDays)*24*time.Hour).UnixMilli(), end.UnixMilli())
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "load: %v\n", err)
-		os.Exit(1)
-	}
-	fmt.Printf("1m bars read: %d (%dd context + window; contracts present: %v)\n", len(m1), *contextDays, contracts)
-	if len(m1) == 0 {
-		fmt.Println("VERDICT: no 1m rows in the window — nothing to replay (state this honestly).")
+	ctxStart := start.Add(-time.Duration(*contextDays) * 24 * time.Hour).UnixMilli()
+
+	// ── Contract purity: ONE contract for the whole ladder ──
+	contract := dominantContract(*dbPath, *symbol, start.UnixMilli(), end.UnixMilli())
+	fmt.Printf("window contract (dominant by 1m rows): %q — the ENTIRE ladder is built contract-pure from it\n", contract)
+	if contract == "" {
+		fmt.Println("VERDICT: no rows for the window — nothing to replay (state this honestly).")
 		os.Exit(0)
 	}
 
-	// Derive higher timeframes from the 1m ladder (derive-on-read).
-	fiveM := aggregate(m1, 5*60_000)
-	h1 := aggregate(m1, 60*60_000)
-	fourH := aggregate(m1, 4*60*60_000)
-	fmt.Printf("derived: 5m=%d · 1h=%d · 4h=%d (context included; the OPPORTUNITY window is %s → %s)\n\n",
-		len(fiveM), len(h1), len(fourH), start.UTC().Format(time.RFC3339), end.UTC().Format(time.RFC3339))
+	// ── NATIVE stored bars (session-aligned by NT8), contract-pure ──
+	native5m := loadNative(*dbPath, *symbol, "5m", contract, ctxStart, end.UnixMilli())
+	native1h := loadNative(*dbPath, *symbol, "1h", contract, ctxStart, end.UnixMilli())
+	native1m := loadNative(*dbPath, *symbol, "1m", contract, start.UnixMilli(), end.UnixMilli())
+	fmt.Printf("native rows loaded (contract-pure %s): 1m(window)=%d · 5m=%d · 1h=%d\n\n",
+		contract, len(native1m), len(native5m), len(native1h))
+	if len(native5m) == 0 || len(native1h) == 0 {
+		fmt.Println("VERDICT: native stored 5m/1h rows absent — NATIVE REPLAY UNAVAILABLE;")
+		fmt.Println("no eligibility claims are made from UTC-aggregated bars.")
+		os.Exit(0)
+	}
+
+	// 4h is DERIVED from the native 1h ladder on the ETH grid (22:00Z-anchored
+	// 4-bar groups, all four 1h present) — the only derivation left, disclosed.
+	fourH := eth4hFrom1h(native1h)
+	fmt.Printf("4h derived from native 1h on the ETH 22:00Z grid (proxy — no stored 4h): %d bars\n", len(fourH))
+
+	// In-window 5m ladder (the opportunity machinery runs only in the window);
+	// the H1 ladder carries ONE extra bar of context so the first in-window
+	// boundary (prev bar from the prior hour) is evaluated, like the live
+	// cache would.
+	fiveM := filter(native5m, start.UnixMilli(), end.UnixMilli())
+	h1 := filter(native1h, start.UnixMilli()-3600_000, end.UnixMilli())
+	fmt.Printf("in-window: 5m=%d · 1h=%d (1h includes the boundary context bar)\n\n", len(fiveM), len(h1))
 
 	// ── Section A: 4H levels in force when the window opened ──
 	fmt.Println("── A. DETECTED 4H LEVELS (BodyPivots4H, as-of window start; retirement inside the window noted) ──")
@@ -121,9 +152,6 @@ func main() {
 		if cur.CloseTime >= end.UnixMilli() {
 			break // the last H1 is still forming inside the window
 		}
-		if cur.OpenTime < start.UnixMilli() {
-			continue // context only — confirmations counted inside the window
-		}
 		act := kernel.ActiveLevels(levelsAt(fourH, cur.OpenTime), cur.OpenTime)
 		v := kernel.H1CloseBreak(act, prev, cur, 0.25)
 		h1Confirmed++
@@ -138,74 +166,78 @@ func main() {
 	}
 	fmt.Printf("  H1 completions evaluated: %d · breaks fired: %d\n\n", h1Confirmed, len(breaks))
 
-	// ── Section C: per-break 5m window geometry + verdict ──
+	// ── Section C: per-break 5m interval geometry + verdict ──
 	fmt.Println("── C. OPPORTUNITIES (per break: next 5m interval, swing stop, opposing zone, R:R) ──")
 	eligible, refused := 0, 0
 	reasonCounts := map[string]int{}
 	for bi, b := range breaks {
 		intervalStart := alignUp(b.cur.CloseTime+1, 5*60_000)
-		// The first COMPLETED 5m bar of that interval.
+		// The entry interval opens at intervalStart. entryRef must be a price
+		// KNOWABLE at that instant: the close of the last 5m bar COMPLETED
+		// BEFORE the interval (the bar that closed at intervalStart−1ms).
 		idx := -1
 		for j, k := range fiveM {
-			if k.OpenTime == intervalStart {
+			if k.OpenTime+5*60_000 == intervalStart {
 				idx = j
 				break
 			}
 		}
 		fmt.Printf("\n  #%d %s break over %.2f (H1 confirm %s)\n", bi+1, b.verdict.Direction, b.verdict.Boundary, ts(b.cur.CloseTime))
 		if idx < 0 {
-			fmt.Printf("    verdict: REFUSED — next 5m interval (%s) has no bar in the tape\n", ts(intervalStart))
+			fmt.Printf("    verdict: REFUSED — the 5m bar completed at the entry instant (%s) is not in the native tape\n", ts(intervalStart))
 			refused++
 			reasonCounts["interval_unfilled"]++
 			continue
 		}
-		newest5m := fiveM[idx]
-		elapsed := newest5m.OpenTime - intervalStart
+		prev5m := fiveM[idx]
+		entryRef := prev5m.Close                 // known AT entry time (elapsed 0ms)
+		elapsed := intervalStart - intervalStart // 0 by construction — the first instant of the window
+		fmt.Printf("    interval %s (elapsed %dms) · entry ref %.2f (close of the 5m bar COMPLETED at the boundary — knowable at entry)\n",
+			ts(intervalStart), elapsed, entryRef)
+
 		lookback := fiveM[:idx+1]
 		stopPx, ok := kernel.StructuralSwing5M(lookback, b.verdict.Direction, 24, b.cur.CloseTime)
-		verb := "ELIGIBLE"
-		refuseClass := ""
-		targetPx := 0.0
-		rr := 0.0
 		if !ok {
-			verb, refuseClass = "REFUSED", "no_swing"
-			fmt.Printf("    interval %s (elapsed %dms) · swing: NONE\n", ts(intervalStart), elapsed)
-		} else {
-			stopAdj := stopPx - 0.25
-			if b.verdict.Direction == "short" {
-				stopAdj = stopPx + 0.5
-			}
-			entryRef := newest5m.Close
-			targetPx, ok = kernel.NearestOpposingZone(kernel.ActiveLevels(levelsAt(fourH, newest5m.OpenTime), newest5m.OpenTime), entryRef, b.verdict.Direction, newest5m.OpenTime)
-			if !ok {
-				verb, refuseClass = "REFUSED", "no_opposing_zone"
-			} else {
-				risk := entryRef - stopAdj
-				if risk < 0 {
-					risk = -risk
-				}
-				reward := targetPx - entryRef
-				if reward < 0 {
-					reward = -reward
-				}
-				if risk > 0 {
-					rr = reward / risk
-				}
-				if rr < *minRR {
-					verb, refuseClass = "REFUSED", "rr_below_min"
-				}
-				fmt.Printf("    interval %s (elapsed %dms) · entry ref %.2f · swing stop %.2f (adj %.2f) · opposing zone %.2f · R:R %.2f\n",
-					ts(intervalStart), elapsed, newest5m.Close, stopPx, stopAdj, targetPx, rr)
-			}
-		}
-		if verb == "ELIGIBLE" {
-			fmt.Println("    verdict: ELIGIBLE — would submit in live mode (subject to flat/fresh/unreconciled re-checks)")
-			eligible++
-		} else {
-			fmt.Printf("    verdict: REFUSED — %s\n", refuseClass)
+			fmt.Printf("    verdict: REFUSED — no confirmed 5m swing stop before the H1 close\n")
 			refused++
-			reasonCounts[refuseClass]++
+			reasonCounts["no_swing"]++
+			continue
 		}
+		// Symmetric ONE-tick buffer, mirrors the production evaluator.
+		stopAdj := stopPx - 0.25
+		if b.verdict.Direction == "short" {
+			stopAdj = stopPx + 0.25
+		}
+		targetPx, ok := kernel.NearestOpposingZone(kernel.ActiveLevels(levelsAt(fourH, intervalStart), intervalStart), entryRef, b.verdict.Direction, intervalStart)
+		if !ok {
+			fmt.Printf("    swing stop %.2f (adj %.2f) · opposing zone: NONE\n", stopPx, stopAdj)
+			fmt.Println("    verdict: REFUSED — no eligible opposing 4H zone")
+			refused++
+			reasonCounts["no_opposing_zone"]++
+			continue
+		}
+		risk := entryRef - stopAdj
+		if risk < 0 {
+			risk = -risk
+		}
+		reward := targetPx - entryRef
+		if reward < 0 {
+			reward = -reward
+		}
+		rr := 0.0
+		if risk > 0 {
+			rr = reward / risk
+		}
+		if rr < *minRR {
+			fmt.Printf("    swing stop %.2f (adj %.2f) · opposing zone %.2f · R:R %.2f\n", stopPx, stopAdj, targetPx, rr)
+			fmt.Printf("    verdict: REFUSED — rr_below_min (nearer zone never skipped)\n")
+			refused++
+			reasonCounts["rr_below_min"]++
+			continue
+		}
+		fmt.Printf("    swing stop %.2f (adj %.2f) · opposing zone %.2f · R:R %.2f\n", stopPx, stopAdj, targetPx, rr)
+		fmt.Println("    verdict: ELIGIBLE — would submit in live mode (subject to flat/fresh/unreconciled re-checks)")
+		eligible++
 	}
 
 	fmt.Println("\n════════════════════════════════════════════════════════════════")
@@ -252,59 +284,81 @@ func alignUp(ms, span int64) int64 {
 	return ((ms + span - 1) / span) * span
 }
 
-// load1m reads 1m rows for the window, deduped by open_time (max rowid wins —
-// the same convention the bar-history reader uses across contracts).
-func load1m(dbPath, symbol string, startMs, endMs int64) ([]market.Kline, []string, error) {
-	dsn := "file:" + dbPath + "?mode=ro&_pragma=busy_timeout(5000)"
-	db, err := sql.Open("sqlite", dsn)
+// dominantContract is the contract with the most 1m rows in the window — the
+// whole ladder is then built contract-pure from it (no cross-contract
+// merging, ever).
+func dominantContract(dbPath, symbol string, startMs, endMs int64) string {
+	db, err := sql.Open("sqlite", "file:"+dbPath+"?mode=ro&_pragma=busy_timeout(5000)")
 	if err != nil {
-		return nil, nil, err
+		return ""
+	}
+	defer db.Close()
+	var contract string
+	err = db.QueryRow(`
+		SELECT contract FROM bars
+		WHERE symbol = ? AND tf = '1m' AND open_time_ms >= ? AND open_time_ms < ?
+		GROUP BY contract ORDER BY COUNT(*) DESC LIMIT 1`, symbol, startMs, endMs).Scan(&contract)
+	if err != nil {
+		return ""
+	}
+	return contract
+}
+
+// loadNative reads STORED NT8-native bars (session-aligned) for ONE contract.
+// The PK is (symbol,tf,contract,open_time_ms) on the live schema, so the
+// contract is in the WHERE clause — isolation is enforced at the query.
+func loadNative(dbPath, symbol, tf, contract string, startMs, endMs int64) []market.Kline {
+	db, err := sql.Open("sqlite", "file:"+dbPath+"?mode=ro&_pragma=busy_timeout(5000)")
+	if err != nil {
+		return nil
 	}
 	defer db.Close()
 	rows, err := db.Query(`
-		SELECT open_time_ms, o, h, l, c, contract
-		FROM bars
-		WHERE symbol = ? AND tf = '1m' AND open_time_ms >= ? AND open_time_ms < ?
-		GROUP BY open_time_ms
-		HAVING rowid = MAX(rowid)
-		ORDER BY open_time_ms ASC`, symbol, startMs, endMs)
+		SELECT open_time_ms, o, h, l, c FROM bars
+		WHERE symbol = ? AND tf = ? AND contract = ?
+		  AND open_time_ms >= ? AND open_time_ms < ?
+		ORDER BY open_time_ms ASC`, symbol, tf, contract, startMs, endMs)
 	if err != nil {
-		return nil, nil, err
+		return nil
 	}
 	defer rows.Close()
+	span := tfMs(tf)
 	var out []market.Kline
-	contractSet := map[string]bool{}
 	for rows.Next() {
 		var openMs int64
 		var o, h, l, c float64
-		var contract string
-		if err := rows.Scan(&openMs, &o, &h, &l, &c, &contract); err != nil {
-			return nil, nil, err
+		if err := rows.Scan(&openMs, &o, &h, &l, &c); err != nil {
+			return nil
 		}
-		contractSet[contract] = true
 		out = append(out, market.Kline{
 			OpenTime:  openMs,
-			CloseTime: openMs + 60_000 - 1,
+			CloseTime: openMs + span - 1,
 			Open:      o, High: h, Low: l, Close: c,
-			Final: true, // stored rows are closed by definition (the replay label above is the honesty gate)
+			Final: true, // stored rows are closed by definition
 		})
 	}
-	var contracts []string
-	for c := range contractSet {
-		contracts = append(contracts, c)
-	}
-	sort.Strings(contracts)
-	return out, contracts, rows.Err()
+	return out
 }
 
-// aggregate derives a higher timeframe from the 1m ladder: bucket = open −
-// open%span; OHLC over the bucket's minutes. A bucket is INCLUDED only when
-// every minute of it is present (a partial edge bucket would distort the
-// pivot/break math — partial bars are dropped and the count is printed).
-func aggregate(m1 []market.Kline, span int64) []market.Kline {
-	if len(m1) == 0 {
-		return nil
+func tfMs(tf string) int64 {
+	switch tf {
+	case "1m":
+		return 60_000
+	case "5m":
+		return 5 * 60_000
+	case "1h":
+		return 60 * 60_000
 	}
+	return 60_000
+}
+
+// eth4hFrom1h derives 4h bars from the NATIVE 1h ladder on the ETH grid
+// (anchored 22:00Z — the CME ETH session open). A bucket is included only
+// when all four constituent 1h bars are present. This is the ONLY derivation
+// in the replay and is disclosed; NT8-native 4h bars are not stored.
+func eth4hFrom1h(h1 []market.Kline) []market.Kline {
+	// ETH anchor: 22:00Z. A 4h bucket opens at 22:00Z + k*4h.
+	const ethAnchorMod = (22 * 60 * 60 * 1000) % (4 * 60 * 60 * 1000)
 	type acc struct {
 		o, h, l, c float64
 		open       int64
@@ -312,8 +366,8 @@ func aggregate(m1 []market.Kline, span int64) []market.Kline {
 	}
 	m := map[int64]*acc{}
 	var order []int64
-	for _, b := range m1 {
-		bucket := b.OpenTime - b.OpenTime%span
+	for _, b := range h1 {
+		bucket := b.OpenTime - ((b.OpenTime - ethAnchorMod) % (4 * 60 * 60 * 1000))
 		a, ok := m[bucket]
 		if !ok {
 			m[bucket] = &acc{o: b.Open, h: b.High, l: b.Low, c: b.Close, open: bucket, n: 1}
@@ -330,17 +384,27 @@ func aggregate(m1 []market.Kline, span int64) []market.Kline {
 		a.n++
 	}
 	sort.Slice(order, func(i, j int) bool { return order[i] < order[j] })
-	full := span / 60_000
 	out := make([]market.Kline, 0, len(order))
 	for _, b := range order {
 		a := m[b]
-		if a.n < int(full) {
-			continue // partial bucket — not a real closed bar
+		if a.n != 4 {
+			continue // partial 4h bucket — not a real closed bar
 		}
 		out = append(out, market.Kline{
-			OpenTime: a.open, CloseTime: a.open + span - 1,
+			OpenTime: a.open, CloseTime: a.open + 4*60*60*1000 - 1,
 			Open: a.o, High: a.h, Low: a.l, Close: a.c, Final: true,
 		})
+	}
+	return out
+}
+
+// filter keeps bars with open time inside [startMs, endMs).
+func filter(bars []market.Kline, startMs, endMs int64) []market.Kline {
+	out := make([]market.Kline, 0, len(bars))
+	for _, b := range bars {
+		if b.OpenTime >= startMs && b.OpenTime < endMs {
+			out = append(out, b)
+		}
 	}
 	return out
 }
