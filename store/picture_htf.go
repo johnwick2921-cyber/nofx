@@ -198,6 +198,19 @@ func (s *Store) PictureHtfMarkBrokerState(oppKey, stage, brokerOrderID, brokerSt
 		Updates(updates).Error
 }
 
+// PictureHtfAppendBrokerStatus appends one evidence note to broker_status
+// WITHOUT touching the stage or fill fields. Protection-leg events and
+// reconciliation markers accumulate instead of overwriting each other; a note
+// already present is not duplicated (idempotent).
+func (s *Store) PictureHtfAppendBrokerStatus(oppKey, note string) error {
+	if s == nil || s.gdb == nil {
+		return fmt.Errorf("store unavailable")
+	}
+	return s.gdb.Model(&PictureHtfOpportunityDB{}).
+		Where("opp_key = ? AND (broker_status IS NULL OR broker_status = '' OR instr(broker_status, ?) = 0)", oppKey, note).
+		Update("broker_status", gorm.Expr("CASE WHEN broker_status IS NULL OR broker_status = '' THEN ? ELSE broker_status || '; ' || ? END", note, note)).Error
+}
+
 // PictureHtfBySignal returns the rows stamped with a broker signal id (the
 // entry uuid — protective legs ride the same signal id).
 func (s *Store) PictureHtfBySignal(signalID string) ([]PictureHtfOpportunityDB, error) {

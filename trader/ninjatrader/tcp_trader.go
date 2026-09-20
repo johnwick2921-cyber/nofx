@@ -286,8 +286,13 @@ func (t *TCPTrader) FarSideProves(minBuild string) bool {
 
 // OrderSnapshotLookup returns the broker's own book entry for a signal id from
 // the latest RECEIVED order snapshot (entry legs carry the plain signal id;
-// protective legs carry -sl/-tp suffixes). The snapshot is the restart-safe
-// broker view — the reconciliation sweep reads it after a disconnect/restart.
+// protective legs carry -sl/-tp suffixes). WIRE SEMANTICS (picture-htf round,
+// 2026-09-20): the AddOn EXCLUDES terminal orders from the snapshot
+// (VLTraderTCPClient.cs SendOrderSnapshot skips Filled/Cancelled/Rejected/
+// Expired), so this lookup can prove an order is WORKING but can never prove
+// a terminal outcome, and NT8Order carries no fill price (limit_price is the
+// order's limit). Terminal recovery must use received execution/order
+// history — never this book.
 func (t *TCPTrader) OrderSnapshotLookup(signalID string) (ntwire.NT8Order, bool) {
 	var zero ntwire.NT8Order
 	if t == nil || t.server == nil || signalID == "" {
@@ -701,6 +706,43 @@ func (t *TCPTrader) ModifyBracket(signalID string, newSL, newTP float64) error {
 // OrderUpdates returns THIS trader's order_update stream (per symbol+account).
 func (t *TCPTrader) OrderUpdates() <-chan ntwire.OrderUpdatePayload {
 	return t.server.SubscribeOrderUpdatesFor(t.symbol, t.boundAccount)
+}
+
+// OrderUpdatesListen returns a coordinated fan-out listener for this trader's
+// order_update stream plus its unregister func. Unlike OrderUpdates (single
+// subscriber, last-subscribe-wins — a second direct subscribe CLOSES the first
+// consumer's channel), listeners coexist: the armed executor and the picture
+// broker consumer both receive every frame, and neither can evict the other.
+// The channel closes only when the underlying subscription dies; consumers
+// keep their self-heal contract and re-listen.
+func (t *TCPTrader) OrderUpdatesListen() (<-chan ntwire.OrderUpdatePayload, func()) {
+	return t.server.ListenOrderUpdates(t.symbol, t.boundAccount)
+}
+
+// RecentFillFor returns the LATEST received fill for a signal id from the
+// netting-fill ring — real execution evidence (fill frames carry the actual
+// average fill price, never a limit price). ok=false means no fill for that
+// signal was received since this process booted.
+func (t *TCPTrader) RecentFillFor(signalID string) (price, quantity float64, ok bool) {
+	if strings.TrimSpace(signalID) == "" {
+		return 0, 0, false
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	var best *recentFill
+	for i := range t.recentFills {
+		f := &t.recentFills[i]
+		if f.SignalID != signalID || f.Price <= 0 {
+			continue
+		}
+		if best == nil || f.TimeMs >= best.TimeMs {
+			best = f
+		}
+	}
+	if best == nil {
+		return 0, 0, false
+	}
+	return best.Price, best.Quantity, true
 }
 
 // rememberEntryOrderID caches the entry order/signal identity for a

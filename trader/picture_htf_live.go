@@ -75,6 +75,10 @@ func (at *AutoTrader) pictureHtfEvaluator() *PictureHtfEvaluator {
 	sig := fmt.Sprintf("%t|%.5f|%d|%d|%d|%d|%.4f",
 		cfg.Enabled, cfg.TickSize, cfg.PivotWindow, cfg.SwingLookback, cfg.EntryWindowSec, cfg.FreshnessSec, cfg.MinRR)
 	if at.pictureHtf != nil && at.pictureHtfSig == sig {
+		// The broker consumer self-heals here: if its listener channel ever
+		// closed (underlying subscription died), the registry entry was
+		// deleted and this per-cycle call re-listens.
+		at.ensurePictureHtfBrokerConsumer()
 		return at.pictureHtf
 	}
 	at.pictureHtf = NewPictureHtfEvaluator(at, cfg)
