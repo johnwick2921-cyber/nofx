@@ -170,6 +170,54 @@ func (s *Store) PictureHtfMarkBroker(oppKey, stage, brokerOrderID, brokerStatus,
 		Updates(updates).Error
 }
 
+// PictureHtfMarkBrokerState is the full broker-state stamp used by the live
+// consumer and the reconciliation sweep: stage + order id + status + reason +
+// fill price/qty + the actual-fill R:R computed by the caller. Only RECEIVED
+// broker evidence may call this. Zero fill fields are left untouched.
+func (s *Store) PictureHtfMarkBrokerState(oppKey, stage, brokerOrderID, brokerStatus, rejectReason string, fillPrice, fillQty, fillRR float64) error {
+	if s == nil || s.gdb == nil {
+		return fmt.Errorf("store unavailable")
+	}
+	updates := map[string]any{
+		"stage":           stage,
+		"broker_status":   brokerStatus,
+		"reject_reason":   rejectReason,
+		"broker_order_id": brokerOrderID,
+	}
+	if fillPrice > 0 {
+		updates["fill_price"] = fillPrice
+	}
+	if fillQty > 0 {
+		updates["fill_qty"] = fillQty
+	}
+	if fillRR > 0 {
+		updates["fill_rr"] = fillRR
+	}
+	return s.gdb.Model(&PictureHtfOpportunityDB{}).
+		Where("opp_key = ?", oppKey).
+		Updates(updates).Error
+}
+
+// PictureHtfBySignal returns the rows stamped with a broker signal id (the
+// entry uuid — protective legs ride the same signal id).
+func (s *Store) PictureHtfBySignal(signalID string) ([]PictureHtfOpportunityDB, error) {
+	if s == nil || s.gdb == nil {
+		return nil, fmt.Errorf("store unavailable")
+	}
+	if strings.TrimSpace(signalID) == "" {
+		return nil, nil
+	}
+	var rows []PictureHtfOpportunityDB
+	err := s.gdb.Where("signal_id = ?", signalID).Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		rows = []PictureHtfOpportunityDB{}
+	}
+	return rows, nil
+}
+
 // PictureHtfClaimSubmission is the atomic submission-ownership claim (addendum
 // #4): it moves an opportunity from confirmed to place_pending ONLY when no
 // signal is registered yet, in one SQL statement. Exactly ONE caller (across

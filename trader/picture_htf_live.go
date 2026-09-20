@@ -79,6 +79,7 @@ func (at *AutoTrader) pictureHtfEvaluator() *PictureHtfEvaluator {
 	}
 	at.pictureHtf = NewPictureHtfEvaluator(at, cfg)
 	at.pictureHtfSig = sig
+	at.ensurePictureHtfBrokerConsumer()
 	return at.pictureHtf
 }
 
@@ -91,11 +92,13 @@ func (at *AutoTrader) NotifyLiveBars(symbol, tf string, bars []market.Kline, rec
 
 // pictureHtfTickFallback is the wall-clock fallback the run loop calls once
 // per cycle: it covers a missed boundary frame (feed stall) with the same
-// evaluation. The evaluator's freshness gate still applies, so a late tick
-// can only EXPAND the verdict history, never bypass the timing law.
+// evaluation, and runs the reconciliation sweep so pending rows recover
+// across disconnects/restarts WITHOUT another entry (the sweep only ever
+// observes the broker book). The evaluator's freshness gate still applies.
 func (at *AutoTrader) pictureHtfTickFallback(now time.Time) {
 	if ev := at.pictureHtfEvaluator(); ev != nil {
 		ev.Evaluate(at.futuresSymbol(), now)
+		pictureHtfReconcilePending(at)
 	}
 }
 

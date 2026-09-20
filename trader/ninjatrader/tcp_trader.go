@@ -284,6 +284,27 @@ func (t *TCPTrader) FarSideProves(minBuild string) bool {
 	return ntwire.FarSideProven(t.server.FarSideBuildID(), minBuild)
 }
 
+// OrderSnapshotLookup returns the broker's own book entry for a signal id from
+// the latest RECEIVED order snapshot (entry legs carry the plain signal id;
+// protective legs carry -sl/-tp suffixes). The snapshot is the restart-safe
+// broker view — the reconciliation sweep reads it after a disconnect/restart.
+func (t *TCPTrader) OrderSnapshotLookup(signalID string) (ntwire.NT8Order, bool) {
+	var zero ntwire.NT8Order
+	if t == nil || t.server == nil || signalID == "" {
+		return zero, false
+	}
+	snap, ok := t.server.OrderSnapshots().Latest(t.boundAccount)
+	if !ok {
+		return zero, false
+	}
+	for _, o := range snap.Orders {
+		if o.Name == signalID {
+			return o, true
+		}
+	}
+	return zero, false
+}
+
 // feedNowUTC is the latest market bar close, falling back to wall time when
 // absent. It is a market fact, never the creation timestamp of an entry command.
 func (t *TCPTrader) feedNowUTC(symbol string) time.Time {
