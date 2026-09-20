@@ -52,8 +52,8 @@ historical replay evidence · **[audited]** code-level audit only ·
 | T3 | Enforce the ACTUAL saved strategy minimum + existing sizing/risk limits; 3R is a displayed reference only | evaluator minRR resolver (strategy → SafeDefault); seam sizing clamp | [pin] LowRRRefuses · TestPictureHtfContractSizeNeverExceedsClamp · [replay] both floors (2.5 default, live 2.0) | PASS |
 | M1 | Completed-H1 close-progression momentum; advisory only; cannot reverse/flatten/cancel | `kernel/picture_htf.go` H1MomentumStall + evaluator records it on the row only | [pin] TestH1MomentumStallAdvisory | PASS (no gate reads it) |
 | P1 | Durable unique opportunity row ≠ submission license; exactly-once send via atomic ownership | `store/picture_htf.go` PictureHtfClaim + PictureHtfClaimSubmission (UPDATE … WHERE stage='confirmed' AND signal_id='') | [pin] TestPictureHtfClaimSubmissionExactlyOneWinner (12 claimers, 1 winner, -race) · TestPictureHtfClaimDuplicateKeyRefuses | PASS |
-| P2 | Reconciliation prevents a second send; never blindly retry an ambiguous command | place_pending blocks re-entry; seam reports "send ambiguous" and does not resend | [pin] TestPictureHtfAmbiguousSendStaysPending (re-entry refused at the store) · TestPictureHtfReconcileRecoversFilledAcrossRestart · TestPictureHtfReconcileRejectedAndAbsent (sweep recovers the book; ABSENT stays place_pending — never resent) | PASS |
-| P3 | Received broker state moves the row (working/filled/rejected); absent fields stay empty | `store/picture_htf.go` PictureHtfMarkBrokerState + `trader/picture_htf_broker.go` consumer (forward-only stages; protective legs never clobber the entry fill) | [pin] TestPictureHtfLifecycleAndBrokerEvidence · TestPictureHtfConsumeOrderUpdateEntryLifecycle · TestPictureHtfConsumeProtectiveLegsUpdateProtectionNotFill · TestPictureHtfConsumeOrderUpdateIsolation | PASS (live NT8 receipt still owner-gated, §7) |
+| P2 | Reconciliation prevents a second send; never blindly retry an ambiguous command | place_pending blocks re-entry; seam reports "send ambiguous" and does not resend; the sweep recovers only RECEIVED evidence — a terminal outcome that was never received stays UNKNOWN (never fabricated, never resent) | [pin] TestPictureHtfAmbiguousSendStaysPending (re-entry refused at the store) · TestPictureHtfReconcileRecoversFillFromReceivedHistory · TestPictureHtfReconcileRecoversRejectionFromReceivedHistory · TestPictureHtfReconcileRecoversFillFromFillStream · TestPictureHtfReconcileAbsentBookStaysUnknownNeverResends · TestPictureHtfReconcileWorkingBookLeavesFillPriceUnknown | PASS |
+| P3 | Received broker state moves the row (working/filled/rejected); absent fields stay empty | `store/picture_htf.go` PictureHtfMarkBrokerState/AppendBrokerStatus + `trader/picture_htf_broker.go` consumer (forward-only stages; protective legs append, never clobber the entry fill) | [pin] TestPictureHtfLifecycleAndBrokerEvidence · TestPictureHtfConsumeOrderUpdateEntryLifecycle · TestPictureHtfConsumeProtectiveLegsUpdateProtectionNotFill · TestPictureHtfConsumeOrderUpdateIsolation · TestPictureConsumerAndArmedStreamCoexistOnOneSubscription (both consumers on ONE subscription — neither loses frames) | PASS (live NT8 receipt still owner-gated, §7) |
 | P4 | Restart after claim / after send / before ack — no double send | durable claim + atomic ownership | [pin] TestPictureHtfRestartAfterClaimSingleSubmission + ClaimSubmission pin | PASS |
 
 ## 3. Production path trace (native frame → broker state)
@@ -129,8 +129,10 @@ no market-fill reconstruction.
 ```
 go test ./... -count=1                          → /tmp/gofinal5.log  exit 0, 35/35 packages
 go test ./trader/ -count=1 -race -run TestPictureHtf … (race surfaces) → clean
-go test ./... -count=1 (wave 18, post-consumer/reconciler) → /tmp/gofinal7.log  exit 0, 35/35 packages
-go test ./trader/ -count=1 -run 'TestPictureHtfConsume|TestPictureHtfReconcile' → 6/6 PASS
+go test ./... -count=1 (wave 18, pre-CTO-review) → /tmp/gofinal7.log  exit 0, 35/35 packages
+go test ./... -count=1 (wave 18, CTO round-2 corrections) → /tmp/gofinal8.log  exit 0, 35/35 packages
+go test ./trader/ -count=1 -run 'TestPictureHtfConsume|TestPictureHtfReconcile|TestPictureConsumerAndArmed' → 9/9 PASS
+go test ./provider/ninjatrader/ -count=1 -run 'TestOrderUpdateFanout' → 2/2 PASS (coordinated dispatch)
 cd web && npx tsc --noEmit                     → clean
 cd web && npx vitest run                       → /tmp/webfinal5.log 76 files / 492 tests, exit 0
 go run ./cmd/picture_htf_replay --db /tmp/picture-htf-replay.db \
@@ -138,35 +140,89 @@ go run ./cmd/picture_htf_replay --db /tmp/picture-htf-replay.db \
                                                → /tmp/replay-final.log
 ```
 
-## 6b. Broker-state pins — wave 18 (commit de2527918f730e89871402c70350f6baa9a14d1b)
+## 6b. Broker-state pins — wave 18, CTO round 2 (2026-09-20)
 
-All six in `trader/picture_htf_broker_test.go`, all green in the wave-18 run
-(`/tmp/gofinal7.log`, `go test ./... -count=1` exit 0, 35/35 packages).
+The CTO reviewed the first wave-18 pass and found three production
+mismatches; all three are corrected and re-pinned (see §6c). The pins below
+drive the REAL receipt paths and reproduce the AddOn's ACTUAL wire
+semantics:
+- order_update frames carry `fill_price` = AverageFillPrice (actual fill
+  evidence) and `quantity` = Filled count;
+- the order_snapshot **excludes terminal orders** (Filled/Cancelled/Rejected/
+  Expired — `VLTraderTCPClient.cs` SendOrderSnapshot) and carries **no fill
+  price** — a filled order is ABSENT from the book exactly like a
+  never-placed one;
+- fill frames carry the actual fill price on the fill stream.
 
-**Received broker events update the correct opportunity and protection state:**
+No test injects a terminal state or a fill price into the snapshot, and no
+recovered fill price may come from `LimitPrice`.
+
+**Received broker events update the correct opportunity and protection state**
+(`trader/picture_htf_broker_test.go`):
 
 | Pin | Proves |
 |---|---|
-| `TestPictureHtfConsumeOrderUpdateEntryLifecycle` | received entry events move the SIGNAL-NAMED row forward-only: accepted/partfilled → working → filled with fill price/qty + actual-fill R:R computed from the row's own geometry; a stale working event cannot downgrade a filled row |
+| `TestPictureHtfConsumeOrderUpdateEntryLifecycle` | received entry events move the SIGNAL-NAMED row forward-only: working → filled with the wire's fill price/qty + actual-fill R:R; a stale working event cannot downgrade a filled row |
 | `TestPictureHtfConsumeOrderUpdateRejectionCarriesReason` | a rejected entry closes the row with the wire rejection reason recorded |
-| `TestPictureHtfConsumeProtectiveLegsUpdateProtectionNotFill` | a filled SL leg records `protection_sl_filled` WITHOUT touching the entry's stage or fill (entry fill price preserved) — protection state is recorded, never clobbered |
+| `TestPictureHtfConsumeProtectiveLegsUpdateProtectionNotFill` | a filled SL leg records `protection_sl_filled` WITHOUT touching the entry's stage or fill; protection notes APPEND (the SL evidence survives a later TP rejection) |
 | `TestPictureHtfConsumeOrderUpdateIsolation` | an order_update for a different signal never touches the row |
 
-**Restart/disconnect reconciliation resolves ambiguous submissions without duplicate orders:**
+**Restart/disconnect reconciliation recovers RECEIVED outcomes without
+duplicate orders** (same file + real router/snapshot paths):
 
 | Pin | Proves |
 |---|---|
-| `TestPictureHtfReconcileRecoversFilledAcrossRestart` | a place_pending row whose order FILLED on the broker's book while the bot was down is recovered to filled with the book fill — the recovered row blocks re-entry (no second order) |
-| `TestPictureHtfReconcileRejectedAndAbsent` | a rejected/cancelled order on the book closes the row with "reconciled from broker book"; an order ABSENT from the book stays place_pending — ambiguous is NEVER resent |
+| `TestPictureHtfReconcileRecoversFillFromReceivedHistory` | a filled frame received BEFORE the row existed is recovered to filled with the frame's actual fill price and R:R; the recovered row blocks re-entry |
+| `TestPictureHtfReconcileRecoversRejectionFromReceivedHistory` | a rejection received before the row existed is recovered with its reason |
+| `TestPictureHtfReconcileRecoversFillFromFillStream` | a fill on the real fill router → received-fill ring recovers the row with the actual fill price (never a limit) |
+| `TestPictureHtfReconcileAbsentBookStaysUnknownNeverResends` | with an explicitly empty wire book and no received history the row STAYS place_pending, marked `outcome unknown` exactly once, fill price 0 — a filled order is absent from the snapshot exactly like a never-placed one, so absence proves nothing |
+| `TestPictureHtfReconcileWorkingBookLeavesFillPriceUnknown` | a present working book entry is a working receipt; its `LimitPrice` must NEVER become the fill price (the snapshot carries no fill price) |
+| `TestPictureConsumerAndArmedStreamCoexistOnOneSubscription` | the picture consumer and the armed listener share ONE subscription through the real router: every fed frame reaches BOTH, neither channel is closed by the other |
+| `TestOrderUpdateFanoutCoexistsNoEviction` + `TestOrderUpdateFanoutPerAccountIsolation` (`provider/ninjatrader/order_update_fanout_test.go`) | coordinated dispatch: listeners join/leave without evicting anyone; a legacy direct subscribe closes the fan-out source → listeners close (the consumers' self-heal signal); per-account isolation |
 | `TestPictureHtfAmbiguousSendStaysPending` (evaluator suite) | the seam reports "send ambiguous" and re-entry is refused at the store |
 | `TestPictureHtfRestartAfterClaimSingleSubmission` (evaluator suite) | restart after claim produces exactly one submission |
 | `TestPictureHtfClaimSubmissionExactlyOneWinner` (store suite) | atomic claim ownership — 12 concurrent claimers, one winner |
 
-**Consumer wiring:** `ensurePictureHtfBrokerConsumer` starts one consumer per
-picture trader from the evaluator build, draining `tcp.OrderUpdates()`;
-`pictureHtfReconcilePending` runs each cycle via the tick fallback.
-`TCPTrader.OrderSnapshotLookup` reads the bound account's RECEIVED order
-snapshot book.
+**Wiring:** one coordinated order_update fan-out per (symbol, account) owns
+the single direct subscription (`TCPServer.ListenOrderUpdates`); the armed
+executor (`armedUpdateStream`) and the picture consumer
+(`ensurePictureHtfBrokerConsumer`) are both LISTENERS — neither can evict the
+other, and each self-heals if the underlying subscription dies. The consumer
+records every entry-leg frame into a received-history (process lifetime)
+even when no row matches yet; `pictureHtfReconcilePending` runs each cycle
+and recovers from that history, then the received-fill ring, then the
+working-order book. An outcome never received stays UNKNOWN.
+
+## 6c. CTO round-2 corrections (all three findings fixed)
+
+1. **Reconciliation tests supplied broker states the actual snapshot
+   excludes.** The wave-18 tests injected Filled/Rejected orders into the
+   snapshot lookup; the AddOn's snapshot skips terminal orders. FIXED: the
+   reconciler no longer reads terminal outcomes from the snapshot. Terminal
+   recovery now comes from received execution/order history only — the
+   consumer-populated order_update history (process lifetime) and the
+   TCPTrader received-fill ring. Pins:
+   RecoversFillFromReceivedHistory / RecoversRejectionFromReceivedHistory /
+   RecoversFillFromFillStream / AbsentBookStaysUnknownNeverResends.
+2. **Reconciliation used `order.LimitPrice` as the fill price.** FIXED:
+   `LimitPrice` is never a fill. Recovered fill prices come ONLY from the
+   order_update frame's `fill_price` (AverageFillPrice) or the fill frame.
+   A terminal outcome with no received price is terminal with the fill price
+   left UNKNOWN — never fabricated. Pin: WorkingBookLeavesFillPriceUnknown +
+   the "fill price unknown" branch of ApplyTerminal.
+3. **The new consumer could replace the existing order subscription.**
+   `SubscribeOrderUpdatesFor` REPLACES the (symbol, account) channel, so two
+   direct subscribers close each other. FIXED: `TCPServer.ListenOrderUpdates`
+   coordinated fan-out — one direct subscription per key, listeners coexist,
+   and both consumers (armed executor + picture) are now listeners. Pins:
+   TestOrderUpdateFanoutCoexistsNoEviction / PerAccountIsolation (provider)
+   + TestPictureConsumerAndArmedStreamCoexistOnOneSubscription (trader,
+   through the real router).
+
+The prior wave-18 pin names
+(`TestPictureHtfReconcileRecoversFilledAcrossRestart`,
+`TestPictureHtfReconcileRejectedAndAbsent`) are REMOVED — their fixtures
+injected wire-impossible states.
 
 ## 7. Gap register — classified (per CTO request, 2026-09-20)
 
@@ -178,8 +234,8 @@ evidence.
 
 | # | Gap | Status | Evidence | Remaining owner/runtime step |
 |---|---|---|---|---|
-| 1 | Broker-state consumer (received entry / rejection / fill / protective-order events update the correct opportunity) | **implemented, pinned (unit)** | `trader/picture_htf_broker.go` consumer, wired once per trader via `ensurePictureHtfBrokerConsumer`; pins: TestPictureHtfConsumeOrderUpdateEntryLifecycle (forward-only, fill + actual-fill R:R), RejectionCarriesReason, ConsumeProtectiveLegsUpdateProtectionNotFill, Isolation — all green (`/tmp/gofinal7.log`, exit 0, 35/35) | receive a real order_update set on NT8 SIM (owner's copy → F5 → restart) |
-| 2 | Reconciliation sweep (pending/ambiguous submissions recover across disconnects/restarts without another entry) | **implemented, pinned (unit)** | sweep runs every cycle (`pictureHtfReconcilePending`); pins with a synthetic broker book: TestPictureHtfReconcileRecoversFilledAcrossRestart (filled recovered, re-entry blocked), RejectedAndAbsent (rejected closes; ABSENT stays place_pending — never resent) — green | live NT8 snapshot book behind `OrderSnapshotLookup` (owner step above) |
+| 1 | Broker-state consumer (received entry / rejection / fill / protective-order events update the correct opportunity) | **implemented, pinned (unit + real subscription)** | `trader/picture_htf_broker.go` consumer, a coordinated fan-out listener per trader; pins: EntryLifecycle (forward-only, wire fill price + actual-fill R:R), RejectionCarriesReason, ConsumeProtectiveLegsUpdateProtectionNotFill (append, never clobber), Isolation, CoexistOnOneSubscription (real router — the armed listener receives every frame too) — all green (`/tmp/gofinal8.log`, exit 0, 35/35) | receive a real order_update set on NT8 SIM (owner's copy → F5 → restart) |
+| 2 | Reconciliation sweep (pending/ambiguous submissions recover across disconnects/restarts without another entry) | **implemented, pinned (unit + real paths)** | sweep runs every cycle from RECEIVED evidence only: consumer-populated order_update history → received-fill ring → working-order book (presence only; absence proves nothing); pins: RecoversFillFromReceivedHistory (frame before the row existed → filled with the frame's actual price, re-entry blocked), RecoversRejectionFromReceivedHistory, RecoversFillFromFillStream (real fill router), AbsentBookStaysUnknownNeverResends (explicit empty wire book + no history → place_pending, `outcome unknown`, never resent), WorkingBookLeavesFillPriceUnknown (LimitPrice is never a fill) — green | live NT8 snapshot + order_update sets on SIM (owner step above) |
 | 3 | Partial fills (filled quantity receives protection through the actual AddOn path) | **implemented in the AddOn, untested live** | C# audit [A]: VLTraderTCPClient.cs:1445 `SubmitBracketOnEntryFill(signalId, e.Filled, e.AverageFillPrice)`; :2089+ refuses filledQty ≤ 0, sizes SL/TP legs by filledQty, `AmendBracketQuantity` on later fills — protective orders follow the FILLED quantity | NT8 partial-fill scenario (limit-touch) — owner/runtime |
 | 4 | Native 4h | **live input available; historical storage absent (replay limitation, NOT a live blocker)** | live: `defaultAutoBarsTimeframes` (`provider/ninjatrader/tcp_server.go:518`) includes `"4h"`, so the live native 4H subscription exists [B]; storage: no native-4h rows in the DB, replay uses the disclosed ETH-grid proxy | none for activation; importing native 4h history is a replay-quality choice |
 | 5 | AddOn build/capability receipt | **owner/runtime** | wire pins green both sides; VL_BUILD_ID="2026-09-20-p1" floor on both ends | owner: copy → F5 → full NT8 restart → boot line receipt |
@@ -200,8 +256,11 @@ optimums; a faithful implementation does not establish profitability.
 
 ## 9. Report pinning
 
-- Wave-18 code commit: `de2527918f730e89871402c70350f6baa9a14d1b` (broker-state
-  consumer + reconciliation sweep + pins, pushed to `fix/picture-htf`).
+- Wave-18 code commit: `de2527918f730e89871402c70350f6baa9a14d1b` (first
+  consumer/reconciler pass — SUPERSEDED by the round-2 corrections below).
+- Wave-19 code commit: `c2ba4388bcee1bb29809c57bb196bfa306fd55d2` — the CTO's
+  three production-integration findings fixed (received-evidence recovery,
+  fill-price honesty, coordinated dispatch), the fixes this §6b/§6c state.
 - This report lives on the same branch; the raw URL is pinned to the full
   commit SHA with the byte count quoted in the dispatch reply, and the pinned
   blob was curl-fetched and byte-compared against the working tree.
