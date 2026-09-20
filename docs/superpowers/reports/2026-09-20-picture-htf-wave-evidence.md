@@ -52,8 +52,8 @@ historical replay evidence · **[audited]** code-level audit only ·
 | T3 | Enforce the ACTUAL saved strategy minimum + existing sizing/risk limits; 3R is a displayed reference only | evaluator minRR resolver (strategy → SafeDefault); seam sizing clamp | [pin] LowRRRefuses · TestPictureHtfContractSizeNeverExceedsClamp · [replay] both floors (2.5 default, live 2.0) | PASS |
 | M1 | Completed-H1 close-progression momentum; advisory only; cannot reverse/flatten/cancel | `kernel/picture_htf.go` H1MomentumStall + evaluator records it on the row only | [pin] TestH1MomentumStallAdvisory | PASS (no gate reads it) |
 | P1 | Durable unique opportunity row ≠ submission license; exactly-once send via atomic ownership | `store/picture_htf.go` PictureHtfClaim + PictureHtfClaimSubmission (UPDATE … WHERE stage='confirmed' AND signal_id='') | [pin] TestPictureHtfClaimSubmissionExactlyOneWinner (12 claimers, 1 winner, -race) · TestPictureHtfClaimDuplicateKeyRefuses | PASS |
-| P2 | Reconciliation prevents a second send; never blindly retry an ambiguous command | place_pending blocks re-entry; seam reports "send ambiguous" and does not resend | [pin] TestPictureHtfAmbiguousSendStaysPending (re-entry refused at the store) · [missing] the automatic NT8-order reconciliation sweep is NOT implemented (§7) | PARTIAL |
-| P3 | Received broker state moves the row (working/filled/rejected); absent fields stay empty | `store/picture_htf.go` PictureHtfMarkBroker | [pin] TestPictureHtfLifecycleAndBrokerEvidence · [missing] no live consumer of order_update frames for picture rows yet (§7) | PARTIAL |
+| P2 | Reconciliation prevents a second send; never blindly retry an ambiguous command | place_pending blocks re-entry; seam reports "send ambiguous" and does not resend | [pin] TestPictureHtfAmbiguousSendStaysPending (re-entry refused at the store) · TestPictureHtfReconcileRecoversFilledAcrossRestart · TestPictureHtfReconcileRejectedAndAbsent (sweep recovers the book; ABSENT stays place_pending — never resent) | PASS |
+| P3 | Received broker state moves the row (working/filled/rejected); absent fields stay empty | `store/picture_htf.go` PictureHtfMarkBrokerState + `trader/picture_htf_broker.go` consumer (forward-only stages; protective legs never clobber the entry fill) | [pin] TestPictureHtfLifecycleAndBrokerEvidence · TestPictureHtfConsumeOrderUpdateEntryLifecycle · TestPictureHtfConsumeProtectiveLegsUpdateProtectionNotFill · TestPictureHtfConsumeOrderUpdateIsolation | PASS (live NT8 receipt still owner-gated, §7) |
 | P4 | Restart after claim / after send / before ack — no double send | durable claim + atomic ownership | [pin] TestPictureHtfRestartAfterClaimSingleSubmission + ClaimSubmission pin | PASS |
 
 ## 3. Production path trace (native frame → broker state)
@@ -94,7 +94,7 @@ NT8 AddOn bar_update (final+emitted_at)      → C# VLBarsSubscriptionManager bo
 | Missing stop / target / wrong-polarity target / insufficient R:R | NoSwingRefuses · NoOpposingZoneRefuses · kernel NearestOpposingZonePolarityAndNearest · LowRRRefuses | PASS |
 | Competing old/new executors, same account/instrument | store TestPictureHtfClaimSubmissionExactlyOneWinner (12-way, -race) | PASS |
 | Restart after claim / after send / before ack | RestartAfterClaimSingleSubmission · ClaimSubmission pins | PASS |
-| Rejection / immediate fill / ambiguous send / partial fill | ambiguous: AmbiguousSendStaysPending · rejection reason on the wire (framing roundtrip) · **live consumption + partial-fill handling: MISSING (§7)** | PARTIAL |
+| Rejection / immediate fill / ambiguous send / partial fill | ambiguous: AmbiguousSendStaysPending · rejection reason on the wire (framing roundtrip) · live consumption pinned (TestPictureHtfConsume*: entry lifecycle, rejection reason, protective-leg fills, isolation) · partial-fill AddOn path audited in C# (VLTraderTCPClient.cs:1445 SubmitBracketOnEntryFill + filledQty>0 guard and filledQty-sized legs + AmendBracketQuantity at :2089+); live proof needs NT8 (§7) | PASS (unit/loopback) · live NT8 receipt owner-gated |
 | Missing/rejected protective orders + recovery | **MISSING (§7)** — documented behavior: ambiguous row blocks re-entry until reconciled; the automatic reconciler is not built | MISSING |
 
 ## 5. Evidence categories (kept separate)
@@ -129,6 +129,8 @@ no market-fill reconstruction.
 ```
 go test ./... -count=1                          → /tmp/gofinal5.log  exit 0, 35/35 packages
 go test ./trader/ -count=1 -race -run TestPictureHtf … (race surfaces) → clean
+go test ./... -count=1 (wave 18, post-consumer/reconciler) → /tmp/gofinal7.log  exit 0, 35/35 packages
+go test ./trader/ -count=1 -run 'TestPictureHtfConsume|TestPictureHtfReconcile' → 6/6 PASS
 cd web && npx tsc --noEmit                     → clean
 cd web && npx vitest run                       → /tmp/webfinal5.log 76 files / 492 tests, exit 0
 go run ./cmd/picture_htf_replay --db /tmp/picture-htf-replay.db \
@@ -136,28 +138,27 @@ go run ./cmd/picture_htf_replay --db /tmp/picture-htf-replay.db \
                                                → /tmp/replay-final.log
 ```
 
-## 7. Missing evidence and remaining owner decisions
+## 7. Gap register — classified (per CTO request, 2026-09-20)
 
-1. **Live broker-state consumption** — no consumer yet routes received
-   order_update/fill frames into `PictureHtfMarkBroker` for picture rows.
-   Until it is built, post-submit states are not observable in the ledger
-   automatically (the AddOn's rejection-reason field is on the wire and
-   roundtrip-pinned; the consumer is the missing link). Owner decision:
-   build it in this wave or record it as the activation gate.
-2. **Automatic reconciliation sweep** — `PictureHtfPendingByTrader` exists and
-   an ambiguous row BLOCKS re-entry (never blindly resent — pinned), but the
-   sweep that reconciles place_pending rows against NT8 order snapshots is
-   not implemented.
-3. **Partial-fill handling** — not implemented (SIM market entries fill or
-   reject; state honestly).
-4. **Native 4h stored bars** — absent from the store (live cache only). The
-   replay's 4h is a disclosed proxy. Owner decision: accept the proxy or
-   import native 4h history.
-5. **AddOn build/capability receipt** — requires the owner's copy → F5 → full
-   NT8 restart; until then the boot line reads `addon=not proven`.
-6. **Merged-HEAD/release checks + attended cutover** — pending per the held
-   order; runbook: `docs/superpowers/runbooks/2026-09-20-picture-htf-activation.md`.
-7. **Natural-market opportunity (category D)** — none; pending.
+Each activation-relevant gap carries exactly one status:
+**missing** = no implementation · **implemented, untested** = code exists,
+evidence is unit/loopback only · **owner/runtime** = code and local evidence
+complete; only the owner (or the live NT8 runtime) can produce the remaining
+evidence.
+
+| # | Gap | Status | Evidence | Remaining owner/runtime step |
+|---|---|---|---|---|
+| 1 | Broker-state consumer (received entry / rejection / fill / protective-order events update the correct opportunity) | **implemented, pinned (unit)** | `trader/picture_htf_broker.go` consumer, wired once per trader via `ensurePictureHtfBrokerConsumer`; pins: TestPictureHtfConsumeOrderUpdateEntryLifecycle (forward-only, fill + actual-fill R:R), RejectionCarriesReason, ConsumeProtectiveLegsUpdateProtectionNotFill, Isolation — all green (`/tmp/gofinal7.log`, exit 0, 35/35) | receive a real order_update set on NT8 SIM (owner's copy → F5 → restart) |
+| 2 | Reconciliation sweep (pending/ambiguous submissions recover across disconnects/restarts without another entry) | **implemented, pinned (unit)** | sweep runs every cycle (`pictureHtfReconcilePending`); pins with a synthetic broker book: TestPictureHtfReconcileRecoversFilledAcrossRestart (filled recovered, re-entry blocked), RejectedAndAbsent (rejected closes; ABSENT stays place_pending — never resent) — green | live NT8 snapshot book behind `OrderSnapshotLookup` (owner step above) |
+| 3 | Partial fills (filled quantity receives protection through the actual AddOn path) | **implemented in the AddOn, untested live** | C# audit [A]: VLTraderTCPClient.cs:1445 `SubmitBracketOnEntryFill(signalId, e.Filled, e.AverageFillPrice)`; :2089+ refuses filledQty ≤ 0, sizes SL/TP legs by filledQty, `AmendBracketQuantity` on later fills — protective orders follow the FILLED quantity | NT8 partial-fill scenario (limit-touch) — owner/runtime |
+| 4 | Native 4h | **live input available; historical storage absent (replay limitation, NOT a live blocker)** | live: `defaultAutoBarsTimeframes` (`provider/ninjatrader/tcp_server.go:518`) includes `"4h"`, so the live native 4H subscription exists [B]; storage: no native-4h rows in the DB, replay uses the disclosed ETH-grid proxy | none for activation; importing native 4h history is a replay-quality choice |
+| 5 | AddOn build/capability receipt | **owner/runtime** | wire pins green both sides; VL_BUILD_ID="2026-09-20-p1" floor on both ends | owner: copy → F5 → full NT8 restart → boot line receipt |
+| 6 | Merged-HEAD/release checks + attended cutover | **owner/runtime (held)** | runbook: `docs/superpowers/runbooks/2026-09-20-picture-htf-activation.md`; merged-HEAD full suite required by canon before release | owner present for NT8 steps; owner's explicit "go" |
+| 7 | Natural-market opportunity (category D) | **pending, separate** | none occurred; categories A–C pinned; the decision body itself is proven by the replay body (Sept-17 tape) | a live category-D opportunity when it occurs |
+
+Cutover remains **HELD** — no activation claim is made; the honest terminal
+state of this wave is *implemented, verified to the limit of what the loopback
+can prove, awaiting owner/runtime evidence and CTO review*.
 
 ## 8. Rule defaults
 
