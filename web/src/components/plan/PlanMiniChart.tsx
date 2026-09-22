@@ -329,7 +329,7 @@ export function PlanMiniChart({
       try {
         const url = `/api/klines?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=5000&exchange=${encodeURIComponent(exchange)}`
         const res = await httpClient.request<unknown>(url, { silent: true })
-        if (!stop || !res.success || !seriesRef.current) return
+        if (stop || !res.success || !seriesRef.current) return
         const { rows, roll: envRoll } = unwrapKlinesResponse(res.data)
         if (rows.length === 0) return
         const candles: Candle[] = rows

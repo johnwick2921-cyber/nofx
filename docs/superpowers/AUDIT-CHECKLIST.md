@@ -6076,3 +6076,20 @@ Counter: `death_reread:<trader>:<date>:<session>`.
 **Shape.** Each timeframe rolled at a different hour, so the old contract's stored bars stop early on every tf (1m 10:33 · 3m 10:36 · 5m 09:55 · 15m 08:15 · 30m 06:00 · 1h 01:00) while the new contract's first live bars start at their own hour — the stitch showed a hole at the seam on every tf. And the stitch shifted nothing, so every tf showed the ~290-point Sep/Dec basis as a price cliff. The 1m rows of the old contract were otherwise complete.
 
 **Rule (probe).** Per contract per tf, compare the last stored bar time on the roll day against the 1m last bar: any tf whose last bar is earlier than the 1m last bar is this class. The display fix derives the prior segment from that contract's 1m rows with the planner's own bucket helper, shifts it by the basis measured at THAT timeframe's own seam (the new contract's first bar of that tf vs the last prior 1m close before it — the pair sits <1 minute apart), marks derived/adjusted on each bar and the envelope, never touches the current contract or volume, and keeps CHART_ROLL_STITCH=legacy byte-identical. Follow-up (2026-09-19, owner: the first boot still showed the cliff): the shipped basis was measured at the TRUE 1m switch, hours after the 15m/30m/1h seam — the Sep/Dec basis decays from ~290 in the morning to ~15 at that switch, so one 15.25 shift left a ~274-280-point cliff; measuring at each tf's own seam makes the seam continuous by construction. Second follow-up (2026-09-19, owner: "5m day 11" hole on every tf): the prior contract's 1m rows have interior gaps where NT8 was off (Sept 11 ~00:29-07:45 CT) while the current contract's imported 1m rows cover them — the derive now fills such gaps with the current rows converted into the prior contract's price space (basis at the nearest minute both contracts share); gaps neither contract has stay gaps, never fabricated.
+
+## Pending class assignment at merge — Inverted async cancellation guard blanks a live chart
+
+**Wave:** `fix/planner-chart-response-20260922`. **Found:** 2026-09-22.
+The roll-chart change `0e7573485` inverted the PlanMiniChart response guard
+from `stop` to `!stop`. Mounted charts start with `stop=false`, so every
+successful response returned before `series.setData`. A disposed request could
+also overwrite a replacement interval while its chart reference remained live.
+The built frontend contained the same inversion. Existing chart tests exercised
+the canvas-less placeholder and did not test the async candle delivery path.
+
+**Probe:** mount the production component with a working chart adapter and a
+nonempty successful response; assert candle delivery and polling. Resolve an
+older interval request after the replacement request and assert it cannot
+overwrite the series. Resolve after unmount and assert no write or further poll.
+**Law:** test both live response delivery and cancellation at the production
+component boundary; placeholder rendering alone does not verify chart loading.
