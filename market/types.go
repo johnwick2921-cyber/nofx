@@ -158,6 +158,13 @@ type Kline struct {
 	// Adjusted (W-ROLL-DAY-CHART, 2026-09-19) marks a prior-contract bar whose
 	// OHLC was shifted by the measured roll basis. ADDITIVE + omitempty.
 	Adjusted bool `json:"adjusted,omitempty"`
+	// Final (W-PICTURE-HTF, 2026-09-20) is the AddOn's proof the bar CLOSED
+	// (final=true on the boundary frame; forming bars carry false). Zero for
+	// every crypto/backfill producer. ADDITIVE + omitempty.
+	Final bool `json:"final,omitempty"`
+	// EmittedAt (W-PICTURE-HTF, 2026-09-20) is the AddOn's emission clock for
+	// this frame (ms, UTC). ADDITIVE + omitempty.
+	EmittedAt int64 `json:"emitted_at,omitempty"`
 }
 
 type KlineResponse []interface{}
