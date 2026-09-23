@@ -489,6 +489,25 @@ type AutoTrader struct {
 	// (plan:version:scenario) spec, again only when the prices change.
 	armAuthoredLast map[string]string
 
+	// W-EXEC-TRUTH W3 D14 — ONE armed pass at a time per trader. The scan
+	// (runCycle → maybeManageArmedOrdersAt), the live-bar event pass and the
+	// strict nudge all take it; the maps above are pass state and are safe
+	// only because every writer holds this lock. Never re-entered.
+	armedPassMu sync.Mutex
+	// zoneArmActive — the ACTIVE plan doc has an enabled market_in_zone arm
+	// (cached by every pass); the live-bar sink kicks the event pass only
+	// while it is true. zoneWatch holds []zoneWatch — the armed policy rows'
+	// zones and last verdicts — so the sink can see a verdict CHANGE.
+	zoneArmActive atomic.Bool
+	zoneWatch     atomic.Value
+	// armedEvent is the per-trader event-pass loop (started in Run, stopped
+	// in Stop); nil while the trader is not running.
+	armedEvent atomic.Pointer[armedEventLoop]
+	// armedEventNowForTest is a TEST SEAM ONLY (nil in production): the event
+	// loop's clock, so a fixture-time plan can be driven through the REAL
+	// goroutine. TestArmedEventClockSeamIsNilInProduction pins it.
+	armedEventNowForTest func() time.Time
+
 	// Plan 4 Stage 4 — NinjaTrader TCP balance tracking (defer-until-balance guard)
 	// For NinjaTrader TCP traders, we track if account_balance frame has arrived yet.
 	// If equity == 0 and this is false, we skip the cycle silently (no phantom HOLD record).
@@ -888,6 +907,7 @@ func (at *AutoTrader) Run() error {
 	at.isRunning = true
 	at.isRunningMutex.Unlock()
 	at.registerPictureHtf()                     // live-bar routing for the two-picture mode
+	at.startArmedEventLoop()                    // W3 D14 — the live-bar armed pass (market_in_zone)
 	at.logInfof("🚦 %s", entryLatchBootLine(at)) // W-EXEC-TRUTH W0 (b) — READ, never asserted
 	if at.exchange == "ninjatrader" {
 		if _, ok := kernel.TFDurationMs(at.primaryTimeframe()); !ok {
@@ -1084,6 +1104,7 @@ func (at *AutoTrader) Stop() {
 	at.isRunningMutex.Unlock()
 
 	unregisterPostExitDispatch(at) // Phase 4: stop routing close events here
+	at.stopArmedEventLoop()        // W3 D14 — no event pass after Stop
 	close(at.stopMonitorCh)        // Notify monitoring goroutine to stop
 	at.monitorWg.Wait()            // Wait for monitoring goroutine to finish
 	logger.Info("⏹ Automatic trading system stopped")

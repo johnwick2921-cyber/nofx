@@ -109,6 +109,33 @@ type ArmedOrderDB struct {
 	// written before this wave.
 	CancelSettledSnapshotID int64 `gorm:"default:0"`
 
+	// W3 market_in_zone (2026-09-23). Every field is ABSENT (NULL / '') on a
+	// legacy or planned_order row — 0 is a real value for slippage and a real
+	// price nowhere, so absence is never written as 0.
+	//   Policy          — the leg's entry policy ('' = legacy).
+	//   ZoneLo/ZoneHi   — the planner's entry_zone rounded INWARD to the tick.
+	//   ZoneProvenance  — resolveEntryGeometryZone's label (never a refusal).
+	//   PlannedEntryPx  — the authored entry (EntryPx is the far bound).
+	//   EvalPrice/EvalBarMs — the price and bar the placement verdict read.
+	//   PlacedAtMs      — when the limit was sent (the rest-cap clock;
+	//                     updated_at is rewritten by every pass).
+	//   FilledAtMs, FillSlippageTicks — the fill receipt (slippage vs the
+	//                     wire limit, the AddOn's formula, side-adjusted + =
+	//                     worse); LastVerdict/LastVerdictMs — the executor's
+	//                     latest verdict for the card ("Waiting"/"Blocked").
+	Policy            string `gorm:"default:''"`
+	ZoneLo            *float64
+	ZoneHi            *float64
+	ZoneProvenance    string `gorm:"default:''"`
+	PlannedEntryPx    *float64
+	EvalPrice         *float64
+	EvalBarMs         *int64
+	PlacedAtMs        *int64
+	FilledAtMs        *int64
+	FillSlippageTicks *float64
+	LastVerdict       string `gorm:"default:''"`
+	LastVerdictMs     *int64
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -128,6 +155,11 @@ const (
 	// (2026-09-06 23:37:02, position 592).
 	StateFilled = "filled"
 )
+
+// ArmPolicyMarketInZone is kernel.EntryPolicyMarketInZone (W3), restated here
+// because store cannot import kernel (kernel imports store). A trader test pins
+// the two equal, so this is a mirror with a check, not a second truth.
+const ArmPolicyMarketInZone = "market_in_zone"
 
 // TableName is the armed_orders table (spec name).
 func (ArmedOrderDB) TableName() string { return "armed_orders" }
@@ -201,6 +233,20 @@ func (s *ArmedOrderStore) Migrate() error {
 			// were accumulated by a process that is gone.
 			{"cancel_attempts_boot", "TEXT NOT NULL DEFAULT ''"},
 			{"cancel_settled_snapshot_id", "INTEGER NOT NULL DEFAULT 0"},
+			// W3 market_in_zone (2026-09-23): NULLable where 0 would be a
+			// fabricated value (absent ≠ 0); '' where the text is a label.
+			{"policy", "TEXT NOT NULL DEFAULT ''"},
+			{"zone_lo", "REAL"},
+			{"zone_hi", "REAL"},
+			{"zone_provenance", "TEXT NOT NULL DEFAULT ''"},
+			{"planned_entry_px", "REAL"},
+			{"eval_price", "REAL"},
+			{"eval_bar_ms", "INTEGER"},
+			{"placed_at_ms", "INTEGER"},
+			{"filled_at_ms", "INTEGER"},
+			{"fill_slippage_ticks", "REAL"},
+			{"last_verdict", "TEXT NOT NULL DEFAULT ''"},
+			{"last_verdict_ms", "INTEGER"},
 		} {
 			var n int64
 			if err := s.db.Raw("SELECT COUNT(*) FROM pragma_table_info('armed_orders') WHERE name = ?", col.name).Scan(&n).Error; err != nil {
@@ -285,6 +331,18 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 			return fmt.Errorf("armed_orders: refusing to rewrite %s/%s — a cancel is in flight for signal %q and is not yet confirmed by the broker's book; the slot is not free",
 				row.PlanID, row.Scenario, existing.SignalID)
 		}
+		// W3 D15 — RE-ARM PINNED. A market_in_zone row that REACHED THE BROKER
+		// (it carries a signal) is terminal for its plan version: filled,
+		// stopped, cancelled by the rest cap or withdrawn for maintenance, the
+		// same version never mints it again. Without this the mint below is the
+		// re-place loop (fill → stop-out → seq+1 → marketable limit → fill…),
+		// and the rest cap becomes a 30-minute re-placement timer. A NEW
+		// version re-arms (the mint runs); a boot-swept row keeps the 0B law.
+		if existing.State != StateArmed && strings.TrimSpace(existing.SignalID) != "" &&
+			existing.Policy == ArmPolicyMarketInZone && existing.Version == row.Version &&
+			!IsBootSweepReason(existing.StateReason) {
+			return nil
+		}
 		// A TERMINAL row that reached the broker keeps its record forever; the
 		// new authorization becomes the NEXT placement rather than erasing it.
 		// A row that never reached the broker has nothing to keep and still
@@ -304,6 +362,9 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 			row.SignalID = ""
 			row.FillPrice = 0
 			row.FillQuantity = 0
+			row.EvalPrice, row.EvalBarMs, row.PlacedAtMs = nil, nil, nil
+			row.FilledAtMs, row.FillSlippageTicks = nil, nil
+			row.LastVerdict, row.LastVerdictMs = "", nil
 			return s.db.Create(row).Error
 		}
 		if existing.State == "armed" {
@@ -326,6 +387,10 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 				"side": row.Side, "entry_px": row.EntryPx, "stop_px": row.StopPx,
 				"target_px": row.TargetPx, "updated_at": row.UpdatedAt,
 				"leg_count": row.LegCount, "kind": row.Kind,
+				// W3 — the entry policy and its zone follow the authorization.
+				// A legacy row writes '' / NULL over '' / NULL.
+				"policy": row.Policy, "zone_lo": row.ZoneLo, "zone_hi": row.ZoneHi,
+				"zone_provenance": row.ZoneProvenance, "planned_entry_px": row.PlannedEntryPx,
 			}).Error
 		}
 		// MANUAL-CANCEL-WINS (2026-08-30 E7 incident): a TERMINAL row is
@@ -367,6 +432,13 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 			"created_at": row.CreatedAt, "updated_at": row.UpdatedAt,
 			// class 33: a re-authorized row belongs to THIS process.
 			"boot_id": ProcessBootID(),
+			// W3 — the new authorization's policy and zone; the receipts of the
+			// placement it replaces are cleared, never inherited (absent ≠ 0).
+			"policy": row.Policy, "zone_lo": row.ZoneLo, "zone_hi": row.ZoneHi,
+			"zone_provenance": row.ZoneProvenance, "planned_entry_px": row.PlannedEntryPx,
+			"eval_price": nil, "eval_bar_ms": nil, "placed_at_ms": nil,
+			"filled_at_ms": nil, "fill_slippage_ticks": nil,
+			"last_verdict": "", "last_verdict_ms": nil,
 		}).Error
 	}
 	if err != gorm.ErrRecordNotFound {
@@ -491,6 +563,53 @@ func (s *ArmedOrderStore) BeginPlacement(id int64, signalID string) error {
 		return fmt.Errorf("armed_orders: row %d is no longer eligible for placement", id)
 	}
 	return nil
+}
+
+// BeginPlacementEval is BeginPlacement for a market_in_zone row (W3): the SAME
+// compare-and-set (armed, no signal yet) plus a non-empty policy, and in the same
+// write the evidence the placement verdict read — the price, the bar it came
+// from — and the send time the rest cap measures from (placed_at_ms; updated_at
+// is rewritten by every pass and is not a placement age). A legacy row can
+// never be stamped by it; BeginPlacement is untouched.
+func (s *ArmedOrderStore) BeginPlacementEval(id int64, signalID string, evalPx float64, evalBarMs, placedAtMs int64) error {
+	if strings.TrimSpace(signalID) == "" {
+		return fmt.Errorf("armed_orders: placement requires signal id")
+	}
+	r := s.db.Model(&ArmedOrderDB{}).Where("id = ? AND state = ? AND (signal_id = '' OR signal_id IS NULL) AND policy <> ''", id, StateArmed).
+		Updates(map[string]any{"signal_id": signalID, "state": StatePlacePending, "state_reason": "",
+			"eval_price": evalPx, "eval_bar_ms": evalBarMs, "placed_at_ms": placedAtMs})
+	if r.Error != nil {
+		return r.Error
+	}
+	if r.RowsAffected != 1 {
+		return fmt.Errorf("armed_orders: row %d is no longer eligible for a zone placement", id)
+	}
+	return nil
+}
+
+// SetFillReceipt records a market_in_zone fill's receipt (W3 D17): when the
+// fill frame was received and the slippage against the wire limit in ticks,
+// side-adjusted (+ = worse). slip nil = not computable (NULL, never 0). Only a
+// policy row is written — a legacy row keeps NULL.
+func (s *ArmedOrderStore) SetFillReceipt(id int64, filledAtMs int64, slip *float64) error {
+	if s == nil || s.db == nil || id == 0 {
+		return nil
+	}
+	return s.db.Model(&ArmedOrderDB{}).Where("id = ? AND policy <> ''", id).
+		Updates(map[string]any{"filled_at_ms": filledAtMs, "fill_slippage_ticks": slip}).Error
+}
+
+// SetLastVerdict records the executor's latest placement verdict for a row
+// (the card's "Waiting for price" / "Blocked: …"). Written only when the
+// verdict CHANGES, so a pass that re-reads the same verdict writes nothing and
+// last_verdict_ms is when the verdict began. Returns whether it wrote.
+func (s *ArmedOrderStore) SetLastVerdict(id int64, verdict string, atMs int64) (bool, error) {
+	if s == nil || s.db == nil || id == 0 {
+		return false, nil
+	}
+	r := s.db.Model(&ArmedOrderDB{}).Where("id = ? AND last_verdict <> ?", id, verdict).
+		Updates(map[string]any{"last_verdict": verdict, "last_verdict_ms": atMs})
+	return r.RowsAffected == 1, r.Error
 }
 
 const PlacementReasonUnavailable = "reason unavailable (NT8 frame omitted reason)"

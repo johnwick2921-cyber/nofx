@@ -2052,7 +2052,10 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			continue
 		}
-		d, perr := kernel.ParsePlanDocCappedWithMinRR(raw, maxLevels, scenarioCap, at.armMinRRFor(nil))
+		// W-EXEC-TRUTH W3 (R4): the resolved entry-policy default is stamped at
+		// parse (before the validator) and the armable hold floor runs beside
+		// the A5 prose check — ONE resolution shared with the shadow A/B replay.
+		d, perr := kernel.ParsePlanDocForAuthoring(raw, maxLevels, scenarioCap, at.plannerAuthoringOpts())
 		if perr != nil {
 			lastErr = perr
 			at.logWarnf("📐 planner attempt %d/3 parse/schema rejected: %v", attempt, perr)
@@ -2183,7 +2186,9 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 		// kernel/arms_bias_coherent.go: a hard reject would have refused
 		// 50/68 longs and 66/103 shorts across 171 stored plans. The write
 		// proceeds; this makes the condition visible instead of silent.
-		if w := kernel.BiasArmWarning(d, kernel.ResolvedConditionStatuses(nil, nil, kernel.ShadowConditionsEnv())); w != "" {
+		// W3: under the market_in_zone policy acceptance/hold/breakout_retest are
+		// armable — the warning follows the resolved default policy.
+		if w := kernel.BiasArmWarningFor(d, kernel.ResolvedConditionStatuses(nil, nil, kernel.ShadowConditionsEnv()), entryPolicyForPrompt(at.dayPlanCfg())); w != "" {
 			at.logWarnf("🧭 bias-coherent arms: %s (WARN — write proceeds; owner ruling 2026-09-04 is warn-first)", w)
 		}
 		// FVG ENTRY MODEL (2026-08-26) — write-time re-verification from stored
@@ -2323,7 +2328,12 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 				kernel.StampAuthoredIdentity(d, facts.IdentityMap)
 			}()
 		}
-		if feas := at.writeTimeFeasibilityVerdicts(d, atr5m, at.config.StrategyConfig, session); len(feas) > 0 {
+		// W-EXEC-TRUTH W3 (c): the market_in_zone zone verdicts join the
+		// feasibility issues — NOT gated by the write_time_feasibility knob
+		// (D5); hinted on attempts < max, the arm disabled on the last.
+		feas := at.writeTimeFeasibilityVerdicts(d, atr5m, at.config.StrategyConfig, session)
+		feas = append(feas, at.writeTimeZoneVerdicts(d, atr5m, at.config.StrategyConfig, session)...)
+		if len(feas) > 0 {
 			if attempt < plannerMaxAttempts {
 				lastErr = fmt.Errorf("%s", writeTimeFeasibilityHint(feas))
 				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
@@ -3064,6 +3074,11 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		// W-WRITE-TIME-FEASIBILITY (2026-09-18): the prompt renders the
 		// arm-disabled-at-write rule only when the knob is ON.
 		WriteFeasibilityOn: at.writeTimeFeasibilityOn(),
+		// W-EXEC-TRUTH W3 (h): the ENTRY POLICY sentence follows the SAME
+		// resolved knobs the parse stamps and judges with (plannerAuthoringOpts).
+		EntryPolicyDefault: entryPolicyForPrompt(at.dayPlanCfg()),
+		ZoneMaxPts:         zoneMaxPtsForPrompt(at.dayPlanCfg()),
+		MinHoldMin:         at.plannerAuthoringOpts().MinHoldMin,
 		DigestChain:        digestChain,
 		Warming:            warming,
 		IndicatorsBlock:    indicatorsBlock,
