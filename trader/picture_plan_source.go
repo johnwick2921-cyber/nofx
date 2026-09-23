@@ -34,10 +34,18 @@ import (
 // (sweepInterruptedPictureHandOffsAt), which finds the record and settles the
 // row "planned" — never "refused" behind a scenario that may still trade.
 
+// pictureHtfSeamDoneStage is the word the evaluator reports after the bound
+// seam returns nil (W5 F1, CTO 1790194833410). The SEAM decides it, so the
+// evaluator never needs to know which seam is bound: this one records the
+// opportunity as a Day Plan scenario and settles its row "planned" — nothing
+// was submitted. (The ambiguous-send branch after an error keeps its own
+// "submitted" words.)
+var pictureHtfSeamDoneStage = store.PictureStagePlanned
+
 func init() {
-	// Go runs a package's init functions in file-name order: picture_htf_send.go
-	// binds the retired market-entry send first, and this binding (a later
-	// file) wins. Builder C deletes that file; this binding stays.
+	// The ONLY production binding of the seam: the retired market-entry send
+	// and its broker method are deleted, and TestPictureHasNoMarketEntryPath
+	// pins that they stay gone.
 	pictureHtfSubmitSeam = pictureHtfHandOffSeam
 	// D17 — the executor's pass head runs the interrupted-hand-off sweep once
 	// per pass through this hook (declared beside the executor, bound here).
