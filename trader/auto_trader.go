@@ -379,8 +379,13 @@ type AutoTrader struct {
 	pauseUntilMs           atomic.Int64 // P2 stop_until producer state (unix ms; 0 = not paused) — see auto_trader_pause.go
 	pauseStoreMu           sync.Mutex   // E7-v2: orders memory-vs-store pause writes (expiry CAS vs concurrent re-pause)
 	lastRollWarnContract   string       // P3 roll gate: dedupes the unresolved-contract WARN per contract-string change
-	lastHalfDaySeedDay     string       // P4 half-days producer: once-per-CME-session-day throttle
-	lastCycleBarSig        string       // P10.4 no-new-data dedup: newest primary-TF bar signature at last cycle
+	// onceMu guards the dedupe-once fields read and written through firstFor
+	// (lastRollWarnContract, lastCalFailClosedAlert, lastT1NoCurrencyWarn,
+	// lastClockWidenLog): W-EXEC-TRUTH W0 (Q15) — the admission gate reaches
+	// them from Picture's live-bar goroutine as well as from runCycle.
+	onceMu             sync.Mutex
+	lastHalfDaySeedDay string // P4 half-days producer: once-per-CME-session-day throttle
+	lastCycleBarSig    string // P10.4 no-new-data dedup: newest primary-TF bar signature at last cycle
 
 	// Two-picture mode (W-PICTURE-HTF): the deterministic evaluator, lazily
 	// built from the strategy knobs and rebuilt when they change.
@@ -1275,4 +1280,17 @@ func (at *AutoTrader) recordBrokerRejection(signalID, brokerReason string) {
 	}
 	at.logWarnf("🚨 received armed entry rejection %s leg %d signal=%s reason=%q", row.Scenario, row.LegIndex+1, signalID, reason)
 	telemetry.IncGateBlock(at.id, "place_rejected_by_broker")
+}
+
+// firstFor reports whether key is new for the dedupe-once field *f and records
+// it, atomically under onceMu (W-EXEC-TRUTH W0 Q15). The caller logs OUTSIDE
+// the lock.
+func (at *AutoTrader) firstFor(f *string, key string) bool {
+	at.onceMu.Lock()
+	defer at.onceMu.Unlock()
+	if *f == key {
+		return false
+	}
+	*f = key
+	return true
 }
