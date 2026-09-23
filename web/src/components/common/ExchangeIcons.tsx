@@ -8,7 +8,6 @@ interface IconProps {
 
 // 本地图标路径映射
 const ICON_PATHS: Record<string, string> = {
-  binance: '/exchange-icons/binance.jpg',
   bybit: '/exchange-icons/bybit.png',
   okx: '/exchange-icons/okx.svg',
   bitget: '/exchange-icons/bitget.svg',
@@ -84,27 +83,25 @@ export const getExchangeIcon = (
   props: IconProps = {}
 ) => {
   const lowerType = exchangeType.toLowerCase()
-  const type = lowerType.includes('binance')
-    ? 'binance'
-    : lowerType.includes('bybit')
-      ? 'bybit'
-      : lowerType.includes('okx')
-        ? 'okx'
-        : lowerType.includes('bitget')
-          ? 'bitget'
-          : lowerType.includes('gate')
-            ? 'gate'
-            : lowerType.includes('kucoin')
-              ? 'kucoin'
-              : lowerType.includes('hyperliquid')
-                ? 'hyperliquid'
-                : lowerType.includes('aster')
-                  ? 'aster'
-                  : lowerType.includes('lighter')
-                    ? 'lighter'
-                    : lowerType.includes('indodax')
-                      ? 'indodax'
-                      : lowerType
+  const type = lowerType.includes('bybit')
+    ? 'bybit'
+    : lowerType.includes('okx')
+      ? 'okx'
+      : lowerType.includes('bitget')
+        ? 'bitget'
+        : lowerType.includes('gate')
+          ? 'gate'
+          : lowerType.includes('kucoin')
+            ? 'kucoin'
+            : lowerType.includes('hyperliquid')
+              ? 'hyperliquid'
+              : lowerType.includes('aster')
+                ? 'aster'
+                : lowerType.includes('lighter')
+                  ? 'lighter'
+                  : lowerType.includes('indodax')
+                    ? 'indodax'
+                    : lowerType
 
   const iconProps = {
     width: props.width || 24,

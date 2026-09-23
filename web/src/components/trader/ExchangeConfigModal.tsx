@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import type { Exchange } from '../../types'
 import { t, type Language } from '../../i18n/translations'
-import { api } from '../../lib/api'
 import { getExchangeIcon } from '../common/ExchangeIcons'
 import {
   TwoStageKeyModal,
@@ -12,16 +11,13 @@ import {
   type WebCryptoCheckStatus,
 } from '../common/WebCryptoEnvironmentCheck'
 import {
-  BookOpen,
   Trash2,
   HelpCircle,
-  ExternalLink,
   UserPlus,
   Key,
   Shield,
   ChevronLeft,
   Check,
-  Copy,
   ArrowRight,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -30,7 +26,6 @@ import { getShortName } from './utils'
 
 // Supported exchange templates
 const SUPPORTED_EXCHANGE_TEMPLATES = [
-  { exchange_type: 'binance', name: 'Binance Futures', type: 'cex' as const },
   { exchange_type: 'bybit', name: 'Bybit Futures', type: 'cex' as const },
   { exchange_type: 'okx', name: 'OKX Futures', type: 'cex' as const },
   { exchange_type: 'bitget', name: 'Bitget Futures', type: 'cex' as const },
@@ -199,16 +194,8 @@ export function ExchangeConfigModal({
   const [secretKey, setSecretKey] = useState('')
   const [passphrase, setPassphrase] = useState('')
   const [testnet, setTestnet] = useState(false)
-  const [showGuide, setShowGuide] = useState(false)
-  const [serverIP, setServerIP] = useState<{
-    public_ip: string
-    message: string
-  } | null>(null)
-  const [loadingIP, setLoadingIP] = useState(false)
-  const [copiedIP, setCopiedIP] = useState(false)
   const [webCryptoStatus, setWebCryptoStatus] =
     useState<WebCryptoCheckStatus>('idle')
-  const [showBinanceGuide, setShowBinanceGuide] = useState(false)
 
   // Aster fields
   const [asterUser, setAsterUser] = useState('')
@@ -255,10 +242,6 @@ export function ExchangeConfigModal({
     string,
     { url: string; hasReferral?: boolean }
   > = {
-    binance: {
-      url: 'https://www.binance.com/join?ref=NOFXENG',
-      hasReferral: true,
-    },
     okx: { url: 'https://www.okx.com/join/1865360', hasReferral: true },
     bybit: { url: 'https://partner.bybit.com/b/83856', hasReferral: true },
     bitget: {
@@ -302,43 +285,6 @@ export function ExchangeConfigModal({
       setLighterApiKeyIndex(selectedExchange.lighterApiKeyIndex || 0)
     }
   }, [editingExchangeId, selectedExchange])
-
-  // Load server IP for Binance
-  useEffect(() => {
-    if (currentExchangeType === 'binance' && !serverIP) {
-      setLoadingIP(true)
-      api
-        .getServerIP()
-        .then((data) => setServerIP(data))
-        .catch((err) => console.error('Failed to load server IP:', err))
-        .finally(() => setLoadingIP(false))
-    }
-  }, [currentExchangeType, serverIP])
-
-  const handleCopyIP = async (ip: string) => {
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(ip)
-        setCopiedIP(true)
-        setTimeout(() => setCopiedIP(false), 2000)
-        toast.success(t('ipCopied', language))
-      } else {
-        const textArea = document.createElement('textarea')
-        textArea.value = ip
-        textArea.style.position = 'fixed'
-        textArea.style.left = '-999999px'
-        document.body.appendChild(textArea)
-        textArea.select()
-        document.execCommand('copy')
-        document.body.removeChild(textArea)
-        setCopiedIP(true)
-        setTimeout(() => setCopiedIP(false), 2000)
-        toast.success(t('ipCopied', language))
-      }
-    } catch {
-      toast.error(t('copyIPFailed', language))
-    }
-  }
 
   const secureInputContextLabel =
     secureInputTarget === 'aster'
@@ -399,7 +345,6 @@ export function ExchangeConfigModal({
     setIsSaving(true)
     try {
       if (
-        currentExchangeType === 'binance' ||
         currentExchangeType === 'bybit' ||
         currentExchangeType === 'indodax'
       ) {
@@ -559,20 +504,6 @@ export function ExchangeConfigModal({
             </h3>
           </div>
           <div className="flex items-center gap-2">
-            {currentExchangeType === 'binance' && currentStep === 1 && (
-              <button
-                type="button"
-                onClick={() => setShowGuide(true)}
-                className="px-3 py-2 rounded-lg text-sm font-semibold transition-all hover:scale-105 flex items-center gap-2"
-                style={{
-                  background: 'rgba(240, 185, 11, 0.1)',
-                  color: '#F0B90B',
-                }}
-              >
-                <BookOpen className="w-4 h-4" />
-                {t('viewGuide', language)}
-              </button>
-            )}
             {editingExchangeId && (
               <button
                 type="button"
@@ -810,61 +741,13 @@ export function ExchangeConfigModal({
               </div>
 
               {/* CEX Fields */}
-              {(currentExchangeType === 'binance' ||
-                currentExchangeType === 'bybit' ||
+              {(currentExchangeType === 'bybit' ||
                 currentExchangeType === 'okx' ||
                 currentExchangeType === 'bitget' ||
                 currentExchangeType === 'gate' ||
                 currentExchangeType === 'kucoin' ||
                 currentExchangeType === 'indodax') && (
                 <>
-                  {currentExchangeType === 'binance' && (
-                    <div
-                      className="p-4 rounded-xl cursor-pointer transition-colors"
-                      style={{
-                        background: '#1a3a52',
-                        border: '1px solid #2b5278',
-                      }}
-                      onClick={() => setShowBinanceGuide(!showBinanceGuide)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span style={{ color: '#58a6ff' }}>ℹ️</span>
-                          <span
-                            className="text-sm font-medium"
-                            style={{ color: '#EAECEF' }}
-                          >
-                            {t('exchangeConfig.useBinanceFuturesApi', language)}
-                          </span>
-                        </div>
-                        <span style={{ color: '#8b949e' }}>
-                          {showBinanceGuide ? '▲' : '▼'}
-                        </span>
-                      </div>
-                      {showBinanceGuide && (
-                        <div
-                          className="mt-3 pt-3 text-sm"
-                          style={{
-                            borderTop: '1px solid #2b5278',
-                            color: '#c9d1d9',
-                          }}
-                        >
-                          <a
-                            href="https://www.binance.com/zh-CN/support/faq/how-to-create-api-keys-on-binance-360002502072"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 hover:underline"
-                            style={{ color: '#58a6ff' }}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {t('exchangeConfig.viewTutorial', language)}{' '}
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
                   {editingExchangeId && selectedExchange && (
                     <div
                       className="p-3 rounded-xl text-xs"
@@ -975,59 +858,6 @@ export function ExchangeConfigModal({
                     </div>
                   )}
 
-                  {currentExchangeType === 'binance' && (
-                    <div
-                      className="p-4 rounded-xl"
-                      style={{
-                        background: 'rgba(240, 185, 11, 0.1)',
-                        border: '1px solid rgba(240, 185, 11, 0.2)',
-                      }}
-                    >
-                      <div
-                        className="text-sm font-semibold mb-2"
-                        style={{ color: '#F0B90B' }}
-                      >
-                        {t('whitelistIP', language)}
-                      </div>
-                      <div
-                        className="text-xs mb-3"
-                        style={{ color: '#848E9C' }}
-                      >
-                        {t('whitelistIPDesc', language)}
-                      </div>
-                      {loadingIP ? (
-                        <div className="text-xs" style={{ color: '#848E9C' }}>
-                          {t('loadingServerIP', language)}
-                        </div>
-                      ) : serverIP?.public_ip ? (
-                        <div
-                          className="flex items-center gap-2 p-3 rounded-lg"
-                          style={{ background: '#0B0E11' }}
-                        >
-                          <code
-                            className="flex-1 text-sm font-mono"
-                            style={{ color: '#F0B90B' }}
-                          >
-                            {serverIP.public_ip}
-                          </code>
-                          <button
-                            type="button"
-                            onClick={() => handleCopyIP(serverIP.public_ip)}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:scale-105"
-                            style={{
-                              background: 'rgba(240, 185, 11, 0.2)',
-                              color: '#F0B90B',
-                            }}
-                          >
-                            <Copy className="w-3 h-3" />
-                            {copiedIP
-                              ? t('ipCopied', language)
-                              : t('copyIP', language)}
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-                  )}
                 </>
               )}
 
@@ -1480,46 +1310,28 @@ export function ExchangeConfigModal({
               </div>
             </form>
           )}
+
+          {/* A stored row whose exchange type is no longer offered (a removed
+              broker, or no type at all). Named, never an empty modal: the
+              backend refuses to load it, and the header delete button above
+              still removes it. The type is READ from the row — no literal. */}
+          {editingExchangeId && selectedExchange && !selectedTemplate && (
+            <div
+              data-testid="exchange-unsupported-notice"
+              className="p-4 rounded-xl text-sm"
+              style={{
+                background: 'rgba(246, 70, 93, 0.08)',
+                border: '1px solid rgba(246, 70, 93, 0.3)',
+                color: '#EAECEF',
+              }}
+            >
+              {t('exchangeConfig.unsupportedExchangeType', language, {
+                type: selectedExchange.exchange_type || 'n/a',
+              })}
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Binance Guide Modal */}
-      {showGuide && (
-        <div
-          className="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4"
-          onClick={() => setShowGuide(false)}
-        >
-          <div
-            className="rounded-2xl p-6 w-full max-w-4xl"
-            style={{ background: '#1E2329' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3
-                className="text-xl font-bold flex items-center gap-2"
-                style={{ color: '#EAECEF' }}
-              >
-                <BookOpen className="w-6 h-6" style={{ color: '#F0B90B' }} />
-                {t('binanceSetupGuide', language)}
-              </h3>
-              <button
-                onClick={() => setShowGuide(false)}
-                className="px-4 py-2 rounded-lg text-sm font-semibold"
-                style={{ background: '#2B3139', color: '#848E9C' }}
-              >
-                {t('closeGuide', language)}
-              </button>
-            </div>
-            <div className="overflow-y-auto max-h-[80vh]">
-              <img
-                src="/images/guide.png"
-                alt={t('binanceSetupGuide', language)}
-                className="w-full h-auto rounded-lg"
-              />
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Secure Input Modal */}
       <TwoStageKeyModal

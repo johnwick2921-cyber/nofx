@@ -134,11 +134,6 @@ export const faqCategories: FAQCategory[] = [
         answerKey: 'faqConfigureExchangesAnswer',
       },
       {
-        id: 'binance-api-setup',
-        questionKey: 'faqBinanceAPISetup',
-        answerKey: 'faqBinanceAPISetupAnswer',
-      },
-      {
         id: 'hyperliquid-setup',
         questionKey: 'faqHyperliquidSetup',
         answerKey: 'faqHyperliquidSetupAnswer',
@@ -235,11 +230,6 @@ export const faqCategories: FAQCategory[] = [
         id: 'ai-api-timeout',
         questionKey: 'faqAIAPITimeout',
         answerKey: 'faqAIAPITimeoutAnswer',
-      },
-      {
-        id: 'binance-position-mode',
-        questionKey: 'faqBinancePositionMode',
-        answerKey: 'faqBinancePositionModeAnswer',
       },
       {
         id: 'balance-shows-zero',

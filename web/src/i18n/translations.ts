@@ -450,16 +450,6 @@ export const translations = {
     exchangeConfigWarning3:
       '• After deleting configuration, related traders will not be able to trade',
     edit: 'Edit',
-    viewGuide: 'View Guide',
-    binanceSetupGuide: 'Binance Setup Guide',
-    closeGuide: 'Close',
-    whitelistIP: 'Whitelist IP',
-    whitelistIPDesc: 'Binance requires adding server IP to API whitelist',
-    serverIPAddresses: 'Server IP Addresses',
-    copyIP: 'Copy',
-    ipCopied: 'IP Copied',
-    copyIPFailed: 'Failed to copy IP address. Please copy manually',
-    loadingServerIP: 'Loading server IP...',
 
     // Error Messages
     createTraderFailed: 'Failed to create trader',
@@ -559,10 +549,6 @@ export const translations = {
     githubStarsInDays: '2.5K+ GitHub Stars in 3 days',
     heroTitle1: 'Read the Market.',
     heroTitle2: 'Write the Trade.',
-    heroDescription:
-      PERSONA_NAME +
-      ' is the future standard for AI trading — an open, community-driven agentic trading OS. Supporting Binance, Aster DEX and other exchanges, self-hosted, multi-agent competition, let AI automatically make decisions, execute and optimize trades for you.',
-    poweredBy: 'Powered by Aster DEX and Binance.',
 
     // Landing Page CTA
     readyToDefine: 'Ready to define the future of AI trading?',
@@ -630,8 +616,6 @@ export const translations = {
     step1Desc:
       'git clone https://github.com/NoFxAiOS/nofx and switch to dev branch to test new features.',
     step2Title: 'Configure Environment',
-    step2Desc:
-      'Frontend setup for exchange APIs (like Binance, Hyperliquid), AI models and custom prompts.',
     step3Title: 'Deploy & Run',
     step3Desc:
       'One-click Docker deployment, start AI agents. Note: High-risk market, only test with money you can afford to lose.',
@@ -715,7 +699,7 @@ export const translations = {
 
     faqSupportedExchanges: 'Which exchanges are supported?',
     faqSupportedExchangesAnswer:
-      'CEX (Centralized): Binance Futures, Bybit, OKX, Bitget. DEX (Decentralized): Hyperliquid, Aster DEX, Lighter. Each exchange has different features - Binance has the most liquidity, Hyperliquid is fully on-chain with no KYC required. Check the documentation for setup guides for each exchange.',
+      'CEX (Centralized): Bybit, OKX, Bitget. DEX (Decentralized): Hyperliquid, Aster DEX, Lighter. Each exchange has different features - Hyperliquid is fully on-chain with no KYC required. Check the documentation for setup guides for each exchange.',
 
     faqSupportedAIModels: 'Which AI models are supported?',
     faqSupportedAIModelsAnswer:
@@ -758,11 +742,7 @@ export const translations = {
 
     faqConfigureExchanges: 'How do I configure exchange connections?',
     faqConfigureExchangesAnswer:
-      'Go to Config page → Exchanges section. Click "Add Exchange", select exchange type, and enter credentials. For CEX (Binance/Bybit/OKX): Need API Key + Secret Key (+ Passphrase for OKX). For DEX (Hyperliquid/Aster/Lighter): Need wallet address and private key. Always enable only necessary permissions (Futures Trading) and consider IP whitelisting.',
-
-    faqBinanceAPISetup: 'How do I set up Binance API correctly?',
-    faqBinanceAPISetupAnswer:
-      'Important steps: 1) Create API key in Binance → API Management; 2) Enable ONLY "Enable Futures" permission; 3) Consider adding IP whitelist for security; 4) CRITICAL: Switch to Hedge Mode (双向持仓) in Futures settings → Preferences → Position Mode; 5) Ensure funds are in Futures wallet (not Spot). Common error -4061 means you need Hedge Mode.',
+      'Go to Config page → Exchanges section. Click "Add Exchange", select exchange type, and enter credentials. For CEX (Bybit/OKX/Bitget): Need API Key + Secret Key (+ Passphrase for OKX). For DEX (Hyperliquid/Aster/Lighter): Need wallet address and private key. Always enable only necessary permissions (Futures Trading) and consider IP whitelisting.',
 
     faqHyperliquidSetup: 'How do I set up Hyperliquid?',
     faqHyperliquidSetupAnswer:
@@ -793,11 +773,11 @@ export const translations = {
 
     faqOnlyShortPositions: 'Why is the AI only opening short positions?',
     faqOnlyShortPositionsAnswer:
-      'This is usually due to Binance Position Mode. Solution: Switch to Hedge Mode (双向持仓) in Binance Futures → Preferences → Position Mode. You must close all positions first. After switching, the AI can open both long and short positions independently.',
+      "This is usually due to the exchange account's Position Mode. Solution: Switch to Hedge Mode in your exchange's Futures settings → Preferences → Position Mode. You must close all positions first. After switching, the AI can open both long and short positions independently.",
 
     faqLeverageSettings: 'How do leverage settings work?',
     faqLeverageSettingsAnswer:
-      'Leverage is set in Strategy → Risk Controls: BTC/ETH leverage (typically 5-20x) and Altcoin leverage (typically 3-10x). Higher leverage = higher risk and potential returns. Subaccounts may have restrictions (e.g., Binance subaccounts limited to 5x). The AI respects these limits when placing orders.',
+      'Leverage is set in Strategy → Risk Controls: BTC/ETH leverage (typically 5-20x) and Altcoin leverage (typically 3-10x). Higher leverage = higher risk and potential returns. Subaccounts may have restrictions (e.g., some exchanges limit subaccounts to 5x). The AI respects these limits when placing orders.',
 
     faqStopLossTakeProfit:
       'Does ' + PERSONA_NAME + ' support stop-loss and take-profit?',
@@ -835,15 +815,9 @@ export const translations = {
     faqAIAPITimeoutAnswer:
       'Check: 1) API key is valid (test with curl); 2) Network can reach API endpoint (ping/curl); 3) API provider is not down (check status page); 4) VPN/firewall not blocking; 5) Rate limits not exceeded. Default timeout is 120 seconds.',
 
-    faqBinancePositionMode: 'Binance error code -4061 (Position Mode)',
-    faqBinancePositionModeAnswer:
-      "Error: \"Order's position side does not match user's setting\". You're in One-way Mode but " +
-      PERSONA_NAME +
-      ' requires Hedge Mode. Fix: 1) Close ALL positions first; 2) Binance Futures → Settings (gear icon) → Preferences → Position Mode → Switch to "Hedge Mode" (双向持仓); 3) Restart your trader.',
-
     faqBalanceShowsZero: 'Account balance shows 0',
     faqBalanceShowsZeroAnswer:
-      'Funds are likely in Spot wallet, not Futures wallet. Solution: 1) In Binance, go to Wallet → Futures → Transfer; 2) Transfer USDT from Spot to Futures; 3) Refresh ' +
+      'Funds are likely in Spot wallet, not Futures wallet. Solution: 1) In your exchange, go to Wallet → Futures → Transfer; 2) Transfer USDT from Spot to Futures; 3) Refresh ' +
       PERSONA_NAME +
       ' dashboard. Also check: funds not locked in savings/staking products.',
 
@@ -1319,8 +1293,7 @@ export const translations = {
       privateKeyNote:
         'Private key is only used locally for signing. Never uploaded. No ETH or gas needed.',
       howToFundUsdc: 'How to Fund USDC',
-      fundStep1:
-        'Withdraw USDC from exchange (Binance/OKX/Coinbase) to your wallet',
+      fundStep1: 'Withdraw USDC from exchange (OKX/Coinbase) to your wallet',
       fundStep2: 'Select Base network (very low fees)',
       fundStep3: '$5-10 USDC lasts a long time (~$0.003/call)',
       back: 'Back',
@@ -1355,8 +1328,8 @@ export const translations = {
       accountName: 'Account Name',
       accountNamePlaceholder: 'e.g., Main Account',
       pleaseEnterAccountName: 'Please enter account name',
-      useBinanceFuturesApi: 'Use "Spot & Futures Trading" API',
-      viewTutorial: 'View Tutorial',
+      unsupportedExchangeType:
+        'Exchange type "{type}" is no longer supported. This account cannot be loaded or traded; delete it with the trash button above.',
       lighterApiKeySetup: 'Lighter API Key Setup',
       lighterApiKeyDesc: 'Generate an API Key on Lighter website',
       apiKeyIndex: 'API Key Index',
@@ -1861,16 +1834,6 @@ export const translations = {
     exchangeConfigWarning2: '• 不要授予提现权限，确保资金安全',
     exchangeConfigWarning3: '• 删除配置后，相关交易员将无法正常交易',
     edit: '编辑',
-    viewGuide: '查看教程',
-    binanceSetupGuide: '币安配置教程',
-    closeGuide: '关闭',
-    whitelistIP: '白名单IP',
-    whitelistIPDesc: '币安交易所需要填写白名单IP',
-    serverIPAddresses: '服务器IP地址',
-    copyIP: '复制',
-    ipCopied: 'IP已复制',
-    copyIPFailed: 'IP地址复制失败，请手动复制',
-    loadingServerIP: '正在加载服务器IP...',
 
     // Error Messages
     createTraderFailed: '创建交易员失败',
@@ -1965,10 +1928,6 @@ export const translations = {
     githubStarsInDays: '3 天内 2.5K+ GitHub Stars',
     heroTitle1: 'Read the Market.',
     heroTitle2: 'Write the Trade.',
-    heroDescription:
-      PERSONA_NAME +
-      ' 是 AI 交易的未来标准——一个开放、社区驱动的代理式交易操作系统。支持 Binance、Aster DEX 等交易所，自托管、多代理竞争，让 AI 为你自动决策、执行和优化交易。',
-    poweredBy: '由 Aster DEX 和 Binance 提供支持。',
 
     // Landing Page CTA
     readyToDefine: '准备好定义 AI 交易的未来吗？',
@@ -2027,8 +1986,6 @@ export const translations = {
     step1Desc:
       'git clone https://github.com/NoFxAiOS/nofx 并切换到 dev 分支测试新功能。',
     step2Title: '配置环境',
-    step2Desc:
-      '前端设置交易所 API（如 Binance、Hyperliquid）、AI 模型和自定义提示词。',
     step3Title: '部署与运行',
     step3Desc:
       '一键 Docker 部署，启动 AI 代理。注意：高风险市场，仅用闲钱测试。',
@@ -2108,7 +2065,7 @@ export const translations = {
 
     faqSupportedExchanges: '支持哪些交易所？',
     faqSupportedExchangesAnswer:
-      'CEX（中心化）：币安合约、Bybit、OKX、Bitget。DEX（去中心化）：Hyperliquid、Aster DEX、Lighter。每个交易所有不同特点 - 币安流动性最好，Hyperliquid 完全链上无需 KYC。查看文档获取各交易所的设置指南。',
+      'CEX（中心化）：Bybit、OKX、Bitget。DEX（去中心化）：Hyperliquid、Aster DEX、Lighter。每个交易所有不同特点 - Hyperliquid 完全链上无需 KYC。查看文档获取各交易所的设置指南。',
 
     faqSupportedAIModels: '支持哪些 AI 模型？',
     faqSupportedAIModelsAnswer:
@@ -2151,11 +2108,7 @@ export const translations = {
 
     faqConfigureExchanges: '如何配置交易所连接？',
     faqConfigureExchangesAnswer:
-      '进入配置页面 → 交易所部分。点击"添加交易所"，选择类型并输入凭证。CEX（币安/Bybit/OKX）：需要 API Key + Secret Key（OKX 还需要 Passphrase）。DEX（Hyperliquid/Aster/Lighter）：需要钱包地址和私钥。务必只启用必要权限（合约交易）并考虑 IP 白名单。',
-
-    faqBinanceAPISetup: '如何正确设置币安 API？',
-    faqBinanceAPISetupAnswer:
-      '重要步骤：1）在币安 → API 管理中创建 API 密钥；2）仅启用"启用合约"权限；3）考虑添加 IP 白名单增强安全；4）关键：在合约设置 → 偏好设置 → 持仓模式中切换为双向持仓模式；5）确保资金在合约钱包（不是现货）。-4061 错误表示需要双向持仓模式。',
+      '进入配置页面 → 交易所部分。点击"添加交易所"，选择类型并输入凭证。CEX（Bybit/OKX/Bitget）：需要 API Key + Secret Key（OKX 还需要 Passphrase）。DEX（Hyperliquid/Aster/Lighter）：需要钱包地址和私钥。务必只启用必要权限（合约交易）并考虑 IP 白名单。',
 
     faqHyperliquidSetup: '如何设置 Hyperliquid？',
     faqHyperliquidSetupAnswer:
@@ -2186,11 +2139,11 @@ export const translations = {
 
     faqOnlyShortPositions: '为什么 AI 只开空单？',
     faqOnlyShortPositionsAnswer:
-      '通常是因为币安持仓模式问题。解决方案：在币安合约 → 偏好设置 → 持仓模式中切换为双向持仓。必须先平掉所有持仓。切换后，AI 可以独立开多单和空单。',
+      '通常是因为交易所账户的持仓模式问题。解决方案：在交易所合约设置 → 偏好设置 → 持仓模式中切换为双向持仓。必须先平掉所有持仓。切换后，AI 可以独立开多单和空单。',
 
     faqLeverageSettings: '杠杆设置如何工作？',
     faqLeverageSettingsAnswer:
-      '杠杆在策略 → 风控中设置：BTC/ETH 杠杆（通常 5-20 倍）和山寨币杠杆（通常 3-10 倍）。更高杠杆 = 更高风险和潜在收益。子账户可能有限制（如币安子账户限制 5 倍）。AI 下单时会遵守这些限制。',
+      '杠杆在策略 → 风控中设置：BTC/ETH 杠杆（通常 5-20 倍）和山寨币杠杆（通常 3-10 倍）。更高杠杆 = 更高风险和潜在收益。子账户可能有限制（如部分交易所子账户限制 5 倍）。AI 下单时会遵守这些限制。',
 
     faqStopLossTakeProfit: PERSONA_NAME + ' 支持止损止盈吗？',
     faqStopLossTakeProfitAnswer:
@@ -2227,15 +2180,9 @@ export const translations = {
     faqAIAPITimeoutAnswer:
       '检查：1）API 密钥有效（用 curl 测试）；2）网络能访问 API 端点（ping/curl）；3）API 提供商未宕机（查看状态页）；4）VPN/防火墙未阻止；5）未超过速率限制。默认超时 120 秒。',
 
-    faqBinancePositionMode: '币安错误代码 -4061（持仓模式）',
-    faqBinancePositionModeAnswer:
-      '错误："Order\'s position side does not match user\'s setting"。您处于单向持仓模式，但 ' +
-      PERSONA_NAME +
-      ' 需要双向持仓模式。修复：1）先平掉所有持仓；2）币安合约 → 设置（齿轮图标）→ 偏好设置 → 持仓模式 → 切换为"双向持仓"；3）重启交易员。',
-
     faqBalanceShowsZero: '账户余额显示 0',
     faqBalanceShowsZeroAnswer:
-      '资金可能在现货钱包而非合约钱包。解决方案：1）在币安进入钱包 → 合约 → 划转；2）将 USDT 从现货划转到合约；3）刷新 ' +
+      '资金可能在现货钱包而非合约钱包。解决方案：1）在交易所进入钱包 → 合约 → 划转；2）将 USDT 从现货划转到合约；3）刷新 ' +
       PERSONA_NAME +
       ' 仪表板。也检查：资金未被理财/质押产品锁定。',
 
@@ -2692,7 +2639,7 @@ export const translations = {
       privateKeyNote:
         '私钥仅在本地签名使用，不会上传或发送交易。无需 ETH，无 Gas 费用。',
       howToFundUsdc: '如何充值 USDC',
-      fundStep1: '从交易所（Binance / OKX / Coinbase）提 USDC 到你的钱包地址',
+      fundStep1: '从交易所（OKX / Coinbase）提 USDC 到你的钱包地址',
       fundStep2: '选择 Base 网络（手续费极低）',
       fundStep3: '充入 $5-10 USDC 即可使用很长时间（约 $0.003/次调用）',
       back: '返回',
@@ -2726,8 +2673,8 @@ export const translations = {
       accountName: '账户名称',
       accountNamePlaceholder: '例如：主账户、套利账户',
       pleaseEnterAccountName: '请输入账户名称',
-      useBinanceFuturesApi: '币安用户必读：使用「现货与合约交易」API',
-      viewTutorial: '查看官方教程',
+      unsupportedExchangeType:
+        '交易所类型“{type}”已不再支持。该账户无法加载或交易；请使用上方的删除按钮将其删除。',
       lighterApiKeySetup: 'Lighter API Key 配置',
       lighterApiKeyDesc: '请在 Lighter 网站生成 API Key',
       apiKeyIndex: 'API Key 索引',
@@ -3251,16 +3198,6 @@ export const translations = {
     exchangeConfigWarning3:
       '• Setelah menghapus konfigurasi, trader terkait tidak akan dapat trading',
     edit: 'Edit',
-    viewGuide: 'Lihat Panduan',
-    binanceSetupGuide: 'Panduan Pengaturan Binance',
-    closeGuide: 'Tutup',
-    whitelistIP: 'Whitelist IP',
-    whitelistIPDesc: 'Binance memerlukan penambahan IP server ke whitelist API',
-    serverIPAddresses: 'Alamat IP Server',
-    copyIP: 'Salin',
-    ipCopied: 'IP Disalin',
-    copyIPFailed: 'Gagal menyalin alamat IP. Silakan salin secara manual',
-    loadingServerIP: 'Memuat IP server...',
 
     // Error Messages
     createTraderFailed: 'Gagal membuat trader',
@@ -3357,10 +3294,6 @@ export const translations = {
     githubStarsInDays: '2.5K+ GitHub Stars dalam 3 hari',
     heroTitle1: 'Read the Market.',
     heroTitle2: 'Write the Trade.',
-    heroDescription:
-      PERSONA_NAME +
-      ' adalah standar masa depan untuk trading AI — OS trading agensi yang terbuka dan didorong komunitas. Mendukung Binance, Aster DEX dan bursa lainnya, self-hosted, kompetisi multi-agen, biarkan AI secara otomatis membuat keputusan, mengeksekusi dan mengoptimalkan trading untuk Anda.',
-    poweredBy: 'Didukung oleh Aster DEX dan Binance.',
     readyToDefine: 'Siap mendefinisikan masa depan trading AI?',
     startWithCrypto:
       'Dimulai dari pasar kripto, berkembang ke TradFi. ' +
@@ -3419,8 +3352,6 @@ export const translations = {
     step1Desc:
       'git clone https://github.com/NoFxAiOS/nofx dan beralih ke branch dev untuk menguji fitur baru.',
     step2Title: 'Konfigurasi Lingkungan',
-    step2Desc:
-      'Setup frontend untuk API bursa (seperti Binance, Hyperliquid), model AI dan prompt kustom.',
     step3Title: 'Deploy & Jalankan',
     step3Desc:
       'Deployment Docker satu klik, mulai agen AI. Catatan: Pasar berisiko tinggi, hanya uji dengan uang yang bisa Anda rugi.',
@@ -3492,7 +3423,7 @@ export const translations = {
       ' dirancang untuk tujuan edukasi dan riset. Kami sangat menyarankan: mulai dengan jumlah kecil (10-50 USDT), jangan investasi melebihi yang sanggup Anda rugi, uji sebelum trading nyata.',
     faqSupportedExchanges: 'Bursa mana yang didukung?',
     faqSupportedExchangesAnswer:
-      'CEX (Tersentralisasi): Binance Futures, Bybit, OKX, Bitget. DEX (Terdesentralisasi): Hyperliquid, Aster DEX, Lighter. Setiap bursa memiliki fitur berbeda - Binance memiliki likuiditas terbesar, Hyperliquid sepenuhnya on-chain tanpa KYC.',
+      'CEX (Tersentralisasi): Bybit, OKX, Bitget. DEX (Terdesentralisasi): Hyperliquid, Aster DEX, Lighter. Setiap bursa memiliki fitur berbeda - Hyperliquid sepenuhnya on-chain tanpa KYC.',
     faqSupportedAIModels: 'Model AI mana yang didukung?',
     faqSupportedAIModelsAnswer:
       PERSONA_NAME +
@@ -3525,9 +3456,6 @@ export const translations = {
     faqConfigureExchanges: 'Bagaimana cara mengonfigurasi koneksi bursa?',
     faqConfigureExchangesAnswer:
       'Buka halaman Konfigurasi → bagian Bursa. Klik "Tambah Bursa", pilih jenis, dan masukkan kredensial. Aktifkan hanya izin yang diperlukan (Trading Futures).',
-    faqBinanceAPISetup: 'Bagaimana cara mengatur API Binance dengan benar?',
-    faqBinanceAPISetupAnswer:
-      'Langkah penting: 1) Buat API key di Binance → Manajemen API; 2) Aktifkan HANYA izin "Enable Futures"; 3) PENTING: Beralih ke Hedge Mode di pengaturan Futures; 4) Pastikan dana di dompet Futures.',
     faqHyperliquidSetup: 'Bagaimana cara mengatur Hyperliquid?',
     faqHyperliquidSetupAnswer:
       'Hyperliquid adalah bursa terdesentralisasi. Langkah: 1) Kunjungi app.hyperliquid.xyz; 2) Hubungkan wallet; 3) Buat API wallet; 4) Salin alamat dan private key; 5) Tambahkan di ' +
@@ -3550,7 +3478,7 @@ export const translations = {
       'Penyebab umum: 1) AI memutuskan menunggu; 2) Saldo tidak cukup; 3) Batas posisi maks tercapai; 4) Masalah API bursa; 5) Batasan strategi terlalu ketat.',
     faqOnlyShortPositions: 'Mengapa AI hanya membuka posisi short?',
     faqOnlyShortPositionsAnswer:
-      'Biasanya karena Mode Posisi Binance. Solusi: Beralih ke Hedge Mode di Binance Futures → Preferensi → Mode Posisi.',
+      'Biasanya karena Mode Posisi akun bursa. Solusi: Beralih ke Hedge Mode di pengaturan Futures bursa Anda → Preferensi → Mode Posisi.',
     faqLeverageSettings: 'Bagaimana cara kerja pengaturan leverage?',
     faqLeverageSettingsAnswer:
       'Leverage diatur di Strategi → Kontrol Risiko: leverage BTC/ETH (biasanya 5-20x) dan leverage Altcoin (biasanya 3-10x).',
@@ -3581,11 +3509,6 @@ export const translations = {
     faqAIAPITimeout: 'API AI timeout atau koneksi ditolak',
     faqAIAPITimeoutAnswer:
       'Periksa: 1) API key valid; 2) Jaringan bisa mengakses endpoint; 3) Penyedia tidak down; 4) VPN/firewall tidak memblokir.',
-    faqBinancePositionMode: 'Kode error Binance -4061 (Mode Posisi)',
-    faqBinancePositionModeAnswer:
-      'Anda dalam mode One-way tetapi ' +
-      PERSONA_NAME +
-      ' memerlukan Hedge Mode. Tutup semua posisi, beralih ke Hedge Mode, restart trader.',
     faqBalanceShowsZero: 'Saldo akun menunjukkan 0',
     faqBalanceShowsZeroAnswer:
       'Dana mungkin di dompet Spot, bukan dompet Futures. Transfer USDT dari Spot ke Futures.',
@@ -4012,8 +3935,7 @@ export const translations = {
       privateKeyNote:
         'Private key hanya digunakan untuk signing lokal. Tidak pernah diunggah. Tidak perlu ETH atau gas.',
       howToFundUsdc: 'Cara Mengisi USDC',
-      fundStep1:
-        'Tarik USDC dari exchange (Binance/OKX/Coinbase) ke wallet Anda',
+      fundStep1: 'Tarik USDC dari exchange (OKX/Coinbase) ke wallet Anda',
       fundStep2: 'Pilih jaringan Base (biaya sangat rendah)',
       fundStep3: '$5-10 USDC cukup untuk waktu lama (~$0.003/panggilan)',
       back: 'Kembali',
@@ -4047,8 +3969,8 @@ export const translations = {
       accountName: 'Nama Akun',
       accountNamePlaceholder: 'mis., Akun Utama',
       pleaseEnterAccountName: 'Silakan masukkan nama akun',
-      useBinanceFuturesApi: 'Gunakan API "Spot & Futures Trading"',
-      viewTutorial: 'Lihat Tutorial',
+      unsupportedExchangeType:
+        'Jenis bursa "{type}" tidak lagi didukung. Akun ini tidak dapat dimuat atau diperdagangkan; hapus dengan tombol hapus di atas.',
       lighterApiKeySetup: 'Setup API Key Lighter',
       lighterApiKeyDesc: 'Buat API Key di situs Lighter',
       apiKeyIndex: 'Indeks API Key',
