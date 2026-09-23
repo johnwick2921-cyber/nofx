@@ -122,6 +122,22 @@ export const status: GuideSection = {
     },
     {
       kind: 'p',
+      text: "Picture only draws the higher picture when it can prove it has the history for it. It needs a full window of COMPLETED 4-hour candles and refuses until it has them, saying how many it actually counted ('insufficient depth 118/124') rather than a bare refusal. A candle counts as completed only when the AddOn proved it closed — a candle still forming is never treated as finished data, and a pivot is only drawn when all four of the candles around it have closed, so a level can no longer be declared on partial evidence or be used before the candle that confirms it has closed.",
+    },
+    {
+      kind: 'p',
+      text: 'It also checks the bars belong to the instrument it is trading. Every bar frame names its contract, and a frame naming a different front month than this trader is on is ignored and counted — across a contract roll the symbol alone cannot tell two contracts apart. Before the first connection acknowledgement the contract is not yet known; those frames are still used, but the count of them is on the 📷 boot line so the gap is visible rather than silent, and it says so in the log if it lasts more than a minute.',
+    },
+    {
+      kind: 'p',
+      text: 'The entry window belongs to the 1-hour close that confirmed the break — the 5-minute interval that follows it, once. It used to be measured from whichever 5-minute candle was newest, so every new candle pushed the window forward and a break confirmed hours earlier stayed enterable. Freshness is judged on when the data was EMITTED and when we received it, not on how long ago the candle closed: NinjaTrader sends a closed candle on the first tick of the next one, so an ordinary few seconds of lateness is late, not stale, and is still tradeable inside the window. A candle that only reaches us after the window shut is reported as never actionable rather than refused — there was no opportunity to turn down.',
+    },
+    {
+      kind: 'p',
+      text: 'A bar frame that arrives long after it was sent is kept as data but is not treated as news: it goes to the chart and the history, and does not trigger an entry. A stopped trader stops receiving frames entirely, and an evaluation already under way when a trader is stopped or restarted is refused at the last step before the order — so a frame in flight can never send on behalf of a trader that is gone. The 📷 boot line READS all of this: the contract in use (or n/a before it is known), and the counts of foreign-contract frames, unknown-contract frames, frames refused as too old, frames whose age could not be judged, and evaluations skipped for want of a completed candle.',
+    },
+    {
+      kind: 'p',
       text: "An entry typed in the agent chat goes through the same chain as an AI decision, plan mode included: under strict it is refused. A chat entry carries no stop or target, so the entry gate's R:R and stop-distance checks do not apply to it — holding a stop-less chat entry to the stop floor is owed, not built.",
     },
     {
