@@ -11,12 +11,13 @@ func TestPlannerToolsForMarketIntentAreTrimmed(t *testing.T) {
 	tools := plannerToolsForText("看一下 BTCUSDT 行情和 K线")
 	names := toolNamesForTest(tools)
 
-	for _, expected := range []string{"get_market_snapshot", "get_market_price", "get_kline"} {
+	for _, expected := range []string{"get_market_snapshot", "get_market_price"} {
 		if !containsString(names, expected) {
 			t.Fatalf("expected market tool %q in %v", expected, names)
 		}
 	}
-	for _, unexpected := range []string{"manage_strategy", "manage_trader", "manage_exchange_config", "manage_model_config"} {
+	// get_kline was deleted with the external-exchange reads; it is not offered.
+	for _, unexpected := range []string{"get_kline", "manage_strategy", "manage_trader", "manage_exchange_config", "manage_model_config"} {
 		if containsString(names, unexpected) {
 			t.Fatalf("did not expect management tool %q in market tools %v", unexpected, names)
 		}
