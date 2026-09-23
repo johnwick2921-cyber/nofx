@@ -153,7 +153,7 @@ func isConfigOrTraderIntent(text string) bool {
 	keywords := []string{
 		"交易员", "trader", "exchange", "交易所", "模型", "model", "api key", "apikey",
 		"绑定", "配置", "setup", "configure", "deepseek", "openai", "claude", "gemini",
-		"okx", "binance", "bybit", "gate", "kucoin", "hyperliquid", "aster", "lighter",
+		"okx", "bybit", "gate", "kucoin", "hyperliquid", "aster", "lighter",
 	}
 	for _, kw := range keywords {
 		if strings.Contains(lower, kw) {
@@ -3977,7 +3977,7 @@ func (a *Agent) thinkAndActLegacyWithStore(ctx context.Context, storeUserID stri
 	// loop. Even a single prior round causes DeepSeek to hallucinate data from
 	// earlier topics (e.g. outputting strategy details when asked about a wallet).
 	// The planner path handles multi-turn context properly; the legacy loop is
-	// a single-turn fallback. References like "那binance的钱包呢" still work
+	// a single-turn fallback. References like "那okx的钱包呢" still work
 	// because the text itself contains enough keywords for domain routing.
 	messages = append(messages, mcp.NewUserMessage(userPrompt))
 

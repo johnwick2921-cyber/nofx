@@ -785,7 +785,7 @@ func TestTraderCreateRequiresResolvedResourceIDs(t *testing.T) {
 		Action: "create",
 		Fields: map[string]string{
 			"name":          "凯茵",
-			"exchange_name": "Binance",
+			"exchange_name": "Bybit",
 			"model_name":    "deepseek",
 			"strategy_name": "BTC趋势做空",
 		},
@@ -803,7 +803,7 @@ func TestTraderCreateRequiresResolvedResourceIDs(t *testing.T) {
 		ActionName: "create",
 		CollectedFields: map[string]any{
 			"name":          "凯茵",
-			"exchange_name": "Binance",
+			"exchange_name": "Bybit",
 			"model_name":    "deepseek",
 			"strategy_name": "BTC趋势做空",
 		},

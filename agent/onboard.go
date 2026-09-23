@@ -234,13 +234,12 @@ func (a *Agent) handleExchangeChoice(userID int64, text string, state *SetupStat
 	lower := strings.ToLower(strings.TrimSpace(text))
 
 	exchanges := map[string]string{
-		"binance": "binance", "币安": "binance", "1": "binance",
-		"okx": "okx", "欧易": "okx", "2": "okx",
-		"bybit": "bybit", "3": "bybit",
-		"bitget": "bitget", "4": "bitget",
-		"gate": "gate", "5": "gate",
-		"kucoin": "kucoin", "库币": "kucoin", "6": "kucoin",
-		"hyperliquid": "hyperliquid", "7": "hyperliquid",
+		"okx": "okx", "欧易": "okx", "1": "okx",
+		"bybit": "bybit", "2": "bybit",
+		"bitget": "bitget", "3": "bitget",
+		"gate": "gate", "4": "gate",
+		"kucoin": "kucoin", "库币": "kucoin", "5": "kucoin",
+		"hyperliquid": "hyperliquid", "6": "hyperliquid",
 	}
 
 	ex, ok := exchanges[lower]
@@ -540,27 +539,25 @@ var setupMessages = map[string]map[string]string{
 	},
 	"ask_exchange": {
 		"zh": "🏦 *选择你的交易所*\n\n" +
-			"1️⃣ Binance（币安）\n" +
-			"2️⃣ OKX（欧易）\n" +
-			"3️⃣ Bybit\n" +
-			"4️⃣ Bitget\n" +
-			"5️⃣ Gate\n" +
-			"6️⃣ KuCoin（库币）\n" +
-			"7️⃣ Hyperliquid\n\n" +
+			"1️⃣ OKX（欧易）\n" +
+			"2️⃣ Bybit\n" +
+			"3️⃣ Bitget\n" +
+			"4️⃣ Gate\n" +
+			"5️⃣ KuCoin（库币）\n" +
+			"6️⃣ Hyperliquid\n\n" +
 			"发送数字或名称选择：",
 		"en": "🏦 *Choose your exchange*\n\n" +
-			"1️⃣ Binance\n" +
-			"2️⃣ OKX\n" +
-			"3️⃣ Bybit\n" +
-			"4️⃣ Bitget\n" +
-			"5️⃣ Gate\n" +
-			"6️⃣ KuCoin\n" +
-			"7️⃣ Hyperliquid\n\n" +
+			"1️⃣ OKX\n" +
+			"2️⃣ Bybit\n" +
+			"3️⃣ Bitget\n" +
+			"4️⃣ Gate\n" +
+			"5️⃣ KuCoin\n" +
+			"6️⃣ Hyperliquid\n\n" +
 			"Send number or name:",
 	},
 	"invalid_exchange": {
-		"zh": "❓ 没有识别到交易所。请发送数字 1-7 或交易所名称。",
-		"en": "❓ Exchange not recognized. Send a number 1-7 or exchange name.",
+		"zh": "❓ 没有识别到交易所。请发送数字 1-6 或交易所名称。",
+		"en": "❓ Exchange not recognized. Send a number 1-6 or exchange name.",
 	},
 	"ask_secret": {
 		"zh": "🔑 收到 API Key。\n\n现在请发送你的 *API Secret*：",

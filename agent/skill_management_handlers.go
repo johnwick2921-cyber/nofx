@@ -190,7 +190,7 @@ func hasExplicitManagementDomainCue(text, domain string) bool {
 	case "trader":
 		return containsAny(lower, []string{"交易员", "trader", "agent"})
 	case "exchange":
-		return containsAny(lower, []string{"交易所", "exchange", "okx", "binance", "bybit", "gate", "kucoin", "hyperliquid"})
+		return containsAny(lower, []string{"交易所", "exchange", "okx", "bybit", "gate", "kucoin", "hyperliquid"})
 	case "model":
 		return containsAny(lower, []string{"模型", "model"})
 	case "strategy":
@@ -1367,7 +1367,7 @@ func formatExchangeCreateDraftSummary(lang string, session skillSession) string 
 			fmt.Sprintf("- 测试网：%t（未指定时默认 false）", testnet),
 		}
 		switch exType {
-		case "binance", "bybit", "gate", "indodax":
+		case "bybit", "gate", "indodax":
 			lines = append(lines,
 				fmt.Sprintf("- 已提供 API Key：%t", fieldValue(session, "api_key") != ""),
 				fmt.Sprintf("- 已提供 Secret：%t", fieldValue(session, "secret_key") != ""),
@@ -1414,7 +1414,7 @@ func formatExchangeCreateDraftSummary(lang string, session skillSession) string 
 		fmt.Sprintf("- Testnet: %t (defaults to false if omitted)", testnet),
 	}
 	switch exType {
-	case "binance", "bybit", "gate", "indodax":
+	case "bybit", "gate", "indodax":
 		lines = append(lines,
 			fmt.Sprintf("- API key provided: %t", fieldValue(session, "api_key") != ""),
 			fmt.Sprintf("- Secret provided: %t", fieldValue(session, "secret_key") != ""),
@@ -1913,7 +1913,7 @@ func (a *Agent) describeExchange(storeUserID, lang string, target *EntityReferen
 		credentialLinesEn = append(credentialLinesEn, fmt.Sprintf("- %s: %t", labelEn, present))
 	}
 	switch exchange.ExchangeType {
-	case "binance", "bybit", "gate", "indodax":
+	case "bybit", "gate", "indodax":
 		addCredentialLine("API Key", "API key present", exchange.HasAPIKey)
 		addCredentialLine("Secret", "Secret present", exchange.HasSecretKey)
 	case "okx", "bitget", "kucoin":
@@ -2169,7 +2169,7 @@ func (a *Agent) handleExchangeCreateSkill(storeUserID string, userID int64, lang
 		if lang == "zh" {
 			reply := "要创建交易所配置，还缺这些字段：" + formatMissingFieldList(lang, missing) + "。"
 			if exType == "" {
-				reply += "\n例如：OKX、Binance、Bybit。"
+				reply += "\n例如：OKX、Bybit、Bitget。"
 			}
 			return reply
 		}

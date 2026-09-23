@@ -27,7 +27,7 @@ func TestToolManageExchangeConfigLifecycle(t *testing.T) {
 
 	createResp := a.toolManageExchangeConfig("user-1", `{
 		"action":"create",
-		"exchange_type":"binance",
+		"exchange_type":"bybit",
 		"account_name":"Main",
 		"enabled":true,
 		"testnet":true
@@ -44,7 +44,7 @@ func TestToolManageExchangeConfigLifecycle(t *testing.T) {
 	if created.Status != "ok" || created.Action != "create" {
 		t.Fatalf("unexpected create response: %+v", created)
 	}
-	if created.Exchange.AccountName != "Main" || created.Exchange.ExchangeType != "binance" {
+	if created.Exchange.AccountName != "Main" || created.Exchange.ExchangeType != "bybit" {
 		t.Fatalf("unexpected exchange payload: %+v", created.Exchange)
 	}
 
@@ -224,7 +224,7 @@ func TestToolManageTraderLifecycle(t *testing.T) {
 
 	exchangeResp := a.toolManageExchangeConfig("user-1", `{
 		"action":"create",
-		"exchange_type":"binance",
+		"exchange_type":"bybit",
 		"account_name":"Main",
 		"enabled":true
 	}`)

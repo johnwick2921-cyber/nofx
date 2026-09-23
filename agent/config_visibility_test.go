@@ -95,7 +95,7 @@ func TestToolManageExchangeConfigCreateDefaultsToEnabledLikeManualPage(t *testin
 	}
 	a := New(nil, st, DefaultConfig(), slog.Default())
 
-	resp := a.toolManageExchangeConfig("default", `{"action":"create","exchange_type":"binance","account_name":"Binance Main","api_key":"api-test-123456","secret_key":"secret-test-123456"}`)
+	resp := a.toolManageExchangeConfig("default", `{"action":"create","exchange_type":"bybit","account_name":"Bybit Main","api_key":"api-test-123456","secret_key":"secret-test-123456"}`)
 	if strings.Contains(resp, `"error"`) {
 		t.Fatalf("expected create to succeed, got: %s", resp)
 	}
@@ -255,7 +255,7 @@ func TestExchangeSkillOptionSummaryMatchesManualPage(t *testing.T) {
 	a := New(nil, st, DefaultConfig(), slog.Default())
 
 	summary := a.exchangeSkillOptionSummary("zh")
-	for _, expected := range []string{"Binance", "Bybit", "OKX", "Bitget", "Gate", "KuCoin", "Hyperliquid", "Aster", "Lighter", "Indodax"} {
+	for _, expected := range []string{"Bybit", "OKX", "Bitget", "Gate", "KuCoin", "Hyperliquid", "Aster", "Lighter", "Indodax"} {
 		if !strings.Contains(summary, expected) {
 			t.Fatalf("expected option %q in summary, got: %s", expected, summary)
 		}
@@ -463,7 +463,7 @@ func TestToolUpdateTraderRejectsRenameOutsideManualPanel(t *testing.T) {
 	if err := st.AIModel().UpdateWithName("default", "default_deepseek", "DeepSeek", true, "sk-test-12345", "", "deepseek-chat"); err != nil {
 		t.Fatalf("seed model: %v", err)
 	}
-	exchangeID, err := st.Exchange().Create("default", "binance", "Main", true, "api-test", "secret-test", "", false, "", false, "", "", "", "", "", "", 0, "", "", 0)
+	exchangeID, err := st.Exchange().Create("default", "bybit", "Main", true, "api-test", "secret-test", "", false, "", false, "", "", "", "", "", "", 0, "", "", 0)
 	if err != nil {
 		t.Fatalf("seed exchange: %v", err)
 	}
@@ -515,7 +515,7 @@ func TestToolCreateTraderResponseHidesLegacyTraderTuningFields(t *testing.T) {
 	if err := st.AIModel().UpdateWithName("default", "default_deepseek", "DeepSeek", true, "sk-test-12345", "", "deepseek-chat"); err != nil {
 		t.Fatalf("seed model: %v", err)
 	}
-	exchangeID, err := st.Exchange().Create("default", "binance", "Main", true, "api-test", "secret-test", "", false, "", false, "", "", "", "", "", "", 0, "", "", 0)
+	exchangeID, err := st.Exchange().Create("default", "bybit", "Main", true, "api-test", "secret-test", "", false, "", false, "", "", "", "", "", "", 0, "", "", 0)
 	if err != nil {
 		t.Fatalf("seed exchange: %v", err)
 	}
@@ -566,7 +566,7 @@ func TestToolCreateTraderAutoReadsInitialBalanceFromExchange(t *testing.T) {
 	if err := st.AIModel().UpdateWithName("default", "default_deepseek", "DeepSeek", true, "sk-test-12345", "", "deepseek-chat"); err != nil {
 		t.Fatalf("seed model: %v", err)
 	}
-	exchangeID, err := st.Exchange().Create("default", "binance", "Main", true, "api-test", "secret-test", "", false, "", false, "", "", "", "", "", "", 0, "", "", 0)
+	exchangeID, err := st.Exchange().Create("default", "bybit", "Main", true, "api-test", "secret-test", "", false, "", false, "", "", "", "", "", "", 0, "", "", 0)
 	if err != nil {
 		t.Fatalf("seed exchange: %v", err)
 	}

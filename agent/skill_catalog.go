@@ -48,12 +48,12 @@ func skillCatalogPrompt(lang string) string {
 
 ### 4. 交易行为异常诊断
 - ` + "`skill_order_execution_diagnosis`" + `：当用户问仓位开不出来、只开单边、杠杆报错时，优先排查：
-  1. 是否为交易所模式问题（例如 Binance One-way / Hedge Mode）
+  1. 是否为交易所持仓模式问题（单向 One-way / 双向 Hedge Mode，例如 OKX/Bybit）
   2. 是否为子账户杠杆限制
   3. 是否为合约权限或 symbol 不可交易
   4. 是否为余额不足或保证金占用过高
 - 已知事实：
-  - Binance 若不是 Hedge Mode，可能出现 position side mismatch 或只开单边
+  - 交易所账户若不是 Hedge Mode（双向持仓），可能出现 position side mismatch 或只开单边
   - 某些子账户杠杆受限，超过限制会直接报错
 
 ### 5. 策略与提示词诊断
@@ -88,7 +88,7 @@ Known facts:
 - OKX requires passphrase in addition to API key and secret
 - invalid signature / timestamp often means clock skew or mismatched credentials
 - missing enabled model or exchange config can block trader startup
-- Binance position-side issues are often caused by One-way Mode vs Hedge Mode
+- Exchange position-side issues (e.g. OKX/Bybit) are often caused by One-way Mode vs Hedge Mode
 
 Response style:
 - Diagnostics: symptom -> cause -> checks -> fix
