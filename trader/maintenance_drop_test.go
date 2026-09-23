@@ -255,3 +255,22 @@ func dialRaw(t *testing.T, addr string) net.Conn {
 	t.Cleanup(func() { _ = c.Close() })
 	return c
 }
+
+// M2.1 (review 3 F10): a never-attempted drop of a PICTURE entry settles its
+// place_pending opportunity as refused, naming the job — not the false
+// "no ledger row names it" ERROR + P1 (mutation: skip the Picture settle).
+func TestDroppedNeverSentPictureEntrySettlesRefused(t *testing.T) {
+	w := newDropWire(t)
+	setHold(t, w.dir, "job-pic")
+	if _, _, err := w.st.PictureHtfClaim(&store.PictureHtfOpportunityDB{OppKey: "opp-drop", TraderID: w.at.id, Stage: "confirmed"}); err != nil {
+		t.Fatal(err)
+	}
+	if won, err := w.st.PictureHtfClaimSubmission("opp-drop", "sig-pic"); err != nil || !won {
+		t.Fatalf("fixture: %v %v", won, err)
+	}
+	w.at.onMaintenanceDroppedEntry(ntwire.DroppedEntry{SignalID: "sig-pic", TraderID: w.at.id, Symbol: "MNQ", Side: "long"})
+	row, ok, _ := w.st.PictureHtfGet("opp-drop")
+	if !ok || row.Stage != "refused" || !strings.Contains(row.StageReason, "never sent") || !strings.Contains(row.StageReason, "job-pic") {
+		t.Fatalf("the Picture row must settle refused, never sent, naming the job: %+v", row)
+	}
+}
