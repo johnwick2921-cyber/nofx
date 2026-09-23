@@ -160,6 +160,18 @@ func (at *AutoTrader) shadowVerdictFor(raw string, maxLevels, scenarioCap int, f
 			reasons = append(reasons, verr.Error())
 		}
 	}
+	// W-EXEC-TRUTH W2 A1/A2 — the live chain's born check, PURE here (no
+	// liveness events): without it the shadow's legal rate overstates.
+	if market.FuturesBarsProvider != nil {
+		if berr := kernel.EvaluateBornCheck(d, market.FuturesBarsProvider(at.futuresSymbol(), "1m", kernel.AISVPBarCount), facts.ReadAt, time.Now()).Err(); berr != nil {
+			reasons = append(reasons, berr.Error())
+		}
+	}
+	// W-EXEC-TRUTH W2 A3+A4 — the SAME kernel check the write loop runs; the
+	// shadow records nothing.
+	if verr := kernel.CheckScenarioWriteTruth(d, facts.IdentityMap, facts.CapacityCut, market.FuturesTickSize(at.futuresSymbol())).Err(); verr != nil {
+		reasons = append(reasons, verr.Error())
+	}
 	return len(reasons) == 0, reasons
 }
 

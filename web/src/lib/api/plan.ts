@@ -56,10 +56,21 @@ export interface ScenarioEconomics {
   r_to_arm_target: number | null
   target_path_exception?: string
   role_exceptions?: Array<{ level: string; use: string; reason: string }>
+  /** W2 A4 — seated levels on the entry→target path with the planned role;
+   * ABSENT on legacy rows. */
+  path_levels?: Array<{
+    price: number
+    level: string
+    level_id?: string
+    role: string // pass_through | reduce | exit
+  }>
 }
 
 export interface PlanScenario {
   level_id?: string | null
+  /** W2 A3 — a two-anchor setup's sweep / reclaim level ids; ABSENT on legacy rows. */
+  sweep_level_id?: string
+  reclaim_level_id?: string
   economics?: ScenarioEconomics
   arm?: {
     enabled?: boolean
@@ -277,6 +288,17 @@ export interface ScenarioLiveness {
   reason?: string
 }
 
+/** W-EXEC-TRUTH W2 A1/A2 — the publication-time born check stored on the
+ * served row. recorded=false (pre-W2 row, fail-closed NO-TRADE row) → the card
+ * says n/a; read_clock_ms null on a recorded row = read clock unknown at write. */
+export interface AuthoredInvalidation {
+  recorded: boolean
+  policy?: string
+  read_clock_ms: number | null
+  publish_clock_ms: number | null
+  groups?: number[]
+}
+
 export interface ScenarioDeath {
   plan_id: string
   version: number
@@ -329,6 +351,7 @@ export interface PlanToday {
   scenario_identity?: Record<string, ScenarioLevelIdentity>
   scenario_status?: Record<string, ScenarioStatusValue>
   scenario_liveness?: ScenarioLiveness
+  authored_invalidation?: AuthoredInvalidation
   scenario_deaths?: Record<string, ScenarioDeath>
   // A1/A4: verdict basis ("machine"|"heuristic") + scenarios with no anchor
   /** ONE SETUP (dispatch 102) — the arm seam's recorded verdict per scenario. */
@@ -379,6 +402,8 @@ export interface PlanToday {
           detail: string
         }>
         rule: string
+        /** W2 — 'stored' | 'authoring_default'; absent on pre-W2 records. */
+        rule_source?: string
         ref_price: number
         side: string
         met: boolean

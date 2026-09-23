@@ -185,6 +185,47 @@ func PromptContracts() []PromptContract {
 			MustAppear: []string{"written with arm.enabled=false", "arm_disabled_reason", "stop-entry trigger already through price"},
 			Gate:       "WRITE-TIME FEASIBILITY",
 		},
+		{
+			// W-EXEC-TRUTH W2 A5 (2026-09-23) — the stored duration. A time_hold
+			// whose prose states minutes must store them as confirm.hold_min
+			// (row 452 S2 "3 minutes" was counted as the 10-minute default), and
+			// hold_min is legal on time_hold only.
+			Rule:       "time_hold prose minutes must be stored as confirm.hold_min (time_hold only); the machine counts the stored rule exactly",
+			Site:       "kernel/confirm_resolver.go ValidateConfirmHoldProse (parsePlanDocument newAuthoring) + validateConfirmHoldMin (ValidatePlanDocWithCaps)",
+			MustAppear: []string{`"hold_min": <n>`, "hold_min is time_hold ONLY — the minutes of 1m closes your prose states", "2x5m_close waits for TWO completed 5m closes"},
+		},
+		{
+			// W-EXEC-TRUTH W2 A1 (2026-09-23) — scenario.invalid outside the
+			// grammar was accepted as UNKNOWN (row 455: all four sentences).
+			// It is now a write-time refusal, so the prompt states the grammar
+			// and one placeholder example, verbatim from the kernel.
+			Rule:       "scenario.invalid must be exactly one of the 5m / 2x5m close above|below <price> forms — anything else is refused at write",
+			Site:       "trader/plan_liveness.go validateAuthoredScenariosAt → kernel.EvaluateBornCheck (authoredCloseRule grammar, AuthoredUnknownGrammar)",
+			MustAppear: []string{`"invalid" GRAMMAR (machine-checked at write; anything else is REFUSED, never accepted as UNKNOWN)`, `"5m close above <price>" | "5m close below <price>" | "2x5m close above <price>" | "2x5m close below <price>"`, `Example: "invalid": "`},
+		},
+		// W-EXEC-TRUTH W2 A3 (2026-09-23) — identity ≠ price is a write-time
+		// refusal (correction; unconditional), including an id not in the map.
+		{
+			Rule:       "a level_id names the map level at the traded price; an id at another price or not in the map is refused at write",
+			Site:       "kernel/scenario_write_truth.go scenarioIdentityWriteIssues ← CheckScenarioWriteTruth (trader write loop + shadowVerdictFor)",
+			MustAppear: []string{"IDENTITY = PRICE (refused at write)", "an id not in the map (invented or altered), is REFUSED"},
+		},
+		{
+			Rule:       "a two-anchor setup names two different map ids (sweep_level_id / reclaim_level_id), each at its own leg",
+			Site:       "kernel/scenario_write_truth.go scenarioIdentityWriteIssues (anchor_reuse / anchor_unrelated)",
+			MustAppear: []string{"sweep_level_id and reclaim_level_id: two DIFFERENT map ids"},
+		},
+		// W-EXEC-TRUTH W2 A4 (2026-09-23) — the obstacle-chain contract.
+		{
+			Rule:       "target_chain sorted outward; first_obstacle = nearest seated level on the path; every seated path level listed in path_levels with a role",
+			Site:       "kernel/scenario_write_truth.go obstacleChainWriteIssues ← CheckScenarioWriteTruth",
+			MustAppear: []string{"target_chain is sorted outward from entry in the trade direction", "first_obstacle is the NEAREST seated map level strictly between entry and the arm target", "a seated level missing from the path is REFUSED by name"},
+		},
+		{
+			Rule:       "reduce on a single-contract arm is refused as infeasible",
+			Site:       "kernel/scenario_write_truth.go obstacleChainWriteIssues (reduce_qty1, ArmQuantityFor)",
+			MustAppear: []string{"reduce on a single-contract arm", "is REFUSED at write as infeasible"},
+		},
 	}
 }
 

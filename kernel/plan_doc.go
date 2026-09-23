@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // P3.3 — the day-plan document (the schema-strict JSON the planner AI emits).
@@ -59,10 +60,18 @@ type PlanConfirm struct {
 	Rule     string  `json:"rule"`      // touch | 1x5m_close | 2x5m_close | 1m_mss | time_hold (E1: 15m dead)
 	RefPrice float64 `json:"ref_price"` // the price the closes are counted against
 	Side     string  `json:"side"`      // above | below
+	// HoldMin (W2 A5, 2026-09-23) — time_hold ONLY: the minutes of completed
+	// 1m closes the prose states. Absent = the ACCEPT_HOLD_MIN authoring
+	// default (ResolveConfirm names it); never inferred from prose at read.
+	HoldMin *int `json:"hold_min,omitempty"`
 }
 
 type PlanScenario struct {
-	LevelID *string `json:"level_id"` // NULL on legacy; WARN-only on new authoring.
+	LevelID *string `json:"level_id"` // NULL on legacy; refused at write when it does not resolve or names another price (W2 A3).
+	// W2 A3 — a two-anchor setup (sweep + reclaim) names each leg's level.
+	// Additive: absent on legacy rows; checked only at the write site.
+	SweepLevelID   *string `json:"sweep_level_id,omitempty"`
+	ReclaimLevelID *string `json:"reclaim_level_id,omitempty"`
 	// Absent on legacy records: never inferred or required during stored reads.
 	Economics *ScenarioEconomics `json:"economics,omitempty"`
 	ID        string             `json:"id"`        // S1, S2, S3
@@ -520,6 +529,12 @@ func parsePlanDocument(raw string, maxLevels, maxScenarios int, newAuthoring boo
 			return nil, err
 		}
 	}
+	// W2 A5: a time_hold's stated minutes must be STORED (new authoring only).
+	if newAuthoring {
+		if err := ValidateConfirmHoldProse(&doc); err != nil {
+			return nil, err
+		}
+	}
 	return &doc, nil
 }
 
@@ -734,6 +749,9 @@ func ValidatePlanDocWithCaps(d *PlanDoc, maxLevels, maxScenarios int) error {
 			if !numberNearInText(s.Trigger+" "+s.Invalid, s.Confirm.RefPrice, 2.0) {
 				return fmt.Errorf("scenario[%d].confirm.ref_price %.2f does not match any number in the trigger/invalid prose (object and prose must agree)", i, s.Confirm.RefPrice)
 			}
+			if err := validateConfirmHoldMin(i, "confirm", s.Confirm); err != nil {
+				return err
+			}
 		}
 		if s.Confirm2 != nil {
 			if confirmRuleMentions15m(s.Confirm2.Rule) {
@@ -747,6 +765,9 @@ func ValidatePlanDocWithCaps(d *PlanDoc, maxLevels, maxScenarios int) error {
 			}
 			if s.Confirm2.RefPrice <= 0 {
 				return fmt.Errorf("scenario[%d].confirm2.ref_price %v invalid", i, s.Confirm2.RefPrice)
+			}
+			if err := validateConfirmHoldMin(i, "confirm2", s.Confirm2); err != nil {
+				return err
 			}
 		}
 	}
@@ -870,9 +891,10 @@ func FlipLineBeyondPrice(flip *PlanCondition, price float64) error {
 }
 
 // DeathLineBeyondPrice is FlipLineBeyondPrice for the death object: a death
-// line already crossed at authoring is a plan born dead (the scenario
-// born-dead check, validateAuthoredScenariosAt, evaluates ONLY the
-// scenario.invalid prose grammar on 1m closes and never reads death{}).
+// line already crossed at authoring is a plan born dead. This judges the READ
+// price only; since W-EXEC-TRUTH W2 D5 the born check (EvaluateBornCheck, via
+// validateAuthoredScenariosAt) also judges death{}/flip{} on every 5m group
+// closed between the read clock and publication.
 func DeathLineBeyondPrice(death *PlanCondition, price float64) error {
 	if death == nil {
 		return nil
@@ -1014,7 +1036,8 @@ func MislabeledStructuralLevels(d *PlanDoc, machineLabels map[float64]string) []
 
 type PlanFacts struct {
 	Zones       *LevelZoneMap  `json:"-"` // presentation only
-	IdentityMap []MapCandidate `json:"-"` // record-only snapshot, ignored by every trading validator
+	IdentityMap []MapCandidate `json:"-"` // frozen seated map; read by the W2 A3/A4 write-time checks (nil = UNKNOWN → skipped)
+	CapacityCut []MapCandidate `json:"-"` // W2 A4 — pool references the seat race dropped; accepted as a first obstacle, never required
 	Price       float64        // reference price at read time
 	DATR        float64        // daily ATR proxy
 	PDH         float64        // prior day high (0 = unknown → gap rules skipped)
@@ -1022,6 +1045,11 @@ type PlanFacts struct {
 	PDC         float64        // prior day close (CLASS 50b — the bias-label tree leg)
 	Regime      RegimeBlock    // CLASS 50b — the bias-label regime leg (read-time copy)
 	Structure   *StructureMap  `json:"-"` // S1 — stamped onto the doc at write when non-nil
+	// ReadAt (W-EXEC-TRUTH W2 A2) — the read clock the prompt was assembled at.
+	// The write site re-judges every 5m group closed between it and publication.
+	// Zero (legacy facts-less callers) = latest-window check, read clock n/a.
+	// json:"-": FactsSnapshotJSON marshals PlanFacts and must not change shape.
+	ReadAt time.Time `json:"-"`
 }
 
 // ValidatePlanDocWithFacts = schema rules + facts rules:
