@@ -1422,6 +1422,16 @@ export const translations = {
       yes: 'Yes',
       no: 'No',
     },
+
+    // Agent chat sidebar — market ticker (NinjaTrader bars)
+    agentTicker: {
+      source: 'Source: {source}',
+      change1h: '1h',
+      change4h: '4h',
+      unavailable: 'Unavailable: {reason}',
+      noRow: 'the server returned no data for this symbol',
+      requestFailed: 'request failed',
+    },
   },
   zh: {
     // Header
@@ -2761,6 +2771,16 @@ export const translations = {
       yes: '是',
       no: '否',
     },
+
+    // Agent chat sidebar — market ticker (NinjaTrader bars)
+    agentTicker: {
+      source: '来源：{source}',
+      change1h: '1小时',
+      change4h: '4小时',
+      unavailable: '不可用：{reason}',
+      noRow: '服务器未返回该品种的数据',
+      requestFailed: '请求失败',
+    },
   },
   id: {
     // Header
@@ -4061,6 +4081,16 @@ export const translations = {
       close: 'Tutup',
       yes: 'Ya',
       no: 'Tidak',
+    },
+
+    // Agent chat sidebar — market ticker (NinjaTrader bars)
+    agentTicker: {
+      source: 'Sumber: {source}',
+      change1h: '1j',
+      change4h: '4j',
+      unavailable: 'Tidak tersedia: {reason}',
+      noRow: 'server tidak mengembalikan data untuk simbol ini',
+      requestFailed: 'permintaan gagal',
     },
   },
 }

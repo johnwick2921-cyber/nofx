@@ -606,7 +606,7 @@ export function AgentChatPage() {
       key: 'market' as const,
       icon: <TrendingUp size={14} />,
       title: language === 'zh' ? '市场行情' : 'Market',
-      component: <MarketTicker />,
+      component: <MarketTicker language={language} />,
     },
     {
       key: 'positions' as const,
