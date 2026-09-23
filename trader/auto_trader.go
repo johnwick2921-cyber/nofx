@@ -251,10 +251,6 @@ type AutoTraderConfig struct {
 	Exchange   string // Exchange type: "bybit", "okx", "bitget", "gate", "hyperliquid", "aster", "lighter", "indodax", or "ninjatrader"
 	ExchangeID string // Exchange account UUID (for multi-account support)
 
-	// Binance API configuration
-	BinanceAPIKey    string
-	BinanceSecretKey string
-
 	// Bybit API configuration
 	BybitAPIKey    string
 	BybitSecretKey string

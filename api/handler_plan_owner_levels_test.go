@@ -41,9 +41,11 @@ func newOwnerLevelsServer(t *testing.T) (*Server, string) {
 	if err := st.AIModel().Create(olTestUser, "m-ol", "m", "deepseek", true, "sk-test-not-a-real-key", ""); err != nil {
 		t.Fatalf("ai model: %v", err)
 	}
-	// A binance CEX row: its trader constructs without any network or NT8
-	// TCP side effect, which is all the manager needs to seat the trader.
-	exID, err := st.Exchange().Create(olTestUser, "binance", "Default", true,
+	// A Bybit CEX row: its trader constructs without any network or NT8 TCP
+	// side effect (the constructor only builds an HTTP client), which is all
+	// the manager needs to seat the trader. (Was a Binance row until
+	// W-NO-BINANCE B deleted that broker.)
+	exID, err := st.Exchange().Create(olTestUser, "bybit", "Default", true,
 		"test-key", "test-secret", "", false, "", true, "", "", "", "", "", "", 0, "", "", 0)
 	if err != nil {
 		t.Fatalf("exchange: %v", err)

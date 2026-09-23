@@ -621,10 +621,8 @@ func (tm *TraderManager) addTraderFromStore(traderCfg *store.Trader, aiModelCfg 
 		Name:                  traderCfg.Name,
 		AIModel:               aiModelCfg.Provider,
 		AIModelID:             aiModelCfg.ID,
-		Exchange:              exchangeCfg.ExchangeType, // Exchange type: binance/bybit/okx/etc
+		Exchange:              exchangeCfg.ExchangeType, // Exchange type: ninjatrader/bybit/okx/etc
 		ExchangeID:            exchangeCfg.ID,           // Exchange account UUID (for multi-account)
-		BinanceAPIKey:         "",
-		BinanceSecretKey:      "",
 		HyperliquidPrivateKey: "",
 		HyperliquidTestnet:    exchangeCfg.Testnet,
 		UseQwen:               aiModelCfg.Provider == "qwen",
@@ -656,9 +654,6 @@ func (tm *TraderManager) addTraderFromStore(traderCfg *store.Trader, aiModelCfg 
 
 	// Set API keys based on exchange type (convert EncryptedString to string)
 	switch exchangeCfg.ExchangeType {
-	case "binance":
-		traderConfig.BinanceAPIKey = string(exchangeCfg.APIKey)
-		traderConfig.BinanceSecretKey = string(exchangeCfg.SecretKey)
 	case "bybit":
 		traderConfig.BybitAPIKey = string(exchangeCfg.APIKey)
 		traderConfig.BybitSecretKey = string(exchangeCfg.SecretKey)
