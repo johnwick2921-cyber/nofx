@@ -58,7 +58,7 @@ const MARKET_CONFIG = {
     hasDropdown: true,
   },
   crypto: {
-    exchange: 'binance',
+    exchange: 'bybit',
     defaultSymbol: 'BTCUSDT',
     icon: '₿',
     labelKey: 'crypto' as const,

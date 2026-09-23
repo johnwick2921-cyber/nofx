@@ -60,7 +60,7 @@ interface AdvancedChartProps {
   interval?: string
   traderID?: string
   height?: number
-  exchange?: string // Exchange type: binance, bybit, okx, bitget, hyperliquid, aster, lighter
+  exchange: string // Exchange type (required — /api/klines refuses a missing one): bybit, okx, bitget, hyperliquid, aster, lighter, ninjatrader, ...
   onSymbolChange?: (symbol: string) => void // Symbol change callback
 }
 
@@ -114,7 +114,7 @@ export function AdvancedChart({
   interval = '5m',
   traderID,
   height = 550,
-  exchange = 'binance', // Default to binance
+  exchange,
   onSymbolChange: _onSymbolChange, // Available for future use
 }: AdvancedChartProps) {
   void _onSymbolChange // Prevent unused warning

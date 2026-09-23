@@ -66,15 +66,17 @@ function getExchangeDisplayNameFromList(
     : typeName
 }
 
-// Helper function to get exchange type from exchange ID (UUID) - for kline charts
+// Helper function to get exchange type from exchange ID (UUID) - for kline charts.
+// An unknown / missing exchange returns '' (absent), never a made-up venue:
+// the chart then shows its own labelled default market pill.
 function getExchangeTypeFromList(
   exchangeId: string | undefined,
   exchanges: Exchange[] | undefined
 ): string {
-  if (!exchangeId) return 'binance'
+  if (!exchangeId) return ''
   const exchange = exchanges?.find((e) => e.id === exchangeId)
-  if (!exchange) return 'binance' // Default to binance for charts
-  return exchange.exchange_type?.toLowerCase() || 'binance'
+  if (!exchange) return ''
+  return exchange.exchange_type?.toLowerCase() || ''
 }
 
 // Helper function to check if exchange is a perp-dex type (wallet-based)
