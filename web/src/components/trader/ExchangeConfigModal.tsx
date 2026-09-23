@@ -857,7 +857,6 @@ export function ExchangeConfigModal({
                       />
                     </div>
                   )}
-
                 </>
               )}
 
