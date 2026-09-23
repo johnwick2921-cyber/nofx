@@ -76,6 +76,13 @@ type TCPServer struct {
 	// Pending signals to flush on (re)connect (spec L4414).
 	pendingMu sync.Mutex
 	pending   []timedSignal
+	// entryHoldCheck (W-ONE-BUTTON M2, gap U2): func() bool — true while the
+	// installation is under maintenance. flushPending drops queued entries
+	// while it holds; nothing re-queues them.
+	entryHoldCheck atomic.Value
+	// maint (W-ONE-BUTTON M2 site 7): the hold source, what each connection was
+	// told, and the per-connection record (hello epoch + maintenance_ack).
+	maint maintenanceWire
 
 	// E7 capability handshake (2026-08-30): the far-side AddOn's build id,
 	// reported on every heartbeat. Empty until the first heartbeat carries it.
@@ -642,6 +649,12 @@ var (
 type timedSignal struct {
 	payload   SignalPayload
 	timestamp time.Time
+	// attempted is true once a write of this signal's frame was STARTED on ANY
+	// connection. WriteFrame can fail after some bytes left the socket, so an
+	// attempted signal may have reached the AddOn; only a signal with zero bytes
+	// ever written provably never left this process (W-ONE-BUTTON M2, CTO
+	// condition 1 — the maintenance-hold drop settles only those).
+	attempted bool
 }
 
 // ListenAddr returns the NT8 bridge listen address: TCPListenAddr unless
@@ -1172,6 +1185,11 @@ func (s *TCPServer) Start(ctx context.Context) error {
 	go s.drainBarIngest(cctx)
 	// U1 3.3 — wire-liveness line every 60s (not wg-tracked: exits with ctx).
 	go s.livenessReporter(cctx)
+	// W-ONE-BUTTON M2 site 7 — push the installation hold (silent when unheld).
+	s.maint.mu.Lock()
+	s.maint.tick, s.maint.resend = maintenanceTick, maintenanceResend
+	s.maint.mu.Unlock()
+	go s.maintenanceLoop(cctx.Done(), maintenanceTick)
 	s.logger.Info("tcp_server: listening", "addr", s.addr)
 	return nil
 }
@@ -1248,7 +1266,10 @@ func (s *TCPServer) SendSignal(payload SignalPayload) error {
 	s.pendingMu.Lock()
 	s.pending = append(s.pending, timedSignal{payload: payload, timestamp: time.Now()})
 	s.pendingMu.Unlock()
-	err := s.flushPending()
+	heldDropped, err := s.flushPendingReport()
+	if err == nil {
+		err = ownDropError(payload.SignalID, heldDropped)
+	}
 	recordResearchSignal(payload, err)
 	return err
 }
@@ -1521,6 +1542,7 @@ func (s *TCPServer) acceptLoop(ctx context.Context) {
 		s.conn = c
 		s.lastAckTime = time.Now()
 		s.connMu.Unlock()
+		s.beginConnectionRecord(c, time.Now()) // W-ONE-BUTTON M2 site 7
 
 		s.logger.Info("tcp_server: client connected", "addr", c.RemoteAddr())
 		s.wg.Add(2)
@@ -1529,6 +1551,9 @@ func (s *TCPServer) acceptLoop(ctx context.Context) {
 		// A3 (G2) — declare the bound-account allowlist BEFORE flushing any queued
 		// signals, so the AddOn's allowlist is established before it can execute one.
 		s.sendAccountAllowlist(c)
+		// W-ONE-BUTTON M2 site 7 — a held installation tells the AddOn BEFORE
+		// the flush (which itself drops queued entries while held).
+		s.pushMaintenance(c, time.Now())
 		// Flush any signals queued during the disconnect window.
 		_ = s.flushPending()
 		// Plan 4.4 Stage 2 — auto-subscribe to bars on every accept so
@@ -1931,8 +1956,10 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 					s.farSideBuild.Store(p.BuildID)
 				}
 			}
+			s.recordHello(c, p, time.Now()) // W-ONE-BUTTON M2 (Q3): the epoch, per connection
 			s.logger.Info("tcp_server: hello handshake OK",
-				"protocol_version", p.ProtocolVersion, "source", p.Source, "build_id", p.BuildID)
+				"protocol_version", p.ProtocolVersion, "source", p.Source, "build_id", p.BuildID,
+				"nt8_pid", p.NT8PID, "assembly_mvid", p.AssemblyMVID)
 			s.writeMu.Lock()
 			_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
 			err := WriteFrame(c, FrameHello, HelloPayload{ProtocolVersion: ProtocolVersion, Source: "nofx-go"})
@@ -1940,6 +1967,20 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			if err != nil {
 				s.logger.Warn("tcp_server: write hello reply", "err", err)
 				return
+			}
+
+		case FrameMaintenanceAck:
+			// W-ONE-BUTTON M2 site 7 — recorded on THIS connection's record only.
+			var p MaintenanceAckPayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad maintenance_ack payload", "err", err)
+				continue
+			}
+			if s.recordMaintenanceAck(c, p, time.Now()) {
+				s.logger.Info("tcp_server: 🔒 maintenance_ack",
+					"held", p.Held, "job_id", p.JobID, "queued_commands", p.QueuedCommands,
+					"connections", len(p.Connections), "accounts", len(p.Accounts),
+					"census_error", p.CensusError, "build_id", p.BuildID)
 			}
 
 		case FrameFill:
@@ -2397,13 +2438,28 @@ func (s *TCPServer) checkSignalAge(sig SignalPayload, now time.Time) error {
 }
 
 // flushPending writes any non-stale queued signals to the connected client.
-// No-op if disconnected. Stale entries (>TCPStaleSignalAge) are dropped.
+// No-op if disconnected. Stale entries (>TCPStaleSignalAge) are dropped, and
+// so is every queued entry while the installation is under maintenance.
 func (s *TCPServer) flushPending() error {
+	_, err := s.flushPendingReport()
+	return err
+}
+
+// flushPendingReport is flushPending plus what it DROPPED because of the
+// maintenance hold, as signal id → attempted (so SendSignal can tell its own
+// entry "never sent" from "may have reached NT8" — ownDropError).
+func (s *TCPServer) flushPendingReport() (map[string]bool, error) {
+	// Held: the whole queue is dropped and reported, CONNECTED OR NOT (the
+	// queue holds entries only; nothing in it may reach the wire while held).
+	if s.entryHeld() {
+		return s.dropQueuedWhileHeld(), nil
+	}
+	var heldDropped map[string]bool
 	s.connMu.Lock()
 	c := s.conn
 	s.connMu.Unlock()
 	if c == nil {
-		return nil
+		return nil, nil
 	}
 
 	s.pendingMu.Lock()
@@ -2413,6 +2469,12 @@ func (s *TCPServer) flushPending() error {
 
 	for i, queued := range toSend {
 		sig := queued.payload
+		if s.entryHeld() {
+			// W-ONE-BUTTON M2 (gap U2): the hold landed mid-flush — the rest of
+			// this batch is dropped and reported, never re-queued.
+			heldDropped = s.reportDrops(toSend[i:])
+			return heldDropped, nil
+		}
 		s.writeMu.Lock()
 		// Check after waiting for the writer, using the command's original
 		// timestamp. Neither enqueue nor retry is allowed to renew its lease.
@@ -2424,6 +2486,8 @@ func (s *TCPServer) flushPending() error {
 		err := WriteFrame(c, FrameSignal, sig)
 		s.writeMu.Unlock()
 		if err != nil {
+			// The write was STARTED: bytes may have reached the AddOn.
+			toSend[i].attempted = true
 			// W2 (SUNDAY-SHIELD) — re-queue this signal AND the remaining
 			// unsent tail. The old code re-queued only the current one and
 			// DROPPED every later queued signal on a mid-flush conn death —
@@ -2433,10 +2497,41 @@ func (s *TCPServer) flushPending() error {
 			s.pendingMu.Unlock()
 			s.logger.Warn("tcp_server: flush signal failed", "err", err, "signal_id", sig.SignalID, "requeued", len(toSend)-i)
 			s.closeConn()
-			return err
+			return heldDropped, err
 		}
 	}
-	return nil
+	return heldDropped, nil
+}
+
+// ErrEntryHeld is returned by SendSignal when its OWN entry was dropped from
+// the queue because the installation went under maintenance between the
+// caller's permit and the flush (W-ONE-BUTTON M2, site-map gap U2). The
+// caller must record the entry as NOT placed.
+var ErrEntryHeld = errors.New("entry dropped: the installation is under maintenance (hold landed before the flush)")
+
+// SetEntryHoldCheck installs the maintenance predicate the queue consults
+// before writing each queued entry. nil = never held (today's behaviour).
+func (s *TCPServer) SetEntryHoldCheck(fn func() bool) {
+	if fn == nil {
+		s.entryHoldCheck.Store(func() bool { return false })
+		return
+	}
+	s.entryHoldCheck.Store(fn)
+}
+
+func (s *TCPServer) entryHeld() bool {
+	if fn, ok := s.entryHoldCheck.Load().(func() bool); ok && fn != nil {
+		return fn()
+	}
+	return false
+}
+
+// PendingSignalCount is the number of entry signals queued for the next
+// flush — an installation-gate input: a queued entry is an entry in flight.
+func (s *TCPServer) PendingSignalCount() int {
+	s.pendingMu.Lock()
+	defer s.pendingMu.Unlock()
+	return len(s.pending)
 }
 
 func (s *TCPServer) closeConn() {

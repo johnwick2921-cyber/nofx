@@ -67,6 +67,11 @@ func main() {
 	if len(os.Args) > 1 {
 		cfg.DBPath = os.Args[1]
 	}
+	// W-ONE-BUTTON M2 (MUST-2): resolve the installation data dir ONCE, with
+	// the resolver the maintenance-hold CLI uses, BEFORE traders load (they
+	// auto-start inside LoadTradersFromStore) so every entry gate reads the
+	// hold file the CLI and the updater write.
+	trader.SetMaintenanceDataDir(resolveMaintenanceDataDir(cfg.DBPath))
 	// Ensure data directory exists (for SQLite)
 	if cfg.DBType == "sqlite" {
 		if dir := filepath.Dir(cfg.DBPath); dir != "." {
@@ -296,6 +301,9 @@ func main() {
 	} else {
 		logger.Infof("%s", integrity.Line())
 	}
+	// W-ONE-BUTTON M2 — the installation maintenance hold, every field READ.
+	// The AddOn has usually not connected yet, so addon_ack prints n/a here.
+	logger.Infof("%s", trader.MaintenanceBootLine(traderManager.GetAllTraders()))
 	logger.Infof("%s", researchsnapshot.CurrentBootLine())
 	// UI SERVING PATH (owner ruling 2026-09-03). Printed right after the boot
 	// integrity line because it answers the same question about a different
