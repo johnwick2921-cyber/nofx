@@ -264,12 +264,16 @@ func (e *StrategyEngine) writeAvailableIndicators(sb *strings.Builder) {
 			// say so instead of advertising a feed that is not there.
 			sb.WriteString("- Open Interest (OI) data: n/a (no external market data on the futures path)\n")
 		} else {
-			sb.WriteString("- Open Interest (OI) data\n")
+			// The crypto path has no open-interest source in this build: the
+			// value is absent (n/a) for every coin — say so instead of
+			// advertising a feed that is not there.
+			sb.WriteString("- Open Interest (OI) data: n/a (no open-interest source)\n")
 		}
 	}
 
 	if indicators.EnableFundingRate && !e.isFuturesInstrument() {
-		sb.WriteString("- Funding rate\n")
+		// No funding source in this build either: the value is n/a.
+		sb.WriteString("- Funding rate: n/a (no funding source)\n")
 	}
 
 	// F11a — AI500 / OI_Top are crypto screening concepts; a futures strategy trades

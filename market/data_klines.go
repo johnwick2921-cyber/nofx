@@ -3,7 +3,6 @@ package market
 import (
 	"context"
 	"fmt"
-	"nofx/logger"
 	"nofx/provider/coinank/coinank_api"
 	"nofx/provider/coinank/coinank_enum"
 	"nofx/provider/hyperliquid"
@@ -13,6 +12,39 @@ import (
 )
 
 // Note: Kline data now uses free/open API (coinank_api.Kline) which doesn't require authentication
+
+// CoinAnkVenue is the ONE mapping from a trader's exchange to its CoinAnk
+// kline venue, used by the market reads and by /api/klines alike. An exchange
+// with no CoinAnk venue of its own — or no exchange at all — is REFUSED by
+// name: its klines are never read from another venue's book (there is no
+// default venue and no cross-venue fallback).
+func CoinAnkVenue(exchange string) (coinank_enum.Exchange, error) {
+	switch strings.ToLower(strings.TrimSpace(exchange)) {
+	case "bybit":
+		return coinank_enum.Bybit, nil
+	case "okx":
+		return coinank_enum.Okex, nil
+	case "bitget":
+		return coinank_enum.Bitget, nil
+	case "gate":
+		return coinank_enum.Gate, nil
+	case "hyperliquid":
+		return coinank_enum.Hyperliquid, nil
+	case "aster":
+		return coinank_enum.Aster, nil
+	default:
+		return "", fmt.Errorf("no CoinAnk venue for exchange %q — its klines are not read from another venue", exchange)
+	}
+}
+
+// CoinAnkAPISymbol is the symbol spelling CoinAnk expects on a venue: OKX
+// lists perpetuals as "BTC-USDT-SWAP", every other venue as "BTCUSDT".
+func CoinAnkAPISymbol(symbol string, venue coinank_enum.Exchange) string {
+	if venue == coinank_enum.Okex && strings.HasSuffix(symbol, "USDT") {
+		return fmt.Sprintf("%s-USDT-SWAP", strings.TrimSuffix(symbol, "USDT"))
+	}
+	return symbol
+}
 
 // getKlinesFromCoinAnk fetches kline data from CoinAnk API (replacement for WSMonitorCli)
 func getKlinesFromCoinAnk(symbol, interval, exchange string, limit int) ([]Kline, error) {
@@ -51,48 +83,26 @@ func getKlinesFromCoinAnk(symbol, interval, exchange string, limit int) ([]Kline
 		return nil, fmt.Errorf("unsupported interval: %s", interval)
 	}
 
-	// Map exchange string to coinank enum
-	var coinankExchange coinank_enum.Exchange
-	switch strings.ToLower(exchange) {
-	case "binance":
-		coinankExchange = coinank_enum.Binance
-	case "bybit":
-		coinankExchange = coinank_enum.Bybit
-	case "okx":
-		coinankExchange = coinank_enum.Okex
-	case "bitget":
-		coinankExchange = coinank_enum.Bitget
-	case "gate":
-		coinankExchange = coinank_enum.Gate
-	case "hyperliquid":
-		coinankExchange = coinank_enum.Hyperliquid
-	case "aster":
-		coinankExchange = coinank_enum.Aster
-	default:
-		// Default to Binance for unknown exchanges
-		coinankExchange = coinank_enum.Binance
+	// The venue is resolved by the ONE mapper (CoinAnkVenue): an exchange with
+	// no CoinAnk venue is REFUSED by name before any request — never read from
+	// another venue's book.
+	coinankExchange, err := CoinAnkVenue(exchange)
+	if err != nil {
+		return nil, err
 	}
 
-	// Call CoinAnk free/open API (no authentication required)
+	// Call CoinAnk free/open API (no authentication required). One request,
+	// one venue: a failed or empty answer is an error, never a second request
+	// to a different venue.
 	ctx := context.Background()
 	ts := time.Now().UnixMilli()
 	// Use "To" side to search backward from current time (get historical klines)
-	coinankKlines, err := coinank_api.Kline(ctx, symbol, coinankExchange, ts, coinank_enum.To, limit, coinankInterval)
-	if err != nil || len(coinankKlines) == 0 {
-		// If exchange-specific data fails or returns empty, fallback to Binance
-		if coinankExchange != coinank_enum.Binance {
-			if err != nil {
-				logger.Warnf("⚠️ CoinAnk %s data failed, falling back to Binance: %v", exchange, err)
-			} else {
-				logger.Warnf("⚠️ CoinAnk %s %s data empty for %s, falling back to Binance", exchange, interval, symbol)
-			}
-			coinankKlines, err = coinank_api.Kline(ctx, symbol, coinank_enum.Binance, ts, coinank_enum.To, limit, coinankInterval)
-			if err != nil {
-				return nil, fmt.Errorf("CoinAnk API error (fallback): %w", err)
-			}
-		} else if err != nil {
-			return nil, fmt.Errorf("CoinAnk API error: %w", err)
-		}
+	coinankKlines, err := coinank_api.Kline(ctx, CoinAnkAPISymbol(symbol, coinankExchange), coinankExchange, ts, coinank_enum.To, limit, coinankInterval)
+	if err != nil {
+		return nil, fmt.Errorf("CoinAnk API error (%s): %w", coinankExchange, err)
+	}
+	if len(coinankKlines) == 0 {
+		return nil, fmt.Errorf("CoinAnk returned no %s klines for %s on %s", interval, symbol, coinankExchange)
 	}
 
 	// Convert coinank kline format to market.Kline format
@@ -466,18 +476,30 @@ func calculateLongerTermData(klines []Kline) *LongerTermData {
 	return data
 }
 
-// GetBoxData fetches 1h klines and calculates box data for a symbol
-func GetBoxData(symbol string) (*BoxData, error) {
+// GetBoxData fetches 1h klines and calculates box data for a symbol on the
+// trader's venue. The read goes through marketRouteFor like every other market
+// read: a CME futures symbol has no box source here and is REFUSED (the grid
+// is a crypto strategy), the NinjaTrader venue with a non-CME symbol is
+// REFUSED, an xyz asset reads Hyperliquid, and a crypto symbol reads its own
+// venue's CoinAnk book — an exchange with no CoinAnk venue is refused by name.
+func GetBoxData(symbol, venue string) (*BoxData, error) {
 	symbol = Normalize(symbol)
 
 	// Fetch 500 1h klines
 	var klines []Kline
 	var err error
 
+	switch marketRouteFor(symbol, venue) {
+	case routeFutures:
+		return nil, fmt.Errorf("%s: box data is a crypto grid read — a CME futures symbol has no box source (refused)", symbol)
+	case routeRefusedVenue:
+		return nil, fmt.Errorf("%s: the NinjaTrader venue reads CME futures only — a non-CME symbol is refused (no crypto market read on the futures venue)", symbol)
+	}
+
 	if IsXyzDexAsset(symbol) {
 		klines, err = getKlinesFromHyperliquid(symbol, "1h", LongBoxPeriod)
 	} else {
-		klines, err = getKlinesFromCoinAnk(symbol, "1h", "binance", LongBoxPeriod)
+		klines, err = getKlinesFromCoinAnk(symbol, "1h", venue, LongBoxPeriod)
 	}
 
 	if err != nil {

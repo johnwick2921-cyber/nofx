@@ -179,7 +179,7 @@ func TestRegisterDoesNotAdoptOrphanCredentials(t *testing.T) {
 	}
 	orphanExchange := &store.Exchange{
 		ID: uuid.New().String(), UserID: ghostUserID,
-		Name: "victim binance", ExchangeType: "binance", APIKey: "VICTIM-EXCHANGE-KEY",
+		Name: "victim bybit", ExchangeType: "bybit", APIKey: "VICTIM-EXCHANGE-KEY",
 	}
 	if err := db.Create(orphanExchange).Error; err != nil {
 		t.Fatalf("seed orphan exchange: %v", err)

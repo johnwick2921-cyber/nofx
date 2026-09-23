@@ -33,7 +33,7 @@ func newPicturePlanGateServer(t *testing.T, strategyJSON string) (*Server, strin
 		t.Fatalf("ai model: %v", err)
 	}
 	// Bybit: a CEX whose trader constructs offline (W-NO-BINANCE B removed the
-	// Binance broker this fixture used).
+	// broker this fixture used to seat).
 	exID, err := st.Exchange().Create(ppgUser, "bybit", "Default", true,
 		"test-key", "test-secret", "", false, "", true, "", "", "", "", "", "", 0, "", "", 0)
 	if err != nil {

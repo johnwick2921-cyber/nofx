@@ -105,7 +105,7 @@ func missingExchangeFields(exchange *store.Exchange) []string {
 
 	var missing []string
 	switch exchange.ExchangeType {
-	case "binance", "bybit", "gate", "indodax":
+	case "bybit", "gate", "indodax":
 		if exchange.APIKey == "" {
 			missing = append(missing, "API Key")
 		}
@@ -186,8 +186,9 @@ func validateExchangeForTraderCreation(exchange *store.Exchange) (string, string
 			)
 	}
 
-	switch exchange.ExchangeType {
-	case "binance", "bybit", "okx", "bitget", "gate", "kucoin", "hyperliquid", "aster", "lighter", "indodax", "ninjatrader":
+	// The ONE supported-exchange registry decides (store.IsSupportedExchangeType).
+	switch {
+	case store.IsSupportedExchangeType(exchange.ExchangeType):
 		return "", "", nil
 	default:
 		return formatTraderCreationError(
@@ -228,7 +229,11 @@ func classifyTraderSetupReason(reason string) (string, string) {
 	case strings.Contains(lower, "failed to initialize account"):
 		return "trader.reason.exchange_account_init_failed", "交易所账户初始化失败，请确认钱包地址和 API Key 是否匹配"
 	case strings.Contains(lower, "unsupported trading platform"):
-		return "trader.reason.exchange_unsupported", "当前交易所类型暂不支持机器人初始化"
+		// The refusal names the stored exchange type; keep it (the named reason
+		// must reach the response, not only a fixed sentence).
+		return "trader.reason.exchange_unsupported", "当前交易所类型暂不支持机器人初始化：" + trimmed
+	case strings.Contains(lower, "has no exchange configured"):
+		return "trader.reason.exchange_missing", "当前机器人没有配置交易所：" + trimmed
 	case strings.Contains(lower, "initial balance not set and unable to fetch balance from exchange"):
 		return "trader.reason.exchange_balance_unavailable", "系统暂时无法从交易所读取账户余额"
 	case strings.Contains(lower, "timeout"), strings.Contains(lower, "no such host"), strings.Contains(lower, "connection refused"):
@@ -859,6 +864,17 @@ func (s *Server) handleStartTrader(c *gin.Context) {
 			// Check exchange
 			if fullCfg.Exchange == nil {
 				SafeBadRequestWithDetails(c, formatTraderStartError("这个机器人关联的交易所账户不存在", "请前往「设置 > 交易所配置」检查后，再重新点击启动"), "trader.start.exchange_not_found", mapStringPairs("trader_name", traderName))
+				return
+			}
+			// An exchange type this build cannot construct is refused by name at
+			// load (the manager consults the registry before the enabled check);
+			// report THAT refusal — not "disabled" — so the stored type is named.
+			if rerr := store.CheckSupportedExchangeType(fullCfg.Exchange.ExchangeType); rerr != nil {
+				loadErr := s.traderManager.GetLoadError(traderID)
+				if loadErr == nil {
+					loadErr = rerr
+				}
+				SafeBadRequestWithDetails(c, describeTraderStartError(traderName, loadErr), "trader.start.load_failed", traderSetupReasonParams(loadErr, "", "trader_name", traderName))
 				return
 			}
 			if !fullCfg.Exchange.Enabled {

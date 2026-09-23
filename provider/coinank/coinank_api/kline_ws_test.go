@@ -35,19 +35,19 @@ func TestKlineWs(t *testing.T) {
 		}
 		fmt.Println("kline closed")
 	}()
-	err = ws.Subscribe("BTCUSDT", coinank_enum.Binance, coinank_enum.Minute1)
+	err = ws.Subscribe("BTCUSDT", coinank_enum.Bybit, coinank_enum.Minute1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	fmt.Println("sub success")
 	time.Sleep(10 * time.Second)
-	err = ws.UnSubscribe("BTCUSDT", coinank_enum.Binance, coinank_enum.Minute1)
+	err = ws.UnSubscribe("BTCUSDT", coinank_enum.Bybit, coinank_enum.Minute1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	fmt.Println("unsub success")
 	time.Sleep(10 * time.Second)
-	err = ws.Subscribe("BTCUSDT", coinank_enum.Binance, coinank_enum.Hour1)
+	err = ws.Subscribe("BTCUSDT", coinank_enum.Bybit, coinank_enum.Hour1)
 	if err != nil {
 		t.Fatal(err)
 	}

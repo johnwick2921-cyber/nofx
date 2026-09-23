@@ -121,21 +121,6 @@ type LongerTermData struct {
 	RSI14Values   []float64
 }
 
-// Binance API response structure
-type ExchangeInfo struct {
-	Symbols []SymbolInfo `json:"symbols"`
-}
-
-type SymbolInfo struct {
-	Symbol            string `json:"symbol"`
-	Status            string `json:"status"`
-	BaseAsset         string `json:"baseAsset"`
-	QuoteAsset        string `json:"quoteAsset"`
-	ContractType      string `json:"contractType"`
-	PricePrecision    int    `json:"pricePrecision"`
-	QuantityPrecision int    `json:"quantityPrecision"`
-}
-
 type Kline struct {
 	OpenTime            int64   `json:"openTime"`
 	Open                float64 `json:"open"`
@@ -170,21 +155,6 @@ type Kline struct {
 	// EmittedAt (W-PICTURE-HTF, 2026-09-20) is the AddOn's emission clock for
 	// this frame (ms, UTC). ADDITIVE + omitempty.
 	EmittedAt int64 `json:"emitted_at,omitempty"`
-}
-
-type KlineResponse []interface{}
-
-type PriceTicker struct {
-	Symbol string `json:"symbol"`
-	Price  string `json:"price"`
-}
-
-type Ticker24hr struct {
-	Symbol             string `json:"symbol"`
-	PriceChange        string `json:"priceChange"`
-	PriceChangePercent string `json:"priceChangePercent"`
-	Volume             string `json:"volume"`
-	QuoteVolume        string `json:"quoteVolume"`
 }
 
 // SymbolFeatures feature data structure

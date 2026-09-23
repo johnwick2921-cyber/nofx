@@ -65,9 +65,12 @@ type GridContext struct {
 	MACDSignal      float64 `json:"macd_signal"`
 	MACDHistogram   float64 `json:"macd_histogram"`
 	FundingRate     float64 `json:"funding_rate"`
-	Volume24h       float64 `json:"volume_24h"`
-	PriceChange1h   float64 `json:"price_change_1h"`
-	PriceChange4h   float64 `json:"price_change_4h"`
+	// FundingRateKnown reports whether FundingRate was actually read; false →
+	// the prompt says n/a (a 0 there is absent, never a real rate).
+	FundingRateKnown bool    `json:"funding_rate_known"`
+	Volume24h        float64 `json:"volume_24h"`
+	PriceChange1h    float64 `json:"price_change_1h"`
+	PriceChange4h    float64 `json:"price_change_4h"`
 
 	// Account info
 	TotalEquity      float64 `json:"total_equity"`
@@ -232,7 +235,11 @@ func buildGridUserPromptZh(ctx *GridContext) string {
 	sb.WriteString(fmt.Sprintf("- EMA20: $%.2f, EMA50: $%.2f, 距离: %.2f%%\n", ctx.EMA20, ctx.EMA50, ctx.EMADistance))
 	sb.WriteString(fmt.Sprintf("- RSI14: %.1f\n", ctx.RSI14))
 	sb.WriteString(fmt.Sprintf("- MACD: %.4f, Signal: %.4f, Histogram: %.4f\n", ctx.MACD, ctx.MACDSignal, ctx.MACDHistogram))
-	sb.WriteString(fmt.Sprintf("- 资金费率: %.4f%%\n", ctx.FundingRate*100))
+	if ctx.FundingRateKnown {
+		sb.WriteString(fmt.Sprintf("- 资金费率: %.4f%%\n", ctx.FundingRate*100))
+	} else {
+		sb.WriteString("- 资金费率: n/a\n")
+	}
 	sb.WriteString("\n")
 
 	// Box Indicator Section
@@ -343,7 +350,11 @@ func buildGridUserPromptEn(ctx *GridContext) string {
 	sb.WriteString(fmt.Sprintf("- EMA20: $%.2f, EMA50: $%.2f, Distance: %.2f%%\n", ctx.EMA20, ctx.EMA50, ctx.EMADistance))
 	sb.WriteString(fmt.Sprintf("- RSI14: %.1f\n", ctx.RSI14))
 	sb.WriteString(fmt.Sprintf("- MACD: %.4f, Signal: %.4f, Histogram: %.4f\n", ctx.MACD, ctx.MACDSignal, ctx.MACDHistogram))
-	sb.WriteString(fmt.Sprintf("- Funding Rate: %.4f%%\n", ctx.FundingRate*100))
+	if ctx.FundingRateKnown {
+		sb.WriteString(fmt.Sprintf("- Funding Rate: %.4f%%\n", ctx.FundingRate*100))
+	} else {
+		sb.WriteString("- Funding Rate: n/a\n")
+	}
 	sb.WriteString("\n")
 
 	// Box Indicator Section
@@ -570,9 +581,10 @@ func BuildGridContextFromMarketData(mktData *market.Data, config *store.GridStra
 		Distribution:    config.Distribution,
 
 		// Market data
-		PriceChange1h: mktData.PriceChange1h,
-		PriceChange4h: mktData.PriceChange4h,
-		FundingRate:   mktData.FundingRate,
+		PriceChange1h:    mktData.PriceChange1h,
+		PriceChange4h:    mktData.PriceChange4h,
+		FundingRate:      mktData.FundingRate,
+		FundingRateKnown: mktData.FundingRateKnown,
 	}
 
 	// Extract indicators from timeframe data

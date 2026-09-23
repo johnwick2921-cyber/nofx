@@ -3,7 +3,6 @@ package coinank_enum
 type Exchange string
 
 const ( // all maybe support exchange
-	Binance     Exchange = "Binance"
 	Huobi       Exchange = "Huobi"
 	Okex        Exchange = "Okex"
 	Bitmex      Exchange = "Bitmex"
