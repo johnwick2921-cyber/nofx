@@ -428,10 +428,16 @@ type AutoTrader struct {
 	// self-backoff clock (see maybeRereadAfterFlip). Per trader on purpose:
 	// a process-global map keyed by plan id let one trader's (or one test's)
 	// failed launch hold another's retry.
-	flipRereadLaunchAt    sync.Map
-	lastAIBalanceDay      string // P5 daily balance poll throttle (AI_BALANCE_WARN)
-	isRunning             bool
-	isRunningMutex        sync.RWMutex          // Mutex to protect isRunning flag
+	flipRereadLaunchAt sync.Map
+	lastAIBalanceDay   string // P5 daily balance poll throttle (AI_BALANCE_WARN)
+	isRunning          bool
+	isRunningMutex     sync.RWMutex // Mutex to protect isRunning flag
+	// pictureGen (W4/D25) opens on every registerPictureHtf and closes on
+	// unregisterPictureHtf. An evaluation records the generation it began
+	// under and re-checks it immediately before the wire, so a frame in
+	// flight across a Stop or a restart cannot send for a trader that is
+	// gone. Atomic: read from the live-bar goroutine, written on Run/Stop.
+	pictureGen            atomic.Int64
 	startTime             time.Time             // System start time
 	callCount             int                   // AI call count
 	positionFirstSeenTime map[string]int64      // Position first seen time (symbol_side -> timestamp in milliseconds)
@@ -1104,6 +1110,7 @@ func (at *AutoTrader) Stop() {
 	at.isRunningMutex.Unlock()
 
 	unregisterPostExitDispatch(at) // Phase 4: stop routing close events here
+	at.unregisterPictureHtf()      // W4 D25 — no Picture frame after Stop
 	at.stopArmedEventLoop()        // W3 D14 — no event pass after Stop
 	close(at.stopMonitorCh)        // Notify monitoring goroutine to stop
 	at.monitorWg.Wait()            // Wait for monitoring goroutine to finish
