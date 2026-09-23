@@ -835,16 +835,9 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		// THE LEDGER'S EAR FOR A REFUSAL (2026-09-07). Every entry-reject path
 		// in the NT8 trader calls this with the BROKER'S reason, verbatim.
 		nt.SetRejectSink(at.recordBrokerRejection)
-		// W-ONE-BUTTON M2 site 4 — the installation-wide maintenance permit,
-		// taken by the four ENTRY sends only (never protection/exits), and the
-		// queue's hold check (gap U2). Wired at construction, before Run.
-		nt.SetEntryPermit(MaintenanceEntryPermit)
-		nt.SetEntryHoldCheck(maintenanceQueueHeld)
-		// Site 7 — the AddOn learns the hold over the wire (silent when unheld).
-		nt.SetMaintenanceSource(maintenanceWireState)
-		// M-2 — an entry the hold drops from the queue settles what this trader
-		// recorded for it (never sent), or says why it cannot.
-		nt.SetDroppedEntrySink(at.id, at.onMaintenanceDroppedEntry)
+		// W-ONE-BUTTON M2 — the installation maintenance hold (sites 4, 4b, 7
+		// and the M-2 drop sink), wired at construction, before Run.
+		wireNT8Maintenance(at, nt)
 	}
 	return at, nil
 }
