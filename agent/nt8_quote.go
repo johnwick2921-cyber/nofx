@@ -2,6 +2,7 @@ package agent
 
 import (
 	"strings"
+	"time"
 
 	"nofx/market"
 )
@@ -53,9 +54,41 @@ func readNT8Quote(requested string) nt8Quote {
 		q.Unavailable = sym + ": the NinjaTrader market read returned no data"
 		return q
 	}
-	price, change1h, change4h := data.CurrentPrice, data.PriceChange1h, data.PriceChange4h
+	price := data.CurrentPrice
 	q.Price = &price
-	q.Change1hPct = &change1h
-	q.Change4hPct = &change4h
+	// The changes are NOT data.PriceChange1h/4h: on the futures route those are
+	// bar-count windows over 5m/1h bars (20 bars = 100 min; the prior 1h close),
+	// and 0 when the bars run short. Here each window is measured by bar time
+	// on the NT8 5m series, and is null when the series does not reach back.
+	bars := market.FuturesBarsProvider(sym, "5m", nt8QuoteBars)
+	q.Change1hPct = changeOverWindow(bars, time.Hour)
+	q.Change4hPct = changeOverWindow(bars, 4*time.Hour)
 	return q
+}
+
+// nt8QuoteBars is how many 5m bars the change windows read: 200 bars reach
+// back 16h40m, well past the 4h window.
+const nt8QuoteBars = 200
+
+// changeOverWindow is the percent change from the close of the latest bar that
+// closed at least `window` before the series' last bar, to that last close.
+// It returns nil — absent, never a fabricated 0 — when no bar reaches back
+// that far or the reference close is not positive.
+func changeOverWindow(bars []market.Kline, window time.Duration) *float64 {
+	if len(bars) == 0 {
+		return nil
+	}
+	last := bars[len(bars)-1]
+	target := last.CloseTime - window.Milliseconds()
+	for i := len(bars) - 2; i >= 0; i-- {
+		if bars[i].CloseTime > target {
+			continue
+		}
+		if bars[i].Close <= 0 {
+			return nil
+		}
+		pct := (last.Close - bars[i].Close) / bars[i].Close * 100
+		return &pct
+	}
+	return nil
 }

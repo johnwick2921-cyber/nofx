@@ -165,12 +165,17 @@ func TestHandleTickers_CMESymbolReadsNT8Bars(t *testing.T) {
 	if _, has := mnq["unavailable"]; has {
 		t.Fatalf("a successful read must not carry unavailable: %v", mnq)
 	}
-	// market.GetWithExchange on the futures route: price = last 5m close;
-	// 1h change vs the 5m close 20 bars back; 4h change vs the prior 1h close.
+	// price = the last 5m close (market.GetWithExchange). The 1h change is
+	// measured by bar TIME on the 5m series: the bar that closed 60 min before
+	// the last one is bar 17 (12 bars × 5 min back), close 20017. The 30-bar
+	// series spans 150 min, so the 4h window has no reference bar → null,
+	// never 0 and never the prior 1h close.
 	want := map[string]float64{
 		"price":         20029,
-		"change_1h_pct": (20029.0 - 20009.0) / 20009.0 * 100,
-		"change_4h_pct": (20029.0 - 19900.0) / 19900.0 * 100,
+		"change_1h_pct": (20029.0 - 20017.0) / 20017.0 * 100,
+	}
+	if v, has := mnq["change_4h_pct"]; !has || v != nil {
+		t.Fatalf("MNQ change_4h_pct = %v (present=%v), want null — the series does not reach back 4h", v, has)
 	}
 	for key, w := range want {
 		got, ok := mnq[key].(float64)
