@@ -13,7 +13,7 @@ import (
 	"nofx/store"
 )
 
-// ── W-NO-BINANCE A — absent open interest / funding render n/a, never 0 ────
+// ── W-NB A — absent open interest / funding render n/a, never 0 ────
 //
 // The CME futures path reads no external market data (market.futuresOIFunding:
 // OpenInterest nil, FundingRateKnown false). The prompt says n/a; it never

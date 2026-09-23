@@ -10,7 +10,7 @@ import (
 )
 
 // futuresOIFunding is the ONE place the CME futures path decides open interest
-// and funding (W-NO-BINANCE A): ABSENT — OI nil, funding not known — because
+// and funding (W-NB A): ABSENT — OI nil, funding not known — because
 // the futures path makes no external market-data call. OI and funding are
 // crypto-perp concepts; there is no CME symbol behind them.
 func futuresOIFunding() (oi *OIData, funding float64, fundingKnown bool) {
@@ -27,7 +27,7 @@ func cryptoOIFunding() (oi *OIData, funding float64, fundingKnown bool) {
 }
 
 // marketRoute is where one market read for (symbol, venue) goes — the ONE
-// decision GetWithExchange takes and the 📊 boot line READS (W-NO-BINANCE A).
+// decision GetWithExchange takes and the 📊 boot line READS (W-NB A).
 type marketRoute int
 
 const (
@@ -98,7 +98,7 @@ func GetWithExchange(symbol, exchange string) (*Data, error) {
 	// CME futures (NT8) read the live BarCache via the injected provider —
 	// never CoinAnk. BarCache holds 5m/15m/1h (not 3m/4h), so we map 5m->short
 	// and 1h->longer. Crypto path below is untouched.
-	// W-NO-BINANCE A: the route is the ONE decision (marketRouteFor); the
+	// W-NB A: the route is the ONE decision (marketRouteFor); the
 	// NinjaTrader venue with a non-CME symbol is refused, never a crypto read.
 	route := marketRouteFor(symbol, exchange)
 	if route == routeRefusedVenue {
@@ -197,7 +197,7 @@ func GetWithExchange(symbol, exchange string) (*Data, error) {
 		}
 	}
 
-	// OI + funding. W-NO-BINANCE A: the CME futures path makes NO external
+	// OI + funding. W-NB A: the CME futures path makes NO external
 	// market-data call — both are crypto-perp concepts with no CME symbol —
 	// and reports them ABSENT (nil / not known), never a fabricated 0. The
 	// crypto path has no OI/funding source in this build: ABSENT as well.
@@ -428,11 +428,11 @@ func getWithTimeframes(symbol, venue string, timeframes []string, primaryTimefra
 	}
 
 	// Calculate price changes
-	priceChange1h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 60) // 1 hour
+	priceChange1h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 60)  // 1 hour
 	priceChange4h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 240) // 4 hours
 
 	// OI + funding (crypto-perp concepts). The futures path makes no call and
-	// reports both ABSENT (W-NO-BINANCE A — never the fabricated {0,0} / 0
+	// reports both ABSENT (W-NB A — never the fabricated {0,0} / 0
 	// this used to write); the crypto path has no source in this build and
 	// reports both ABSENT too.
 	var oiData *OIData
@@ -457,7 +457,7 @@ func getWithTimeframes(symbol, venue string, timeframes []string, primaryTimefra
 		OpenInterest:       oiData,
 		FundingRate:        fundingRate,
 		FundingRateKnown:   fundingKnown,
-		TimeframeData: timeframeData,
+		TimeframeData:      timeframeData,
 	}, nil
 }
 
@@ -836,7 +836,6 @@ func isStaleData(klines []Kline, symbol string) bool {
 	logger.Infof("⚠️  %s detected extreme price stability (no fluctuation for %d consecutive periods), but volume is normal", symbol, stalePriceThreshold)
 	return false
 }
-
 
 // chatTableCT loads America/Chicago for the chat-path OHLCV table (the one
 // former Time(UTC) site outside the tz-guard dirs — v1 audit §1.1).

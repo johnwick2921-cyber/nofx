@@ -7,7 +7,7 @@ import (
 	"nofx/market"
 )
 
-// W-NO-BINANCE A — the 📊 market-data boot line is READ.
+// W-NB A — the 📊 market-data boot line is READ.
 func TestMarketDataBootLineIsRead(t *testing.T) {
 	prev := market.FuturesBarsProvider
 	t.Cleanup(func() { market.FuturesBarsProvider = prev })

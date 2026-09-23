@@ -844,7 +844,7 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 
 		// Liquidity filter (skip for xyz dex assets - they have no open-interest
 		// feed). CME futures (NT8 path) likewise have no crypto open-interest
-		// feed (OI is absent — nil — since W-NO-BINANCE A), so the OI gate must
+		// feed (OI is absent — nil — since W-NB A), so the OI gate must
 		// not judge them — exempt them too.
 		isExistingPosition := positionSymbols[coin.Symbol]
 		isXyzAsset := market.IsXyzDexAsset(coin.Symbol)

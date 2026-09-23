@@ -110,7 +110,7 @@ func TestExistingGoImportTargetsPreserved(t *testing.T) {
 			}
 		}
 	}
-	// W-NO-BINANCE B: a removed nofx/ target whose PACKAGE WAS DELETED from the
+	// W-NB B: a removed nofx/ target whose PACKAGE WAS DELETED from the
 	// tree (no tracked file left under its directory) is a deletion, not a
 	// rename — preserveImports still rejects it when a renamed counterpart
 	// (vl/X) is imported. A package that still exists must still be imported.
@@ -137,7 +137,7 @@ func TestExistingGoImportTargetsPreserved(t *testing.T) {
 		} // a new file has no pre-existing import targets
 		after, err := os.ReadFile(filepath.Join(root, path))
 		if os.IsNotExist(err) {
-			// A DELETED file (W-NO-BINANCE B) drops all its imports: each is
+			// A DELETED file (W-NB B) drops all its imports: each is
 			// judged like any removal — still imported elsewhere, or its
 			// package deleted from the tree; a rename is still rejected.
 			after, err = []byte("package deleted\n"), nil
@@ -179,7 +179,7 @@ func TestImportScopeAllowsMovedTarget(t *testing.T) {
 	}
 }
 
-// W-NO-BINANCE B: a removed import whose package was DELETED is allowed
+// W-NB B: a removed import whose package was DELETED is allowed
 // (the predicate says "no tracked file left under its directory"); the same
 // removal with a renamed counterpart is still rejected.
 func TestImportScopeAllowsADeletedPackageButNotARename(t *testing.T) {
