@@ -9,6 +9,7 @@ import (
 	"nofx/store"
 	"nofx/trader"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -451,6 +452,15 @@ func (tm *TraderManager) LoadUserTradersFromStore(st *store.Store, userID string
 			continue
 		}
 
+		// The supported-exchange registry is consulted FIRST (before the
+		// enabled check): a trader on a type this build cannot construct is
+		// REFUSED by name and recorded, never skipped silently.
+		if rerr := trader.ExchangeRefusal(traderCfg.Name, exchangeCfg.ExchangeType); rerr != nil {
+			logger.Warnf("%s %v", traderLogTag(traderCfg.ID, traderCfg.Name), rerr)
+			tm.loadErrors[traderCfg.ID] = rerr
+			continue
+		}
+
 		if !exchangeCfg.Enabled {
 			logger.Infof("⚠️ Exchange %s for trader %s is not enabled, skipping", traderCfg.ExchangeID, traderCfg.Name)
 			continue
@@ -555,6 +565,14 @@ func (tm *TraderManager) LoadTradersFromStore(st *store.Store) error {
 			continue
 		}
 
+		// Registry FIRST, same as LoadUserTradersFromStore: a trader on a type
+		// this build cannot construct is REFUSED by name and recorded.
+		if rerr := trader.ExchangeRefusal(traderCfg.Name, exchangeCfg.ExchangeType); rerr != nil {
+			logger.Warnf("%s %v", traderLogTag(traderCfg.ID, traderCfg.Name), rerr)
+			tm.loadErrors[traderCfg.ID] = rerr
+			continue
+		}
+
 		if !exchangeCfg.Enabled {
 			logger.Infof("⚠️  Exchange %s for trader %s is not enabled, skipping", traderCfg.ExchangeID, traderCfg.Name)
 			continue
@@ -564,12 +582,32 @@ func (tm *TraderManager) LoadTradersFromStore(st *store.Store) error {
 		err = tm.addTraderFromStore(traderCfg, aiModelCfg, exchangeCfg, st)
 		if err != nil {
 			logger.Warnf("%s failed to add trader: %v", traderLogTag(traderCfg.ID, traderCfg.Name), err)
+			// Boot-loader parity with LoadUserTradersFromStore: record the load
+			// error so GetLoadError answers from the first boot, not only after
+			// some API call reloads the user.
+			tm.loadErrors[traderCfg.ID] = err
 			continue
 		}
+		delete(tm.loadErrors, traderCfg.ID)
 	}
 
-	logger.Infof("✓ Successfully loaded %d traders to memory", len(tm.traders))
+	logger.Infof("✓ Successfully loaded %d traders to memory · %s", len(tm.traders), tm.loadRefusalSummaryLocked())
 	return nil
+}
+
+// loadRefusalSummaryLocked READS tm.loadErrors (caller holds tm.mu) for the
+// boot line: the count and the refused trader ids, sorted. None → "refused at
+// load: 0".
+func (tm *TraderManager) loadRefusalSummaryLocked() string {
+	if len(tm.loadErrors) == 0 {
+		return "refused at load: 0"
+	}
+	ids := make([]string, 0, len(tm.loadErrors))
+	for id := range tm.loadErrors {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return fmt.Sprintf("refused at load: %d (%s)", len(ids), strings.Join(ids, ","))
 }
 
 // addTraderFromStore internal method: adds trader from store configuration

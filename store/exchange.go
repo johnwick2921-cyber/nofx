@@ -61,7 +61,7 @@ func (s *ExchangeStore) initTables() error {
 		if tableExists > 0 {
 			// Still run data migrations
 			s.migrateToMultiAccount()
-			s.db.Model(&Exchange{}).Where("account_name = '' OR account_name IS NULL").Update("account_name", "Default")
+			s.backfillDefaultAccountName()
 			if err := s.cleanupIncompleteExchangeConfigs(); err != nil {
 				logger.Warnf("Exchange cleanup migration warning: %v", err)
 			}
@@ -79,7 +79,7 @@ func (s *ExchangeStore) initTables() error {
 	}
 
 	// Fix empty account_name for existing records
-	s.db.Model(&Exchange{}).Where("account_name = '' OR account_name IS NULL").Update("account_name", "Default")
+	s.backfillDefaultAccountName()
 	if err := s.cleanupIncompleteExchangeConfigs(); err != nil {
 		logger.Warnf("Exchange cleanup migration warning: %v", err)
 	}
@@ -87,12 +87,32 @@ func (s *ExchangeStore) initTables() error {
 	return nil
 }
 
+// backfillDefaultAccountName names an unnamed account "Default" — for rows of a
+// SUPPORTED exchange type only. A row whose type this build does not construct
+// is never written at boot (see cleanupIncompleteExchangeConfigs).
+func (s *ExchangeStore) backfillDefaultAccountName() {
+	s.db.Model(&Exchange{}).
+		Where("(account_name = '' OR account_name IS NULL) AND exchange_type IN ?", supportedExchangeTypes).
+		Update("account_name", "Default")
+}
+
+// cleanupIncompleteExchangeConfigs runs on every boot (initTables). For a row
+// of a SUPPORTED type it deletes an incomplete config and enables a complete
+// one, as before. A row whose exchange_type is NOT in the registry — a broker
+// removed from the build, or no type at all — is LEFT UNTOUCHED: never
+// deleted, never enabled, no data.db write. Its traders are refused by name at
+// load (trader.ExchangeRefusal). Deleting it here would have been a silent
+// boot-time write that turned "refused" into "gone".
 func (s *ExchangeStore) cleanupIncompleteExchangeConfigs() error {
 	var exchanges []Exchange
 	if err := s.db.Find(&exchanges).Error; err != nil {
 		return err
 	}
 	for _, exchange := range exchanges {
+		if err := CheckSupportedExchangeType(exchange.ExchangeType); err != nil {
+			logger.Warnf("🧹⛔ Exchange row left untouched at boot (not deleted, not enabled): id=%s user=%s — %v; its traders are refused at load", exchange.ID, exchange.UserID, err)
+			continue
+		}
 		missing := MissingRequiredExchangeCredentialFields(
 			exchange.ExchangeType,
 			string(exchange.APIKey),
@@ -123,12 +143,18 @@ func (s *ExchangeStore) cleanupIncompleteExchangeConfigs() error {
 	return nil
 }
 
+// legacyExchangeTypeIDs are the old-schema ids (id = exchange type, exchange_type
+// '') that migrateToMultiAccount rewrites to a UUID row. Only SUPPORTED types
+// are listed: an old-schema row for a broker removed from the build is left
+// untouched (no boot write) and its traders are refused at load.
+var legacyExchangeTypeIDs = []string{"bybit", "okx", "bitget", "hyperliquid", "aster", "lighter"}
+
 // migrateToMultiAccount migrates old schema (id=exchange_type) to new schema (id=UUID)
 func (s *ExchangeStore) migrateToMultiAccount() error {
 	// Check if migration is needed by looking for old-style IDs (non-UUID)
 	var count int64
 	err := s.db.Model(&Exchange{}).
-		Where("exchange_type = '' AND id IN ?", []string{"binance", "bybit", "okx", "bitget", "hyperliquid", "aster", "lighter"}).
+		Where("exchange_type = '' AND id IN ?", legacyExchangeTypeIDs).
 		Count(&count).Error
 	if err != nil {
 		return err
@@ -142,7 +168,7 @@ func (s *ExchangeStore) migrateToMultiAccount() error {
 
 	// Get all old records
 	var records []Exchange
-	err = s.db.Where("exchange_type = '' AND id IN ?", []string{"binance", "bybit", "okx", "bitget", "hyperliquid", "aster", "lighter"}).
+	err = s.db.Where("exchange_type = '' AND id IN ?", legacyExchangeTypeIDs).
 		Find(&records).Error
 	if err != nil {
 		return err
@@ -152,7 +178,7 @@ func (s *ExchangeStore) migrateToMultiAccount() error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		for _, r := range records {
 			newID := uuid.New().String()
-			oldID := r.ID // This is the exchange type (e.g., "binance")
+			oldID := r.ID // This is the exchange type (e.g., "bybit")
 
 			// Update traders table to use new UUID
 			if err := tx.Exec("UPDATE traders SET exchange_id = ? WHERE exchange_id = ? AND user_id = ?",
@@ -207,8 +233,6 @@ func (s *ExchangeStore) GetByID(userID, id string) (*Exchange, error) {
 // getExchangeNameAndType returns the display name and type for an exchange type
 func getExchangeNameAndType(exchangeType string) (name string, typ string) {
 	switch exchangeType {
-	case "binance":
-		return "Binance Futures", "cex"
 	case "bybit":
 		return "Bybit Futures", "cex"
 	case "okx":
@@ -380,36 +404,4 @@ func (s *ExchangeStore) Delete(userID, id string) error {
 	}
 	logger.Infof("🗑️ Deleted exchange: id=%s, userID=%s", id, userID)
 	return nil
-}
-
-// CreateLegacy creates exchange configuration (legacy API for backward compatibility)
-// This method is deprecated, use Create instead
-func (s *ExchangeStore) CreateLegacy(userID, id, name, typ string, enabled bool, apiKey, secretKey string, testnet bool,
-	hyperliquidWalletAddr, asterUser, asterSigner, asterPrivateKey string) error {
-
-	// Check if this is an old-style ID (exchange type as ID)
-	if id == "binance" || id == "bybit" || id == "okx" || id == "bitget" || id == "hyperliquid" || id == "aster" || id == "lighter" {
-		_, err := s.Create(userID, id, "Default", enabled, apiKey, secretKey, "", testnet,
-			hyperliquidWalletAddr, true, // Default to Unified Account mode
-			asterUser, asterSigner, asterPrivateKey, "", "", "", 0,
-			"", "", 0) // NinjaTrader fields not used in legacy create
-		return err
-	}
-
-	// Otherwise assume it's already a UUID
-	exchange := &Exchange{
-		ID:                    id,
-		UserID:                userID,
-		Name:                  name,
-		Type:                  typ,
-		Enabled:               enabled,
-		APIKey:                crypto.EncryptedString(apiKey),
-		SecretKey:             crypto.EncryptedString(secretKey),
-		Testnet:               testnet,
-		HyperliquidWalletAddr: hyperliquidWalletAddr,
-		AsterUser:             asterUser,
-		AsterSigner:           asterSigner,
-		AsterPrivateKey:       crypto.EncryptedString(asterPrivateKey),
-	}
-	return s.db.Where("id = ?", id).FirstOrCreate(exchange).Error
 }

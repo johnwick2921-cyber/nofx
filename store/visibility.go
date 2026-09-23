@@ -4,7 +4,7 @@ import "strings"
 
 func MissingRequiredExchangeCredentialFields(exchangeType, apiKey, secretKey, passphrase, hyperliquidWalletAddr, asterUser, asterSigner, asterPrivateKey, lighterWalletAddr, lighterAPIKeyPrivateKey string, ntDataDir ...string) []string {
 	switch strings.ToLower(strings.TrimSpace(exchangeType)) {
-	case "binance", "bybit", "gate", "indodax":
+	case "bybit", "gate", "indodax":
 		return missingNamedFields(
 			namedField{"api_key", apiKey},
 			namedField{"secret_key", secretKey},
