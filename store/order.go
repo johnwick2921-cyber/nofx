@@ -373,7 +373,7 @@ func (s *OrderStore) GetMaxTradeIDsByExchange(exchangeID string) (map[string]int
 	var results []symbolTradeID
 
 	// Query all trade IDs grouped by symbol, find max in Go to avoid database-specific CAST issues
-	// (PostgreSQL INTEGER is 32-bit, can't handle Binance trade IDs > 2.1B)
+	// (PostgreSQL INTEGER is 32-bit, can't handle exchange trade IDs > 2.1B)
 	err := s.db.Model(&TraderFill{}).
 		Select("symbol, exchange_trade_id").
 		Where("exchange_id = ? AND exchange_trade_id != ''", exchangeID).

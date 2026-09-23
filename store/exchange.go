@@ -143,8 +143,8 @@ func (s *ExchangeStore) cleanupIncompleteExchangeConfigs() error {
 	return nil
 }
 
-// legacyExchangeTypeIDs are the old-schema ids (id = exchange type, exchange_type
-// '') that migrateToMultiAccount rewrites to a UUID row. Only SUPPORTED types
+// legacyExchangeTypeIDs are the old-schema ids (id = exchange type, empty
+// exchange_type) that migrateToMultiAccount rewrites to a UUID row. Only SUPPORTED types
 // are listed: an old-schema row for a broker removed from the build is left
 // untouched (no boot write) and its traders are refused at load.
 var legacyExchangeTypeIDs = []string{"bybit", "okx", "bitget", "hyperliquid", "aster", "lighter"}
@@ -263,6 +263,14 @@ func (s *ExchangeStore) Create(userID, exchangeType, accountName string, enabled
 	asterUser, asterSigner, asterPrivateKey,
 	lighterWalletAddr, lighterPrivateKey, lighterApiKeyPrivateKey string, lighterApiKeyIndex int,
 	ntDataDir, ntInstrumentName string, ntDefaultContractQty int) (string, error) {
+
+	// The registry is consulted FIRST, so a type this build cannot construct is
+	// refused by name — not reported as "missing exchange_type". (Case-folded
+	// like the credential check below, so existing callers keep their casing
+	// tolerance.)
+	if !IsSupportedExchangeType(strings.ToLower(strings.TrimSpace(exchangeType))) {
+		return "", CheckSupportedExchangeType(exchangeType)
+	}
 
 	if missing := MissingRequiredExchangeCredentialFields(
 		exchangeType, apiKey, secretKey, passphrase,

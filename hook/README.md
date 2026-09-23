@@ -41,7 +41,7 @@ func HookExec[T any](key string, args ...any) *T
 
 ### 1. `GETIP` - 获取用户IP
 
-**调用位置**：`api/server.go:210`
+**调用位置**：当前没有生产代码调用（扩展点保留）
 
 **参数**：`userId string`
 
@@ -57,27 +57,9 @@ type IpResult struct {
 
 ---
 
-### 2. `NEW_BINANCE_TRADER` - Binance客户端创建
+### 2. `NEW_ASTER_TRADER` - Aster客户端创建
 
-**调用位置**：`trader/binance_futures.go:68`
-
-**参数**：`userId string, client *futures.Client`
-
-**返回**：`*NewBinanceTraderResult`
-```go
-type NewBinanceTraderResult struct {
-    Err    error
-    Client *futures.Client  // 可修改client配置
-}
-```
-
-**用途**：为Binance客户端注入代理、日志等
-
----
-
-### 3. `NEW_ASTER_TRADER` - Aster客户端创建
-
-**调用位置**：`trader/aster_trader.go:68`
+**调用位置**：`trader/aster/trader.go:66`
 
 **参数**：`user string, client *http.Client`
 
@@ -90,6 +72,24 @@ type NewAsterTraderResult struct {
 ```
 
 **用途**：为Aster客户端注入代理等
+
+---
+
+### 3. `SET_HTTP_CLIENT` - 通用HTTP客户端替换
+
+**调用位置**：当前没有生产代码调用（它唯一的生产调用方——`market` 包的 API 客户端——已在 W-NO-BINANCE B 中随交易所专属的 OI/资金费率抓取一起删除）。保留该扩展点供测试替身使用，新的 HTTP 客户端可以接入它。
+
+**参数**：`client *http.Client`
+
+**返回**：`*SetHttpClientResult`
+```go
+type SetHttpClientResult struct {
+    Err    error
+    Client *http.Client  // 替换后的HTTP client
+}
+```
+
+**用途**：为通用HTTP客户端注入代理、离线测试替身等
 
 ## 使用示例
 
@@ -113,17 +113,15 @@ func InitHooks(enabled bool) {
         return &hook.IpResult{Err: err, IP: proxyIP}
     })
 
-    // 注册Binance客户端Hook
-    hook.RegisterHook(hook.NEW_BINANCE_TRADER, func(args ...any) any {
-        userId := args[0].(string)
-        client := args[1].(*futures.Client)
+    // 注册Aster客户端Hook
+    hook.RegisterHook(hook.NEW_ASTER_TRADER, func(args ...any) any {
+        user := args[0].(string)
+        client := args[1].(*http.Client)
 
         // 修改client配置
-        if client.HTTPClient != nil {
-            client.HTTPClient.Transport = getProxyTransport()
-        }
+        client.Transport = getProxyTransport(user)
 
-        return &hook.NewBinanceTraderResult{Client: client}
+        return &hook.NewAsterTraderResult{Client: client}
     })
 }
 ```
@@ -207,10 +205,10 @@ func (r *MyHookResult) GetResult() string {
 ```go
 // hook/hooks.go
 const (
-    GETIP              = "GETIP"
-    NEW_BINANCE_TRADER = "NEW_BINANCE_TRADER"
-    NEW_ASTER_TRADER   = "NEW_ASTER_TRADER"
-    MY_HOOK            = "MY_HOOK"  // 新增
+    GETIP            = "GETIP"
+    NEW_ASTER_TRADER = "NEW_ASTER_TRADER"
+    SET_HTTP_CLIENT  = "SET_HTTP_CLIENT"
+    MY_HOOK          = "MY_HOOK"  // 新增
 )
 ```
 
@@ -266,5 +264,5 @@ func TestHook(t *testing.T) {
 ## 参考
 
 - 核心实现：`hook/hooks.go`
-- Result类型：`hook/trader_hook.go`, `hook/ip_hook.go`
-- 调用示例：`api/server.go`, `trader/binance_futures.go`, `trader/aster_trader.go`
+- Result类型：`hook/trader_hook.go`, `hook/ip_hook.go`, `hook/http_client_hook.go`
+- 调用示例：`trader/aster/trader.go`

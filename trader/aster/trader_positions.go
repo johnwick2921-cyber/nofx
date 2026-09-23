@@ -39,14 +39,14 @@ func (t *AsterTrader) GetPositions() ([]map[string]interface{}, error) {
 		leverageVal, _ := strconv.ParseFloat(pos["leverage"].(string), 64)
 		liquidationPrice, _ := strconv.ParseFloat(pos["liquidationPrice"].(string), 64)
 
-		// Determine direction (consistent with Binance)
+		// Determine direction (consistent with the other perp brokers)
 		side := "long"
 		if posAmt < 0 {
 			side = "short"
 			posAmt = -posAmt
 		}
 
-		// Return same field names as Binance
+		// Return the same field names as the other perp brokers
 		result = append(result, map[string]interface{}{
 			"symbol":           pos["symbol"],
 			"side":             side,
@@ -65,7 +65,7 @@ func (t *AsterTrader) GetPositions() ([]map[string]interface{}, error) {
 // SetMarginMode Set margin mode
 func (t *AsterTrader) SetMarginMode(symbol string, isCrossMargin bool) error {
 	// Aster supports margin mode settings
-	// API format similar to Binance: CROSSED (cross margin) / ISOLATED (isolated margin)
+	// API format: CROSSED (cross margin) / ISOLATED (isolated margin)
 	marginType := "CROSSED"
 	if !isCrossMargin {
 		marginType = "ISOLATED"

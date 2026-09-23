@@ -87,7 +87,7 @@ func TestApplyDecisionCallTimeout(t *testing.T) {
 
 	// Crypto: byte-identical to the pre-change behavior (no cap).
 	bn := &fakeDecisionClient{}
-	applyDecisionCallTimeout(bn, "binance")
+	applyDecisionCallTimeout(bn, "bybit")
 	if bn.set {
 		t.Fatalf("crypto client must NOT be capped, got timeout=%v", bn.timeout)
 	}

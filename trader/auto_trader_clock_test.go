@@ -110,7 +110,7 @@ func TestBarCloseCadenceActive(t *testing.T) {
 	if mkTrader("ninjatrader", nil, "5m").barCloseCadenceActive() {
 		t.Fatal("no day_plan → inactive")
 	}
-	if mkTrader("binance", &yes, "5m").barCloseCadenceActive() {
+	if mkTrader("bybit", &yes, "5m").barCloseCadenceActive() {
 		t.Fatal("crypto → inactive even with day_plan")
 	}
 }
