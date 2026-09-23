@@ -6444,3 +6444,138 @@ to owner ruling on "no new protocol work").
 **Shape.** The order's identity (plan, scenario, leg) survives a re-plan, but the price that justified it does not. Nothing compares the working order's price with the current version's.
 **Probe:** for every resting order, name the plan version that priced it and the code path that runs when a newer version re-prices the same scenario. "The rest cap will end it" is a bound, not an answer.
 **Owed:** on a new version, a working `market_in_zone` row whose zone no longer contains its limit is cancelled ("zone moved by v<N>") and the scenario re-arms under the new version; a call-site test drives a version bump with a moved zone.
+
+## CLASS NN (assigned at merge) — a level declared on fewer witnesses than its own definition names
+
+**Found:** 2026-09-23, W-EXEC-TRUTH W4 (`fix/w4-picture-evidence`), D22 [A].
+
+**Shape.** `kernel.BodyPivots4H` defines a 4H body pivot as a candle whose four
+neighbours (i−2, i−1, i+1, i+2) all fail to exceed it. The loop ran
+`i := 1 .. len-2` and the neighbour loop `continue`d past any neighbour that was
+out of range or absent — so a "pivot" could be declared on as few as TWO
+observed neighbours and still carry the authority of the four-neighbour rule.
+The doc comment said "All four confirming neighbors"; the code skipped the ones
+it could not find. Nothing in the type recorded how many had actually been read.
+
+**Fixed in W4:** the range is `i := 2 .. len-3` and `fourNeighboursComplete`
+requires all four to exist and i+2 to carry a completion stamp; a hole REFUSES
+instead of being skipped. RED: "pivot formed at idx 1 with no i-2 neighbour".
+
+**The tell to look for elsewhere:** a loop that states a quorum in prose and
+implements it with `continue`. Ask what the code does when a witness is missing
+— skipping one is not the same as not needing it.
+
+## CLASS NN (assigned at merge) — an absent timestamp that reads as permission
+
+**Found:** 2026-09-23, W-EXEC-TRUTH W4, D22 [A]. Same wave as the above; the
+two travel together and are worth reading as one.
+
+**Shape.** `PictureHtfLevel.KnowableAt` was assigned only when i+2 happened to
+exist. When it did not, the field kept Go's zero value — and all three
+consumers (`ActiveLevels`, `H1CloseBreak`, `NearestOpposingZone`) tested
+`KnowableAt == 0 || KnowableAt <= now`, i.e. read "we never established when
+this became knowable" as "it has always been knowable". The safest-looking
+reading of an absent value was the most permissive one. It was also anchored to
+the OPEN of the confirming candle rather than its close, making every level
+usable a whole period early.
+
+**Fixed in W4:** the pivot rule guarantees i+2 exists, so `KnowableAt` is
+always a real completion time and never 0; all three consumers now refuse 0 as
+missing evidence. RED: "level carries KnowableAt=0 (absent standing in for a
+real time)".
+
+**The tell:** `x == 0 || x <= now`. A zero that shares a comparison with a real
+value is a fabricated value wearing the type's clothes (canon: absent ≠ []).
+
+## CLASS NN (assigned at merge) — a requirement whose own fetch cannot satisfy it
+
+**Found:** 2026-09-23, W-EXEC-TRUTH W4, D21/F2 [A] (arithmetic from the code;
+101's read-only map raised it, verified independently at this wave's base).
+
+**Shape.** The spec said "require ≥ PivotWindow+4 COMPLETED 4H candles". The
+evaluator fetched exactly `PivotWindow+4` and only THEN filtered to completed
+ones — and the provider returns the TAIL, which always holds the candle still
+forming. So the rule could never pass: not rarely, by construction. Implemented
+literally it would have refused every Picture entry within about a trading day.
+
+**Fixed in W4:** `pictureHtfDepthMargin` makes the FETCH exceed the
+REQUIREMENT, and `PictureDepthEvidence{Fetched, Completed, Required}` reports
+the count that was READ ("insufficient depth 8/12"). RED at the provider seam:
+"the 4H fetch asked for 12, which cannot yield 12 completed bars once the
+forming bar is filtered out".
+
+**The tell:** a threshold compared against a filtered subset of a fetch sized to
+the threshold. Ask what the filter removes, then ask whether the fetch accounts
+for it. A dispatch can carry this defect too — this one did, and was corrected
+before it shipped rather than after.
+
+## CLASS NN (assigned at merge) — evidence stripped at a seam that rebuilds the type
+
+**Found:** 2026-09-23, W-EXEC-TRUTH W4, D21 identity [A].
+
+**Shape.** Three separate facts about a bar frame — the contract it belongs to,
+whether the AddOn PROVED the bar closed, and when the source emitted it — were
+each carried correctly by the wire and each lost in Go. `contract` had no field
+on `BarsHistoricalPayload`/`BarUpdatePayload` at all, though the AddOn has
+stamped it on EVERY bar frame since 2026-09-11. `Final` and `EmittedAt` existed
+on both types but were dropped where `pictureHtfLiveBars` built its klines by
+naming five fields: `market.Kline{OpenTime, Open, High, Low, Close}`. So the
+Picture evaluator received frames stripped of everything that made them
+evidence, and could not tell whose tape it was reading, a closed candle from a
+forming one, or how old the data was.
+
+**Fixed in W4:** the payloads parse `contract` (no AddOn change — only a
+field); the consumer carries Final, EmittedAt and Contract; OnBars ignores and
+counts a definite contract mismatch. RED at the type level: "p.Contract
+undefined (type BarUpdatePayload has no field or method Contract)".
+
+**The tell:** a struct literal that names fields instead of copying. Every field
+added to the source type afterwards is silently dropped there, and no test
+fails. Grep for the seams that rebuild a type rather than pass it.
+
+## CLASS NN (assigned at merge) — a clock that always dominates, added as belt-and-braces
+
+**Found:** 2026-09-23, W-EXEC-TRUTH W4, D23/R1 — found by CTO review of this
+wave's own push 6 [A]. Recorded because the defect was INTRODUCED by the fix
+for the class above it, which is the more useful lesson.
+
+**Shape.** Freshness had read only our own RECEIPT clock, so data emitted long
+ago but delivered this instant passed. The fix bound the limit to the worst of
+three clocks: source `emitted_at`, the candle's own close, and receipt. But NT8
+emits a closed bar on the FIRST TICK OF THE NEXT BAR, so `emitted >= close`
+ALWAYS and candle age dominates source age unconditionally. "Worst of three"
+silently became "elapsed since the boundary ≤ freshness_sec" — 2s against a 10s
+entry window — refusing the ordinary late-emission case outright: a candle
+closing 14:00:00 and emitted 14:00:03 has a source age of 0.1s and a candle age
+of 3s.
+
+**Fixed in W4:** the limit binds worse(source, receipt) only; the candle close
+stays as READ evidence and binds nothing. RED: "a candle emitted 3s after its
+boundary is 3s late, not stale — it must send inside the 10s window, got 0".
+
+**The tell:** adding a clock, a bound or a check "for safety" without asking
+whether it can ever LOSE. A term that always dominates has replaced the rule,
+not reinforced it.
+
+## CLASS NN (assigned at merge) — a registry entry evicted by an owner that has already been replaced
+
+**Found:** 2026-09-23, W-EXEC-TRUTH W4, D25 [A].
+
+**Shape.** `Stop()` never removed the trader from `pictureHtfTraders`, so a
+stopped trader kept receiving live frames. The obvious fix — `Delete(at.id)` —
+introduces a worse bug: a RESTARTED trader has already re-registered under the
+same id, so a late Stop from the old instance evicts the live one. And that
+registry is shared: `pictureHtfLiveBars` Ranges it to drive W3's armed-kick
+pass, so evicting the wrong entry silently stops the armed event pass for a
+running trader — a Picture change breaking an executor feature, with nothing in
+either place to connect them.
+
+**Fixed in W4:** `CompareAndDelete(at.id, at)`, plus a trader GENERATION that
+an evaluation records at its start and re-checks immediately before the wire,
+so an evaluation in flight across a Stop or restart cannot send for a trader
+that is gone. RED: "the RESTARTED trader was evicted by the old instance's Stop
+— W3's armed kicks would stop with it".
+
+**The tell:** any `Delete(key)` on a shared registry whose values can be
+replaced. Removal keyed by identity alone cannot tell "mine" from "the one that
+took my place". Ask who else Ranges the map before changing what is in it.
