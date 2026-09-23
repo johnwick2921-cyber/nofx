@@ -1,6 +1,7 @@
 package trader
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -138,5 +139,75 @@ func TestPictureHandOffNeverLandsOnASupersededVersion(t *testing.T) {
 func TestPictureHandOffBeforeAppendHookIsNilInProduction(t *testing.T) {
 	if pictureHandOffBeforeAppendForTest != nil {
 		t.Fatal("the R1 test seam must be nil in production")
+	}
+}
+
+// W5 R2: a frame that reaches the hand-off the instant the trader registers
+// for live bars finds a LIVE run epoch — never a durable "not running".
+func TestPictureRunMarksTheEpochBeforeRegistering(t *testing.T) {
+	at, st := handOffTrader(t)
+	now := handOffNow()
+	seedAIPlan(t, st, "active")
+	ev := handOffEvidence(now, 1)
+	claimHandOff(t, st, ev)
+	called := false
+	var herr error
+	at.startPictureRunWith(func() {
+		called = true
+		herr = at.pictureHandOffAt(ev, now)
+	})
+	t.Cleanup(at.stopArmedEventLoop)
+	if !called {
+		t.Fatal("fixture: the registration never ran")
+	}
+	if herr != nil {
+		t.Fatalf("a frame at registration must find a live run epoch, not a refusal: %v", herr)
+	}
+}
+
+// Run itself goes through the ordered helper, never the bare registration.
+func TestRunStartsPictureThroughTheOrderedHelper(t *testing.T) {
+	src, err := os.ReadFile("auto_trader.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(src)
+	i := strings.Index(s, "func (at *AutoTrader) Run() error {")
+	if i < 0 {
+		t.Fatal("Run not found")
+	}
+	body := s[i:]
+	if j := strings.Index(body, "\n}\n"); j > 0 {
+		body = body[:j]
+	}
+	if !strings.Contains(body, "at.startPictureRun()") || strings.Contains(body, "at.registerPictureHtf()") || strings.Contains(body, "at.startArmedEventLoop()") {
+		t.Fatal("Run must start Picture through startPictureRun (epoch first, then registration), never the two calls bare")
+	}
+}
+
+// W5 R3: the re-append path's 🖼 lines (appended / could NOT be re-appended)
+// name the opportunity through the redactor too — never the account.
+func TestReappendLinesNeverCarryTheAccountName(t *testing.T) {
+	at, st := handOffTrader(t)
+	schedulerTape(t)
+	now := handOffNow()
+	pinTraderNow(t, now.Add(2*time.Second))
+	ev, _ := machinePlanV1(t, at, st, now)
+	if !strings.Contains(ev.OppKey, "|sim101|") {
+		t.Fatalf("fixture: the key must carry an account segment: %s", ev.OppKey)
+	}
+	logs := captureTraderLog(t)
+	at.maybeRunSessionReadsAt(now)
+	defer drainReReads(t)
+	if waitVersion(t, st, 2) == nil {
+		t.Fatal("fixture: the AI read must land v2")
+	}
+	drainReReads(t)
+	out := logs.String()
+	if !strings.Contains(out, "re-appended to") {
+		t.Fatalf("fixture: the re-append must log its 🖼 line:\n%s", out)
+	}
+	if strings.Contains(strings.ToLower(out), "sim101") {
+		t.Fatalf("a re-append line carries the account name:\n%s", out)
 	}
 }

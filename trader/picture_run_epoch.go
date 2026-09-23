@@ -42,3 +42,17 @@ func (at *AutoTrader) clearPictureRunEpoch() {
 		pictureRunEpochs.Delete(at.id)
 	}
 }
+
+// startPictureRun starts the armed event loop — which marks the run epoch —
+// BEFORE registering for Picture's live bars (W5 R2, CTO review round 1). A
+// frame queued in the live sink can reach the hand-off the instant the trader
+// is registered; registered first, it met no live epoch and was durably
+// refused ("trader not running") while the trader was in fact starting.
+func (at *AutoTrader) startPictureRun() { at.startPictureRunWith(at.registerPictureHtf) }
+
+// startPictureRunWith is startPictureRun with the registration injected, so a
+// test can deliver a frame at the exact moment of registration.
+func (at *AutoTrader) startPictureRunWith(register func()) {
+	at.startArmedEventLoop() // marks the run epoch
+	register()
+}

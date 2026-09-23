@@ -2512,9 +2512,11 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 			spends = false
 			over := "an empty chain"
 			if prev != nil {
-				over = fmt.Sprintf("a machine Picture plan (v%d)", prev.Version)
+				over = fmt.Sprintf("machine plan v%d", prev.Version)
 			}
-			at.logInfof("🧮 replan budget: %s lands the first AI plan of %s %s over %s — not a re-plan, nothing spent (class 35)",
+			// W5 R6: say only what is known here — whether this read lands a
+			// plan, a NO-TRADE row or nothing is decided below.
+			at.logInfof("🧮 replan budget: %s is the chain's first AI read of %s %s over %s — not a re-plan, nothing spent (class 35)",
 				spendClass, tradeDate, session, over)
 		}
 	}
@@ -3884,9 +3886,9 @@ func (at *AutoTrader) reappendLiveMachineScenarios(planID string, newVersion int
 		})
 		switch {
 		case aerr != nil:
-			at.logWarnf("🖼 picture scenario %s (ref %s) could NOT be re-appended to %s v%d: %v — it is not in the new plan and will not trade", sc.ID, ref, planID, newVersion, aerr)
+			at.logWarnf("🖼 picture scenario %s (ref %s) could NOT be re-appended to %s v%d: %v — it is not in the new plan and will not trade", sc.ID, store.RedactPictureOppKey(ref), planID, newVersion, aerr)
 		case appended:
-			at.logInfof("🖼 picture scenario %s re-appended to %s v%d (overlay o%d) — same ref %s, same evidence; window until %s", sc.ID, planID, newVersion, ver, ref, kernel.ClockCTSeconds(time.UnixMilli(sc.Machine.EligibleUntilMs)))
+			at.logInfof("🖼 picture scenario %s re-appended to %s v%d (overlay o%d) — same ref %s, same evidence; window until %s", sc.ID, planID, newVersion, ver, store.RedactPictureOppKey(ref), kernel.ClockCTSeconds(time.UnixMilli(sc.Machine.EligibleUntilMs)))
 		}
 	}
 }

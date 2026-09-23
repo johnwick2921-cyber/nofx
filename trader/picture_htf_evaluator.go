@@ -695,7 +695,7 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 	if !e.traderStillTheSame(startGen) {
 		e.staleTraderSends++
 		logger.Warnf("picture-htf: send REFUSED — the trader that began this evaluation is gone (generation %d → %d, running=%v, day_plan=%v); opportunity %s not sent",
-			startGen, pictureTraderGenerationOf(e.at), e.at.runningNow(), e.at.dayPlanEnabled(), oppKey)
+			startGen, pictureTraderGenerationOf(e.at), e.at.runningNow(), e.at.dayPlanEnabled(), store.RedactPictureOppKey(oppKey))
 		return e.refuse(oppKey, "refused", "trader stopped or restarted before the send — no entry", stall)
 	}
 	if err := pictureHtfSubmitSeam(e, row, stopPx, targetPx, 0, now); err != nil {
@@ -729,7 +729,7 @@ func (e *PictureHtfEvaluator) refuseHeld(oppKey, reason string, stall *kernel.Mo
 	if e.holdRefusedKey != oppKey {
 		e.holdRefusedKey = oppKey
 		telemetry.IncGateBlock(e.at.id, "maintenance_hold")
-		logger.Warnf("🔒 picture-htf: opportunity %s REFUSED — maintenance hold: %s. It will not be traded after the update.", oppKey, reason)
+		logger.Warnf("🔒 picture-htf: opportunity %s REFUSED — maintenance hold: %s. It will not be traded after the update.", store.RedactPictureOppKey(oppKey), reason)
 	}
 	return e.refuse(oppKey, "refused", "maintenance hold — "+reason, stall)
 }
