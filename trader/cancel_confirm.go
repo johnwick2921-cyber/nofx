@@ -642,3 +642,40 @@ func (at *AutoTrader) clearBookOutageIfHealthy(now time.Time) {
 	at.logWarnf("🚨 broker book RECOVERED after %s — arm placement resumes (outage alert cleared)",
 		time.Duration(now.UnixMilli()-startMs)*time.Millisecond)
 }
+
+// dayPlanOffPassHead is the armed pass's head while Day Plan is OFF (or the
+// trader is not an NT8 trader with a store): settle first, so a fill or a
+// confirmed cancel is in the ledger before the Picture sweep reads it (the
+// FIX 1 drain-before-guards order), then the D21 Picture sweep.
+func (at *AutoTrader) dayPlanOffPassHead(now time.Time) {
+	at.settleArmedLedgerWhileOff(now)
+	at.pictureDayPlanOffSweep(now)
+}
+
+// settleArmedLedgerWhileOff is the SETTLEMENT half of the pass, run at the
+// head while Day Plan is OFF (W5 R8, CTO round 2): drain the order updates and
+// confirm every requested cancel from the fresh broker book, exactly as when
+// ON. Nothing here places, arms or authors. Without it a cancel the OFF sweep
+// requested stayed cancel_pending forever (every settlement site sat below the
+// OFF return, the boot sweep excludes cancel_pending), and the entry latch —
+// which counts a non-terminal row with a signal as PLACED — refused every AI
+// entry until the Day Plan came back ON. Planner rows had the same freeze
+// before W5; this closes it for both.
+func (at *AutoTrader) settleArmedLedgerWhileOff(now time.Time) {
+	if at == nil || at.store == nil || at.exchange != "ninjatrader" || at.dayPlanEnabled() {
+		return
+	}
+	ledger := at.store.ArmedOrders()
+	nt := at.armedTrader()
+	if ledger == nil || nt == nil {
+		return
+	}
+	at.consumeArmedOrderUpdates(nt, ledger)
+	at.confirmPendingCancels(ledger, func(sid string) error {
+		// A re-request is still a cancel: the filled-arm guard decides (W0 (f)).
+		if !at.cancelSignalIfSafe(nt.CancelOrder, sid, "cancel re-request", now) {
+			return errCancelRefused
+		}
+		return nil
+	}, now)
+}

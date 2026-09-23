@@ -211,7 +211,7 @@ func (at *AutoTrader) maybeManageArmedOrdersAtOpts(snap map[string]kernel.Struct
 	defer armedPassEntered(at.id)()
 	scope := opts.scope
 	if !at.dayPlanEnabled() || at.store == nil || at.exchange != "ninjatrader" {
-		at.pictureDayPlanOffSweep(now) // W5 D21: Picture rows only
+		at.dayPlanOffPassHead(now) // W5 R8 settle, then D21
 		return
 	}
 	ledger := at.store.ArmedOrders()
