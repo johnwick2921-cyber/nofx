@@ -117,6 +117,10 @@ func TestStartOnARetiredExchangeTypeIsANamedLoadRefusal(t *testing.T) {
 
 func TestUpdateOfARetiredExchangeRowIsANamedRefusalAndWritesNothing(t *testing.T) {
 	s, st, tok := newRetiredExchangeServer(t)
+	before, err := st.Exchange().GetByID(rxUser, rxOff)
+	if err != nil {
+		t.Fatalf("seed row: %v", err)
+	}
 	body := `{"exchanges":{"` + rxOff + `":{"enabled":true,"api_key":"k2","secret_key":"s2"}}}`
 	rec, out := rxDo(t, s, tok, http.MethodPut, "/api/exchanges", body)
 	if rec.Code != http.StatusBadRequest || out["code"] != "UNSUPPORTED_EXCHANGE" {
@@ -129,8 +133,8 @@ func TestUpdateOfARetiredExchangeRowIsANamedRefusalAndWritesNothing(t *testing.T
 	if err != nil {
 		t.Fatalf("the row must still exist: %v", err)
 	}
-	if ex.Enabled || string(ex.APIKey) != "k" {
-		t.Fatalf("a refused update must write nothing: enabled=%v", ex.Enabled)
+	if ex.Enabled != before.Enabled || string(ex.APIKey) != string(before.APIKey) || !ex.UpdatedAt.Equal(before.UpdatedAt) {
+		t.Fatalf("a refused update must write nothing: enabled %v→%v, updated %v→%v", before.Enabled, ex.Enabled, before.UpdatedAt, ex.UpdatedAt)
 	}
 }
 
