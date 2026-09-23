@@ -1,9 +1,6 @@
 package trader
 
 import (
-	"os"
-	"path/filepath"
-
 	"nofx/store"
 )
 
@@ -23,7 +20,11 @@ import (
 // behaviour: never held. main.go always configures it before traders load.
 var maintenanceBarrier EntryBarrier
 
-func resetMaintenanceBarrierForTest() { maintenanceBarrier = EntryBarrier{} }
+func resetMaintenanceBarrierForTest() { maintenanceBarrier.resetForTest() }
+
+// maintenanceStateAfterReadHook is a TEST SEAM (nil in production): it runs
+// between a reader's file read and its engage/release decision.
+var maintenanceStateAfterReadHook func()
 
 // maintenanceState reads the file and syncs the barrier to it.
 func maintenanceState() (store.MaintenanceHoldState, bool) {
@@ -31,11 +32,17 @@ func maintenanceState() (store.MaintenanceHoldState, bool) {
 	if dir == "" {
 		return store.MaintenanceHoldState{}, false
 	}
+	gen := maintenanceBarrier.Gen() // taken BEFORE the read (M2.1, review N1)
 	st := store.ReadMaintenanceHold(dir)
+	if maintenanceStateAfterReadHook != nil {
+		maintenanceStateAfterReadHook()
+	}
 	if st.Held {
 		maintenanceBarrier.Engage()
 	} else if maintenanceBarrier.Held() {
-		maintenanceBarrier.Release()
+		// Release only if nobody engaged since this read began: an "absent"
+		// read that predates a hold is stale, not evidence the hold is gone.
+		maintenanceBarrier.ReleaseIfGen(gen)
 	}
 	return st, true
 }
@@ -91,11 +98,6 @@ func MaintenanceInFlight() int64 { return maintenanceBarrier.InFlight() }
 
 // MaintenanceDrained reports held AND no entry send in flight.
 func MaintenanceDrained() bool { return maintenanceBarrier.Drained() }
-
-// writeRaw is a test helper: overwrite the hold file with raw bytes.
-func writeRaw(dir, body string) error {
-	return os.WriteFile(filepath.Join(dir, "updater", "hold.json"), []byte(body), 0o600)
-}
 
 // maintenanceQueueHeld is the predicate the NT8 TCP server's queue consults
 // before writing each queued entry (gap U2): MaintenanceHeld's boolean.

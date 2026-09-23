@@ -255,3 +255,48 @@ func dialRaw(t *testing.T, addr string) net.Conn {
 	t.Cleanup(func() { _ = c.Close() })
 	return c
 }
+
+// M2.1 (review 3 F10): a never-attempted drop of a PICTURE entry settles its
+// place_pending opportunity as refused, naming the job — not the false
+// "no ledger row names it" ERROR + P1 (mutation: skip the Picture settle).
+func TestDroppedNeverSentPictureEntrySettlesRefused(t *testing.T) {
+	w := newDropWire(t)
+	setHold(t, w.dir, "job-pic")
+	if _, _, err := w.st.PictureHtfClaim(&store.PictureHtfOpportunityDB{OppKey: "opp-drop", TraderID: w.at.id, Stage: "confirmed"}); err != nil {
+		t.Fatal(err)
+	}
+	if won, err := w.st.PictureHtfClaimSubmission("opp-drop", "sig-pic"); err != nil || !won {
+		t.Fatalf("fixture: %v %v", won, err)
+	}
+	w.at.onMaintenanceDroppedEntry(ntwire.DroppedEntry{SignalID: "sig-pic", TraderID: w.at.id, Symbol: "MNQ", Side: "long"})
+	row, ok, _ := w.st.PictureHtfGet("opp-drop")
+	if !ok || row.Stage != "refused" || !strings.Contains(row.StageReason, "never sent") || !strings.Contains(row.StageReason, "job-pic") {
+		t.Fatalf("the Picture row must settle refused, never sent, naming the job: %+v", row)
+	}
+}
+
+// M2.1 (review 2 N2): the permit-then-hold race on the AI path. The AI entry
+// is dropped INSIDE its own send: OpenLong returns ErrEntryHeld and the AI
+// caller records nothing — so there is no phantom OPEN row, and the drop must
+// NOT raise the "trader_positions holds an OPEN row NT8 never had" ERROR + P1.
+func TestOwnAIDropRaisesNoPhantomRowAlarm(t *testing.T) {
+	w := newDropWire(t)
+	w.at.config.StrategyConfig = &store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}}
+	w.nt.SetEntryPermit(func() (func(), bool) { return func() {}, true }) // permit granted…
+	w.nt.SetEntryHoldCheck(func() bool { return true })                   // …then the hold is seen at the flush
+	_ = w.nt.SetStopLoss("MNQ", "LONG", 1, 28950)
+	_ = w.nt.SetTakeProfit("MNQ", "LONG", 1, 29100)
+	logs := captureTraderLog(t)
+	if _, err := w.nt.OpenLong("MNQ", 1, 1); !ntTrader.IsMaintenanceHold(err) {
+		t.Fatalf("fixture: the entry must be dropped inside its own send, got %v", err)
+	}
+	if out := logs.String(); strings.Contains(out, "holds an OPEN row") {
+		t.Fatalf("an own drop's caller was told and recorded nothing — no phantom-row alarm; log:\n%s", out)
+	}
+	rows, _ := w.st.Alert().List(w.at.id, 10)
+	for _, r := range rows {
+		if r.Kind == "maintenance-drop" {
+			t.Fatalf("an own drop must not raise the phantom-row P1: %+v", r)
+		}
+	}
+}

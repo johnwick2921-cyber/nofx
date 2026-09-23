@@ -26,7 +26,7 @@ type gateFixture struct {
 
 func goodCensusAck(job string) *ntwire.MaintenanceAckPayload {
 	return &ntwire.MaintenanceAckPayload{Held: true, JobID: job, BuildID: "2026-09-22-m2",
-		Connections: []ntwire.CensusConnection{{Sim: true, Connected: true}, {Sim: false, Connected: false}},
+		Connections: []ntwire.CensusConnection{{Sim: true, Connected: true, Settled: true}, {Sim: false, Connected: false, Settled: true}},
 		Accounts:    []ntwire.CensusAccount{{Sim: true, Positions: 0, Working: 0}}}
 }
 
@@ -155,6 +155,9 @@ func TestInstallationGateCensusCases(t *testing.T) {
 			a.Accounts = append(a.Accounts, ntwire.CensusAccount{Sim: false, Positions: 1})
 		}, "position"},
 		"working order anywhere": {func(a *ntwire.MaintenanceAckPayload) { a.Accounts[0].Working = 2 }, "working"},
+		// M2.1 (review d): a connection neither Connected nor Disconnected
+		// (Connecting, ConnectionLost …) — its accounts' zeros cannot be trusted.
+		"connection in a transitional state": {func(a *ntwire.MaintenanceAckPayload) { a.Connections[1].Settled = false }, "transitional"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -219,23 +222,41 @@ func TestInstallationGateNonNT8TraderFails(t *testing.T) {
 	mustFail(t, f.run(), "traders_nt8", "csv-or-crypto")
 }
 
-// U3: a trader still in the Picture HTF registry but no longer in the manager
-// is covered too.
-func TestInstallationGateCoversPictureRegistryTraders(t *testing.T) {
+// U3 + M2.1 (CTO ruling on review item b): the Picture HTF registry never
+// unregisters, so it keeps every trader that ever Run() — crypto and removed
+// ones too. A REGISTRY-ONLY trader that is not an NT8 TCP trader cannot reach
+// NT8 (its evaluator is nil unless the exchange is ninjatrader, and the send
+// needs a *TCPTrader), so it is listed as covered and informational — it must
+// not keep the gate failing until a restart the update itself needs. A RUNNING
+// (manager-loaded) non-NT8 trader still fails the leg.
+func TestInstallationGateRegistryOnlyCryptoTraderIsInformational(t *testing.T) {
 	f := newGateFixture(t)
 	ghost, _ := resetTrader(t, store.StrategyConfig{})
-	ghost.id = "picture-ghost"
+	ghost.id = "picture-ghost-crypto"
+	ghost.exchange = "binance"
 	pictureHtfTraders.Store(ghost.id, ghost)
 	defer pictureHtfTraders.Delete(ghost.id)
 	g := f.run()
-	mustFail(t, g, "traders_nt8", "picture-ghost")
+	l, _ := legOf(g, "traders_nt8")
+	if !l.Pass || !strings.Contains(l.Detail, "picture-ghost-crypto") {
+		t.Fatalf("a registry-only crypto trader is informational (listed, not failing): %+v", l)
+	}
+	if !g.Ready {
+		t.Fatalf("a registry-only crypto trader must not keep the gate closed: %+v", g.Legs)
+	}
 	found := false
 	for _, id := range g.Traders {
-		found = found || id == "picture-ghost"
+		found = found || id == "picture-ghost-crypto"
 	}
 	if !found {
-		t.Fatalf("the registry-only trader must be listed as covered: %v", g.Traders)
+		t.Fatalf("the registry-only trader must still be listed as covered: %v", g.Traders)
 	}
+	// ...while a RUNNING non-NT8 trader in the manager still fails the leg.
+	running, _ := resetTrader(t, store.StrategyConfig{})
+	running.id = "running-crypto"
+	running.exchange = "binance"
+	f.loaded[running.id] = running
+	mustFail(t, f.run(), "traders_nt8", "running-crypto")
 }
 
 // Leg (e): the ledger for EVERY trader id, loaded or not; an authorized but
@@ -343,4 +364,68 @@ func TestInstallationGateSurvivesAPanicOutsideALeg(t *testing.T) {
 	if !found {
 		t.Fatalf("the panic must be reported as a failed leg: %+v", g.Legs)
 	}
+}
+
+// M2.1 (review 3 F4, CTO: FIRST) — the FALSE-PASS direction, at the production
+// path: no stubbed wire view. A real server + TCPTrader; a client connects,
+// acks the hold with a clean census, and addon_ack passes; the client
+// DISCONNECTS and addon_ack must FAIL at once — never READY on the last ack of
+// a connection that is gone (mutations: the view forcing Connected, or
+// ConnectionRecord always reporting connected).
+func TestInstallationGateAddOnAckFailsTheMomentTheAddOnDisconnects(t *testing.T) {
+	w := newDropWire(t) // real server, real TCPTrader, wireNT8Maintenance
+	setHold(t, w.dir, "job-f4")
+	loaded := map[string]*AutoTrader{w.at.id: w.at}
+
+	c := dialRaw(t, w.addr)
+	if err := ntwire.WriteFrame(c, ntwire.FrameHello, ntwire.HelloPayload{ProtocolVersion: ntwire.ProtocolVersion, Source: "vltrader-addon"}); err != nil {
+		t.Fatal(err)
+	}
+	ack := ntwire.MaintenanceAckPayload{Held: true, JobID: "job-f4", BuildID: "2026-09-22-m2",
+		Connections: []ntwire.CensusConnection{{Sim: true, Connected: true, Settled: true}},
+		Accounts:    []ntwire.CensusAccount{{Sim: true}}}
+	if err := ntwire.WriteFrame(c, ntwire.FrameMaintenanceAck, ack); err != nil {
+		t.Fatal(err)
+	}
+	var pass InstallationGateLeg
+	waitDrop(t, "addon_ack to pass on the live connection", 3*time.Second, func() bool {
+		pass, _ = legOf(InstallationGateStatus(loaded, w.st), "addon_ack")
+		return pass.Pass
+	})
+
+	_ = c.Close()
+	waitDrop(t, "the server to see the disconnect", 3*time.Second, func() bool {
+		_, connected, _, _ := w.nt.MaintenanceView()
+		return !connected
+	})
+	l, _ := legOf(InstallationGateStatus(loaded, w.st), "addon_ack")
+	if l.Pass || !strings.Contains(l.Detail, "not connected") {
+		t.Fatalf("after the AddOn disconnects, addon_ack must FAIL (it passed on the last ack of a gone connection): %+v", l)
+	}
+}
+
+// M2.1 (review 3 F5): EVERY per-trader cutover leg the gate takes (1, 2, 4)
+// reaches the verdict through the real seam — not only leg 1.
+func TestInstallationGateCarriesCutoverLegs2And4(t *testing.T) {
+	t.Run("leg 2 api_positions", func(t *testing.T) {
+		f := newGateFixture(t)
+		installationTraderCutover = func(at *AutoTrader) []CutoverLeg { return at.CutoverGateStatus().Legs }
+		s := ntwire.NewTCPServer(nil)
+		s.SeedPositionsForTest("Sim101", []ntwire.OpenPosition{{Symbol: "MNQ", Side: "long", Quantity: 1, AvgPrice: 29000}})
+		f.loaded["gate-t1"].trader = ntTrader.NewTCPTrader(s, "MNQ", "Sim101")
+		mustFail(t, f.run(), "trader_cutover:gate-t1", "api_positions")
+	})
+	t.Run("leg 4 working_orders", func(t *testing.T) {
+		f := newGateFixture(t)
+		installationTraderCutover = func(at *AutoTrader) []CutoverLeg { return at.CutoverGateStatus().Legs }
+		r := store.ArmedOrderDB{TraderID: "gate-t1", PlanID: "2026-09-22:NY:gate-t1", Version: 1, Session: "NY", Scenario: "S1",
+			Side: "LONG", EntryPx: 100, StopPx: 95, TargetPx: 110, State: store.StateArmed}
+		if err := f.st.ArmedOrders().UpsertArm(&r); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.st.ArmedOrders().BeginPlacement(r.ID, "sig-leg4"); err != nil {
+			t.Fatal(err)
+		}
+		mustFail(t, f.run(), "trader_cutover:gate-t1", "working_orders")
+	})
 }

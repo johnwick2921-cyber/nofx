@@ -110,7 +110,7 @@ func TestWireNT8MaintenanceCallsAllFourSettersUnconditionally(t *testing.T) {
 			continue
 		}
 		c, ok := es.X.(*ast.CallExpr)
-		if !ok || len(c.Args) != 1 {
+		if !ok || len(c.Args) == 0 {
 			continue
 		}
 		s, ok := c.Fun.(*ast.SelectorExpr)
@@ -118,6 +118,15 @@ func TestWireNT8MaintenanceCallsAllFourSettersUnconditionally(t *testing.T) {
 			continue
 		}
 		if x, ok := s.X.(*ast.Ident); !ok || x.Name != "nt" {
+			continue
+		}
+		// M2.1: the drop sink is keyed by the owning trader id — SetDroppedEntrySink(at.id, …).
+		if s.Sel.Name == "SetDroppedEntrySink" {
+			if len(c.Args) != 2 || !isSelector(c.Args[0], "at", "id") {
+				got[s.Sel.Name] = "owner is not at.id"
+				continue
+			}
+		} else if len(c.Args) != 1 {
 			continue
 		}
 		switch a := c.Args[len(c.Args)-1].(type) {

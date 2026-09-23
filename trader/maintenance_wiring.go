@@ -15,5 +15,5 @@ func wireNT8Maintenance(at *AutoTrader, nt *ntTrader.TCPTrader) {
 	nt.SetEntryPermit(MaintenanceEntryPermit)
 	nt.SetEntryHoldCheck(maintenanceQueueHeld)
 	nt.SetMaintenanceSource(maintenanceWireState)
-	nt.SetDroppedEntrySink(at.onMaintenanceDroppedEntry)
+	nt.SetDroppedEntrySink(at.id, at.onMaintenanceDroppedEntry) // keyed by trader id (M2.1)
 }

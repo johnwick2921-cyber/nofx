@@ -149,7 +149,7 @@ func InstallationGateStatus(loaded map[string]*AutoTrader, st *store.Store) (g I
 	// hold
 	st0, configured := maintenanceState()
 	holdJob := ""
-	leg("hold", "data/updater/hold.json (store.ReadMaintenanceHold)", func() (bool, string) {
+	leg("hold", "the installation hold file (store.ReadMaintenanceHold)", func() (bool, string) {
 		switch {
 		case !configured:
 			return false, "maintenance data dir not configured — the hold cannot be read"
@@ -215,21 +215,39 @@ func InstallationGateStatus(loaded map[string]*AutoTrader, st *store.Store) (g I
 
 	// traders_nt8
 	leg("traders_nt8", "TraderManager ∪ pictureHtfTraders", func() (bool, string) {
-		var bad []string
+		registry := map[string]bool{}
+		for _, id := range registryOnly {
+			registry[id] = true
+		}
+		var bad, inert []string
 		for _, id := range ids {
-			if _, ok := all[id].trader.(*ntTrader.TCPTrader); !ok {
-				bad = append(bad, fmt.Sprintf("%s (%T)", id, all[id].trader))
+			if _, ok := all[id].trader.(*ntTrader.TCPTrader); ok {
+				continue
 			}
+			if registry[id] {
+				// M2.1 (CTO ruling on review item b): registry-only and not NT8
+				// — it cannot reach NT8 (no evaluator off ninjatrader, and the
+				// send needs a *TCPTrader). Listed, never failing: the registry
+				// never unregisters, so failing here would hold the gate shut
+				// until a restart the update itself needs.
+				inert = append(inert, id)
+				continue
+			}
+			bad = append(bad, fmt.Sprintf("%s (%T)", id, all[id].trader))
 		}
 		extra := ""
 		if len(registryOnly) > 0 {
 			sort.Strings(registryOnly)
 			extra = "; registry-only (not in the manager): " + strings.Join(registryOnly, ", ")
 		}
+		if len(inert) > 0 {
+			sort.Strings(inert)
+			extra += "; of which not NT8 (cannot reach NT8, informational): " + strings.Join(inert, ", ")
+		}
 		if len(bad) > 0 {
 			return false, "not an NT8 TCP trader — coverage unknown: " + strings.Join(bad, ", ") + extra
 		}
-		return true, fmt.Sprintf("%d trader(s), all NT8 TCP%s", len(ids), extra)
+		return true, fmt.Sprintf("%d trader(s); every running trader is NT8 TCP%s", len(ids), extra)
 	})
 
 	// addon_ack
@@ -274,10 +292,13 @@ func InstallationGateStatus(loaded map[string]*AutoTrader, st *store.Store) (g I
 		case a.Accounts == nil:
 			return false, "accounts were not enumerated (absent is not empty)"
 		}
-		nonSim, positions, working := 0, 0, 0
+		nonSim, unsettled, positions, working := 0, 0, 0, 0
 		for _, c := range a.Connections {
 			if c.Connected && !c.Sim {
 				nonSim++
+			}
+			if !c.Settled {
+				unsettled++ // M2.1: Connecting / ConnectionLost — its accounts cannot be vouched for
 			}
 		}
 		for _, ac := range a.Accounts {
@@ -289,6 +310,9 @@ func InstallationGateStatus(loaded map[string]*AutoTrader, st *store.Store) (g I
 		var why []string
 		if nonSim > 0 {
 			why = append(why, fmt.Sprintf("%d connected non-SIM connection(s)", nonSim))
+		}
+		if unsettled > 0 {
+			why = append(why, fmt.Sprintf("%d connection(s) in a transitional state (neither Connected nor Disconnected)", unsettled))
 		}
 		if positions > 0 {
 			why = append(why, fmt.Sprintf("%d open position(s)", positions))
