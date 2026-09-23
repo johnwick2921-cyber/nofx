@@ -382,7 +382,7 @@ func parityPictureRig(t *testing.T, id, path, template string, shift time.Durati
 	at.isRunningMutex.Lock()
 	at.isRunning = true
 	at.isRunningMutex.Unlock()
-	env := &pictureHtfTestEnv{t: t, at: at, st: st, eval: NewPictureHtfEvaluator(at, store.PictureHtfResolved(&cfg))}
+	env := &pictureHtfTestEnv{t: t, at: at, st: st, eval: NewPictureHtfEvaluator(at, pictureTestResolved(&cfg))}
 	origSeam, origCap, origBars := pictureHtfSubmitSeam, pictureHtfCapabilityProven, market.FuturesBarsProvider
 	pictureHtfSubmitSeam = func(e *PictureHtfEvaluator, row *store.PictureHtfOpportunityDB, stopPx, targetPx, qty float64, _ time.Time) error {
 		env.submits = append(env.submits, row.OppKey)
@@ -808,7 +808,7 @@ func parityDrive(r *parityRig, row parityRow, expectPass bool) parityOutcome {
 			row.trip(r)
 		}
 		before := len(r.env.submits)
-		r.env.eval.freshest5mAt = r.env.now
+		r.env.eval.markFresh5mReceivedAt(r.env.now)
 		res := r.env.eval.Evaluate("MNQ", r.env.now)
 		return parityOutcome{passed: len(r.env.submits) > before, clean: res.Stage == "submitted", text: res.Reason, detail: "stage=" + res.Stage + " reason=" + res.Reason}
 
@@ -821,7 +821,7 @@ func parityDrive(r *parityRig, row parityRow, expectPass bool) parityOutcome {
 			}
 			return pictureHtfSend(e, prow, stopPx, targetPx, qty, now)
 		}
-		r.env.eval.freshest5mAt = r.env.now
+		r.env.eval.markFresh5mReceivedAt(r.env.now)
 		res := r.env.eval.Evaluate("MNQ", r.env.now)
 		return parityOutcome{passed: sent(), clean: res.Stage == "submitted", text: res.Reason, detail: "stage=" + res.Stage + " reason=" + res.Reason}
 	}

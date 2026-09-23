@@ -25,8 +25,8 @@ func TestPictureHtfSendRefusesNonNTTrader(t *testing.T) {
 	_ = st
 	// resetTrader builds a bare AutoTrader with NO concrete trader — the seam
 	// must refuse rather than guess.
-	ev := NewPictureHtfEvaluator(at, store.PictureHtfResolved(&store.PictureHtfConfig{Enabled: true}))
-	ev.freshest5mAt = time.Now()
+	ev := NewPictureHtfEvaluator(at, pictureTestResolved(&store.PictureHtfConfig{Enabled: true}))
+	ev.markFresh5mReceivedAt(time.Now())
 	row := &store.PictureHtfOpportunityDB{OppKey: "k", SignalID: "claim", Symbol: "MNQ", Direction: "long",
 		WindowClose: time.Now().Add(time.Minute).UnixMilli()}
 	err := pictureHtfSend(ev, row, 98, 110, 1, time.Now())
@@ -37,8 +37,8 @@ func TestPictureHtfSendRefusesNonNTTrader(t *testing.T) {
 
 func TestPictureHtfSendRefusesStaleFeed(t *testing.T) {
 	at, _ := resetTrader(t, store.StrategyConfig{DayPlan: &store.DayPlanConfig{PictureHtf: &store.PictureHtfConfig{Enabled: true}}})
-	ev := NewPictureHtfEvaluator(at, store.PictureHtfResolved(&store.PictureHtfConfig{Enabled: true, FreshnessSec: 2}))
-	ev.freshest5mAt = time.Now().Add(-10 * time.Second)
+	ev := NewPictureHtfEvaluator(at, pictureTestResolved(&store.PictureHtfConfig{Enabled: true, FreshnessSec: 2}))
+	ev.markFresh5mReceivedAt(time.Now().Add(-10 * time.Second))
 	row := &store.PictureHtfOpportunityDB{OppKey: "k", SignalID: "claim", Symbol: "MNQ", Direction: "long",
 		WindowClose: time.Now().Add(time.Minute).UnixMilli()}
 	err := pictureHtfSend(ev, row, 98, 110, 1, time.Now())
@@ -49,8 +49,8 @@ func TestPictureHtfSendRefusesStaleFeed(t *testing.T) {
 
 func TestPictureHtfSendRefusesClosedWindow(t *testing.T) {
 	at, _ := resetTrader(t, store.StrategyConfig{DayPlan: &store.DayPlanConfig{PictureHtf: &store.PictureHtfConfig{Enabled: true}}})
-	ev := NewPictureHtfEvaluator(at, store.PictureHtfResolved(&store.PictureHtfConfig{Enabled: true}))
-	ev.freshest5mAt = time.Now()
+	ev := NewPictureHtfEvaluator(at, pictureTestResolved(&store.PictureHtfConfig{Enabled: true}))
+	ev.markFresh5mReceivedAt(time.Now())
 	row := &store.PictureHtfOpportunityDB{OppKey: "k", SignalID: "claim", Symbol: "MNQ", Direction: "long",
 		WindowClose: time.Now().Add(-time.Second).UnixMilli()}
 	err := pictureHtfSend(ev, row, 98, 110, 1, time.Now())

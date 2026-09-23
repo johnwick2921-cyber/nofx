@@ -37,14 +37,35 @@ type PictureHtfEvaluator struct {
 	// Evaluation state.
 	lastH1CloseEval int64 // the newest completed H1 close already scanned
 	levels          []kernel.PictureHtfLevel
-	levelsEval4H    int64 // the 4H close time the levels snapshot was built from
-	freshest5mAt    time.Time
+	levelsEval4H    int64     // the 4H close time the levels snapshot was built from
+	freshest5mAt    time.Time // Go RECEIPT clock of the freshest completed 5m frame
+	// D23, the other two clocks. freshest5mEmitted is the AddOn's own stamp
+	// (the SOURCE clock, on another machine); freshest5mClose is the candle's
+	// own close. Both are 0 until a COMPLETED 5m frame arrives — a forming
+	// tick refreshes neither.
+	freshest5mEmitted int64
+	freshest5mClose   int64
 
 	// H1 close series for the advisory momentum stall (last three closes).
 	h1Closes []float64
 
 	// capWarned dedupes the once-per-state "mode unavailable" log.
 	capWarned bool
+
+	// foreignFrames counts live frames whose contract is definitely NOT the
+	// one this trader is on. READ by the accessor; never inferred.
+	foreignFrames int64
+	// unknownFrames counts frames EVALUATED while identity could not be
+	// established (either side ""). They are not dropped — see OnBars — so
+	// this counter is the only thing that keeps that window from being
+	// silent. unknownSince/unknownWarned drive one WARN per window.
+	unknownFrames int64
+	unknownSince  time.Time
+	unknownWarned bool
+	unknownWarns  int64
+	// tickSkips counts wall-clock fallbacks that found no completed frame to
+	// be late about (W4/D24). READ.
+	tickSkips int64
 
 	// holdRefusedKey dedupes the maintenance-hold refusal (count + WARN) to
 	// once per opportunity rather than once per frame.
@@ -120,22 +141,210 @@ func (e *PictureHtfEvaluator) bars(symbol, tf string, n int, nowMs int64) []mark
 	return out
 }
 
+// pictureHtfDepthMargin is how many 4H candles BEYOND the requirement the
+// evaluator fetches. It must be at least 2 and is deliberately larger: the
+// provider returns the TAIL of the history it holds, so that tail always
+// contains the candle still forming, and the break snapshot additionally cuts
+// off at the breaking candle's open, removing one more. Asking for exactly the
+// requirement and then filtering to completed candles can therefore never
+// satisfy the requirement — not rarely, but by construction.
+const pictureHtfDepthMargin = 4
+
+// newestFinalBar returns the newest bar the AddOn PROVED closed, if any. A
+// frame of forming ticks carries none.
+func newestFinalBar(bars []market.Kline) (market.Kline, bool) {
+	for i := len(bars) - 1; i >= 0; i-- {
+		if bars[i].Final {
+			return bars[i], true
+		}
+	}
+	return market.Kline{}, false
+}
+
+// staleBy reports how stale the freshest completed 5m data is, and on which
+// clock that was measured — the worse of the AddOn's own emitted_at (SOURCE)
+// and our receipt of it. The clock is NAMED in the refusal because a fallback
+// that cannot be told from the real measurement is worse than no fallback:
+// emitted_at is the AddOn's clock and may simply be absent.
+//
+// The candle's own close time is deliberately NOT one of these. NT8 emits a
+// closed bar on the FIRST TICK OF THE NEXT BAR, which in slow tape is seconds
+// after the boundary, so candle age (now - close) is ALWAYS >= source age
+// (emitted >= close). Including it silently replaces the rule with "elapsed
+// since the boundary <= freshness_sec" — 2s by default, against a 10s entry
+// window — and refuses the ordinary late-emission case outright: a bar closing
+// 14:00:00 and emitted 14:00:03 has a source age of 0.1s and a candle age of
+// 3s. freshest5mClose stays as READ evidence (it is what tells us the boundary
+// candle is in hand at all) and binds nothing.
+func (e *PictureHtfEvaluator) staleBy(nowMs int64, now time.Time) (int64, string) {
+	worst, clock := int64(-1), "n/a"
+	consider := func(age int64, name string) {
+		if age > worst {
+			worst, clock = age, name
+		}
+	}
+	if e.freshest5mEmitted > 0 {
+		consider(nowMs-e.freshest5mEmitted, "source")
+	}
+	if !e.freshest5mAt.IsZero() {
+		consider(now.Sub(e.freshest5mAt).Milliseconds(), "receipt")
+	}
+	return worst, clock
+}
+
+// fiveMMs is one 5m interval in milliseconds. 5m boundaries are epoch-aligned
+// (300000 divides the epoch), so the arithmetic below needs no session offset.
+const fiveMMs = int64(5 * 60_000)
+
+// nextFiveMBoundary is the start of the first 5m interval beginning strictly
+// after ms. A candle's CloseTime is the last instant it owns, so the boundary
+// after it is the next interval's open.
+func nextFiveMBoundary(ms int64) int64 {
+	return (ms/fiveMMs + 1) * fiveMMs
+}
+
+// pictureUnknownContractWarnAfter is how long Picture may evaluate frames
+// without contract identity before it says so out loud. One WARN per window;
+// the window re-arms when identity returns.
+const pictureUnknownContractWarnAfter = 60 * time.Second
+
+// PictureDepthEvidence is what one evaluation KNOWS about its own 4H history.
+// Every field is READ from the bars in hand; none is assumed. It is part of
+// the evidence contract the Day Plan scenario source consumes.
+type PictureDepthEvidence struct {
+	Fetched   int // candles asked of the provider
+	Completed int // of those, closed before the cutoff and PROVED final
+	Required  int // PivotWindow + 4
+}
+
+// OK reports whether the two pictures may be drawn at all.
+func (d PictureDepthEvidence) OK() bool { return d.Required > 0 && d.Completed >= d.Required }
+
+// Reason is the refusal text, carrying the true counts rather than a verdict.
+func (d PictureDepthEvidence) Reason() string {
+	return fmt.Sprintf("insufficient depth %d/%d completed 4H candles", d.Completed, d.Required)
+}
+
+// depth4H fetches the 4H history with margin and reports what actually came
+// back, so callers refuse on evidence instead of on a guess.
+func (e *PictureHtfEvaluator) depth4H(symbol string, cutoffMs int64) (PictureDepthEvidence, []market.Kline) {
+	required := e.cfg.PivotWindow + 4
+	ask := required + pictureHtfDepthMargin
+	bars := e.bars(symbol, "4h", ask, cutoffMs)
+	return PictureDepthEvidence{Fetched: ask, Completed: len(bars), Required: required}, bars
+}
+
 // rebuildLevels recomputes the 4H body-pivot snapshot from completed bars.
-func (e *PictureHtfEvaluator) rebuildLevels(symbol string, nowMs int64) {
+func (e *PictureHtfEvaluator) rebuildLevels(symbol string, nowMs int64) PictureDepthEvidence {
 	if e.levelsSymbol != symbol {
 		// the snapshot is per symbol — never another instrument's levels
 		e.levels, e.levelsEval4H, e.levelsSymbol = nil, 0, symbol
 	}
-	bars := e.bars(symbol, "4h", e.cfg.PivotWindow+4, nowMs)
-	if len(bars) == 0 {
-		return
+	dep, bars := e.depth4H(symbol, nowMs)
+	if !dep.OK() {
+		// Too little history to draw the higher picture. Drop any snapshot
+		// built from a deeper past so a later short read cannot keep trading
+		// on levels this evaluation cannot justify.
+		e.levels, e.levelsEval4H = nil, 0
+		return dep
 	}
 	newest := bars[len(bars)-1].CloseTime
 	if newest == e.levelsEval4H {
-		return
+		return dep
 	}
 	e.levels = kernel.BodyPivots4H(bars, e.cfg.PivotWindow)
 	e.levelsEval4H = newest
+	return dep
+}
+
+// frameContract is the contract the frame's bars agree on. It returns "" when
+// the frame names none (an AddOn older than the 2026-09-11 ruling) or when its
+// bars disagree — both are UNKNOWN, and unknown is never reported as a match.
+func frameContract(bars []market.Kline) string {
+	out := ""
+	for _, b := range bars {
+		if b.Contract == "" {
+			continue
+		}
+		if out == "" {
+			out = b.Contract
+			continue
+		}
+		if out != b.Contract {
+			return ""
+		}
+	}
+	return out
+}
+
+// HasCompletedFrame reports whether a COMPLETED 5m frame has ever been seen.
+// Until one has, there is no data to judge and no boundary to have missed.
+func (e *PictureHtfEvaluator) HasCompletedFrame() bool {
+	if e == nil {
+		return false
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.freshest5mClose > 0
+}
+
+// noteTickFallbackSkip records a fallback that ran with no completed frame.
+func (e *PictureHtfEvaluator) noteTickFallbackSkip() {
+	if e == nil {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.tickSkips++
+}
+
+// TickFallbackSkips reports how many wall-clock fallbacks found nothing to
+// evaluate — a feed that never delivers is then visible, not merely quiet.
+func (e *PictureHtfEvaluator) TickFallbackSkips() int64 {
+	if e == nil {
+		return 0
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.tickSkips
+}
+
+// UnknownContractFrames reports frames evaluated while contract identity
+// could not be established — the AddOn named no contract, or this trader has
+// no `subscribed` ACK yet. These frames are NOT dropped, so this is the
+// measure of how long Picture ran without knowing whose tape it was reading.
+func (e *PictureHtfEvaluator) UnknownContractFrames() int64 {
+	if e == nil {
+		return 0
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.unknownFrames
+}
+
+// UnknownContractWarnings reports how many times the unknown window has lasted
+// past pictureUnknownContractWarnAfter. One per window: it re-arms when
+// identity returns, so a reconnect that loses the ACK warns again.
+func (e *PictureHtfEvaluator) UnknownContractWarnings() int64 {
+	if e == nil {
+		return 0
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.unknownWarns
+}
+
+// ForeignContractFrames reports how many live frames named a contract other
+// than the one this trader is on. A rising count means the tape and the
+// trader disagree about the instrument — during a roll, or after the
+// reconnect path that re-subscribes without a fresh ACK.
+func (e *PictureHtfEvaluator) ForeignContractFrames() int64 {
+	if e == nil {
+		return 0
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.foreignFrames
 }
 
 // OnBars is the event entry point: the trader's bar consumers call it for
@@ -151,10 +360,51 @@ func (e *PictureHtfEvaluator) OnBars(symbol, tf string, bars []market.Kline, rec
 	if !e.ownsSymbol(symbol) {
 		return // another instrument's frame — never this trader's opportunity
 	}
+	// W4/D21 identity. The AddOn names the front month on EVERY bar frame, so
+	// when the frame names one and this trader is provably on another, the
+	// frame is a different instrument's tape and must never drive an
+	// evaluation — across a roll the SYMBOL alone cannot tell them apart.
+	// Read outside the evaluator's lock: currentContract reaches into the TCP
+	// server, and a Picture evaluation must never hold a lock across that.
+	mine, _ := pictureHtfContractOf(e.at, symbol)
+	frameC := frameContract(bars)
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if mine != "" && frameC != "" && frameC != mine {
+		e.foreignFrames++
+		logger.Warnf("picture-htf: frame names contract %s but this trader is on %s — frame ignored (%d so far)",
+			frameC, mine, e.foreignFrames)
+		return
+	}
+	if mine == "" || frameC == "" {
+		// Identity could not be established. The frame is NOT dropped — before
+		// the first `subscribed` ACK that would disable Picture for the whole
+		// boot and reconnect window — but the window is never silent: it is
+		// counted, it is on the boot line, and it warns once if it persists.
+		e.unknownFrames++
+		if e.unknownSince.IsZero() {
+			e.unknownSince = receivedAt
+		}
+		if !e.unknownWarned && receivedAt.Sub(e.unknownSince) >= pictureUnknownContractWarnAfter {
+			e.unknownWarned = true
+			e.unknownWarns++
+			logger.Warnf("picture-htf: contract unknown for %s — Picture frames evaluated without contract identity (trader=%q frame=%q)",
+				pictureUnknownContractWarnAfter, mine, frameC)
+		}
+	} else {
+		// Identity is established again: close the window and re-arm it, so a
+		// later reconnect that loses the ACK warns on its own merits.
+		e.unknownSince, e.unknownWarned = time.Time{}, false
+	}
 	if tf == "5m" {
-		e.freshest5mAt = receivedAt
+		// D23: only COMPLETED data refreshes freshness. A forming tick is not
+		// new evidence, and treating it as such let a stale setup look current
+		// for as long as ticks kept arriving.
+		if fin, ok := newestFinalBar(bars); ok {
+			e.freshest5mAt = receivedAt
+			e.freshest5mEmitted = fin.EmittedAt
+			e.freshest5mClose = fin.CloseTime
+		}
 	}
 	e.evaluateLocked(symbol, receivedAt)
 }
@@ -192,7 +442,11 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 		return EvaluateResult{Stage: "watching", Reason: "mode unavailable — AddOn evidence missing"}
 	}
 	e.capWarned = false
-	e.rebuildLevels(symbol, nowMs)
+	if dep := e.rebuildLevels(symbol, nowMs); !dep.OK() {
+		// D21: no level and no trade until the history is provably deep
+		// enough. The reason carries the counts that were READ.
+		return EvaluateResult{Stage: "watching", Reason: dep.Reason()}
+	}
 
 	// --- H1 completion scan + advisory momentum ---
 	h1 := e.bars(symbol, "1h", 4, nowMs)
@@ -227,8 +481,14 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 	// applied before target selection, per the same clause. Both snapshots
 	// are time-derived from the cache, so frame arrival order cannot change
 	// either verdict.
+	// The break snapshot reads the same depth rule: its cutoff removes at
+	// least one more candle, which is exactly what the margin is for.
+	breakDep, breakBars := e.depth4H(symbol, cur.OpenTime)
+	if !breakDep.OK() {
+		return EvaluateResult{Stage: "watching", Reason: breakDep.Reason(), Momentum: stall}
+	}
 	breakLevels := kernel.ActiveLevels(
-		kernel.BodyPivots4H(e.bars(symbol, "4h", e.cfg.PivotWindow+4, cur.OpenTime), e.cfg.PivotWindow),
+		kernel.BodyPivots4H(breakBars, e.cfg.PivotWindow),
 		cur.OpenTime)
 	breakVerdict := kernel.H1CloseBreak(breakLevels, prev, cur, e.cfg.TickSize)
 	if !breakVerdict.Fired {
@@ -241,7 +501,12 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 		return EvaluateResult{Stage: "watching", Momentum: stall}
 	}
 	newest5m := fiveM[len(fiveM)-1]
-	intervalStart := newest5m.OpenTime + 5*60_000 // the boundary of the NEXT 5m interval
+	// D23: the entry window belongs to the H1 close that CONFIRMED the break —
+	// it is the 5m interval that follows THAT close, and it happens once.
+	// Measuring from `newest5m.OpenTime + 5m` moved the anchor forward with
+	// every new 5m candle, so the window re-opened every five minutes,
+	// indefinitely, for a break confirmed long before.
+	intervalStart := nextFiveMBoundary(cur.CloseTime)
 	elapsed := nowMs - intervalStart
 	windowMs := int64(e.cfg.EntryWindowSec) * 1000
 	if elapsed < 0 {
@@ -254,6 +519,28 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 	strategyID := e.at.id
 	contract, _ := e.at.currentContract(symbol)
 	oppKey := store.PictureHtfOppKey(strategyID, e.at.currentAccountName(), contract, breakVerdict.Direction, level.Role, level.SourceOpen, cur.CloseTime)
+	// D23/R2 — THE BOUNDARY CANDLE MUST BE IN HAND BEFORE ANY REFUSAL.
+	// The H1 closed frame and the 5m closed frame both arrive AFTER the
+	// boundary, and the H1 one typically lands first (~1.0s vs ~1.2s). In that
+	// gap the freshness stamps still describe the PREVIOUS 5m candle, so every
+	// clock reads ~5 minutes stale and a refusal written then is a durable
+	// `expired` that the qualifying 5m frame, 200ms later, would inherit.
+	// Before D23 this was masked: forming ticks refreshed the receipt stamp,
+	// so the gap looked fresh — and the entry that followed was computed on
+	// the previous candle's geometry. Making only completed data count
+	// unmasked it, so the wait is explicit.
+	boundaryClose := intervalStart - 1
+	if e.freshest5mClose < boundaryClose {
+		return EvaluateResult{Stage: "watching", Momentum: stall,
+			Reason: fmt.Sprintf("awaiting the completed 5m close at %d", boundaryClose)}
+	}
+	// It is in hand — but did WE have it while the window was still open? A
+	// candle delivered after the window shut was never actionable, so it is
+	// not an opportunity we refused; no durable row is written for it.
+	if !e.freshest5mAt.IsZero() && e.freshest5mAt.UnixMilli() > intervalStart+windowMs {
+		return EvaluateResult{Stage: "watching", Momentum: stall,
+			Reason: "the completed 5m close arrived after the entry window — never actionable"}
+	}
 	if elapsed > windowMs {
 		return e.refuse(oppKey, "expired", fmt.Sprintf("entry window passed (%dms > %dms)", elapsed, windowMs), stall)
 	}
@@ -266,8 +553,13 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 	if e.freshest5mAt.IsZero() {
 		return EvaluateResult{Stage: "watching", Reason: "awaiting the first 5m frame of the interval", Momentum: stall}
 	}
-	if now.Sub(e.freshest5mAt).Milliseconds() > int64(e.cfg.FreshnessSec)*1000 {
-		return e.refuse(oppKey, "expired", "data age exceeds the freshness limit — a late frame cannot enter", stall)
+	// D23: three clocks, separately measured, and the limit binds the WORST of
+	// them. Source age answers "how old is this data"; receipt age answers
+	// "how long did this frame sit in our own queue". Either alone leaves a
+	// hole: fresh data delivered late, or a prompt delivery of stale data.
+	if age, clock := e.staleBy(nowMs, now); age > int64(e.cfg.FreshnessSec)*1000 {
+		return e.refuse(oppKey, "expired",
+			fmt.Sprintf("%s age %dms exceeds the freshness limit (%ds) — a late frame cannot enter", clock, age, e.cfg.FreshnessSec), stall)
 	}
 
 	// --- Geometry: structural stop + opposing-zone target ---
