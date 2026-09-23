@@ -198,6 +198,20 @@ func (at *AutoTrader) maybeMoveStopToBreakeven(symbol, side string, entryPrice, 
 		symbol, side, pts, entryPrice)
 }
 
+// defaultBreakevenTriggerPoints is the shipped auto-breakeven trigger (points in
+// profit) when the strategy leaves breakeven_trigger_points unset or ≤ 0.
+const defaultBreakevenTriggerPoints = 50.0
+
+// breakevenTriggerPoints is the ONE resolution of the breakeven trigger (W1 (g):
+// breakevenTrigger and the Settings page both read it).
+func breakevenTriggerPoints(rc store.RiskControlConfig) float64 {
+	trigger := rc.BreakevenTriggerPoints
+	if trigger <= 0 {
+		trigger = defaultBreakevenTriggerPoints
+	}
+	return trigger
+}
+
 // breakevenTrigger is the pure decision for auto-breakeven: given the strategy's
 // breakeven config and a position's side/entry/mark, it returns whether the stop
 // should move to breakeven now and the current points in profit. Default trigger
@@ -206,10 +220,7 @@ func breakevenTrigger(rc store.RiskControlConfig, side string, entry, mark float
 	if !hlBool(rc.BreakevenEnabled, false) {
 		return false, 0
 	}
-	trigger := rc.BreakevenTriggerPoints
-	if trigger <= 0 {
-		trigger = 50
-	}
+	trigger := breakevenTriggerPoints(rc)
 	// Normalise side casing once. The sole production caller (checkPositionDrawdown)
 	// feeds pos["side"] from NT8's GetPositions/positionMap, which emits UPPERCASE
 	// "LONG"/"SHORT" (upperSideStr). A case-sensitive == "long" never matched, so the

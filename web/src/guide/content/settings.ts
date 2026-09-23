@@ -23,7 +23,8 @@ const dayPlan: KnobSpec[] = [
   },
   {
     label: 'One setup (switch)',
-    where: 'Strategy → Day Plan → One setup (switch) + min grade (A/B/C)',
+    where:
+      'Strategy → Day Plan → "One setup — arm only the single best reject (fade) level" (switch) + min grade (A/B/C)',
     what: 'The book arms ONE play — the fade (reject) — at the best level near price, only on a permitted day. Gates arm AUTHORIZATION only; never cancels a resting arm, never places. The follow side is recorded, never armed.',
     trader:
       'ON [O] by default (an unset strategy reads ON — the field is a tri-state so an unset value is never read as OFF). OFF restores the wide book byte-identically (pinned against a golden generated before the wave existed).',
@@ -105,18 +106,18 @@ const dayPlan: KnobSpec[] = [
   {
     label: 'Max re-plans',
     where: 'Strategy → Day Plan → Max re-plans 0–4',
-    what: "Re-read budget per session — a RECORDED counter (class 35): only death re-plans and owner re-reads (↻) spend it. Level-event / MSS wake reads (fast-market included), dormant flips + re-arms, the session's scheduled read, owner reset and fail-closed markers are FREE and never count. Budget exhausted = NO-TRADE terminal marker (⛔).",
+    what: "Re-read budget per session — a RECORDED counter (class 35): only death re-plans and owner re-reads (↻) spend it. Level-event / MSS wake reads (fast-market included), dormant flips + re-arms, the session's scheduled read, owner reset and fail-closed markers are FREE and never count. Budget exhausted = NO-TRADE terminal marker (⛔). PRESENCE-AWARE since W1 (settings truth, 2026-09-23): a BLANK box = inherit the shipped default 2; 0 = no re-plan at all, stored and honoured at the strategy level too (before W1 a strategy-level 0 could not be saved and read as 2). Each trader's boot block prints the cap it will run: '🧮 replan cap: strategy=N[O|I] · NY=… · ASIA=… · LONDON=…' ([O] saved, [I] the shipped default).",
     trader:
       'The v6-after-cap-4 confusion: the last chip IS the no-trade marker, not a real plan. And a chain can legitimately be v6 with the FULL budget left (2026-09-01 LONDON: six rows, zero spends) — the card\'s "re-reads left" is the recorded number, not version−1.',
     consumer:
-      "store/strategy.go (ReplanCap · GetReplanBudget/SpendReplan) · trader/auto_trader_planner.go (deathReplanAllowed → runDeathReplan) · trader/auto_trader_reread.go (owner re-read gate). The re-ALIGN budget (owner level edits → ⟳ Re-align plan) is folded beside this since W-KNOB-PRUNE: constant 5 per plan unless the strategy stores realign_cap (the owner's stores 10), no control.",
-    range: '0 – 4 per session',
-    systemDefault: '2 (owner)',
+      "store/resolve_source.go ResolveReplanCap (the ONE rule: session → strategy → 2; ReplanCapFor delegates) · store/strategy.go (GetReplanBudget/SpendReplan) · trader/auto_trader_planner.go (deathReplanAllowed → runDeathReplan) · trader/auto_trader_reread.go (owner re-read gate). The re-ALIGN budget (owner level edits → ⟳ Re-align plan) is folded beside this since W-KNOB-PRUNE: constant 5 per plan unless the strategy stores realign_cap (the owner's stores 10), no control.",
+    range: '0 – 4 per session · blank = inherit',
+    systemDefault: 'blank → 2 [I] (shipped default)',
     recommended: '⭐ 2 — one re-read after an early death, then sit out.',
     whenToTouch:
       "Raise for violent trend days where one death shouldn't end the session.",
     perSession:
-      'Yes — session override wins; inherit (blank) = the strategy-level value (ReplanCapFor).',
+      'Yes — session override wins (0 = no re-plan in that session); inherit = the strategy-level value (ResolveReplanCap). Turning an override ON starts it at the strategy value it was inheriting.',
   },
   {
     label: 'Require approval',
@@ -329,7 +330,8 @@ const dayPlan: KnobSpec[] = [
   },
   {
     label: 'Picture HTF (two-picture mode)',
-    where: 'Strategy → Day Plan → Picture HTF block',
+    where:
+      'Strategy → Day Plan → Picture HTF block → "Include Picture HTF setups" (switch; greyed out while Enable Day Plan is off)',
     what: "The owner's two-picture method as a DETERMINISTIC mode (2026-09-20): a 4H body pivot → the H1 close breaks it by at least one tick → the next 5m interval (entry window, default 10s) searches a strict 5m swing for the stop and the nearest opposing 4H zone for the target. R:R below the configured minimum refuses — the nearer zone is never skipped. The AI is commentary only; timing is the rule, not the model. Since W-EXEC-TRUTH W0b every Picture entry passes the same entry rules as the AI and armed orders (see Status → One set of entry rules), trades only the trader's own instrument, and runs only while the trader is running and the Day Plan is on; under plan_mode=strict it is refused until it becomes a Day Plan scenario (📷 plan_gate= and the plan card say so).",
     trader:
       'OFF by default; enabling it gates on the AddOn proving build ≥ 2026-09-20-p1 (final+emitted_at bar markers, rejection reasons) — below that the evaluator logs "mode unavailable" and never submits. Sends a 1-contract SIM market entry with its protective bracket only when the book is flat, the feed is fresh, and no unreconciled submission blocks re-entry.',
@@ -503,7 +505,7 @@ const risk: KnobSpec[] = [
   {
     label: 'Guardrails master',
     where: 'Strategy → Risk Control → Guardrails',
-    what: 'Master switch for the daily guardrails stack (loss/profit caps, max trades, consecutive-loss halt, reentry cooldown, consistency, blackout windows).',
+    what: 'Master switch for the daily guardrails stack (loss/profit caps, max trades, reentry cooldown, consistency, blackout windows). The consecutive-loss halt is NOT under this switch — it is its own circuit breaker and bites whether the master is on or off.',
     trader:
       'Currently OFF by owner ruling — the would-have-tripped counters still display.',
     consumer: 'kernel/engine_position.go (guardrail evaluation)',
@@ -595,15 +597,17 @@ const risk: KnobSpec[] = [
   {
     label: 'Consecutive-loss halt',
     where: 'Strategy → Risk Control → Guardrails',
-    what: 'N consecutive losing closes halt entries until the next session.',
+    what: "N consecutive losing closes in one CME session-day halt NEW entries on every path (decision, agent, arm, picture) until the 17:00 CT roll, and resting entries are withdrawn. NOT gated by the guardrails master. PRESENCE-AWARE since W1 (settings truth, 2026-09-23): toggle OFF stores 0 = OFF; toggle ON or a BLANK box = inherit (env BREAKER_HALT_N when set, else 8); a number = that N. Before W1 the row showed a missing value as OFF while the runtime enforced 8, and its OFF wrote a 0 no save could store. The 🛑 boot lines print what is enforced: breaker=8[I] (shipped default), 3[O] / off[O] (saved), 5[E] / off[E] (env), or n/a when not exactly one strategy is bound (each trader's own '🛑 [trader] breaker=' line then speaks for it).",
     trader:
       'The streak-breaker: three losers in a row is the market telling you something.',
     consumer:
-      'store/position_query.go:57 (CountConsecutiveLossesSince) · telemetry gate-block consecutive_loss',
-    range: 'count · enabled with master',
-    systemDefault: 'ON (with master)',
+      'store/resolve_source.go ResolveBreakerHalt (the ONE rule: saved incl. 0 → env BREAKER_HALT_N → 8) · trader/auto_trader_orders.go consecutiveLossHaltedAt (decision/agent) · trader/session_risk.go sessionRiskGateAt (arm/picture) · trader/withdraw.go · store/position_query.go CountConsecutiveLossesSince · telemetry gate-block consecutive_loss',
+    range: 'OFF (0) · inherit (blank) · 1 – N',
+    systemDefault:
+      'inherit → 8 [I]; BREAKER_HALT_N overrides the inherit [E] — ON, not master-gated',
     recommended: '⭐ ON, threshold 2–3.',
-    whenToTouch: 'Leave ON — this is the cheapest guardrail in the stack.',
+    whenToTouch:
+      "Leave ON — this is the cheapest guardrail in the stack. CAVEAT (W1): a Studio save writes an OFF (0) together with its confirmation record (system_config settings_truth_zero:<strategy id>) in one transaction, and the 🩺 boot line and the effective chip print 'OFF — confirmed by Studio save <time CT>'. A strategy restored or imported WITHOUT that record row reads 'explicit 0 UNCONFIRMED — re-save in Studio' and refuses its trader at load until it is re-saved in the Studio. This is fail-closed, by design. A strategy-level replan cap of 0 works the same way.",
     perSession: 'No.',
   },
   {
@@ -715,6 +719,30 @@ export const settings: GuideSection = {
           'Ports, paths, keys — not a trading knob. Never carries a value on the wire.',
         ],
       ],
+    },
+    { kind: 'h', text: 'What the ⚙ settings boot line counts' },
+    {
+      kind: 'p',
+      text: 'schema= is the number of setting paths the bot actually SAVES — every key the strategy save writes, found by saving a fully filled-in config and reading the keys back, not by reading the Go struct tags. Since W1 (2026-09-23) that includes the ai_config.* blocks (risk_control, indicators, coin_source, prompt_sections, custom_prompt): they are stored under ai_config, and the old count skipped them entirely, so a new risk or indicator field could land with no classification and no ⚠ UNCLASSIFIED warning. The W1 build counted 167 paths where the old count read 75; the number on your boot line is the one that is true for the running binary. The boot line and the Settings page panel read the same enumeration, so they cannot disagree.',
+    },
+    {
+      kind: 'p',
+      text: 'env-shadows reads "n/a (not counted)": nothing counts which environment variables override a saved knob yet, so the line says so instead of printing a 0 nobody measured. The /api/config/resolved summary leaves env_shadows out for the same reason, and the Settings panel shows n/a.',
+    },
+    {
+      kind: 'p',
+      text: "Effective value · origin · scope (W1). Every Risk Control and Day Plan row in the Studio shows a chip under it such as 'eff 3 · saved value · strategy' (the per-session rows in the NY / ASIA / LONDON accordion read that session's answer; a row the server did not answer shows no chip, never a guessed one). The chips re-read after a successful Save. The min-confidence note 'unset/0 → default 60' and the Futures Risk panel's '≤ 10' / 'equity × 20' fallbacks are gone: the chip and the panel print the value the server resolved for the saved strategy, or n/a when it could not be read. EFFECTIVE is the value the running bot uses, computed on the server from the SAVED strategy with the same functions the bot calls — unsaved edits do not change it until you save. ORIGIN says where that value came from: saved value · schema default / shipped default · strategy value · session override · env NAME (a process environment variable) · clamp (…) (a range or ceiling cut it) · suspended (EXIT_MECHS_SUSPENDED) · backfilled default (filled in when the saved block was empty) · code constant (folded) (no control; a constant applies unless a value is stored). '— saved X not used' means you saved X and something else won. SCOPE says where to change it: strategy · session:NY / ASIA / LONDON · process env · venue:ninjatrader. 'n/a — no resolver registered' means the server has no production resolver for that field yet — it never guesses; the coverage count says how many rows are resolved. Secrets always read 'redacted'. Source: GET /api/strategies/:id/effective?session=NY. Known limit: the Studio's own save path still writes some defaults back as values (an unset min R:R is saved as 3, min confidence 0 as 60, max positions 0 as 1), so a strategy saved from the Studio shows those as 'saved value' — pinned by a test until the save path is fixed.",
+    },
+    {
+      kind: 'code',
+      title: 'boot line shape (the numbers are read at boot, never typed)',
+      lines: [
+        '⚙ settings: schema=<paths> classified=<rows> live=<n> ineffective=<n> candidate-unverified=<n> suspended=<n> advisory=<n> display-only=<n> infra=<n> folded=<n> · env-shadows=n/a (not counted)',
+      ],
+    },
+    {
+      kind: 'p',
+      text: 'Most saved paths are still classified by their last name (min_risk_reward_ratio), because the registry is keyed that way. Where one last name means two different things, the registry carries the full path instead: the seven ai_config.indicators.external_data_sources.* fields read "ineffective" — nothing in the engine fetches external data — rather than borrowing the live "name" and "type" rows of unrelated settings.',
     },
     { kind: 'h', text: 'saved → resolved · source' },
     {
@@ -915,7 +943,7 @@ export const settings: GuideSection = {
         },
         {
           title: 'The knob',
-          body: 'condition_status map, resolved per-condition: session override → strategy base → env (SHADOW_CONDITIONS / LIVE_CONDITIONS) → defaults. Defaults this wave: fvg_entry = shadow, breakout_retest = shadow, all others = live. sweep_reclaim is NOT shadowed (docketed for the Sep-9 court, pre-registered criterion, do not touch).',
+          body: 'condition_status map, resolved per-condition: session override → strategy base → LIVE_CONDITIONS → SHADOW_CONDITIONS → defaults. A condition named in BOTH env lists resolves LIVE (LIVE_CONDITIONS outranks SHADOW_CONDITIONS whatever order they are written in); a strategy or session setting outranks both env lists. Defaults this wave: fvg_entry = shadow, breakout_retest = shadow, all others = live. sweep_reclaim is NOT shadowed (docketed for the Sep-9 court, pre-registered criterion, do not touch).',
         },
         {
           title:

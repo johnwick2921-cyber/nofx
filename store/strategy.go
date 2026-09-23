@@ -1030,8 +1030,12 @@ type DayPlanConfig struct {
 	// regardless of what is stored (the old resolver already mapped every other
 	// vocabulary onto it). Field kept so old JSON round-trips; no Studio control.
 	AcceptanceRule string `json:"acceptance_rule,omitempty"`
-	// ReplanCap: re-reads per session, 0–4 (default 2).
-	ReplanCap int `json:"replan_cap,omitempty"`
+	// ReplanCap: re-reads per session, 0–4. W1 (settings truth, 2026-09-23):
+	// a POINTER because 0 is a legal value — nil/absent = the shipped default 2,
+	// an explicit 0 = no re-plan at all, N = N. As an int, 0 could never be
+	// stored (omitempty dropped it) and the resolver read a hand-set 0 as 2.
+	// Resolved ONLY by ResolveReplanCap (store/resolve_source.go).
+	ReplanCap *int `json:"replan_cap,omitempty"`
 	// SessionsEnabled: subset of NY | ASIA | LONDON (default [NY]); each other
 	// session earns enablement via replay + NY match-rate evidence.
 	SessionsEnabled []string `json:"sessions_enabled,omitempty"`
@@ -1118,7 +1122,7 @@ type DayPlanConfig struct {
 	// concept is deleted. Old stored JSON carrying the field still loads
 	// (encoding/json ignores unknown fields).
 	// ConditionStatus (0C shadow demotion, 2026-08-31) — per-condition live|
-	// shadow map, resolved base → session override → env → defaults (fvg_entry
+	// shadow map, resolved session override → base → LIVE → SHADOW env → defaults (fvg_entry
 	// and breakout_retest default SHADOW per owner ruling). The ARM SEAM is the
 	// only enforcement point; authoring/validation/E8 scoring stay untouched.
 	ConditionStatus map[string]string `json:"condition_status,omitempty"`
@@ -1166,19 +1170,15 @@ const (
 // LastEntryOffsetFor resolves the per-session last-entry offset (minutes before
 // session end). Override → default. Config only — no caller may carry a literal.
 func (c *DayPlanConfig) LastEntryOffsetFor(session string) int {
-	if ov := c.SessionOverride(session); ov != nil && ov.LastEntryOffsetMin != nil && *ov.LastEntryOffsetMin >= 0 {
-		return *ov.LastEntryOffsetMin
-	}
-	return DefaultLastEntryOffsetMin
+	v, _ := LastEntryOffsetForWithSource(c, session)
+	return v
 }
 
 // EODFlatOffsetFor resolves the per-session EOD-flat offset (minutes before
 // session end). Override → default.
 func (c *DayPlanConfig) EODFlatOffsetFor(session string) int {
-	if ov := c.SessionOverride(session); ov != nil && ov.EODFlatOffsetMin != nil && *ov.EODFlatOffsetMin >= 0 {
-		return *ov.EODFlatOffsetMin
-	}
-	return DefaultEODFlatOffsetMin
+	v, _ := EODFlatOffsetForWithSource(c, session)
+	return v
 }
 
 // SessionOverride returns the named session's override block, or nil. Shared by
@@ -1284,16 +1284,11 @@ func (s *StrategyStore) RepairAcceptanceRuleMigration() (baseMigrated, sessionMi
 }
 
 // ReplanCapFor resolves the re-read cap for a session: per-session override →
-// strategy-level → the shipped default of 2. A 0 override is meaningful (no
-// re-plan after death), hence the >= 0 test rather than > 0.
+// strategy-level → the shipped default of 2. A 0 is meaningful at BOTH levels
+// (no re-plan after death). W1: delegates to ResolveReplanCap — one resolver,
+// canon 28 — so the boot line, the card and the gates read one rule.
 func (c *DayPlanConfig) ReplanCapFor(session string) int {
-	n := 2
-	if c != nil && c.ReplanCap > 0 {
-		n = c.ReplanCap
-	}
-	if ov := c.SessionOverride(session); ov != nil && ov.ReplanCap != nil && *ov.ReplanCap >= 0 {
-		n = *ov.ReplanCap
-	}
+	n, _ := ResolveReplanCap(c, session)
 	return n
 }
 
@@ -1513,10 +1508,8 @@ func GetResetBaseline(st *Store, traderID, tradeDate, session string) int {
 // configured for this session (the shipped behavior — the strategy-level daily
 // guardrail still applies). A 0 cap is meaningful: no entries this session.
 func (c *DayPlanConfig) MaxTradesFor(session string) (int, bool) {
-	if ov := c.SessionOverride(session); ov != nil && ov.MaxTrades != nil && *ov.MaxTrades >= 0 {
-		return *ov.MaxTrades, true
-	}
-	return 0, false
+	n, ok, _ := MaxTradesForWithSource(c, session)
+	return n, ok
 }
 
 // MinGradeFor (grading audit §4.7, 2026-08-25) resolves the per-session
@@ -1524,10 +1517,8 @@ func (c *DayPlanConfig) MaxTradesFor(session string) (int, bool) {
 // seam so the kernel executor path (KEY LEVELS + PLAN STATUS) and the trader
 // planner path can never disagree on the floor.
 func (c *DayPlanConfig) MinGradeFor(session string) string {
-	if ov := c.SessionOverride(session); ov != nil && ov.MinGrade != nil {
-		return strings.ToUpper(strings.TrimSpace(*ov.MinGrade))
-	}
-	return ""
+	v, _ := MinGradeForWithSource(c, session)
+	return v
 }
 
 // PlanModeFor resolves the plan-restriction mode for a session: per-session
@@ -1549,7 +1540,7 @@ func DefaultDayPlanConfig() *DayPlanConfig {
 		ProximityFilterATR: 1.5,
 		MaxLevels:          8,
 		HtfSeats:           intPtr(2),
-		ReplanCap:          2,
+		ReplanCap:          intPtr(2),
 		SessionsEnabled:    []string{"NY"},
 		ApprovalRequired:   false,
 		// W-KNOB-PRUNE (2026-09-18): the folded knobs (scenario_cap,
@@ -1565,6 +1556,10 @@ func DefaultDayPlanConfig() *DayPlanConfig {
 func wakeBoolPtr(v bool) *bool { return &v }
 
 func intPtr(v int) *int { return &v }
+
+// IntPtr returns a pointer to v — for presence-aware *int knobs (W1:
+// consecutive_loss_halt, replan_cap), where nil = inherit and &0 = an explicit 0.
+func IntPtr(v int) *int { return &v }
 
 // DefaultWakeMinIntervalMin is the shipped wake spacing (minutes). W6-D
 // (2026-08-25): raised 10 → 30 — wakes are unlimited (no budget), so the
@@ -1787,14 +1782,8 @@ func (c *DayPlanConfig) DeathRereadEnabled() bool {
 // per-session override → strategy-level → "C" (no restriction). The ONE
 // resolution seam so the kernel gate and the Studio card can never disagree.
 func (c *DayPlanConfig) MinScenarioQualityFor(session string) string {
-	floor := "C"
-	if c != nil && strings.TrimSpace(c.MinScenarioQuality) != "" {
-		floor = strings.ToUpper(strings.TrimSpace(c.MinScenarioQuality))
-	}
-	if ov := c.SessionOverride(session); ov != nil && ov.MinScenarioQuality != nil && strings.TrimSpace(*ov.MinScenarioQuality) != "" {
-		floor = strings.ToUpper(strings.TrimSpace(*ov.MinScenarioQuality))
-	}
-	return floor
+	v, _ := MinScenarioQualityForWithSource(c, session)
+	return v
 }
 
 // MinSideLevelsFor REMOVED by owner ruling 2026-08-31 — the per-side count
@@ -2004,10 +1993,17 @@ type RiskControlConfig struct {
 
 	// D1 — CONSECUTIVE-LOSS halt: after this many consecutive LOSING closed trades
 	// in the CME session-day, block NEW entries until the next session (open-pos
-	// management via SL/TP is unaffected). 0 = OFF. Resets on a winning/break-even
-	// close or a new session. New guardrail → default 0 (off). NOT gated by the
-	// guardrails master switch — it is a per-strategy circuit breaker.
-	ConsecutiveLossHalt int `json:"consecutive_loss_halt,omitempty"`
+	// management via SL/TP is unaffected). Resets on a winning/break-even close or
+	// a new session. NOT gated by the guardrails master switch — it is a
+	// per-strategy circuit breaker.
+	//
+	// W1 (settings truth, 2026-09-23) — PRESENCE-AWARE. nil/absent = INHERIT
+	// (env BREAKER_HALT_N, else the shipped default 8 — the breaker is ON);
+	// an explicit 0 = OFF; N = N. The old int said "0 = OFF" here while the
+	// runtime read 0 as "unset → 8" and no writer could store a 0 at all
+	// (omitempty) — the UI's OFF was a switch wired to nothing. Resolved ONLY
+	// by ResolveBreakerHalt (store/resolve_source.go).
+	ConsecutiveLossHalt *int `json:"consecutive_loss_halt,omitempty"`
 
 	// B7 — RE-ENTRY COOLDOWN: after a STOP-LOSS exit, block a SAME-DIRECTION
 	// re-entry on that symbol for this many minutes OR until price moves ≥ 1×ATR15
@@ -2270,7 +2266,13 @@ func (s *StrategyStore) Create(strategy *Strategy) error {
 
 // Update update a strategy
 func (s *StrategyStore) Update(strategy *Strategy) error {
-	return s.db.Model(&Strategy{}).
+	return updateStrategyRow(s.db, strategy, time.Now().UTC()).Error
+}
+
+// updateStrategyRow is Update's one statement, on db (the store or a
+// transaction) — UpdateWithExplicitZeros runs it inside its transaction.
+func updateStrategyRow(db *gorm.DB, strategy *Strategy, updatedAt time.Time) *gorm.DB {
+	return db.Model(&Strategy{}).
 		Where("id = ? AND user_id = ?", strategy.ID, strategy.UserID).
 		Updates(map[string]interface{}{
 			"name":           strategy.Name,
@@ -2278,8 +2280,8 @@ func (s *StrategyStore) Update(strategy *Strategy) error {
 			"config":         strategy.Config,
 			"is_public":      strategy.IsPublic,
 			"config_visible": strategy.ConfigVisible,
-			"updated_at":     time.Now().UTC(),
-		}).Error
+			"updated_at":     updatedAt,
+		})
 }
 
 // Delete delete a strategy
@@ -2332,8 +2334,13 @@ func (s *StrategyStore) ListPublic() ([]*Strategy, error) {
 
 // Get get a single strategy
 func (s *StrategyStore) Get(userID, id string) (*Strategy, error) {
+	return getStrategy(s.db, userID, id)
+}
+
+// getStrategy is Get on db (the store or a transaction).
+func getStrategy(db *gorm.DB, userID, id string) (*Strategy, error) {
 	var st Strategy
-	err := s.db.Where("id = ? AND (user_id = ? OR is_default = ?)", id, userID, true).
+	err := db.Where("id = ? AND (user_id = ? OR is_default = ?)", id, userID, true).
 		First(&st).Error
 	if err != nil {
 		return nil, err
@@ -2382,25 +2389,36 @@ func (s *StrategyStore) SetActive(userID, strategyID string) error {
 }
 
 // Duplicate duplicate a strategy (used to create custom strategy based on default strategy)
+//
+// W1 (settings truth): the copy holds the same bytes, so it carries the
+// source's record of which explicit zeros a W1 save confirmed — a copy of a
+// confirmed OFF breaker is still the owner's OFF. The source read, the new row
+// and the copied record are ONE transaction (CTO ruling msg 1790176346377): a
+// copy never lands without its record, nor pairs one source's bytes with
+// another moment's record.
 func (s *StrategyStore) Duplicate(userID, sourceID, newID, newName string) error {
-	// get source strategy
-	source, err := s.Get(userID, sourceID)
-	if err != nil {
-		return fmt.Errorf("failed to get source strategy: %w", err)
-	}
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		// get source strategy
+		source, err := getStrategy(tx, userID, sourceID)
+		if err != nil {
+			return fmt.Errorf("failed to get source strategy: %w", err)
+		}
 
-	// create new strategy
-	newStrategy := &Strategy{
-		ID:          newID,
-		UserID:      userID,
-		Name:        newName,
-		Description: "Created based on [" + source.Name + "]",
-		IsActive:    false,
-		IsDefault:   false,
-		Config:      source.Config,
-	}
-
-	return s.Create(newStrategy)
+		// create new strategy
+		newStrategy := &Strategy{
+			ID:          newID,
+			UserID:      userID,
+			Name:        newName,
+			Description: "Created based on [" + source.Name + "]",
+			IsActive:    false,
+			IsDefault:   false,
+			Config:      source.Config,
+		}
+		if err := tx.Create(newStrategy).Error; err != nil {
+			return err
+		}
+		return copyExplicitZeroMarker(tx, sourceID, newID)
+	})
 }
 
 // ParseConfig parse strategy configuration JSON
