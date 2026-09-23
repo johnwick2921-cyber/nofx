@@ -185,14 +185,15 @@ func TestDroppedAttemptedEntryStaysPending(t *testing.T) {
 	}
 }
 
-// CTO condition 3 — the AI market-entry path. placeEntry returns "submitted"
-// for a QUEUED signal and its production caller, recordAndConfirmOrder, then
-// writes an order row and — with no matching fill after ~3s — an OPEN position
-// at the mark price whose entry_order_id is "<nil>" (placeEntry returns no
-// "orderId"). Nothing links that row to the signal, so the drop cannot settle
-// it without fabricating a close: the trader FORGETS the entry, says so, and
-// the gate stays closed on db_open_positions until an operator reconciles.
-func TestDroppedAIEntryIsForgottenAndTheGateStaysClosed(t *testing.T) {
+// CTO condition 3 — the AI market-entry path, after W-EXEC-TRUTH W0 (d)
+// (CLASS 160). placeEntry returns "submitted" for a QUEUED signal; its
+// production caller, recordAndConfirmOrder, now keys the order row by that
+// signal and records NO position without a fill for it. So the drop CAN link
+// the AI entry: its unresolved order row settles CANCELED "never sent", no
+// phantom OPEN row exists, and cutover leg 1 (db_open_positions) stays clear.
+// (Until W0 this test pinned the defect: an OPEN row at the mark with
+// entry_order_id "<nil>" that nothing could settle.)
+func TestDroppedAIEntrySettlesItsOrderRowAndNoPositionExists(t *testing.T) {
 	w := newDropWire(t)
 	_ = w.nt.SetStopLoss("MNQ", "LONG", 1, 28950)
 	_ = w.nt.SetTakeProfit("MNQ", "LONG", 1, 29100)
@@ -206,22 +207,26 @@ func TestDroppedAIEntryIsForgottenAndTheGateStaysClosed(t *testing.T) {
 	}
 	// The production caller, exactly as executeOpenLongWithRecord runs it.
 	w.at.recordAndConfirmOrder(order, "MNQ", "open_long", 1, 29000, 1, 0, 70)
-	open, err := w.st.Position().GetOpenPositions(w.at.id)
-	if err != nil || len(open) != 1 || open[0].EntryOrderID != "<nil>" {
-		t.Fatalf("[A] the AI path records an OPEN row for a queued entry with entry_order_id \"<nil>\": %+v %v", open, err)
+	if open, err := w.st.Position().GetOpenPositions(w.at.id); err != nil || len(open) != 0 {
+		t.Fatalf("CLASS 160: a queued entry records no position: %+v %v", open, err)
+	}
+	o, err := w.st.Order().GetOrderByExchangeID(w.at.exchangeID, sid)
+	if err != nil || o == nil || o.Status != "NEW" {
+		t.Fatalf("the queued AI entry's order row is keyed by its signal and unresolved: %+v %v", o, err)
 	}
 
 	logs := captureTraderLog(t)
 	setHold(t, w.dir, "job-ai")
-	waitDrop(t, "the AI entry to be dropped and forgotten", 5*time.Second, func() bool { return !w.nt.HasPendingEntry(sid) })
-	if out := logs.String(); !strings.Contains(out, sid) || !strings.Contains(out, "db_open_positions") {
-		t.Fatalf("the drop of an unlinkable AI entry must be said out loud (signal + db_open_positions), log:\n%s", out)
+	waitDrop(t, "the AI entry to be dropped", 5*time.Second, func() bool { return !w.nt.HasPendingEntry(sid) })
+	waitDrop(t, "the AI order row to settle", 5*time.Second, func() bool {
+		o, _ := w.st.Order().GetOrderByExchangeID(w.at.exchangeID, sid)
+		return o != nil && o.Status == "CANCELED"
+	})
+	if out := logs.String(); !strings.Contains(out, sid) || !strings.Contains(out, "NEVER reached NT8") {
+		t.Fatalf("the drop must be said out loud (signal + never reached NT8), log:\n%s", out)
 	}
-	if l := w.leg(t, 1); l.Pass {
-		t.Fatalf("the unlinkable OPEN row must keep cutover leg 1 failing: %+v", l)
-	}
-	if open, _ := w.st.Position().GetOpenPositions(w.at.id); len(open) != 1 {
-		t.Fatal("the drop must not fabricate a close for a row it cannot link")
+	if l := w.leg(t, 1); !l.Pass {
+		t.Fatalf("no phantom OPEN row exists, so cutover leg 1 passes: %+v", l)
 	}
 	w.noSignalOnReconnect(t)
 }

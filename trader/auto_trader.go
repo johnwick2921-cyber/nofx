@@ -838,6 +838,9 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		// W-ONE-BUTTON M2 — the installation maintenance hold (sites 4, 4b, 7
 		// and the M-2 drop sink), wired at construction, before Run.
 		wireNT8Maintenance(at, nt)
+		// W-EXEC-TRUTH W0 (b) — the one entry latch's evidence (book + both
+		// ledgers), wired at construction, before Run.
+		wireNT8EntryLatch(at, nt)
 	}
 	return at, nil
 }
@@ -847,7 +850,8 @@ func (at *AutoTrader) Run() error {
 	at.isRunningMutex.Lock()
 	at.isRunning = true
 	at.isRunningMutex.Unlock()
-	at.registerPictureHtf() // live-bar routing for the two-picture mode
+	at.registerPictureHtf()                     // live-bar routing for the two-picture mode
+	at.logInfof("🚦 %s", entryLatchBootLine(at)) // W-EXEC-TRUTH W0 (b) — READ, never asserted
 	if at.exchange == "ninjatrader" {
 		if _, ok := kernel.TFDurationMs(at.primaryTimeframe()); !ok {
 			return fmt.Errorf("primary_timeframe %q is not in the timeframe table (kernel/timeframes.go) — refusing to run on a corrupt bar clock", at.primaryTimeframe())
