@@ -84,7 +84,7 @@ NOFX 的使命是成为所有金融市场的**通用 AI 交易操作系统**。�
 
 - **去中心化永续交易所（Perp-DEX）**
   - [x] **Hyperliquid**（Ethereum L1）- 高性能订单簿DEX（✅ 已支持）
-  - [x] **Aster**（多链）- Binance兼容API的DEX（✅ 已支持）
+  - [x] **Aster**（多链）- 永续合约 DEX（✅ 已支持）
   - [ ] **Lighter**（Arbitrum）- 无Gas订单簿DEX，链下撮合
   - [ ] **EdgeX**（多链）- 专业衍生品DEX
   - [ ] 统一的DEX接口，保证集成一致性

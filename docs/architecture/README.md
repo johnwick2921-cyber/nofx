@@ -13,7 +13,7 @@ NOFX is a full-stack AI trading platform for cryptocurrency and US stock markets
 - **Backend:** Go (Gin framework, SQLite)
 - **Frontend:** React/TypeScript (Vite, TailwindCSS)
 - **AI Models:** DeepSeek, Qwen, OpenAI (GPT-5.2), Claude, Gemini, Grok, Kimi
-- **Exchanges:** Binance, Bybit, OKX, Hyperliquid, Aster, Lighter
+- **Exchanges:** Bybit, OKX, Hyperliquid, Aster, Lighter · NinjaTrader (CME futures)
 
 ---
 
@@ -100,7 +100,6 @@ nofx/
 | Package | Purpose |
 |---------|---------|
 | `gin-gonic/gin` | HTTP API framework |
-| `adshao/go-binance` | Binance API client |
 | `markcheno/go-talib` | Technical indicators |
 | `golang-jwt/jwt` | JWT authentication |
 

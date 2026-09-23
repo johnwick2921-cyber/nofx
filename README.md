@@ -87,7 +87,7 @@ No accounts. No API keys. No prepaid credits. One wallet, every model.
 | Feature             | Description                                                               |
 | :------------------ | :------------------------------------------------------------------------ |
 | **Multi-AI**        | DeepSeek, Qwen, GPT, Claude, Gemini, Grok, Kimi, MiniMax — switch anytime |
-| **Multi-Exchange**  | Binance, Bybit, OKX, Bitget, KuCoin, Gate, Hyperliquid, Aster, Lighter    |
+| **Multi-Exchange**  | Bybit, OKX, Bitget, KuCoin, Gate, Hyperliquid, Aster, Lighter             |
 | **Strategy Studio** | Visual builder — coin sources, indicators, risk controls                  |
 | **AI Competition**  | AIs compete in real-time, leaderboard ranks performance                   |
 | **Telegram Agent**  | Chat with your trading assistant — streaming, tool calling, memory        |
@@ -101,7 +101,6 @@ Crypto · US Stocks · Forex · Metals
 
 | Exchange                                                                                                              | Status | Register (Fee Discount)                                                              |
 | :-------------------------------------------------------------------------------------------------------------------- | :----: | :----------------------------------------------------------------------------------- |
-| <img src="web/public/exchange-icons/binance.jpg" width="20" height="20" style="vertical-align: middle;"/> **Binance** |   ✅   | [Register](https://www.binance.com/join?ref=NOFXENG)                                 |
 | <img src="web/public/exchange-icons/bybit.png" width="20" height="20" style="vertical-align: middle;"/> **Bybit**     |   ✅   | [Register](https://partner.bybit.com/b/83856)                                        |
 | <img src="web/public/exchange-icons/okx.svg" width="20" height="20" style="vertical-align: middle;"/> **OKX**         |   ✅   | [Register](https://www.okx.com/join/1865360)                                         |
 | <img src="web/public/exchange-icons/bitget.svg" width="20" height="20" style="vertical-align: middle;"/> **Bitget**   |   ✅   | [Register](https://www.bitget.com/referral/register?from=referral&clacCode=c8a43172) |
@@ -286,7 +285,7 @@ curl -fsSL https://raw.githubusercontent.com/NoFxAiOS/nofx/main/install.sh | bas
     │    └───────────┘  └───────────┘  └───────────┘  │
     ├─────────────────────────────────────────────────┤
     │             Exchange Connectors                   │
-    │  Binance · Bybit · OKX · Bitget · KuCoin · Gate  │
+    │  Bybit · OKX · Bitget · KuCoin · Gate            │
     │      Hyperliquid · Aster DEX · Lighter            │
     └─────────────────────────────────────────────────┘
 ```

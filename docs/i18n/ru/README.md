@@ -84,7 +84,7 @@ x402 процесс:
 | Функция | Описание |
 |:--------|:------------|
 | **Мульти-AI** | DeepSeek, Qwen, GPT, Claude, Gemini, Grok, Kimi, MiniMax — переключение в любой момент |
-| **Мульти-биржа** | Binance, Bybit, OKX, Bitget, KuCoin, Gate, Hyperliquid, Aster, Lighter |
+| **Мульти-биржа** | Bybit, OKX, Bitget, KuCoin, Gate, Hyperliquid, Aster, Lighter |
 | **Студия стратегий** | Визуальный конструктор — источники монет, индикаторы, контроль рисков |
 | **AI Арена дебатов** | Несколько AI обсуждают сделки (Бык vs Медведь vs Аналитик), голосуют, исполняют |
 | **AI Соревнование** | AI соревнуются в реальном времени, рейтинг в таблице лидеров |
@@ -100,7 +100,6 @@ x402 процесс:
 
 | Биржа | Статус | Регистрация (скидка) |
 |:---------|:------:|:------------------------|
-| <img src="../../../web/public/exchange-icons/binance.jpg" width="20" height="20" style="vertical-align: middle;"/> **Binance** | ✅ | [Регистрация](https://www.binance.com/join?ref=NOFXENG) |
 | <img src="../../../web/public/exchange-icons/bybit.png" width="20" height="20" style="vertical-align: middle;"/> **Bybit** | ✅ | [Регистрация](https://partner.bybit.com/b/83856) |
 | <img src="../../../web/public/exchange-icons/okx.svg" width="20" height="20" style="vertical-align: middle;"/> **OKX** | ✅ | [Регистрация](https://www.okx.com/join/1865360) |
 | <img src="../../../web/public/exchange-icons/bitget.svg" width="20" height="20" style="vertical-align: middle;"/> **Bitget** | ✅ | [Регистрация](https://www.bitget.com/referral/register?from=referral&clacCode=c8a43172) |

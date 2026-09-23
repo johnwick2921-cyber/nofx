@@ -84,7 +84,7 @@ x402 플로우:
 | 기능 | 설명 |
 |:--------|:------------|
 | **멀티 AI** | DeepSeek, Qwen, GPT, Claude, Gemini, Grok, Kimi, MiniMax — 언제든 전환 |
-| **멀티 거래소** | Binance, Bybit, OKX, Bitget, KuCoin, Gate, Hyperliquid, Aster, Lighter |
+| **멀티 거래소** | Bybit, OKX, Bitget, KuCoin, Gate, Hyperliquid, Aster, Lighter |
 | **전략 스튜디오** | 비주얼 빌더 — 코인 소스, 지표, 리스크 관리 |
 | **AI 토론 아레나** | 여러 AI가 거래 토론 (강세 vs 약세 vs 분석가), 투표, 실행 |
 | **AI 경쟁** | AI가 실시간 경쟁, 리더보드 순위 |
@@ -100,7 +100,6 @@ x402 플로우:
 
 | 거래소 | 상태 | 등록 (수수료 할인) |
 |:---------|:------:|:------------------------|
-| <img src="../../../web/public/exchange-icons/binance.jpg" width="20" height="20" style="vertical-align: middle;"/> **Binance** | ✅ | [등록](https://www.binance.com/join?ref=NOFXENG) |
 | <img src="../../../web/public/exchange-icons/bybit.png" width="20" height="20" style="vertical-align: middle;"/> **Bybit** | ✅ | [등록](https://partner.bybit.com/b/83856) |
 | <img src="../../../web/public/exchange-icons/okx.svg" width="20" height="20" style="vertical-align: middle;"/> **OKX** | ✅ | [등록](https://www.okx.com/join/1865360) |
 | <img src="../../../web/public/exchange-icons/bitget.svg" width="20" height="20" style="vertical-align: middle;"/> **Bitget** | ✅ | [등록](https://www.bitget.com/referral/register?from=referral&clacCode=c8a43172) |

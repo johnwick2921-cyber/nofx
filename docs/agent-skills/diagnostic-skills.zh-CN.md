@@ -160,14 +160,14 @@
 
 ### 优先排查
 
-1. 账户模式是否匹配，例如 Binance 是否为 Hedge Mode
+1. 账户模式是否匹配，例如交易所是否为 Hedge Mode
 2. 是否为子账户杠杆限制
 3. 合约权限是否开启
 4. 余额、保证金、可交易 symbol 是否满足条件
 
 ### 已知实现事实
 
-- Binance 在 One-way Mode 下，可能出现 `position side mismatch` 或单边行为
+- 交易所在 One-way Mode 下，可能出现 `position side mismatch` 或单边行为
 - 某些子账户杠杆上限较低，超过限制会直接失败
 - 这些问题在 `docs/guides/TROUBLESHOOTING.md` 已有明确说明
 

@@ -120,7 +120,7 @@ faq.zh-CN.md                 → Chinese FAQ
 - API, HTTP, REST, JSON
 - Docker, Kubernetes
 - GitHub, Git, Pull Request
-- Specific tool names (Binance, Hyperliquid)
+- Specific tool names (Hyperliquid, NinjaTrader)
 
 **Example - Chinese:**
 - ✅ "启动 Docker 容器" (start Docker container)

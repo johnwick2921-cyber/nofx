@@ -88,9 +88,8 @@ sudo apt-get install libta-lib0-dev
 - 按流动性和交易量过滤
 
 ### 交易所集成
-- Binance Futures（中心化交易所）
 - Hyperliquid（去中心化交易所）
-- Aster DEX（兼容 Binance）
+- Aster DEX
 
 ---
 

@@ -19,29 +19,6 @@ Before reporting a bug, please check:
 
 ### 1. Trading Issues
 
-#### ❌ Only Opening Short Positions (Issue #202)
-
-**Symptom:** AI only opens short positions, never long positions, even when market is bullish.
-
-**Root Cause:** Binance account is in **One-way Mode** instead of **Hedge Mode**.
-
-**Solution:**
-1. Login to [Binance Futures](https://www.binance.com/futures/BTCUSDT)
-2. Click **⚙️ Preferences** (top right)
-3. Select **Position Mode**
-4. Switch to **Hedge Mode** (双向持仓)
-5. ⚠️ **Important:** Close all positions before switching
-
-**Why this happens:**
-- Code uses `PositionSide(LONG)` and `PositionSide(SHORT)` parameters
-- These only work in Hedge Mode
-- In One-way Mode, orders fail or only one direction works
-
-**For Subaccounts:**
-- Some Binance subaccounts may not have permission to change position mode
-- Use main account or contact Binance support to enable this permission
-
----
 
 #### ❌ Order Error: `code=-4061` Position Side Mismatch
 
@@ -72,7 +49,7 @@ Before reporting a bug, please check:
 
 **Check these:**
 1. **API Permissions**:
-   - Go to Binance → API Management
+   - Go to your exchange → API Management
    - Verify "Enable Futures" is checked
    - Check IP whitelist (if enabled)
 
@@ -281,7 +258,7 @@ NOFX_BACKEND_PORT=8081
 - `timestamp` errors
 
 **Root Cause:**
-System time is inaccurate, differing from Binance server time by more than allowed range (typically 5 seconds).
+System time is inaccurate, differing from the exchange server time by more than allowed range (typically 5 seconds).
 
 **Solution 1: Sync System Time (Recommended)**
 
@@ -327,14 +304,14 @@ If errors persist after time sync:
    - IP whitelist includes your server IP
 
 2. **Regenerate API Keys:**
-   - Login to Binance → API Management
+   - Login to your exchange → API Management
    - Delete old key
    - Create new key
    - Update NOFX configuration
 
 **Solution 3: Check Rate Limits**
 
-Binance has strict API rate limits:
+Exchanges enforce strict API rate limits:
 
 - **Requests per minute limit**
 - Reduce number of traders

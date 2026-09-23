@@ -84,7 +84,7 @@ NOFX is on a mission to become the **Universal AI Trading Operating System** for
 
 - **Decentralized Perpetual Exchanges (Perp-DEX)**
   - [x] **Hyperliquid** (Ethereum L1) - High-performance orderbook DEX (✅ Supported)
-  - [x] **Aster** (Multi-chain) - Binance-compatible API DEX (✅ Supported)
+  - [x] **Aster** (Multi-chain) - perp DEX (✅ Supported)
   - [ ] **Lighter** (Arbitrum) - Gasless orderbook DEX with off-chain matching
   - [ ] **EdgeX** (Multi-chain) - Professional derivatives DEX
   - [ ] Unified DEX interface for consistent integration

@@ -88,9 +88,8 @@ Run multiple AI models simultaneously:
 - Filter by liquidity and volume
 
 ### Exchange Integration
-- Binance Futures (CEX)
 - Hyperliquid (DEX)
-- Aster DEX (Binance-compatible)
+- Aster DEX
 
 ---
 
