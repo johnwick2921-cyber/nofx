@@ -100,10 +100,10 @@ func TestSanitizeExchangeConfigForLog(t *testing.T) {
 		LighterWalletAddr     string `json:"lighter_wallet_addr"`
 		LighterPrivateKey     string `json:"lighter_private_key"`
 	}{
-		"binance": {
+		"bybit": {
 			Enabled:   true,
-			APIKey:    "binance_api_key_1234567890abcdef",
-			SecretKey: "binance_secret_key_1234567890abcdef",
+			APIKey:    "bybit_api_key_1234567890abcdef",
+			SecretKey: "bybit_secret_key_1234567890abcdef",
 			Testnet:   false,
 			LighterWalletAddr:   "",
 			LighterPrivateKey:   "",
@@ -119,28 +119,28 @@ func TestSanitizeExchangeConfigForLog(t *testing.T) {
 
 	result := SanitizeExchangeConfigForLog(exchanges)
 
-	// Check Binance configuration
-	binanceConfig, ok := result["binance"].(map[string]interface{})
+	// Check Bybit configuration
+	bybitConfig, ok := result["bybit"].(map[string]interface{})
 	if !ok {
-		t.Fatal("binance config not found or wrong type")
+		t.Fatal("bybit config not found or wrong type")
 	}
 
-	maskedAPIKey, ok := binanceConfig["api_key"].(string)
+	maskedAPIKey, ok := bybitConfig["api_key"].(string)
 	if !ok {
-		t.Fatal("binance api_key not found or wrong type")
+		t.Fatal("bybit api_key not found or wrong type")
 	}
 
-	if maskedAPIKey != "bina****cdef" {
-		t.Errorf("expected masked api_key='bina****cdef', got %q", maskedAPIKey)
+	if maskedAPIKey != "bybi****cdef" {
+		t.Errorf("expected masked api_key='bybi****cdef', got %q", maskedAPIKey)
 	}
 
-	maskedSecretKey, ok := binanceConfig["secret_key"].(string)
+	maskedSecretKey, ok := bybitConfig["secret_key"].(string)
 	if !ok {
-		t.Fatal("binance secret_key not found or wrong type")
+		t.Fatal("bybit secret_key not found or wrong type")
 	}
 
-	if maskedSecretKey != "bina****cdef" {
-		t.Errorf("expected masked secret_key='bina****cdef', got %q", maskedSecretKey)
+	if maskedSecretKey != "bybi****cdef" {
+		t.Errorf("expected masked secret_key='bybi****cdef', got %q", maskedSecretKey)
 	}
 
 	// Check Hyperliquid configuration

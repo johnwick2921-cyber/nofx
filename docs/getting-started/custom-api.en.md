@@ -21,10 +21,10 @@ NOFX now supports using any OpenAI-compatible API format, including:
       "id": "trader_custom",
       "name": "My Custom AI Trader",
       "ai_model": "custom",
-      "exchange": "binance",
+      "exchange": "bybit",
 
-      "binance_api_key": "your_binance_api_key",
-      "binance_secret_key": "your_binance_secret_key",
+      "api_key": "your_bybit_api_key",
+      "secret_key": "your_bybit_secret_key",
 
       "custom_api_url": "https://api.openai.com/v1",
       "custom_api_key": "sk-your-openai-api-key",

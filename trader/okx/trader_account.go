@@ -91,7 +91,7 @@ func (t *OKXTrader) GetBalance() (map[string]interface{}, error) {
 //
 // This implementation therefore stores the configured mode locally and injects it
 // into each subsequent API request, rather than making an API call here.
-// NOTE: unlike Binance/Bybit implementations of this interface, no network call
+// NOTE: unlike the Bybit implementation of this interface, no network call
 // is made — the method only updates local state.
 func (t *OKXTrader) SetMarginMode(symbol string, isCrossMargin bool) error {
 	t.isCrossMargin = isCrossMargin

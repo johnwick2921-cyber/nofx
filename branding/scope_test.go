@@ -110,7 +110,19 @@ func TestExistingGoImportTargetsPreserved(t *testing.T) {
 			}
 		}
 	}
-	headImports := func(target string) bool { return headSet[target] }
+	// W-NB B: a removed nofx/ target whose PACKAGE WAS DELETED from the
+	// tree (no tracked file left under its directory) is a deletion, not a
+	// rename — preserveImports still rejects it when a renamed counterpart
+	// (vl/X) is imported. A package that still exists must still be imported.
+	packageDeleted := func(target string) bool {
+		dir := strings.TrimPrefix(target, "nofx/")
+		if dir == target || dir == "" {
+			return false
+		}
+		out, gerr := git("ls-files", "--", dir+"/")
+		return gerr == nil && strings.TrimSpace(string(out)) == ""
+	}
+	headImports := func(target string) bool { return headSet[target] || packageDeleted(target) }
 	paths, err := git("diff", "--name-only", base, "--", "*.go")
 	if err != nil {
 		t.Fatal(err)
@@ -124,6 +136,12 @@ func TestExistingGoImportTargetsPreserved(t *testing.T) {
 			continue
 		} // a new file has no pre-existing import targets
 		after, err := os.ReadFile(filepath.Join(root, path))
+		if os.IsNotExist(err) {
+			// A DELETED file (W-NB B) drops all its imports: each is
+			// judged like any removal — still imported elsewhere, or its
+			// package deleted from the tree; a rename is still rejected.
+			after, err = []byte("package deleted\n"), nil
+		}
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -158,5 +176,21 @@ func TestImportScopeAllowsMovedTarget(t *testing.T) {
 	}
 	if err := preserveImports(before, after, func(string) bool { return false }); err == nil {
 		t.Fatal("a target no tracked file imports any more must still be rejected")
+	}
+}
+
+// W-NB B: a removed import whose package was DELETED is allowed
+// (the predicate says "no tracked file left under its directory"); the same
+// removal with a renamed counterpart is still rejected.
+func TestImportScopeAllowsADeletedPackageButNotARename(t *testing.T) {
+	before := []byte("package p; import (\"nofx/config\"; \"nofx/trader/gone\")")
+	after := []byte("package p; import \"nofx/config\"")
+	deleted := func(t string) bool { return t == "nofx/trader/gone" }
+	if err := preserveImports(before, after, deleted); err != nil {
+		t.Fatalf("an import of a deleted package must be allowed to go: %v", err)
+	}
+	renamed := []byte("package p; import (\"nofx/config\"; \"vl/trader/gone\")")
+	if err := preserveImports(before, renamed, deleted); err == nil {
+		t.Fatal("a rename (nofx/X → vl/X) must still be rejected even when X was deleted")
 	}
 }

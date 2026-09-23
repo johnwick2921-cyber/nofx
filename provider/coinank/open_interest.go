@@ -206,7 +206,7 @@ type OpenInterestChartV2Response struct {
 }
 
 type OpenInterestSymbolChartResponse struct {
-	ExchangeName  string   `json:"exchangeName"` // such as `Binance`
+	ExchangeName  string   `json:"exchangeName"` // such as `Bybit`
 	BaseCoin      string   `json:"baseCoin"`     // such as `BTC`
 	Symbol        string   `json:"symbol"`       // such as `BTCUSDT`
 	ExchangeType  string   `json:"exchangeType"` // exchange type ,`USDT`: usdt base ,`COIN`: coin base

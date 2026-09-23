@@ -11,7 +11,6 @@ import (
 	"nofx/store"
 	"nofx/telemetry"
 	"nofx/trader/aster"
-	"nofx/trader/binance"
 	"nofx/trader/bitget"
 	"nofx/trader/bybit"
 	"nofx/trader/gate"
@@ -249,12 +248,8 @@ type AutoTraderConfig struct {
 	AIModelID string
 
 	// Trading platform selection
-	Exchange   string // Exchange type: "binance", "bybit", "okx", "bitget", "gate", "hyperliquid", "aster", "lighter", "indodax", or "ninjatrader"
+	Exchange   string // Exchange type: "bybit", "okx", "bitget", "gate", "hyperliquid", "aster", "lighter", "indodax", or "ninjatrader"
 	ExchangeID string // Exchange account UUID (for multi-account support)
-
-	// Binance API configuration
-	BinanceAPIKey    string
-	BinanceSecretKey string
 
 	// Bybit API configuration
 	BybitAPIKey    string
@@ -358,7 +353,7 @@ type AutoTrader struct {
 	id                string // Trader unique identifier
 	name              string // Trader display name
 	aiModel           string // AI model name
-	exchange          string // Trading platform type (binance/bybit/etc)
+	exchange          string // Trading platform type (ninjatrader/bybit/etc)
 	exchangeID        string // Exchange account UUID
 	showInCompetition bool   // Whether to show in competition page
 	config            AutoTraderConfig
@@ -558,9 +553,34 @@ type planCitation struct {
 	valid     bool
 }
 
+// ExchangeRefusal is the ONE named refusal for a trader whose exchange type
+// this build cannot construct: no exchange at all (a trader never gets a
+// broker by default), or a type outside store's supported-exchange registry (a
+// broker removed from the build). The stored value is interpolated (%q) — the
+// venue is named from the row, never coerced onto another broker. nil = the
+// type is constructible. The manager's two load paths and NewAutoTrader all
+// call this FIRST, so the refusal reads the same everywhere; the message keeps
+// "unsupported trading platform" so api classifyTraderSetupReason maps it to
+// trader.reason.exchange_unsupported.
+func ExchangeRefusal(traderName, exchange string) error {
+	if strings.TrimSpace(exchange) == "" {
+		return fmt.Errorf("refused: trader %q has no exchange configured — a trader never gets a broker by default", traderName)
+	}
+	if err := store.CheckSupportedExchangeType(exchange); err != nil {
+		return fmt.Errorf("refused: unsupported trading platform %q — this trader does not load: %w", exchange, err)
+	}
+	return nil
+}
+
 // NewAutoTrader creates an automatic trader
 // st parameter is used to store decision records to database
 func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*AutoTrader, error) {
+	// The exchange is checked FIRST — before the AI client is built or any
+	// "Using … AI" line is logged — so a refused trader constructs nothing.
+	if err := ExchangeRefusal(config.Name, config.Exchange); err != nil {
+		return nil, err
+	}
+
 	// Set default values
 	if config.ID == "" {
 		config.ID = "default_trader"
@@ -640,16 +660,11 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		logger.Infof("🔧 [%s] Custom config - URL: %s, Model: %s", config.Name, config.CustomAPIURL, config.CustomModelName)
 	}
 
-	// Set default trading platform
-	if config.Exchange == "" {
-		config.Exchange = "binance"
-	}
-
 	// CTO F2 (critic G1), fail-closed at the SOURCE: the NinjaTrader venue
 	// trades CME futures only. A trader configured on it with a non-CME symbol
 	// (its NT8 symbol or a strategy static coin) is REFUSED here — named, never
 	// started — instead of reading that symbol from a crypto source every
-	// cycle (CoinAnk exchange=Binance + Binance OI/funding).
+	// cycle.
 	if strings.EqualFold(strings.TrimSpace(config.Exchange), "ninjatrader") {
 		if bad := nonCMESymbolsForNT8(config); len(bad) > 0 {
 			return nil, fmt.Errorf("refused: trader %q is on the NinjaTrader venue but trades %s — not CME futures symbols; this trader does not load", config.Name, strings.Join(bad, ","))
@@ -668,9 +683,6 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 	logger.Infof("📊 [%s] Position mode: %s", config.Name, marginModeStr)
 
 	switch config.Exchange {
-	case "binance":
-		logger.Infof("🏦 [%s] Using Binance Futures trading", config.Name)
-		trader = binance.NewFuturesTrader(config.BinanceAPIKey, config.BinanceSecretKey, userID)
 	case "bybit":
 		logger.Infof("🏦 [%s] Using Bybit Futures trading", config.Name)
 		trader = bybit.NewBybitTrader(config.BybitAPIKey, config.BybitSecretKey)
@@ -767,7 +779,10 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		// This is set AFTER the AutoTrader is partially initialized, so we defer
 		// it until later in NewAutoTrader.
 	default:
-		return nil, fmt.Errorf("unsupported trading platform: %s", config.Exchange)
+		// Unreachable for a registry type (ExchangeRefusal ran first); kept
+		// fail-closed so a registry/switch drift is REFUSED by name, never
+		// coerced. TestExchangeRegistryMatchesTheBrokerSwitch pins the parity.
+		return nil, fmt.Errorf("refused: unsupported trading platform %q — this trader does not load", config.Exchange)
 	}
 
 	// Validate initial balance configuration, auto-fetch from exchange if 0
@@ -956,14 +971,6 @@ func (at *AutoTrader) Run() error {
 		if asterTrader, ok := at.trader.(*aster.AsterTrader); ok && at.store != nil {
 			asterTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 30*time.Second)
 			at.logInfof("🔄 Aster order+position sync enabled (every 30s)")
-		}
-	}
-
-	// Start Binance order sync if using Binance exchange
-	if at.exchange == "binance" {
-		if binanceTrader, ok := at.trader.(*binance.FuturesTrader); ok && at.store != nil {
-			binanceTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 30*time.Second)
-			at.logInfof("🔄 Binance order+position sync enabled (every 30s)")
 		}
 	}
 

@@ -23,7 +23,6 @@ import (
 	gethcrypto "github.com/ethereum/go-ethereum/crypto"
 
 	"nofx/manager"
-	"nofx/market"
 	"nofx/mcp"
 	"nofx/store"
 	"nofx/wallet"
@@ -34,7 +33,6 @@ type Agent struct {
 	store         *store.Store
 	aiClient      mcp.AIClient
 	config        *Config
-	sentinel      *Sentinel
 	brain         *Brain
 	scheduler     *Scheduler
 	logger        *slog.Logger
@@ -46,14 +44,15 @@ type Agent struct {
 	NotifyFunc    func(userID int64, text string) error
 }
 
+// Config is the agent's runtime configuration. The crypto-era Sentinel
+// (WatchSymbols / EnableSentinel) and market briefs (EnableBriefs /
+// BriefTimes) are gone with the external market poller they drove: both
+// only ever polled an external crypto exchange feed, and their output went
+// to a NotifyFunc nothing assigns.
 type Config struct {
-	Language            string   `json:"language"`
-	WatchSymbols        []string `json:"watch_symbols"`
-	EnableBriefs        bool     `json:"enable_briefs"`
-	EnableNews          bool     `json:"enable_news"`
-	EnableSentinel      bool     `json:"enable_sentinel"`
-	AllowTradeExecution bool     `json:"allow_trade_execution"`
-	BriefTimes          []int    `json:"brief_times"`
+	Language            string `json:"language"`
+	EnableNews          bool   `json:"enable_news"`
+	AllowTradeExecution bool   `json:"allow_trade_execution"`
 }
 
 var (
@@ -64,12 +63,8 @@ var (
 func DefaultConfig() *Config {
 	return &Config{
 		Language:            "zh",
-		WatchSymbols:        []string{"BTCUSDT", "ETHUSDT", "SOLUSDT"},
-		EnableBriefs:        true,
 		EnableNews:          true,
-		EnableSentinel:      true,
 		AllowTradeExecution: true,
-		BriefTimes:          []int{8, 20},
 	}
 }
 
@@ -377,16 +372,9 @@ func (a *Agent) Start() {
 	a.logger.Info("starting " + branding.PersonaName() + " agent...")
 	a.EnsureAIClient()
 
-	if a.config.EnableSentinel {
-		a.sentinel = NewSentinel(a.config.WatchSymbols, a.handleSignal, a.logger)
-		a.sentinel.Start()
-	}
 	a.brain = NewBrain(a, a.logger)
 	if a.config.EnableNews {
 		a.brain.StartNewsScan(5 * time.Minute)
-	}
-	if a.config.EnableBriefs {
-		a.brain.StartMarketBriefs(a.config.BriefTimes)
 	}
 	a.scheduler = NewScheduler(a, a.logger)
 	a.scheduler.Start(context.Background())
@@ -401,9 +389,6 @@ func (a *Agent) Stop() {
 		// Already closed
 	default:
 		close(a.stopCh)
-	}
-	if a.sentinel != nil {
-		a.sentinel.Stop()
 	}
 	if a.brain != nil {
 		a.brain.Stop()
@@ -550,17 +535,13 @@ func (a *Agent) buildSystemPrompt(lang string) string {
 func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 	// Gather live system state
 	traderInfo := a.getTradersSummaryForStoreUser(storeUserID)
-	watchlist := ""
-	if a.sentinel != nil {
-		watchlist = a.sentinel.FormatWatchlist(lang)
-	}
 	skillCatalog := skillCatalogPrompt(lang)
 
 	if lang == "zh" {
 		return fmt.Sprintf(`你是 `+branding.PersonaName()+`，一个专业的 AI 交易 Agent。你不是一个简单的聊天机器人——你是用户的交易伙伴。
 
 ## 你的核心能力
-1. **市场分析** — 加密货币（BTC/ETH/SOL等）有实时数据，A股/港股/美股/外汇你可以基于知识分析
+1. **市场分析** — CME 期货（MNQ/NQ/ES 等）可用 get_market_snapshot 读取 NinjaTrader 实时数据；加密货币没有实时数据源；A股/港股/美股/外汇你可以基于知识分析
 2. **交易管理** — 查看持仓、余额、交易历史、Trader 状态
 3. **策略建议** — 根据用户需求制定交易策略
 4. **策略模板管理** — 创建、查看、修改、删除、激活策略模板
@@ -569,13 +550,13 @@ func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 
 ## 当前系统状态
 %s
-%s
 
 ## 数据说明（极其重要，违反即失职！）
-- 加密货币（BTC/ETH等）：交易所实时数据，标注 [Real-time]
+- CME 期货（MNQ/NQ/ES 等）：**必须调用 get_market_snapshot 工具**获取 NinjaTrader 实时数据。不调工具就没有数据；工具返回 unavailable 就如实说明原因。
+- 加密货币（BTC/ETH等）：当前没有实时数据源，如实告知
 - A股/港股/美股：**必须调用 search_stock 工具**获取实时行情。不调工具就没有数据。
 - 美股盘前盘后：search_stock 返回的 quote 中 ext_price/ext_change_pct/ext_time
-- 外汇/指数期货：当前没有数据源，如实告知
+- 外汇：当前没有数据源，如实告知
 
 ### 铁律：禁止编造任何价格！
 - **你的训练数据中的价格全部过时，不可使用**
@@ -584,7 +565,7 @@ func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 - 用户问"盘前概览"？→ 调用 search_stock 查主要股票（AAPL、TSLA、NVDA、MSFT、GOOGL、AMZN、META等），用真实数据回答
 - **绝对不允许**不调工具就给出具体价格数字（如 $421.85）
 - 如果某只股票 search_stock 查不到数据，就说"暂时无法获取该股票数据"
-- 指数期货（纳指、标普、道琼斯期货）我们目前没有数据源，直接说"暂不支持指数期货数据"
+- 指数期货只支持 CME 期货代码（如 MNQ、NQ、ES、MES），用 get_market_snapshot 查询；其他指数期货写法没有数据源，直接说"暂不支持该品种数据"
 
 ## 工具使用
 你可以调用以下工具来执行操作：
@@ -593,12 +574,11 @@ func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 - **get_positions** — 查看当前所有持仓（加密货币 + 股票）
 - **get_balance** — 查看账户余额
 - **get_market_price** — 获取实时价格（加密货币或股票代码）
-- **get_kline** — 获取最近 K 线 / 蜡烛图数据（适合“看 15 分钟 K 线”“最近 50 根 1 小时 K 线”）
+- **get_market_snapshot** — CME 期货（MNQ/NQ/ES 等）的 NinjaTrader 实时价格和 1 小时 / 4 小时涨跌幅；其他品种返回带原因的 unavailable
 - **get_exchange_configs / manage_exchange_config** — 查看、新增、修改、删除交易所绑定配置
 - **get_model_configs / manage_model_config** — 查看、新增、修改、删除 AI 模型配置
 - **get_strategies / manage_strategy** — 查看、新增、修改、删除、激活、复制策略模板
 - **manage_trader** — 查看、新增、修改、删除、启动、停止交易员
-- **get_watchlist / manage_watchlist** — 查看、添加、移除运行时监控币对，适合“把 BTC 加入监控”“别再监控 SOL”这类请求
 
 ### 配置、策略与交易员管理规则
 - 当用户要求创建、修改、删除、激活、复制策略模板时，优先使用 get_strategies / manage_strategy
@@ -642,13 +622,13 @@ func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 - **诚实是第一原则** — 不确定就说不确定，没数据就说没数据。绝不编造。
 - 用中文回复。
 
-当前时间: %s`, traderInfo, watchlist, skillCatalog, kernel.FormatCT(time.Now()))
+当前时间: %s`, traderInfo, skillCatalog, kernel.FormatCT(time.Now()))
 	}
 
 	return fmt.Sprintf(`You are `+branding.PersonaName()+`, a professional AI trading agent. Not a chatbot — a trading partner.
 
 ## Capabilities
-1. Market analysis — crypto with real-time data, stocks/forex with knowledge
+1. Market analysis — CME futures (MNQ/NQ/ES, …) with NinjaTrader real-time data via get_market_snapshot; no real-time crypto source; stocks/forex with knowledge
 2. Trade management — positions, balance, history, trader status
 3. Strategy — build trading strategies based on user needs
 4. Strategy template management — create, inspect, update, delete, and activate strategy templates
@@ -657,13 +637,13 @@ func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 
 ## Current System State
 %s
-%s
 
 ## Data Notice (CRITICAL — violating this is unacceptable!)
-- Crypto (BTC/ETH): Exchange real-time data, marked [Real-time]
+- CME futures (MNQ/NQ/ES, …): You MUST call the get_market_snapshot tool (NinjaTrader real-time data). No tool call = no data; if it returns unavailable, tell the user the reason.
+- Crypto (BTC/ETH): No real-time data source currently — tell user honestly
 - Stocks: You MUST call search_stock tool to get real-time quotes. No tool call = no data.
 - US stocks pre/after-hours: ext_price/ext_change_pct/ext_time in search_stock results
-- Forex/Index futures: No data source currently — tell user honestly
+- Forex: No data source currently — tell user honestly
 
 ### ABSOLUTE RULE: NEVER fabricate any price!
 - Your training data prices are ALL outdated and MUST NOT be used
@@ -672,7 +652,7 @@ func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 - User asks "pre-market overview"? → Call search_stock for major stocks (AAPL, TSLA, NVDA, MSFT, GOOGL, AMZN, META etc.) and use real data
 - NEVER output a specific price number (like $421.85) without a tool having returned it
 - If search_stock fails for a stock, say "unable to fetch data for this stock"
-- Index futures (NDX, SPX, DJI futures) — we have no data source, say "index futures not supported yet"
+- Index futures are supported only as CME futures symbols (MNQ, NQ, ES, MES, …) via get_market_snapshot; any other index-futures name has no data source — say "not supported yet"
 
 ## Tools
 You can call these tools to take action:
@@ -681,7 +661,7 @@ You can call these tools to take action:
 - **get_positions** — View all current open positions (crypto + stocks)
 - **get_balance** — View account balance and equity
 - **get_market_price** — Get real-time price from the exchange (crypto or stock symbol)
-- **get_kline** — Get recent candlestick / kline data for a crypto symbol
+- **get_market_snapshot** — NinjaTrader real-time price and 1h/4h change for a CME futures symbol (MNQ/NQ/ES, …); any other symbol returns a named unavailable
 - **get_exchange_configs / manage_exchange_config** — View, create, update, and delete exchange bindings
 - **get_model_configs / manage_model_config** — View, create, update, and delete AI model bindings
 - **get_strategies / manage_strategy** — View, create, update, delete, activate, and duplicate strategy templates
@@ -697,7 +677,6 @@ You can call these tools to take action:
 - When the user wants to bind or edit an exchange account, prefer manage_exchange_config
 - When the user wants to bind or edit an AI model, prefer manage_model_config
 - When the user wants to create, edit, delete, start, or stop a trader, prefer manage_trader
-- When the user wants to add, remove, or inspect monitored coins, prefer get_watchlist / manage_watchlist
 - If required fields are missing, ask a focused follow-up question first, then call the tool
 - **Do not claim the system lacks these capabilities when the tools exist**
 - For secrets such as API keys, secrets, and private keys: store them, but never echo them back in full
@@ -729,62 +708,20 @@ You can call these tools to take action:
 - Lead with the conclusion, then the reason.
 - **Honesty is rule #1** — uncertain = say uncertain, no data = say no data.
 
-Current time: %s`, traderInfo, watchlist, skillCatalog, kernel.FormatCT(time.Now()))
+Current time: %s`, traderInfo, skillCatalog, kernel.FormatCT(time.Now()))
 }
 
 // gatherContext collects real-time market data relevant to the user's message.
 func (a *Agent) gatherContext(storeUserID, text string) string {
 	var parts []string
-	upper := strings.ToUpper(text)
 
-	// Crypto — detect symbols dynamically
-	// 1. Check known popular symbols (fast path)
-	// 2. Extract any "XXXUSDT" pattern from text (catches arbitrary pairs)
-	knownSymbols := []string{
-		"BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "ADA", "AVAX", "DOT", "LINK",
-		"PEPE", "SHIB", "ARB", "OP", "SUI", "APT", "SEI", "TIA", "JUP", "WIF",
-		"NEAR", "ATOM", "FTM", "MATIC", "INJ", "RENDER", "FET", "TAO", "WLD",
-		"AAVE", "UNI", "LDO", "MKR", "CRV", "PENDLE", "ENA", "ONDO", "TRUMP",
-	}
-	matched := make(map[string]bool)
-	for _, sym := range knownSymbols {
-		if strings.Contains(upper, sym) {
-			matched[sym] = true
-		}
-	}
-	// Also extract "XXXUSDT" patterns for coins not in the known list
-	for _, word := range strings.Fields(upper) {
-		word = strings.Trim(word, ".,!?;:()[]{}\"'")
-		if strings.HasSuffix(word, "USDT") && len(word) > 4 && len(word) <= 15 {
-			sym := strings.TrimSuffix(word, "USDT")
-			if len(sym) >= 2 && len(sym) <= 10 {
-				matched[sym] = true
-			}
-		}
-	}
-	// Collect and sort matched symbols for deterministic selection
-	sortedSymbols := make([]string, 0, len(matched))
-	for sym := range matched {
-		sortedSymbols = append(sortedSymbols, sym)
-	}
-	sort.Strings(sortedSymbols)
+	// No crypto block: the chat has no real-time crypto source. The block
+	// that lived here matched symbol SUBSTRINGS ("OP" in STOP, "ETH" in
+	// METHOD), read an external crypto-exchange feed and injected it as
+	// "[Real-time]", printing an unknown funding rate as 0.0000%.
 
-	// Cap at 5 symbols to avoid slow context gathering
-	count := 0
-	for _, sym := range sortedSymbols {
-		if count >= 5 {
-			break
-		}
-		md, err := market.Get(sym + "USDT")
-		if err == nil && md.CurrentPrice > 0 {
-			parts = append(parts, fmt.Sprintf("[%s/USDT Real-time]\nPrice: $%.4f | 1h: %+.2f%% | 4h: %+.2f%% | RSI7: %.1f | EMA20: %.4f | MACD: %.6f | Funding: %.4f%%",
-				sym, md.CurrentPrice, md.PriceChange1h, md.PriceChange4h, md.CurrentRSI7, md.CurrentEMA20, md.CurrentMACD, md.FundingRate*100))
-			count++
-		}
-	}
-
-	// A-share / stocks — only call Sina API when text likely references stocks.
-	// Skip for purely crypto conversations to avoid unnecessary external API calls.
+	// A-share / stocks — only call Sina API when text likely references stocks,
+	// to avoid an external API call on every message.
 	if looksLikeStockQuery(text) {
 		stockCode, stockName := resolveStockCodeDynamic(text)
 		if stockCode != "" {
@@ -887,30 +824,16 @@ func (a *Agent) handleStatus(L string) string {
 			}
 		}
 	}
-	wc := 0
-	if a.sentinel != nil {
-		wc = a.sentinel.SymbolCount()
-	}
 	ai := "❌"
 	if a.aiClient != nil {
 		ai = "✅"
 	}
-	return fmt.Sprintf(a.msg(L, "status"), rc, tc, wc, ai, kernel.FormatCT(time.Now()))
+	return fmt.Sprintf(a.msg(L, "status"), rc, tc, ai, kernel.FormatCT(time.Now()))
 }
 
 // noAIFallback — when no AI is available, still try to be useful.
 func (a *Agent) noAIFallback(storeUserID, lang, text string) (string, error) {
 	upper := strings.ToUpper(text)
-
-	// Try to provide market data directly
-	for _, sym := range []string{"BTC", "ETH", "SOL", "BNB", "XRP", "DOGE"} {
-		if strings.Contains(upper, sym) {
-			md, err := market.Get(sym + "USDT")
-			if err == nil {
-				return fmt.Sprintf("📊 *%s/USDT*\n\n%s\n\n💡 配置 AI 模型后我能给你更深度的分析。发送 *开始配置* 开始。", sym, market.Format(md)), nil
-			}
-		}
-	}
 
 	// Check if asking about positions/balance
 	if strings.Contains(text, "持仓") || strings.Contains(upper, "POSITION") {
@@ -921,9 +844,9 @@ func (a *Agent) noAIFallback(storeUserID, lang, text string) (string, error) {
 	}
 
 	if lang == "zh" {
-		return "🤖 我是 " + branding.PersonaName() + "。配置 AI 模型后我就能理解你的任何问题——分析股票、制定策略、管理交易。\n\n现在可用：\n• 加密货币实时行情（试试「BTC」）\n• `/status` 查看系统状态\n• `/clear` 清空当前对话记忆\n\n发送 *开始配置* 配置 AI 模型。", nil
+		return "🤖 我是 " + branding.PersonaName() + "。配置 AI 模型后我就能理解你的任何问题——分析股票、制定策略、管理交易。\n\n现在可用：\n• `/status` 查看系统状态\n• `/clear` 清空当前对话记忆\n\n发送 *开始配置* 配置 AI 模型。", nil
 	}
-	return "🤖 I'm " + branding.PersonaName() + ". Configure an AI model and I can understand anything — analyze stocks, build strategies, manage trades.\n\nAvailable now:\n• Crypto real-time data (try 'BTC')\n• `/status` to check system status\n• `/clear` to clear the current conversation memory\n\nSend *setup* to configure AI.", nil
+	return "🤖 I'm " + branding.PersonaName() + ". Configure an AI model and I can understand anything — analyze stocks, build strategies, manage trades.\n\nAvailable now:\n• `/status` to check system status\n• `/clear` to clear the current conversation memory\n\nSend *setup* to configure AI.", nil
 }
 
 func (a *Agent) aiServiceFailure(lang string, err error) (string, error) {
@@ -1076,12 +999,6 @@ func (a *Agent) queryBalancesDirect(storeUserID, L string) (string, error) {
 		sb.WriteString(fmt.Sprintf("*%s* (%s): $%.2f\n", t.GetName(), tid, toFloat(info["total_equity"])))
 	}
 	return sb.String(), nil
-}
-
-func (a *Agent) handleSignal(sig Signal) {
-	if a.brain != nil {
-		a.brain.HandleSignal(sig)
-	}
 }
 
 func (a *Agent) notifyAll(text string) {

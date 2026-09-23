@@ -81,7 +81,7 @@ func TestValidateNTAccountBoundForStart(t *testing.T) {
 		t.Fatalf("bound NT account must pass; got msg=%q code=%q", msg, code)
 	}
 	// Non-NinjaTrader exchange with empty account → not blocked (no account concept).
-	crypto := &store.TraderFullConfig{Exchange: &store.Exchange{ExchangeType: "binance"}, Trader: &store.Trader{Account: ""}}
+	crypto := &store.TraderFullConfig{Exchange: &store.Exchange{ExchangeType: "bybit"}, Trader: &store.Trader{Account: ""}}
 	if msg, _, _ := validateNTAccountBoundForStart(crypto, "t"); msg != "" {
 		t.Fatalf("non-NT exchange must not be blocked by the NT account rule; got msg=%q", msg)
 	}

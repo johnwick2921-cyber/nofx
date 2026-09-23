@@ -122,7 +122,7 @@ func (a *Agent) modelSkillOptionSummary(lang string) string {
 func (a *Agent) exchangeSkillOptionSummary(lang string) string {
 	options := enumOptionValues("exchange_management", "exchange_type")
 	if len(options) == 0 {
-		options = []string{"Binance", "Bybit", "OKX", "Bitget", "Gate", "KuCoin", "Hyperliquid", "Aster", "Lighter", "Indodax"}
+		options = []string{"Bybit", "OKX", "Bitget", "Gate", "KuCoin", "Hyperliquid", "Aster", "Lighter", "Indodax"}
 	}
 	if lang == "zh" {
 		return "交易所类型选项：" + strings.Join(options, "、")
@@ -161,8 +161,6 @@ func enumOptionValues(skillName, field string) []string {
 			values = append(values, "Grok")
 		case "minimax":
 			values = append(values, "Minimax")
-		case "binance":
-			values = append(values, "Binance")
 		case "okx":
 			values = append(values, "OKX")
 		case "bybit":

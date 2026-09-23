@@ -343,7 +343,7 @@ func (s *TraderTestSuite) TestOpenLong() {
 		{
 			name:      "Small quantity long",
 			symbol:    "ETHUSDT",
-			quantity:  0.004, // Increased to 0.004 to meet Binance Futures minimum order value of 10 USDT (0.004 * 3000 = 12 USDT)
+			quantity:  0.004, // Increased to 0.004 to meet a typical perp exchange minimum order value of 10 USDT (0.004 * 3000 = 12 USDT)
 			leverage:  5,
 			wantError: false,
 			validate: func(t *testing.T, result map[string]interface{}) {
@@ -392,7 +392,7 @@ func (s *TraderTestSuite) TestOpenShort() {
 		{
 			name:      "Small quantity short",
 			symbol:    "ETHUSDT",
-			quantity:  0.004, // Increased to 0.004 to meet Binance Futures minimum order value of 10 USDT (0.004 * 3000 = 12 USDT)
+			quantity:  0.004, // Increased to 0.004 to meet a typical perp exchange minimum order value of 10 USDT (0.004 * 3000 = 12 USDT)
 			leverage:  5,
 			wantError: false,
 			validate: func(t *testing.T, result map[string]interface{}) {

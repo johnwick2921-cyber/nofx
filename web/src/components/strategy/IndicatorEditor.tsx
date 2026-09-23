@@ -1227,16 +1227,18 @@ export function IndicatorEditor({
                 desc: 'volumeDesc',
                 color: '#c084fc',
                 cryptoOnly: false,
+                noSource: false,
               },
               {
                 key: 'enable_oi',
                 label: 'oi',
                 desc: 'oiDesc',
                 color: '#34d399',
-                // Open Interest is the Binance crypto-perp feed (empty zeros on
-                // CME futures). Hidden on futures like funding rate — no real
-                // futures OI is wired (NT8 bridge carries OHLCV only).
+                // Open interest is a crypto-perpetual idea: hidden on CME
+                // futures (the NT8 bridge carries OHLCV only). On crypto its
+                // only feed was removed, so the card says there is no source.
                 cryptoOnly: true,
+                noSource: true,
               },
               {
                 key: 'enable_funding_rate',
@@ -1244,10 +1246,11 @@ export function IndicatorEditor({
                 desc: 'fundingRateDesc',
                 color: '#fbbf24',
                 cryptoOnly: true,
+                noSource: true,
               },
             ]
               .filter(({ cryptoOnly }) => !cryptoOnly || !isFutures)
-              .map(({ key, label, desc, color }) => (
+              .map(({ key, label, desc, color, noSource }) => (
                 <div
                   key={key}
                   className="p-2.5 rounded-lg transition-all"
@@ -1291,6 +1294,15 @@ export function IndicatorEditor({
                   <p className="text-[10px]" style={{ color: '#5E6673' }}>
                     {ts(indicator[desc as keyof typeof indicator], language)}
                   </p>
+                  {noSource && (
+                    <p
+                      className="text-[10px] mt-1"
+                      style={{ color: '#d4a84b' }}
+                      data-testid={`indicator-no-source-${key}`}
+                    >
+                      {ts(indicator.noDataSource, language)}
+                    </p>
+                  )}
                 </div>
               ))}
           </div>

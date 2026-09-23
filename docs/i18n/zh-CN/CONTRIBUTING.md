@@ -275,7 +275,7 @@ func ce(a, s string) *Exchange {
 // ✅ 好：类型安全，清晰的命名
 interface TraderConfig {
   id: string;
-  exchange: 'binance' | 'hyperliquid' | 'aster';
+  exchange: 'bybit' | 'hyperliquid' | 'aster';
   aiModel: string;
   enabled: boolean;
 }

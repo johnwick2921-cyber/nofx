@@ -40,7 +40,7 @@ func TestSessionEntryBlockedDormant(t *testing.T) {
 	if _, blocked := off.sessionEntryBlocked(); blocked {
 		t.Fatalf("plan-off trader must not engage the session gate")
 	}
-	crypto := mkTrader("binance", boolp(true), "5m")
+	crypto := mkTrader("bybit", boolp(true), "5m")
 	if _, blocked := crypto.sessionEntryBlocked(); blocked {
 		t.Fatalf("crypto trader must never engage the session gate")
 	}

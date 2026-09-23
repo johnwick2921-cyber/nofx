@@ -842,20 +842,33 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 			continue
 		}
 
-		// Liquidity filter (skip for xyz dex assets - they don't have OI data from Binance).
-		// CME futures (NT8 path) likewise have no crypto open-interest feed (OI is
-		// absent — nil — since W-NO-BINANCE A), so the OI gate must not judge
-		// them — exempt them too.
+		// Liquidity filter (skip for xyz dex assets - they have no open-interest
+		// feed). CME futures (NT8 path) likewise have no crypto open-interest
+		// feed (OI is absent — nil — since W-NB A), so the OI gate must
+		// not judge them — exempt them too.
 		isExistingPosition := positionSymbols[coin.Symbol]
 		isXyzAsset := market.IsXyzDexAsset(coin.Symbol)
 		isFutures := market.IsCMEFuturesSymbol(coin.Symbol)
-		if !isExistingPosition && !isXyzAsset && !isFutures && data.OpenInterest != nil && data.CurrentPrice > 0 {
-			oiValue := data.OpenInterest.Latest * data.CurrentPrice
-			oiValueInMillions := oiValue / 1_000_000
-			if oiValueInMillions < minOIThresholdMillions {
-				logger.Infof("⚠️  %s OI value too low (%.2fM USD < %.1fM), skipping coin",
-					coin.Symbol, oiValueInMillions, minOIThresholdMillions)
+		if !isExistingPosition && !isXyzAsset && !isFutures {
+			// A crypto candidate whose open interest is ABSENT cannot be judged
+			// liquid: the filter REFUSES it (named, counted) instead of letting
+			// every coin through unjudged. This build has no crypto OI source,
+			// so crypto new-entry candidates are refused here; open positions
+			// are still fetched and managed above.
+			if data.OpenInterest == nil {
+				logger.Infof("⛔ %s open interest unavailable (no open-interest source) — the %.1fM USD liquidity filter cannot judge it, skipping coin",
+					coin.Symbol, minOIThresholdMillions)
+				telemetry.IncGateBlock(ctx.TraderID, "oi_unavailable")
 				continue
+			}
+			if data.CurrentPrice > 0 {
+				oiValue := data.OpenInterest.Latest * data.CurrentPrice
+				oiValueInMillions := oiValue / 1_000_000
+				if oiValueInMillions < minOIThresholdMillions {
+					logger.Infof("⚠️  %s OI value too low (%.2fM USD < %.1fM), skipping coin",
+						coin.Symbol, oiValueInMillions, minOIThresholdMillions)
+					continue
+				}
 			}
 		}
 

@@ -27,8 +27,6 @@
 #     already delegates to the seamed staleDodgeCheck(now).
 #   kernel/tz.go NowCT — the clock accessor itself; every consumer (ClockCT,
 #     ClockCTAndUTC, ClockCTSeconds, TableTimeCT) already takes an explicit t.
-#   trader/binance/order_sync.go — live-network request timestamps, env-gated
-#     tests (BINANCE_LIVE_TEST), not in the deploy gate.
 
 trader/auto_trader_clock.go:latestClosedPrimaryBarMs:latestClosedPrimaryBarMsAt
 trader/auto_trader_clock.go:recordClosedTradeAnalytics:recordClosedTradeAnalyticsAt

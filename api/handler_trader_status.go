@@ -10,7 +10,6 @@ import (
 	"nofx/store"
 	"nofx/trader"
 	"nofx/trader/aster"
-	"nofx/trader/binance"
 	"nofx/trader/bitget"
 	"nofx/trader/bybit"
 	"nofx/trader/gate"
@@ -192,11 +191,9 @@ func (s *Server) handleClosePosition(c *gin.Context) {
 	var tempTrader trader.Trader
 	var createErr error
 
-	// Use ExchangeType (e.g., "binance") instead of ExchangeID (which is now UUID)
+	// Use ExchangeType (e.g., "okx") instead of ExchangeID (which is now UUID)
 	// Convert EncryptedString fields to string
 	switch exchangeCfg.ExchangeType {
-	case "binance":
-		tempTrader = binance.NewFuturesTrader(string(exchangeCfg.APIKey), string(exchangeCfg.SecretKey), userID)
 	case "hyperliquid":
 		tempTrader, createErr = hyperliquidtrader.NewHyperliquidTrader(
 			string(exchangeCfg.APIKey),
@@ -320,7 +317,7 @@ func (s *Server) handleClosePosition(c *gin.Context) {
 func (s *Server) recordClosePositionOrder(traderID, exchangeID, exchangeType, symbol, side string, quantity, exitPrice float64, result map[string]interface{}) {
 	// Skip for exchanges with OrderSync - let the background sync handle it to avoid duplicates
 	switch exchangeType {
-	case "binance", "lighter", "hyperliquid", "bybit", "okx", "bitget", "aster", "gate":
+	case "lighter", "hyperliquid", "bybit", "okx", "bitget", "aster", "gate":
 		logger.Infof("  📝 Close order will be synced by OrderSync, skipping immediate record")
 		return
 	}

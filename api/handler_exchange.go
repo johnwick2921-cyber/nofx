@@ -28,7 +28,7 @@ type ExchangeConfig struct {
 // SafeExchangeConfig Safe exchange configuration structure (does not contain sensitive information)
 type SafeExchangeConfig struct {
 	ID                    string `json:"id"`            // UUID
-	ExchangeType          string `json:"exchange_type"` // "binance", "bybit", "okx", "hyperliquid", "aster", "lighter", "ninjatrader"
+	ExchangeType          string `json:"exchange_type"` // "bybit", "okx", "hyperliquid", "aster", "lighter", "ninjatrader", …
 	AccountName           string `json:"account_name"`  // User-defined account name
 	Name                  string `json:"name"`          // Display name
 	Type                  string `json:"type"`          // "cex", "dex", "futures"
@@ -100,7 +100,7 @@ type UpdateExchangeConfigRequest struct {
 
 // CreateExchangeRequest request structure for creating a new exchange account
 type CreateExchangeRequest struct {
-	ExchangeType            string `json:"exchange_type" binding:"required"` // "binance", "bybit", "okx", "hyperliquid", "aster", "lighter", "ninjatrader"
+	ExchangeType            string `json:"exchange_type" binding:"required"` // one of store.SupportedExchangeTypes()
 	AccountName             string `json:"account_name"`                     // User-defined account name
 	Enabled                 bool   `json:"enabled"`
 	APIKey                  string `json:"api_key"`
@@ -219,6 +219,17 @@ func (s *Server) handleUpdateExchangeConfigs(c *gin.Context) {
 		existing, err := s.store.Exchange().GetByID(userID, exchangeID)
 		if err != nil {
 			SafeInternalError(c, fmt.Sprintf("Load exchange %s", exchangeID), err)
+			return
+		}
+		// The registry is consulted FIRST: a stored row whose type this build
+		// cannot construct (a broker removed from the build, or no type) is
+		// refused by name — never reported as "missing exchange_type", never
+		// re-enabled by this update. Deleting the row still works.
+		if rerr := store.CheckSupportedExchangeType(existing.ExchangeType); rerr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf("exchange account %s cannot be updated: %v — delete this exchange account instead", exchangeID, rerr),
+				"code":  "UNSUPPORTED_EXCHANGE",
+			})
 			return
 		}
 		effectiveAPIKey := strings.TrimSpace(exchangeData.APIKey)
@@ -392,13 +403,8 @@ func (s *Server) handleCreateExchange(c *gin.Context) {
 		}
 	}
 
-	// Validate exchange type
-	validTypes := map[string]bool{
-		"binance": true, "bybit": true, "okx": true, "bitget": true,
-		"hyperliquid": true, "aster": true, "lighter": true, "gate": true, "kucoin": true, "indodax": true,
-		"ninjatrader": true,
-	}
-	if !validTypes[req.ExchangeType] {
+	// Validate exchange type against the ONE supported-exchange registry.
+	if !store.IsSupportedExchangeType(req.ExchangeType) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid exchange type: %s", req.ExchangeType)})
 		return
 	}
@@ -493,7 +499,6 @@ func (s *Server) handleGetSupportedExchanges(c *gin.Context) {
 	// Return static list of supported exchange types
 	// Note: ID is empty for supported exchanges (they are templates, not actual accounts)
 	supportedExchanges := []SafeExchangeConfig{
-		{ExchangeType: "binance", Name: "Binance Futures", Type: "cex"},
 		{ExchangeType: "bybit", Name: "Bybit Futures", Type: "cex"},
 		{ExchangeType: "okx", Name: "OKX Futures", Type: "cex"},
 		{ExchangeType: "gate", Name: "Gate.io Futures", Type: "cex"},

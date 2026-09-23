@@ -14,17 +14,14 @@ import (
 // ── W-NO-BINANCE A — the source guard ──────────────────────────────────────
 //
 // No non-test file on the futures path's packages (market/, trader/, kernel/)
-// may carry a Binance host except the sites below, each behind the crypto
-// branch or dead. And the two Binance market-data fetchers may be CALLED only
-// from the else-branch of an `if isFutures` — the crypto branch.
+// may carry a Binance host outside the allowlist below. Part B deleted the
+// last allowed sites (the OI/funding fetchers, the API client's base URL and
+// the dead historical klines fetch), so the allowlist is EMPTY: any host
+// literal in these packages now fails.
 
 // binanceHostAllowlist: "<file>:<enclosing func or const/var name>" → why.
-var binanceHostAllowlist = map[string]string{
-	"market/data.go:getOpenInterestData":           "crypto-perp OI; called only from the crypto branch (checked below)",
-	"market/data.go:getFundingRate":                "crypto-perp funding; called only from the crypto branch (checked below)",
-	"market/api_client.go:baseURL":                 "APIClient's base URL; NewAPIClient is constructed only inside the two fetchers above",
-	"market/historical.go:binanceFuturesKlinesURL": "GetKlinesRange — no caller anywhere (dead on the live path); deleted in W-NO-BINANCE Part B",
-}
+// Empty since Part B — the list only shrinks.
+var binanceHostAllowlist = map[string]string{}
 
 // Crypto-only renderers of funding that are NOT Binance hosts, for the record
 // (CTO): kernel/grid_engine.go's 'Funding Rate' lines serve crypto grid
@@ -104,62 +101,11 @@ func TestNoBinanceHostOnTheFuturesPathOutsideTheAllowlist(t *testing.T) {
 	}
 }
 
-// The two Binance fetchers are called ONLY from the crypto branch: inside the
-// else of an `if isFutures { … }` in this package.
-func TestBinanceFetchersAreCalledOnlyFromTheCryptoBranch(t *testing.T) {
-	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, ".", func(fi os.FileInfo) bool { return !strings.HasSuffix(fi.Name(), "_test.go") }, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	calls := 0
-	for _, p := range pkgs {
-		for _, f := range p.Files {
-			var stack []ast.Node
-			ast.Inspect(f, func(n ast.Node) bool {
-				if n == nil {
-					stack = stack[:len(stack)-1]
-					return false
-				}
-				stack = append(stack, n)
-				ce, ok := n.(*ast.CallExpr)
-				if !ok {
-					return true
-				}
-				id, ok := ce.Fun.(*ast.Ident)
-				if !ok || (id.Name != "getOpenInterestData" && id.Name != "getFundingRate") {
-					return true
-				}
-				calls++
-				inCrypto := false
-				for i := len(stack) - 1; i > 0; i-- {
-					if ifs, ok := stack[i-1].(*ast.IfStmt); ok && ifs.Else == stack[i] {
-						if c, ok := ifs.Cond.(*ast.Ident); ok && c.Name == "isFutures" {
-							inCrypto = true
-							break
-						}
-					}
-				}
-				if !inCrypto {
-					t.Errorf("%s: %s is called outside the else-branch of `if isFutures` — the futures path would reach Binance", fset.Position(ce.Pos()), id.Name)
-				}
-				return true
-			})
-		}
-	}
-	if calls < 4 {
-		t.Fatalf("expected the four crypto-branch calls (two per market read), found %d — the guard is going vacuous", calls)
-	}
-}
-
 // CTO F2 — the symbol-only read (GetWithTimeframes, which cannot see the
 // venue) may be called outside market/ ONLY at these sites; every trader
 // cycle read uses GetWithTimeframesVenue with the trader's exchange.
 var symbolOnlyReadAllowlist = map[string]string{
-	"trader/auto_trader_grid.go:InitializeGrid":        "grid strategies are crypto-only today (W-NO-BINANCE B decides their fate)",
-	"trader/auto_trader_grid.go:buildGridContext":      "grid strategies are crypto-only today (W-NO-BINANCE B decides their fate)",
-	"trader/auto_trader_grid_levels.go:autoAdjustGrid": "grid strategies are crypto-only today (W-NO-BINANCE B decides their fate)",
-	"api/strategy.go:handleStrategyTestRun":            "Studio preview of a strategy — no trader, so no venue; CME symbols take the futures route by symbol",
+	"api/strategy.go:handleStrategyTestRun": "Studio preview of a strategy — no trader, so no venue; CME symbols take the futures route by symbol, crypto symbols are refused by name (no default venue)",
 }
 
 func TestTraderCycleReadsAreVenueAware(t *testing.T) {

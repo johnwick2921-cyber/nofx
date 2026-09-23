@@ -67,7 +67,7 @@ func TestSkipWhileOpenDormantWhenPlanOff(t *testing.T) {
 	}
 
 	// A crypto trader is likewise unaffected regardless of day_plan.
-	at.exchange = "binance"
+	at.exchange = "bybit"
 	at.config.StrategyConfig.DayPlan.PlanEnabled = true
 	if skip, _ := at.skipWhileOpen(); skip {
 		t.Fatalf("crypto trader must never engage skip-while-open")

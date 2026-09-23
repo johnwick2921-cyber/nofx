@@ -19,7 +19,7 @@ type staticAIClient struct {
 }
 
 func (c *staticAIClient) SetAPIKey(apiKey string, customURL string, customModel string) {}
-func (c *staticAIClient) ResolvedModel() string { return "mock-model" }
+func (c *staticAIClient) ResolvedModel() string                                         { return "mock-model" }
 func (c *staticAIClient) SetTimeout(timeout time.Duration)                              {}
 func (c *staticAIClient) CallWithMessages(systemPrompt, userPrompt string) (string, error) {
 	return c.response, nil
@@ -785,7 +785,7 @@ func TestTraderCreateRequiresResolvedResourceIDs(t *testing.T) {
 		Action: "create",
 		Fields: map[string]string{
 			"name":          "凯茵",
-			"exchange_name": "Binance",
+			"exchange_name": "Bybit",
 			"model_name":    "deepseek",
 			"strategy_name": "BTC趋势做空",
 		},
@@ -803,7 +803,7 @@ func TestTraderCreateRequiresResolvedResourceIDs(t *testing.T) {
 		ActionName: "create",
 		CollectedFields: map[string]any{
 			"name":          "凯茵",
-			"exchange_name": "Binance",
+			"exchange_name": "Bybit",
 			"model_name":    "deepseek",
 			"strategy_name": "BTC趋势做空",
 		},

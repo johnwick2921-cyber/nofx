@@ -14,18 +14,18 @@ func TestResolvePromptVariant(t *testing.T) {
 		want     string
 	}{
 		// --- No variant saved → the ORIGINAL venue rule, unchanged ---
-		{"crypto, no variant → balanced (byte-identical)", "binance", "", "balanced"},
+		{"crypto, no variant → balanced (byte-identical)", "bybit", "", "balanced"},
 		{"ninjatrader, no variant → futures (byte-identical)", "ninjatrader", "", "futures"},
 		{"blank/whitespace variant → venue rule (crypto)", "bybit", "   ", "balanced"},
 		{"blank/whitespace variant → venue rule (futures)", "ninjatrader", "  ", "futures"},
 
 		// --- A saved variant WINS over the venue default ---
-		{"crypto + saved aggressive → aggressive", "binance", "aggressive", "aggressive"},
+		{"crypto + saved aggressive → aggressive", "bybit", "aggressive", "aggressive"},
 		{"crypto + saved conservative → conservative", "okx", "conservative", "conservative"},
 		{"crypto + saved scalping → scalping", "bybit", "scalping", "scalping"},
-		{"crypto + saved futures → futures (owner override)", "binance", "futures", "futures"},
+		{"crypto + saved futures → futures (owner override)", "bybit", "futures", "futures"},
 		{"futures venue + saved balanced → balanced (owner override)", "ninjatrader", "balanced", "balanced"},
-		{"saved variant trimmed of surrounding space", "binance", " aggressive ", "aggressive"},
+		{"saved variant trimmed of surrounding space", "bybit", " aggressive ", "aggressive"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

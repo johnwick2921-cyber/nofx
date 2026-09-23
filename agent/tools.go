@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -21,7 +20,6 @@ import (
 	"nofx/store"
 	"nofx/trader"
 	"nofx/trader/aster"
-	"nofx/trader/binance"
 	"nofx/trader/bitget"
 	"nofx/trader/bybit"
 	"nofx/trader/gate"
@@ -37,8 +35,6 @@ import (
 var cachedTools = buildAgentTools()
 
 var (
-	binanceFuturesAPIBaseURL    = "https://fapi.binance.com"
-	marketDataHTTPClient        = http.DefaultClient
 	traderInitialBalanceFetcher = defaultTraderInitialBalanceFetcher
 )
 
@@ -84,7 +80,7 @@ func plannerToolDomainForText(text string) string {
 func plannerToolNamesForDomain(domain string) []string {
 	switch domain {
 	case "market":
-		return []string{"get_market_snapshot", "get_market_price", "get_kline", "search_stock"}
+		return []string{"get_market_snapshot", "get_market_price", "search_stock"}
 	case "account":
 		return []string{"get_balance", "get_positions", "get_trade_history", "get_exchange_configs"}
 	case "trader":
@@ -106,7 +102,7 @@ func plannerToolNamesForDomain(domain string) []string {
 			"get_strategies", "manage_strategy",
 			"manage_trader",
 			"get_balance", "get_positions", "get_trade_history",
-			"get_market_snapshot", "get_market_price", "get_kline", "search_stock",
+			"get_market_snapshot", "get_market_price", "search_stock",
 		}
 	}
 }
@@ -428,7 +424,7 @@ func exchangeConfigFieldsSchema() map[string]any {
 		},
 		"exchange_type": map[string]any{
 			"type":        "string",
-			"description": "Exchange type such as binance, bybit, okx, bitget, gate, kucoin, hyperliquid, aster, lighter, or indodax.",
+			"description": "Exchange type such as bybit, okx, bitget, gate, kucoin, hyperliquid, aster, lighter, or indodax.",
 		},
 		"account_name": map[string]any{
 			"type":        "string",
@@ -762,46 +758,13 @@ func buildAgentTools() []mcp.Tool {
 			Type: "function",
 			Function: mcp.FunctionDef{
 				Name:        "get_market_snapshot",
-				Description: "Get a real-time crypto market snapshot for analysis. Returns current price, 24h change, high/low, volume, funding rate, open interest, and recent K-line structure in one tool call. Prefer this when the user asks to analyze a coin, assess current行情, or wants a richer market read than a single price.",
+				Description: "Read the NinjaTrader 8 (NT8) market data for one CME futures symbol (MNQ, NQ, ES, MES, …). Returns the current price and the 1h / 4h price change in percent, with source \"nt8\". Any other symbol (crypto, stocks, forex) has no market-data source here and returns price null with a named \"unavailable\" reason; an NT8 read failure (e.g. no bars cached) also returns the reason in \"unavailable\". Never report a price the tool did not return.",
 				Parameters: map[string]any{
 					"type": "object",
 					"properties": map[string]any{
 						"symbol": map[string]any{
 							"type":        "string",
-							"description": "Crypto trading symbol, for example BTC, ETH, BTCUSDT, or ETHUSDT.",
-						},
-						"interval": map[string]any{
-							"type":        "string",
-							"description": "Kline interval for the structure snapshot, for example 5m, 15m, 1h, or 4h. Defaults to 15m.",
-						},
-						"limit": map[string]any{
-							"type":        "number",
-							"description": "Number of recent candles to fetch for the structure snapshot. Defaults to 20 and is capped at 100.",
-						},
-					},
-					"required": []string{"symbol"},
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: mcp.FunctionDef{
-				Name:        "get_kline",
-				Description: "Get recent kline/candlestick data for a crypto symbol. Use this when the user asks for recent candles, K 线, recent price structure, or a short-term chart context.",
-				Parameters: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"symbol": map[string]any{
-							"type":        "string",
-							"description": "Crypto trading symbol, for example BTC, ETH, BTCUSDT, or ETHUSDT.",
-						},
-						"interval": map[string]any{
-							"type":        "string",
-							"description": "Kline interval, for example 1m, 5m, 15m, 1h, 4h, or 1d. Defaults to 15m.",
-						},
-						"limit": map[string]any{
-							"type":        "number",
-							"description": "Number of recent candles to fetch. Defaults to 50 and is capped at 300.",
+							"description": "CME futures symbol, for example MNQ, NQ, ES or MES.",
 						},
 					},
 					"required": []string{"symbol"},
@@ -841,36 +804,6 @@ func buildAgentTools() []mcp.Tool {
 							"description": "Optional strategy id. Use this when asking about a strategy template directly.",
 						},
 					},
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: mcp.FunctionDef{
-				Name:        "get_watchlist",
-				Description: "Get the current Sentinel watchlist of monitored crypto symbols. Use this when the user asks which coins are being watched or monitored right now.",
-				Parameters:  map[string]any{"type": "object", "properties": map[string]any{}},
-			},
-		},
-		{
-			Type: "function",
-			Function: mcp.FunctionDef{
-				Name:        "manage_watchlist",
-				Description: "Add or remove a monitored crypto symbol from the Sentinel watchlist at runtime. Use this when the user asks to watch, monitor, unwatch, or stop monitoring a coin.",
-				Parameters: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"action": map[string]any{
-							"type":        "string",
-							"enum":        []string{"add", "remove"},
-							"description": "Whether to add or remove the symbol from the watchlist.",
-						},
-						"symbol": map[string]any{
-							"type":        "string",
-							"description": "Crypto symbol to watch, such as BTC, ETH, SOL, BTCUSDT, or ETHUSDT.",
-						},
-					},
-					"required": []string{"action", "symbol"},
 				},
 			},
 		},
@@ -914,16 +847,10 @@ func (a *Agent) handleToolCall(ctx context.Context, storeUserID string, userID i
 		return a.toolGetMarketPrice(tc.Function.Arguments)
 	case "get_market_snapshot":
 		return a.toolGetMarketSnapshot(tc.Function.Arguments)
-	case "get_kline":
-		return a.toolGetKline(tc.Function.Arguments)
 	case "get_trade_history":
 		return a.toolGetTradeHistory(tc.Function.Arguments)
 	case "get_candidate_coins":
 		return a.toolGetCandidateCoins(storeUserID, userID, tc.Function.Arguments)
-	case "get_watchlist":
-		return a.toolGetWatchlist(lang)
-	case "manage_watchlist":
-		return a.toolManageWatchlist(lang, tc.Function.Arguments)
 	default:
 		return fmt.Sprintf(`{"error": "unknown tool: %s"}`, tc.Function.Name)
 	}
@@ -1072,8 +999,6 @@ func defaultTraderInitialBalanceFetcher(exchangeCfg *store.Exchange, userID stri
 
 func buildTraderExchangeProbe(exchangeCfg *store.Exchange, userID string) (trader.Trader, error) {
 	switch exchangeCfg.ExchangeType {
-	case "binance":
-		return binance.NewFuturesTrader(string(exchangeCfg.APIKey), string(exchangeCfg.SecretKey), userID), nil
 	case "bybit":
 		return bybit.NewBybitTrader(string(exchangeCfg.APIKey), string(exchangeCfg.SecretKey)), nil
 	case "okx":
@@ -2993,215 +2918,26 @@ func (a *Agent) toolGetMarketPrice(argsJSON string) string {
 	return fmt.Sprintf(`{"error": "could not get price for %s"}`, sym)
 }
 
-func binanceFuturesGET(path string, out any) error {
-	req, err := http.NewRequest(http.MethodGet, binanceFuturesAPIBaseURL+path, nil)
-	if err != nil {
-		return err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	req = req.WithContext(ctx)
-
-	resp, err := marketDataHTTPClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("source returned status %d", resp.StatusCode)
-	}
-	return json.NewDecoder(resp.Body).Decode(out)
-}
-
+// toolGetMarketSnapshot answers get_market_snapshot from NinjaTrader only
+// (readNT8Quote): a CME futures symbol is read from the NT8 bars; any other
+// symbol, or a failed read, returns price null with a named "unavailable"
+// reason. It makes no external HTTP call and never fabricates a number.
 func (a *Agent) toolGetMarketSnapshot(argsJSON string) string {
 	var args struct {
-		Symbol   string `json:"symbol"`
-		Interval string `json:"interval"`
-		Limit    int    `json:"limit"`
+		Symbol string `json:"symbol"`
 	}
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return fmt.Sprintf(`{"error":"invalid arguments: %s"}`, err)
 	}
-
-	symbol := strings.ToUpper(strings.TrimSpace(args.Symbol))
+	symbol := strings.TrimSpace(args.Symbol)
 	if symbol == "" {
 		return `{"error":"symbol is required"}`
 	}
-	if isStockSymbol(symbol) {
-		return `{"error":"get_market_snapshot currently supports crypto symbols only"}`
+	out, err := json.Marshal(readNT8Quote(symbol))
+	if err != nil {
+		return fmt.Sprintf(`{"error":"failed to encode market snapshot: %s"}`, err)
 	}
-	if !strings.HasSuffix(symbol, "USDT") {
-		symbol += "USDT"
-	}
-
-	interval := strings.TrimSpace(strings.ToLower(args.Interval))
-	if interval == "" {
-		interval = "15m"
-	}
-	if !validKlineInterval(interval) {
-		return fmt.Sprintf(`{"error":"invalid interval %q"}`, interval)
-	}
-
-	limit := args.Limit
-	switch {
-	case limit <= 0:
-		limit = 20
-	case limit > 100:
-		limit = 100
-	}
-
-	var ticker24h struct {
-		Symbol             string `json:"symbol"`
-		LastPrice          string `json:"lastPrice"`
-		PriceChange        string `json:"priceChange"`
-		PriceChangePercent string `json:"priceChangePercent"`
-		HighPrice          string `json:"highPrice"`
-		LowPrice           string `json:"lowPrice"`
-		Volume             string `json:"volume"`
-		QuoteVolume        string `json:"quoteVolume"`
-		Count              int64  `json:"count"`
-	}
-	if err := binanceFuturesGET("/fapi/v1/ticker/24hr?symbol="+symbol, &ticker24h); err != nil {
-		return fmt.Sprintf(`{"error":"failed to fetch 24h ticker for %s: %s"}`, symbol, err)
-	}
-
-	var premiumIndex struct {
-		Symbol          string `json:"symbol"`
-		MarkPrice       string `json:"markPrice"`
-		IndexPrice      string `json:"indexPrice"`
-		LastFundingRate string `json:"lastFundingRate"`
-		NextFundingTime int64  `json:"nextFundingTime"`
-		Time            int64  `json:"time"`
-	}
-	if err := binanceFuturesGET("/fapi/v1/premiumIndex?symbol="+symbol, &premiumIndex); err != nil {
-		return fmt.Sprintf(`{"error":"failed to fetch funding data for %s: %s"}`, symbol, err)
-	}
-
-	var openInterest struct {
-		OpenInterest string `json:"openInterest"`
-		Symbol       string `json:"symbol"`
-		Time         int64  `json:"time"`
-	}
-	if err := binanceFuturesGET("/fapi/v1/openInterest?symbol="+symbol, &openInterest); err != nil {
-		return fmt.Sprintf(`{"error":"failed to fetch open interest for %s: %s"}`, symbol, err)
-	}
-
-	var rawKlines [][]any
-	if err := binanceFuturesGET(fmt.Sprintf("/fapi/v1/klines?symbol=%s&interval=%s&limit=%d", symbol, interval, limit), &rawKlines); err != nil {
-		return fmt.Sprintf(`{"error":"failed to fetch kline for %s: %s"}`, symbol, err)
-	}
-	if len(rawKlines) == 0 {
-		return fmt.Sprintf(`{"error":"empty kline response for %s"}`, symbol)
-	}
-
-	klines := make([]map[string]any, 0, len(rawKlines))
-	highestHigh := 0.0
-	lowestLow := 0.0
-	firstClose := 0.0
-	lastClose := 0.0
-	totalVolume := 0.0
-	for i, row := range rawKlines {
-		if len(row) < 7 {
-			continue
-		}
-		openVal := toSnapshotFloat(row[1])
-		highVal := toSnapshotFloat(row[2])
-		lowVal := toSnapshotFloat(row[3])
-		closeVal := toSnapshotFloat(row[4])
-		volumeVal := toSnapshotFloat(row[5])
-		if i == 0 {
-			firstClose = closeVal
-			highestHigh = highVal
-			lowestLow = lowVal
-		}
-		if highVal > highestHigh {
-			highestHigh = highVal
-		}
-		if lowestLow == 0 || (lowVal > 0 && lowVal < lowestLow) {
-			lowestLow = lowVal
-		}
-		lastClose = closeVal
-		totalVolume += volumeVal
-		klines = append(klines, map[string]any{
-			"open_time":  row[0],
-			"open":       openVal,
-			"high":       highVal,
-			"low":        lowVal,
-			"close":      closeVal,
-			"volume":     volumeVal,
-			"close_time": row[6],
-		})
-	}
-
-	periodChangePercent := 0.0
-	if firstClose > 0 && lastClose > 0 {
-		periodChangePercent = ((lastClose - firstClose) / firstClose) * 100
-	}
-
-	tickerLastPrice, _ := strconv.ParseFloat(strings.TrimSpace(ticker24h.LastPrice), 64)
-	tickerPriceChange, _ := strconv.ParseFloat(strings.TrimSpace(ticker24h.PriceChange), 64)
-	tickerPriceChangePercent, _ := strconv.ParseFloat(strings.TrimSpace(ticker24h.PriceChangePercent), 64)
-	tickerHighPrice, _ := strconv.ParseFloat(strings.TrimSpace(ticker24h.HighPrice), 64)
-	tickerLowPrice, _ := strconv.ParseFloat(strings.TrimSpace(ticker24h.LowPrice), 64)
-	tickerVolume, _ := strconv.ParseFloat(strings.TrimSpace(ticker24h.Volume), 64)
-	tickerQuoteVolume, _ := strconv.ParseFloat(strings.TrimSpace(ticker24h.QuoteVolume), 64)
-	markPrice, _ := strconv.ParseFloat(strings.TrimSpace(premiumIndex.MarkPrice), 64)
-	indexPrice, _ := strconv.ParseFloat(strings.TrimSpace(premiumIndex.IndexPrice), 64)
-	fundingRate, _ := strconv.ParseFloat(strings.TrimSpace(premiumIndex.LastFundingRate), 64)
-	oiValue, _ := strconv.ParseFloat(strings.TrimSpace(openInterest.OpenInterest), 64)
-
-	out, _ := json.Marshal(map[string]any{
-		"symbol": symbol,
-		"price":  tickerLastPrice,
-		"ticker_24h": map[string]any{
-			"price_change":         tickerPriceChange,
-			"price_change_percent": tickerPriceChangePercent,
-			"high_price":           tickerHighPrice,
-			"low_price":            tickerLowPrice,
-			"volume":               tickerVolume,
-			"quote_volume":         tickerQuoteVolume,
-			"trade_count":          ticker24h.Count,
-		},
-		"perp_metrics": map[string]any{
-			"mark_price":        markPrice,
-			"index_price":       indexPrice,
-			"funding_rate":      fundingRate,
-			"next_funding_time": premiumIndex.NextFundingTime,
-			"open_interest":     oiValue,
-		},
-		"kline_snapshot": map[string]any{
-			"interval":              interval,
-			"limit":                 len(klines),
-			"period_change_percent": periodChangePercent,
-			"highest_high":          highestHigh,
-			"lowest_low":            lowestLow,
-			"average_volume":        totalVolume / float64(maxInt(len(klines), 1)),
-			"recent_klines":         klines,
-		},
-	})
 	return string(out)
-}
-
-func toSnapshotFloat(value any) float64 {
-	switch v := value.(type) {
-	case string:
-		f, _ := strconv.ParseFloat(strings.TrimSpace(v), 64)
-		return f
-	case float64:
-		return v
-	case json.Number:
-		f, _ := v.Float64()
-		return f
-	default:
-		return 0
-	}
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 func strategyLockedFieldError(lang, field string) string {
@@ -3263,97 +2999,6 @@ func strategyConfigContainsLockedField(config map[string]any) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-func validKlineInterval(interval string) bool {
-	switch strings.TrimSpace(strings.ToLower(interval)) {
-	case "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1mo":
-		return true
-	default:
-		return false
-	}
-}
-
-func (a *Agent) toolGetKline(argsJSON string) string {
-	var args struct {
-		Symbol   string `json:"symbol"`
-		Interval string `json:"interval"`
-		Limit    int    `json:"limit"`
-	}
-	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
-		return fmt.Sprintf(`{"error": "invalid arguments: %s"}`, err)
-	}
-
-	symbol := strings.ToUpper(strings.TrimSpace(args.Symbol))
-	if symbol == "" {
-		return `{"error": "symbol is required"}`
-	}
-	if !strings.HasSuffix(symbol, "USDT") {
-		symbol += "USDT"
-	}
-
-	interval := strings.TrimSpace(strings.ToLower(args.Interval))
-	if interval == "" {
-		interval = "15m"
-	}
-	if !validKlineInterval(interval) {
-		return fmt.Sprintf(`{"error":"invalid interval %q"}`, interval)
-	}
-
-	limit := args.Limit
-	switch {
-	case limit <= 0:
-		limit = 50
-	case limit > 300:
-		limit = 300
-	}
-
-	url := fmt.Sprintf("https://fapi.binance.com/fapi/v1/klines?symbol=%s&interval=%s&limit=%d", symbol, interval, limit)
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return fmt.Sprintf(`{"error":"failed to create request: %s"}`, err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	req = req.WithContext(ctx)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Sprintf(`{"error":"failed to fetch kline for %s: %s"}`, symbol, err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Sprintf(`{"error":"kline source returned status %d for %s"}`, resp.StatusCode, symbol)
-	}
-
-	var raw [][]any
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
-		return fmt.Sprintf(`{"error":"failed to parse kline response: %s"}`, err)
-	}
-
-	candles := make([]map[string]any, 0, len(raw))
-	for _, row := range raw {
-		if len(row) < 7 {
-			continue
-		}
-		candles = append(candles, map[string]any{
-			"open_time":  row[0],
-			"open":       row[1],
-			"high":       row[2],
-			"low":        row[3],
-			"close":      row[4],
-			"volume":     row[5],
-			"close_time": row[6],
-		})
-	}
-
-	out, _ := json.Marshal(map[string]any{
-		"symbol":   symbol,
-		"interval": interval,
-		"limit":    limit,
-		"klines":   candles,
-	})
-	return string(out)
 }
 
 func (a *Agent) toolGetTradeHistory(argsJSON string) string {
@@ -3621,94 +3266,6 @@ func candidateCoinDetails(coins []kernel.CandidateCoin) []map[string]any {
 		})
 	}
 	return out
-}
-
-func normalizeWatchSymbol(raw string) string {
-	symbol := strings.ToUpper(strings.TrimSpace(raw))
-	symbol = strings.ReplaceAll(symbol, " ", "")
-	if symbol == "" {
-		return ""
-	}
-	hasQuoteSuffix := strings.HasSuffix(symbol, "USDT") || strings.HasSuffix(symbol, "BUSD") || strings.HasSuffix(symbol, "USDC")
-	if !hasQuoteSuffix && isStockSymbol(symbol) == false {
-		return symbol + "USDT"
-	}
-	return symbol
-}
-
-func (a *Agent) toolGetWatchlist(lang string) string {
-	if a.sentinel == nil {
-		return fmt.Sprintf(`{"error":"%s"}`, a.msg(lang, "sentinel_off"))
-	}
-	symbols := a.sentinel.Symbols()
-	payload := map[string]any{
-		"enabled": true,
-		"count":   len(symbols),
-		"symbols": symbols,
-		"text":    a.sentinel.FormatWatchlist(lang),
-	}
-	raw, _ := json.Marshal(payload)
-	return string(raw)
-}
-
-func (a *Agent) toolManageWatchlist(lang, argsJSON string) string {
-	if a.sentinel == nil {
-		return fmt.Sprintf(`{"error":"%s"}`, a.msg(lang, "sentinel_off"))
-	}
-
-	var args struct {
-		Action string `json:"action"`
-		Symbol string `json:"symbol"`
-	}
-	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
-		return fmt.Sprintf(`{"error":"invalid arguments: %s"}`, err)
-	}
-
-	action := strings.ToLower(strings.TrimSpace(args.Action))
-	symbol := normalizeWatchSymbol(args.Symbol)
-	if symbol == "" {
-		return `{"error":"symbol is required"}`
-	}
-
-	switch action {
-	case "add":
-		a.sentinel.AddSymbol(symbol)
-	case "remove":
-		a.sentinel.RemoveSymbol(symbol)
-	default:
-		return `{"error":"unsupported action"}`
-	}
-
-	symbols := a.sentinel.Symbols()
-	if a.config != nil {
-		a.config.WatchSymbols = symbols
-	}
-
-	message := ""
-	if lang == "zh" {
-		if action == "add" {
-			message = fmt.Sprintf("已把 %s 加入监控。", symbol)
-		} else {
-			message = fmt.Sprintf("已把 %s 移出监控。", symbol)
-		}
-	} else {
-		if action == "add" {
-			message = fmt.Sprintf("Added %s to the watchlist.", symbol)
-		} else {
-			message = fmt.Sprintf("Removed %s from the watchlist.", symbol)
-		}
-	}
-
-	payload := map[string]any{
-		"ok":      true,
-		"action":  action,
-		"symbol":  symbol,
-		"count":   len(symbols),
-		"symbols": symbols,
-		"message": message,
-	}
-	raw, _ := json.Marshal(payload)
-	return string(raw)
 }
 
 // knownCryptoSymbols is a set of well-known cryptocurrency base symbols.

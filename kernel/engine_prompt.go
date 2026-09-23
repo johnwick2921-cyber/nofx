@@ -260,16 +260,20 @@ func (e *StrategyEngine) writeAvailableIndicators(sb *strings.Builder) {
 
 	if indicators.EnableOI {
 		if e.isFuturesInstrument() {
-			// W-NO-BINANCE A: the futures path reads no external market data;
+			// W-NB A: the futures path reads no external market data;
 			// say so instead of advertising a feed that is not there.
 			sb.WriteString("- Open Interest (OI) data: n/a (no external market data on the futures path)\n")
 		} else {
-			sb.WriteString("- Open Interest (OI) data\n")
+			// The crypto path has no open-interest source in this build: the
+			// value is absent (n/a) for every coin — say so instead of
+			// advertising a feed that is not there.
+			sb.WriteString("- Open Interest (OI) data: n/a (no open-interest source)\n")
 		}
 	}
 
 	if indicators.EnableFundingRate && !e.isFuturesInstrument() {
-		sb.WriteString("- Funding rate\n")
+		// No funding source in this build either: the value is n/a.
+		sb.WriteString("- Funding rate: n/a (no funding source)\n")
 	}
 
 	// F11a — AI500 / OI_Top are crypto screening concepts; a futures strategy trades
@@ -712,7 +716,7 @@ func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 				sb.WriteString(fmt.Sprintf("Open Interest: Latest: %.2f Average: %.2f\n\n",
 					data.OpenInterest.Latest, data.OpenInterest.Average))
 			} else {
-				// W-NO-BINANCE A: ABSENT is n/a, never a fabricated 0.00 (the
+				// W-NB A: ABSENT is n/a, never a fabricated 0.00 (the
 				// futures path reads no external OI).
 				sb.WriteString("Open Interest: n/a\n\n")
 			}
@@ -722,7 +726,7 @@ func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 			if data.FundingRateKnown {
 				sb.WriteString(fmt.Sprintf("Funding Rate: %.2e\n\n", data.FundingRate))
 			} else {
-				// W-NO-BINANCE A (CTO F1): a funding fetch that did not succeed is
+				// W-NB A (CTO F1): a funding fetch that did not succeed is
 				// n/a, never a fabricated 0.00e+00.
 				sb.WriteString("Funding Rate: n/a\n\n")
 			}

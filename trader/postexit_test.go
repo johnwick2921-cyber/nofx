@@ -87,7 +87,7 @@ func TestPostExitOffAndCryptoNoKick(t *testing.T) {
 	at := &AutoTrader{exchange: "ninjatrader", kickCh: make(chan string, 4)}
 	at.notifyPositionClosed(7)
 	os.Unsetenv("POST_EXIT_RESCAN")
-	crypto := &AutoTrader{exchange: "binance", kickCh: make(chan string, 4)}
+	crypto := &AutoTrader{exchange: "bybit", kickCh: make(chan string, 4)}
 	crypto.notifyPositionClosed(8)
 	select {
 	case r := <-at.kickCh:

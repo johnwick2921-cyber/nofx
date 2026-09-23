@@ -10,7 +10,7 @@ package kernel
 //   - Plain primitives in CheckPreTrade so the function is trivially testable
 //     without constructing a full *Context / *Decision (the plan's illustrative
 //     types do not exactly match the real ones).
-//   - Decoupled from concrete broker packages (ninjatrader, binance, etc.) so
+//   - Decoupled from concrete broker packages (ninjatrader, bybit, etc.) so
 //     that the engine can call ForceFlat via a tiny interface.
 //   - Loaded from env once at startup via LoadRiskLimitsFromConfig().
 

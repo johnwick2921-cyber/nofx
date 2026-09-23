@@ -129,7 +129,7 @@ func TestCreateTraderSkillRequestsStartConfirmation(t *testing.T) {
 	}`)
 	_ = a.toolManageExchangeConfig("user-1", `{
 		"action":"create",
-		"exchange_type":"binance",
+		"exchange_type":"bybit",
 		"account_name":"Main",
 		"enabled":true
 	}`)
@@ -279,7 +279,7 @@ func TestTraderManagementQueryAndDiagnosisSkill(t *testing.T) {
 
 	exchangeResp := a.toolManageExchangeConfig("user-1", `{
 		"action":"create",
-		"exchange_type":"binance",
+		"exchange_type":"bybit",
 		"account_name":"Main",
 		"enabled":true
 	}`)
@@ -479,17 +479,17 @@ func TestTraderManagementAtomicBindingUpdate(t *testing.T) {
 		t.Fatalf("unmarshal deepseek model: %v", err)
 	}
 
-	exchangeBinance := a.toolManageExchangeConfig("user-1", `{
+	exchangeBybit := a.toolManageExchangeConfig("user-1", `{
 		"action":"create",
-		"exchange_type":"binance",
-		"account_name":"Binance 主账户",
+		"exchange_type":"bybit",
+		"account_name":"Bybit 主账户",
 		"enabled":true
 	}`)
-	var binance struct {
+	var bybit struct {
 		Exchange safeExchangeToolConfig `json:"exchange"`
 	}
-	if err := json.Unmarshal([]byte(exchangeBinance), &binance); err != nil {
-		t.Fatalf("unmarshal binance exchange: %v", err)
+	if err := json.Unmarshal([]byte(exchangeBybit), &bybit); err != nil {
+		t.Fatalf("unmarshal bybit exchange: %v", err)
 	}
 	exchangeOKX := a.toolManageExchangeConfig("user-1", `{
 		"action":"create",
@@ -523,7 +523,7 @@ func TestTraderManagementAtomicBindingUpdate(t *testing.T) {
 		"action":"create",
 		"name":"实盘一号",
 		"ai_model_id":"`+openAI.Model.ID+`",
-		"exchange_id":"`+binance.Exchange.ID+`",
+		"exchange_id":"`+bybit.Exchange.ID+`",
 		"strategy_id":"`+stA.Strategy.ID+`"
 	}`)
 	var trader struct {

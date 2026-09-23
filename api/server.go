@@ -153,7 +153,7 @@ func (s *Server) setupRoutes() {
 			// Market data — JWT-protected (C4, 2026-08-25): candle history +
 			// SVP moved out of the public group; the FE httpClient always
 			// attaches the Bearer token, and the agent calls handlers in-process.
-			s.route(protected, "GET", "/klines", "Candlestick data (?symbol=&interval=&limit=)", s.handleKlines)
+			s.route(protected, "GET", "/klines", "Candlestick data (?symbol=&interval=&limit=&exchange= — exchange is REQUIRED; no default venue)", s.handleKlines)
 			s.route(protected, "GET", "/klines/svp", "Session Volume Profile (?symbol=&exchange=ninjatrader) — server-computed POC/VAH/VAL + histogram bins", s.handleKlinesSVP)
 			// Logout (add to blacklist)
 			s.route(protected, "POST", "/logout", "Logout (blacklist token)", s.handleLogout)
@@ -259,7 +259,7 @@ Creates a NEW independently-addressable row (unique id) so a provider can hold m
 
 			// Exchange configuration
 			s.routeWithSchema(protected, "GET", "/exchanges", "List exchange accounts",
-				`Returns: [{"id":"<EXACT id — use this as exchange_id when creating/updating a trader>","exchange_type":"<e.g. okx, binance>","account_name":"<user label>","enabled":<bool>}]
+				`Returns: [{"id":"<EXACT id — use this as exchange_id when creating/updating a trader>","exchange_type":"<e.g. okx, bybit>","account_name":"<user label>","enabled":<bool>}]
 CRITICAL: Always use the "id" field for exchange_id. Do not use "exchange_type" as an id.`,
 				s.handleGetExchangeConfigs)
 			s.routeWithSchema(protected, "GET", "/exchanges/account-state", "Get connection and balance state for each exchange account",
@@ -268,9 +268,9 @@ Use this endpoint to show balance and health in the exchange list without depend
 				s.handleGetExchangeAccountStates)
 			s.routeWithSchema(protected, "POST", "/exchanges", "Create a new exchange account",
 				`Body: {"exchange_type":"<string>","account_name":"<string, user label>","enabled":true,"api_key":"<string>","secret_key":"<string>","passphrase":"<string, required for okx/gate/kucoin>"}
-exchange_type values: "binance","bybit","okx","bitget","gate","kucoin","indodax" (CEX) | "hyperliquid","aster","lighter" (DEX)
+exchange_type values: "bybit","okx","bitget","gate","kucoin","indodax" (CEX) | "hyperliquid","aster","lighter" (DEX) | "ninjatrader" (CME futures)
 Required fields by exchange:
-  binance/bybit/bitget/indodax: api_key + secret_key
+  bybit/bitget/indodax: api_key + secret_key
   okx/gate/kucoin: api_key + secret_key + passphrase
   hyperliquid: hyperliquid_wallet_addr
   aster: aster_user + aster_signer + aster_private_key

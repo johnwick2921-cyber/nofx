@@ -10,8 +10,8 @@
 // Extracted from AdvancedChart (which already carried the correct formatters)
 // so PlanMiniChart — which used to hand the lib raw epochs and therefore
 // showed UTC labels, +5h vs NT8 — shares the identical single implementation.
-// (TradingViewChart is the one exception: the external widget takes
-// timezone:'America/Chicago' natively.)
+// (The external TradingView widget component that took
+// timezone:'America/Chicago' natively was unused and has been deleted.)
 
 import { TickMarkType, type Time } from 'lightweight-charts'
 

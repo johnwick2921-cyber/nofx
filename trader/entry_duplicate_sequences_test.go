@@ -78,16 +78,18 @@ import (
 //
 // NO NETWORK. Until W-NO-BINANCE A the send half's market read,
 // market.GetWithExchange, made two outbound HTTPS calls on the futures branch
-// (getOpenInterestData and getFundingRate, each to fapi.binance.com with a 30 s
+// (the exchange-hosted open-interest and funding fetchers, each with a 30 s
 // client timeout). Those calls are GONE: the futures branch now takes
 // market.futuresOIFunding (absent, no network), pinned by
-// TestAIOpenSendHalfMakesNoBinanceCall and the market source guard. The stub
-// stays, belt and braces: newDupWire still routes every client
-// market.NewAPIClient builds through its own seam (hook.SET_HTTP_CLIENT) to a
-// RoundTripper that fails at once — so a future outbound call on this path
-// costs microseconds here instead of the fixture's 60 s budgets (the latch's
-// book-age bound and the server's TCPHeartbeatAckTimeout) — and restores the
-// previous hook in t.Cleanup.
+// TestAIOpenSendHalfMakesNoBinanceCall and the market source guard, and
+// W-NO-BINANCE B deleted the fetchers and market's API client altogether. The
+// stub stays, belt and braces: newDupWire registers a RoundTripper that fails
+// at once on the generic client seam (hook.SET_HTTP_CLIENT). Since Part B NO
+// production client consults that seam (market's API client was its only
+// consumer), so today the stub is inert; a future client that adopts the seam
+// on this path fails in microseconds here instead of the fixture's 60 s
+// budgets (the latch's book-age bound and the server's
+// TCPHeartbeatAckTimeout). The previous hook is restored in t.Cleanup.
 //
 // THE RACES. Picture runs on the live-bar goroutine, concurrently with the
 // cycle (armed pass, AI decision); the agent-chat and debug doors are other
@@ -214,9 +216,10 @@ var (
 // gets back, at once.
 var errDupOffline = errors.New("dup fixture: outbound HTTP is stubbed offline")
 
-// dupOffline is the RoundTripper behind every client market.NewAPIClient
-// builds while a dup fixture is up. It never dials: it records the host and
-// fails immediately.
+// dupOffline is the RoundTripper behind every client built through the
+// hook.SET_HTTP_CLIENT seam while a dup fixture is up (none in production
+// since W-NO-BINANCE B). It never dials: it records the host and fails
+// immediately.
 type dupOffline struct {
 	mu    sync.Mutex
 	hosts []string
@@ -235,8 +238,8 @@ func (o *dupOffline) seen() []string {
 	return append([]string(nil), o.hosts...)
 }
 
-// stubOutboundHTTP installs dupOffline through market's own client seam
-// (hook.SET_HTTP_CLIENT, consulted by market.NewAPIClient on every call) for
+// stubOutboundHTTP installs dupOffline through the generic client seam
+// (hook.SET_HTTP_CLIENT — no production consumer since W-NO-BINANCE B) for
 // the test's lifetime, and restores whatever was registered before — nested
 // fixtures (S5's rounds) unwind in t.Cleanup's LIFO order. It is registered
 // FIRST in newDupWire so it is restored LAST, after every server and producer

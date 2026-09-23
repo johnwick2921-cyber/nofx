@@ -1038,7 +1038,7 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 	currentPositionKeys := make(map[string]bool)
 
 	for _, pos := range positions {
-		// Comma-ok every assert: NT futures positions omit Binance-only fields
+		// Comma-ok every assert: NT futures positions omit crypto-perp-only fields
 		// (e.g. liquidationPrice — futures have no liquidation), so an unchecked
 		// .(float64) on a missing key panics and takes down the whole bot.
 		symbol, _ := pos["symbol"].(string)

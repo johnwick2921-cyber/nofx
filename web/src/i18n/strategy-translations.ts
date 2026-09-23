@@ -826,6 +826,15 @@ export const indicator = {
     en: 'Perpetual funding rate',
     es: 'Rate de perpetuo',
   },
+  // Open interest and funding came only from a crypto-perpetual market-data
+  // feed that has been removed; nothing else supplies them, so the toggles
+  // stay (saved strategies keep their setting) but say so.
+  noDataSource: {
+    zh: '无数据源 — AI 提示词中显示 n/a',
+    en: 'No data source — the AI prompt shows n/a',
+    es: 'Sin fuente de datos — el prompt de IA muestra n/a',
+    id: 'Tanpa sumber data — prompt AI menampilkan n/a',
+  },
   oiRanking: { zh: 'OI 排行', en: 'OI Ranking', es: 'Ranking OI' },
   oiRankingDesc: {
     zh: '持仓量增减排行',

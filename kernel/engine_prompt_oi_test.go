@@ -10,11 +10,15 @@ import (
 // TestWriteAvailableIndicators_OIGatedByEnableOI locks the OI honesty fix: the
 // "Open Interest (OI) data" availability line appears IFF EnableOI is true. A
 // futures strategy (EnableOI=false via applyFuturesIndicatorDefaults) therefore
-// omits it from the prompt; crypto (EnableOI=true) lists it byte-identically as
-// before. The user-prompt OI value line is gated by the same EnableOI flag
-// (engine_prompt.go), so it follows the same on/off behavior.
+// omits it from the prompt. Crypto (EnableOI=true) lists it — and, since this
+// build has no crypto open-interest source (the exchange-hosted fetcher was
+// removed with its broker), the line says n/a instead of advertising a feed
+// that is not there (a CORRECTION: the old "- Open Interest (OI) data" line
+// promised a value every coin now reports absent). The user-prompt OI value
+// line is gated by the same EnableOI flag (engine_prompt.go).
 func TestWriteAvailableIndicators_OIGatedByEnableOI(t *testing.T) {
-	const oiLine = "- Open Interest (OI) data\n"
+	const oiLine = "- Open Interest (OI) data"
+	const cryptoOILine = "- Open Interest (OI) data: n/a (no open-interest source)\n"
 
 	withOI := &store.StrategyConfig{Indicators: store.IndicatorConfig{
 		Klines:   store.KlineConfig{SelectedTimeframes: []string{"5m"}},
@@ -22,8 +26,8 @@ func TestWriteAvailableIndicators_OIGatedByEnableOI(t *testing.T) {
 	}}
 	var on strings.Builder
 	NewStrategyEngine(withOI).writeAvailableIndicators(&on)
-	if !strings.Contains(on.String(), oiLine) {
-		t.Fatalf("EnableOI=true must list OI (crypto byte-identical); got:\n%s", on.String())
+	if !strings.Contains(on.String(), cryptoOILine) {
+		t.Fatalf("EnableOI=true must list OI, as n/a (no crypto OI source); got:\n%s", on.String())
 	}
 
 	withoutOI := &store.StrategyConfig{Indicators: store.IndicatorConfig{

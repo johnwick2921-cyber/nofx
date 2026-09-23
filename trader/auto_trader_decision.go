@@ -154,7 +154,7 @@ func (at *AutoTrader) GetAccountInfo() (map[string]interface{}, error) {
 	totalMarginUsed := 0.0
 	totalUnrealizedPnLCalculated := 0.0
 	for _, pos := range positions {
-		// Comma-ok asserts: NT futures positions may omit some Binance-style
+		// Comma-ok asserts: NT futures positions may omit some crypto-perp-style
 		// keys; a hard assert would panic /api/account (Plan 4.11 fix).
 		markPrice, _ := pos["markPrice"].(float64)
 		quantity, _ := pos["positionAmt"].(float64)
@@ -246,7 +246,7 @@ func (at *AutoTrader) GetPositions() ([]map[string]interface{}, error) {
 		return []map[string]interface{}{}, nil
 	}
 	for _, pos := range positions {
-		// Comma-ok asserts: NT futures positions may omit some Binance-style
+		// Comma-ok asserts: NT futures positions may omit some crypto-perp-style
 		// keys (e.g. liquidationPrice); a hard assert would panic the API
 		// positions repackaging (Plan 4.11 fix).
 		symbol, _ := pos["symbol"].(string)
@@ -340,7 +340,7 @@ func (at *AutoTrader) recordAndConfirmOrder(orderResult map[string]interface{}, 
 	// Exchanges with OrderSync: Skip immediate order recording, let OrderSync handle it
 	// This ensures accurate data from GetTrades API and avoids duplicate records
 	switch at.exchange {
-	case "binance", "lighter", "hyperliquid", "bybit", "okx", "bitget", "aster", "kucoin", "gate":
+	case "lighter", "hyperliquid", "bybit", "okx", "bitget", "aster", "kucoin", "gate":
 		logger.Infof("  📝 Order submitted (id: %s), will be synced by OrderSync", orderID)
 		return
 	}
@@ -359,7 +359,7 @@ func (at *AutoTrader) recordAndConfirmOrder(orderResult map[string]interface{}, 
 		return
 	}
 
-	// For exchanges without OrderSync (e.g., Binance): record immediately and poll for fill data
+	// For exchanges without OrderSync (e.g., indodax): record immediately and poll for fill data
 	orderRecord := at.createOrderRecord(orderID, symbol, action, positionSide, quantity, price, leverage)
 	if err := at.store.Order().CreateOrder(orderRecord); err != nil {
 		logger.Infof("  ⚠️ Failed to record order: %v", err)
@@ -492,7 +492,7 @@ func (at *AutoTrader) recordPositionChange(orderID, symbol, side, action string,
 			TraderID:        at.id,
 			Account:         at.currentAccountName(), // ITEM 2 per-account attribution
 			ExchangeID:      at.exchangeID,           // Exchange account UUID
-			ExchangeType:    at.exchange,             // Exchange type: binance/bybit/okx/etc
+			ExchangeType:    at.exchange,             // Exchange type: bybit/okx/ninjatrader/etc
 			Symbol:          symbol,
 			Side:            side, // LONG or SHORT
 			Quantity:        quantity,

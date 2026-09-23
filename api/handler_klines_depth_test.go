@@ -367,9 +367,9 @@ func TestResolveKlinesLimitPerExchange(t *testing.T) {
 		{"ninjatrader", "5000", 5000},    // F1 dashboard ask survives
 		{"ninjatrader", "999999", 20000}, // ninjatrader ceiling, not Coinank's
 		{"NinjaTrader", "5000", 5000},    // case-insensitive
-		{"binance", "5000", 1500},        // Coinank cap unchanged
-		{"", "5000", 1500},               // default exchange inherits Coinank cap
-		{"binance", "abc", 1000},         // bad value → default
+		{"bybit", "5000", 1500},          // Coinank cap unchanged
+		{"", "5000", 1500},               // no exchange (the handler refuses it first) → Coinank cap
+		{"bybit", "abc", 1000},           // bad value → default
 		{"ninjatrader", "0", 1000},       // non-positive → default
 		{"", "", 1000},                   // missing → default
 	}

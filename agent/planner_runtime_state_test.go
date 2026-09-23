@@ -555,7 +555,7 @@ func TestThinkAndActUsesLLMSkillRouterForNaturalLanguageTraderQuery(t *testing.T
 
 	exchangeResp := a.toolManageExchangeConfig("user-1", `{
 		"action":"create",
-		"exchange_type":"binance",
+		"exchange_type":"bybit",
 		"account_name":"Main",
 		"enabled":true
 	}`)

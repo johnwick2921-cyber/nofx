@@ -65,7 +65,7 @@ func (a *Agent) handleModelWalletBalanceQuestion(storeUserID, lang, text string)
 				}
 			}
 		}
-		lines = append(lines, "注意：这是 claw402/Base 模型支付钱包余额，不是 OKX/Binance 等交易所账户余额。")
+		lines = append(lines, "注意：这是 claw402/Base 模型支付钱包余额，不是 OKX/Bybit 等交易所账户余额。")
 		return strings.Join(lines, "\n"), true
 	}
 

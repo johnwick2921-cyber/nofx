@@ -12,7 +12,6 @@ import (
 	"nofx/store"
 	"nofx/trader"
 	"nofx/trader/aster"
-	"nofx/trader/binance"
 	"nofx/trader/bitget"
 	"nofx/trader/bybit"
 	"nofx/trader/gate"
@@ -153,6 +152,17 @@ func probeExchangeAccountState(exchangeCfg *store.Exchange, userID string) Excha
 		Asset:      accountAssetForExchange(exchangeCfg.ExchangeType),
 	}
 
+	// The supported-exchange registry is consulted FIRST (before the enabled
+	// and credential checks): a stored row whose type this build cannot
+	// construct is reported UNSUPPORTED_EXCHANGE with its type named — never
+	// "disabled" or "missing exchange_type", and no probe is attempted.
+	if rerr := store.CheckSupportedExchangeType(exchangeCfg.ExchangeType); rerr != nil {
+		state.Status = exchangeAccountStatusUnavailable
+		state.ErrorCode = "UNSUPPORTED_EXCHANGE"
+		state.ErrorMessage = rerr.Error()
+		return state
+	}
+
 	if !exchangeCfg.Enabled {
 		state.Status = exchangeAccountStatusDisabled
 		state.ErrorCode = "EXCHANGE_DISABLED"
@@ -225,8 +235,6 @@ func probeExchangeAccountState(exchangeCfg *store.Exchange, userID string) Excha
 
 func buildExchangeProbeTrader(exchangeCfg *store.Exchange, userID string) (trader.Trader, error) {
 	switch exchangeCfg.ExchangeType {
-	case "binance":
-		return binance.NewFuturesTrader(string(exchangeCfg.APIKey), string(exchangeCfg.SecretKey), userID), nil
 	case "bybit":
 		return bybit.NewBybitTrader(string(exchangeCfg.APIKey), string(exchangeCfg.SecretKey)), nil
 	case "okx":

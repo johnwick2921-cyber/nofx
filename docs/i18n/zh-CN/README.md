@@ -86,7 +86,7 @@ x402 流程：
 | 功能 | 描述 |
 |:--------|:------------|
 | **多 AI** | DeepSeek、Qwen、GPT、Claude、Gemini、Grok、Kimi、MiniMax — 随时切换 |
-| **多交易所** | Binance、Bybit、OKX、Bitget、KuCoin、Gate、Hyperliquid、Aster、Lighter |
+| **多交易所** | Bybit、OKX、Bitget、KuCoin、Gate、Hyperliquid、Aster、Lighter |
 | **策略工作室** | 可视化构建器 — 币种来源、指标、风控 |
 | **AI 竞赛** | AI 实时竞争，排行榜排名 |
 | **Telegram Agent** | 与交易助手对话 — 流式输出、工具调用、记忆 |
@@ -101,7 +101,6 @@ x402 流程：
 
 | 交易所 | 状态 | 注册 (手续费折扣) |
 |:---------|:------:|:------------------------|
-| <img src="../../../web/public/exchange-icons/binance.jpg" width="20" height="20" style="vertical-align: middle;"/> **Binance** | ✅ | [注册](https://www.binance.com/join?ref=NOFXENG) |
 | <img src="../../../web/public/exchange-icons/bybit.png" width="20" height="20" style="vertical-align: middle;"/> **Bybit** | ✅ | [注册](https://partner.bybit.com/b/83856) |
 | <img src="../../../web/public/exchange-icons/okx.svg" width="20" height="20" style="vertical-align: middle;"/> **OKX** | ✅ | [注册](https://www.okx.com/join/1865360) |
 | <img src="../../../web/public/exchange-icons/bitget.svg" width="20" height="20" style="vertical-align: middle;"/> **Bitget** | ✅ | [注册](https://www.bitget.com/referral/register?from=referral&clacCode=c8a43172) |

@@ -32,7 +32,9 @@ func newPicturePlanGateServer(t *testing.T, strategyJSON string) (*Server, strin
 	if err := st.AIModel().Create(ppgUser, "m-ppg", "m", "deepseek", true, "sk-test-not-a-real-key", ""); err != nil {
 		t.Fatalf("ai model: %v", err)
 	}
-	exID, err := st.Exchange().Create(ppgUser, "binance", "Default", true,
+	// Bybit: a CEX whose trader constructs offline (W-NB B removed the
+	// broker this fixture used to seat).
+	exID, err := st.Exchange().Create(ppgUser, "bybit", "Default", true,
 		"test-key", "test-secret", "", false, "", true, "", "", "", "", "", "", 0, "", "", 0)
 	if err != nil {
 		t.Fatalf("exchange: %v", err)

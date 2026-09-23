@@ -169,3 +169,6 @@ data/sandbox.db*
 
 # W-ONE-BUTTON M2 — installation-local updater state (hold file, jobs, keys). Covered by /data/ too; explicit so it is never committed.
 data/updater/
+
+# Stray build output of `go build ./cmd/sandbox-seed` (was committed by accident in 54209b04).
+/sandbox-seed

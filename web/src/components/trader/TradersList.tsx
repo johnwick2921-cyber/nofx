@@ -67,7 +67,7 @@ export function TradersList({
   onCopyAddress,
 }: TradersListProps) {
   return (
-    <div className="binance-card p-4 md:p-6">
+    <div className="nofx-card p-4 md:p-6">
       <div className="flex items-center justify-between mb-4 md:mb-5">
         <h2
           className="text-lg md:text-xl font-bold flex items-center gap-2"

@@ -84,7 +84,7 @@ Không tài khoản. Không API key. Không trả trước. Một ví, tất c�
 | Tính năng | Mô tả |
 |:--------|:------------|
 | **Đa AI** | DeepSeek, Qwen, GPT, Claude, Gemini, Grok, Kimi, MiniMax — chuyển đổi bất cứ lúc nào |
-| **Đa Sàn** | Binance, Bybit, OKX, Bitget, KuCoin, Gate, Hyperliquid, Aster, Lighter |
+| **Đa Sàn** | Bybit, OKX, Bitget, KuCoin, Gate, Hyperliquid, Aster, Lighter |
 | **Strategy Studio** | Trình xây dựng trực quan — nguồn coin, chỉ báo, kiểm soát rủi ro |
 | **AI Competition** | AI cạnh tranh thời gian thực, bảng xếp hạng hiệu suất |
 | **Telegram Agent** | Chat với trợ lý giao dịch — streaming, gọi công cụ, bộ nhớ |
@@ -98,7 +98,6 @@ Crypto · Cổ phiếu Mỹ · Forex · Kim loại
 
 | Sàn | Trạng thái | Đăng ký (Giảm phí) |
 |:---------|:------:|:------------------------|
-| <img src="../../../web/public/exchange-icons/binance.jpg" width="20" height="20" style="vertical-align: middle;"/> **Binance** | ✅ | [Đăng ký](https://www.binance.com/join?ref=NOFXENG) |
 | <img src="../../../web/public/exchange-icons/bybit.png" width="20" height="20" style="vertical-align: middle;"/> **Bybit** | ✅ | [Đăng ký](https://partner.bybit.com/b/83856) |
 | <img src="../../../web/public/exchange-icons/okx.svg" width="20" height="20" style="vertical-align: middle;"/> **OKX** | ✅ | [Đăng ký](https://www.okx.com/join/1865360) |
 | <img src="../../../web/public/exchange-icons/bitget.svg" width="20" height="20" style="vertical-align: middle;"/> **Bitget** | ✅ | [Đăng ký](https://www.bitget.com/referral/register?from=referral&clacCode=c8a43172) |

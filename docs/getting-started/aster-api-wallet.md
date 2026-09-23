@@ -4,7 +4,7 @@ This guide explains how to create and configure an API Wallet for secure trading
 
 ## Why Use API Wallet?
 
-- ✅ **Binance-compatible API**: Easy migration from Binance
+- ✅ **Familiar perp-exchange API**: easy migration from other perp venues
 - ✅ **Separate Trading Wallet**: Enhanced security
 - ✅ **Revocable Access**: Can be disabled anytime
 - ✅ **Lower Fees**: Competitive trading fees

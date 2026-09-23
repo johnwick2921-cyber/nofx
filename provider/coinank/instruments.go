@@ -6,7 +6,7 @@ import (
 	"nofx/provider/coinank/coinank_enum"
 )
 
-// GetLastPrice get symbol latest information, param example -> symbol:`BTCUSDT`,exchange:`Binance`,productType:`SWAP`
+// GetLastPrice get symbol latest information, param example -> symbol:`BTCUSDT`,exchange:`Bybit`,productType:`SWAP`
 func (c *CoinankClient) GetLastPrice(ctx context.Context,
 	symbol string, exchange coinank_enum.Exchange, productType coinank_enum.ProductType) (*GetLastPriceResponse, error) {
 	paramsMap := make(map[string]string, 3)

@@ -13,7 +13,7 @@ import (
 	"nofx/store"
 )
 
-// ── W-NO-BINANCE A — absent open interest / funding render n/a, never 0 ────
+// ── W-NB A — absent open interest / funding render n/a, never 0 ────
 //
 // The CME futures path reads no external market data (market.futuresOIFunding:
 // OpenInterest nil, FundingRateKnown false). The prompt says n/a; it never
@@ -59,10 +59,12 @@ func TestCryptoPromptRendersFundingOnlyWhenKnown(t *testing.T) {
 	if !strings.Contains(unknown, "Funding Rate: n/a") || strings.Contains(unknown, "0.00e+00") {
 		t.Fatalf("a funding fetch that did not succeed is n/a, never 0.00e+00 (CTO F1):\n%s", unknown)
 	}
+	// Part B: the crypto path has no OI / funding source in this build, so the
+	// Available-Data bullets say n/a instead of advertising absent feeds.
 	var sb strings.Builder
 	e.writeAvailableIndicators(&sb)
-	if !strings.Contains(sb.String(), "- Open Interest (OI) data\n") || !strings.Contains(sb.String(), "- Funding rate\n") {
-		t.Fatalf("crypto's Available-Data bullets are unchanged:\n%s", sb.String())
+	if !strings.Contains(sb.String(), "- Open Interest (OI) data: n/a (no open-interest source)\n") || !strings.Contains(sb.String(), "- Funding rate: n/a (no funding source)\n") {
+		t.Fatalf("crypto's Available-Data bullets must say n/a (no source in this build):\n%s", sb.String())
 	}
 }
 

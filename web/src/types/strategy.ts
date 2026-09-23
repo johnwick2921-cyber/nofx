@@ -237,6 +237,9 @@ export interface IndicatorConfig {
   enable_atr: boolean
   enable_boll: boolean
   enable_volume: boolean
+  // Open interest / funding: no data source remains (their only feed, a
+  // crypto-perpetual one, was removed). Kept so saved strategies load; the
+  // editor says 'No data source' and hides both on CME futures.
   enable_oi: boolean
   enable_funding_rate: boolean
   enable_svp?: boolean // session volume profile → futures AI prompt line; default OFF

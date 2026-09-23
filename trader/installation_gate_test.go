@@ -233,7 +233,7 @@ func TestInstallationGateRegistryOnlyCryptoTraderIsInformational(t *testing.T) {
 	f := newGateFixture(t)
 	ghost, _ := resetTrader(t, store.StrategyConfig{})
 	ghost.id = "picture-ghost-crypto"
-	ghost.exchange = "binance"
+	ghost.exchange = "bybit"
 	pictureHtfTraders.Store(ghost.id, ghost)
 	defer pictureHtfTraders.Delete(ghost.id)
 	g := f.run()
@@ -254,7 +254,7 @@ func TestInstallationGateRegistryOnlyCryptoTraderIsInformational(t *testing.T) {
 	// ...while a RUNNING non-NT8 trader in the manager still fails the leg.
 	running, _ := resetTrader(t, store.StrategyConfig{})
 	running.id = "running-crypto"
-	running.exchange = "binance"
+	running.exchange = "bybit"
 	f.loaded[running.id] = running
 	mustFail(t, f.run(), "traders_nt8", "running-crypto")
 }

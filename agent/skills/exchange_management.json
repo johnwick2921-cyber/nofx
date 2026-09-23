@@ -7,8 +7,8 @@
     "exchange_type": {
       "type": "enum",
       "required": true,
-      "values": ["binance", "bybit", "okx", "bitget", "gate", "kucoin", "hyperliquid", "aster", "lighter", "indodax"],
-      "aliases": {"币安": "binance", "欧易": "okx", "必安": "binance", "bitget": "bitget", "bitget futures": "bitget", "bitget合约": "bitget", "库币": "kucoin", "gate.io": "gate", "hyper": "hyperliquid", "印尼站": "indodax"},
+      "values": ["bybit", "okx", "bitget", "gate", "kucoin", "hyperliquid", "aster", "lighter", "indodax"],
+      "aliases": {"欧易": "okx", "bitget": "bitget", "bitget futures": "bitget", "bitget合约": "bitget", "库币": "kucoin", "gate.io": "gate", "hyper": "hyperliquid", "印尼站": "indodax"},
       "description": "交易所类型，必填，决定后续需要哪些凭证字段。"
     },
     "account_name": {
@@ -29,7 +29,7 @@
     "passphrase": {
       "type": "credential",
       "required_for": ["okx", "bitget", "kucoin"],
-      "description": "OKX、Bitget、KuCoin 专用 Passphrase/API 口令，对这些交易所启用前必须填写；Binance、Bybit、Gate、Indodax 通常不需要。"
+      "description": "OKX、Bitget、KuCoin 专用 Passphrase/API 口令，对这些交易所启用前必须填写；Bybit、Gate、Indodax 通常不需要。"
     },
     "testnet": {
       "type": "bool",
@@ -104,7 +104,6 @@
     "删除操作不可逆，必须先向用户确认再执行。"
   ],
   "per_exchange_required_fields": {
-    "binance":      ["api_key", "secret_key"],
     "okx":          ["api_key", "secret_key", "passphrase"],
     "bybit":        ["api_key", "secret_key"],
     "bitget":       ["api_key", "secret_key", "passphrase"],
@@ -123,7 +122,7 @@
       "goal": "创建一个可供 trader 绑定使用的交易所配置。",
       "dynamic_rules": [
         "确认 exchange_type 后，根据 per_exchange_required_fields 决定需要追问哪些凭证字段。",
-        "Binance/Bybit/Gate/Indodax 需要 API Key + Secret；OKX/Bitget/KuCoin 还必须追问 passphrase；Hyperliquid 必须追问 api_key + 钱包地址，并允许记录 unified account 开关；Aster 必须追问 user/signer/private_key；Lighter 必须追问钱包地址和 api_key_private_key。",
+        "Bybit/Gate/Indodax 需要 API Key + Secret；OKX/Bitget/KuCoin 还必须追问 passphrase；Hyperliquid 必须追问 api_key + 钱包地址，并允许记录 unified account 开关；Aster 必须追问 user/signer/private_key；Lighter 必须追问钱包地址和 api_key_private_key。",
         "如果用户选择 OKX、Bitget 或 KuCoin，不能把 passphrase 说成可选项；没有 passphrase 时应停在补字段，不要创建半成品。",
         "凭证字段格式不符时，用人话告知用户正确格式，不要静默丢弃。",
         "若当前父任务只是缺一个可用交易所，本动作完成后应允许父任务恢复并消费新的 exchange_id。",
