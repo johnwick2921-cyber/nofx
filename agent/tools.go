@@ -843,36 +843,6 @@ func buildAgentTools() []mcp.Tool {
 				},
 			},
 		},
-		{
-			Type: "function",
-			Function: mcp.FunctionDef{
-				Name:        "get_watchlist",
-				Description: "Get the current Sentinel watchlist of monitored crypto symbols. Use this when the user asks which coins are being watched or monitored right now.",
-				Parameters:  map[string]any{"type": "object", "properties": map[string]any{}},
-			},
-		},
-		{
-			Type: "function",
-			Function: mcp.FunctionDef{
-				Name:        "manage_watchlist",
-				Description: "Add or remove a monitored crypto symbol from the Sentinel watchlist at runtime. Use this when the user asks to watch, monitor, unwatch, or stop monitoring a coin.",
-				Parameters: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"action": map[string]any{
-							"type":        "string",
-							"enum":        []string{"add", "remove"},
-							"description": "Whether to add or remove the symbol from the watchlist.",
-						},
-						"symbol": map[string]any{
-							"type":        "string",
-							"description": "Crypto symbol to watch, such as BTC, ETH, SOL, BTCUSDT, or ETHUSDT.",
-						},
-					},
-					"required": []string{"action", "symbol"},
-				},
-			},
-		},
 	}
 }
 
@@ -919,10 +889,6 @@ func (a *Agent) handleToolCall(ctx context.Context, storeUserID string, userID i
 		return a.toolGetTradeHistory(tc.Function.Arguments)
 	case "get_candidate_coins":
 		return a.toolGetCandidateCoins(storeUserID, userID, tc.Function.Arguments)
-	case "get_watchlist":
-		return a.toolGetWatchlist(lang)
-	case "manage_watchlist":
-		return a.toolManageWatchlist(lang, tc.Function.Arguments)
 	default:
 		return fmt.Sprintf(`{"error": "unknown tool: %s"}`, tc.Function.Name)
 	}
@@ -3618,94 +3584,6 @@ func candidateCoinDetails(coins []kernel.CandidateCoin) []map[string]any {
 		})
 	}
 	return out
-}
-
-func normalizeWatchSymbol(raw string) string {
-	symbol := strings.ToUpper(strings.TrimSpace(raw))
-	symbol = strings.ReplaceAll(symbol, " ", "")
-	if symbol == "" {
-		return ""
-	}
-	hasQuoteSuffix := strings.HasSuffix(symbol, "USDT") || strings.HasSuffix(symbol, "BUSD") || strings.HasSuffix(symbol, "USDC")
-	if !hasQuoteSuffix && isStockSymbol(symbol) == false {
-		return symbol + "USDT"
-	}
-	return symbol
-}
-
-func (a *Agent) toolGetWatchlist(lang string) string {
-	if a.sentinel == nil {
-		return fmt.Sprintf(`{"error":"%s"}`, a.msg(lang, "sentinel_off"))
-	}
-	symbols := a.sentinel.Symbols()
-	payload := map[string]any{
-		"enabled": true,
-		"count":   len(symbols),
-		"symbols": symbols,
-		"text":    a.sentinel.FormatWatchlist(lang),
-	}
-	raw, _ := json.Marshal(payload)
-	return string(raw)
-}
-
-func (a *Agent) toolManageWatchlist(lang, argsJSON string) string {
-	if a.sentinel == nil {
-		return fmt.Sprintf(`{"error":"%s"}`, a.msg(lang, "sentinel_off"))
-	}
-
-	var args struct {
-		Action string `json:"action"`
-		Symbol string `json:"symbol"`
-	}
-	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
-		return fmt.Sprintf(`{"error":"invalid arguments: %s"}`, err)
-	}
-
-	action := strings.ToLower(strings.TrimSpace(args.Action))
-	symbol := normalizeWatchSymbol(args.Symbol)
-	if symbol == "" {
-		return `{"error":"symbol is required"}`
-	}
-
-	switch action {
-	case "add":
-		a.sentinel.AddSymbol(symbol)
-	case "remove":
-		a.sentinel.RemoveSymbol(symbol)
-	default:
-		return `{"error":"unsupported action"}`
-	}
-
-	symbols := a.sentinel.Symbols()
-	if a.config != nil {
-		a.config.WatchSymbols = symbols
-	}
-
-	message := ""
-	if lang == "zh" {
-		if action == "add" {
-			message = fmt.Sprintf("已把 %s 加入监控。", symbol)
-		} else {
-			message = fmt.Sprintf("已把 %s 移出监控。", symbol)
-		}
-	} else {
-		if action == "add" {
-			message = fmt.Sprintf("Added %s to the watchlist.", symbol)
-		} else {
-			message = fmt.Sprintf("Removed %s from the watchlist.", symbol)
-		}
-	}
-
-	payload := map[string]any{
-		"ok":      true,
-		"action":  action,
-		"symbol":  symbol,
-		"count":   len(symbols),
-		"symbols": symbols,
-		"message": message,
-	}
-	raw, _ := json.Marshal(payload)
-	return string(raw)
 }
 
 // knownCryptoSymbols is a set of well-known cryptocurrency base symbols.
