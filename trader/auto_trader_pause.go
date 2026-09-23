@@ -97,12 +97,16 @@ func (at *AutoTrader) PauseState() (time.Time, bool) {
 
 // entryPaused is the gate predicate: reason + true while the pause holds.
 // The first read at/after the deadline AUTO-RESUMES (clears state + store).
-func (at *AutoTrader) entryPaused() (string, bool) {
+//
+// W-EXEC-TRUTH W0: it takes the caller's clock — the admission gate runs
+// beneath the armed pass's clock seam, and every caller now passes its own now
+// (the wall-clock wrapper had no production caller left and was removed).
+func (at *AutoTrader) entryPausedAt(now time.Time) (string, bool) {
 	ms := at.pauseUntilMs.Load()
 	if ms == 0 {
 		return "", false
 	}
-	if time.Now().UnixMilli() >= ms {
+	if now.UnixMilli() >= ms {
 		// Expiry: only the winner of the CAS clears + logs (loop vs API race).
 		if at.pauseUntilMs.CompareAndSwap(ms, 0) {
 			// E7-v2 fix: a concurrent RE-PAUSE may land between the CAS and the

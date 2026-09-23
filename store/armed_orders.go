@@ -429,7 +429,50 @@ func (s *ArmedOrderStore) SettleNeverSent(signalID, reason string) (int64, error
 // terminal state change is never silent).
 func (s *ArmedOrderStore) SetState(id int64, state, reason string) error {
 	return s.db.Model(&ArmedOrderDB{}).Where("id = ?", id).
-		Updates(map[string]any{"state": state, "state_reason": reason}).Error
+		Updates(map[string]any{"state": state, "state_reason": reasonKeepingWithdraw(reason)}).Error
+}
+
+// ── W-EXEC-TRUTH W0 (f) — a withdrawn row keeps its withdraw head ──────────
+//
+// The withdraw writes "withdraw: <why>" as the row's reason when it asks
+// NinjaTrader to cancel a resting entry. Every later lifecycle write — a
+// re-request, a received order_update, a snapshot confirm, a placement
+// receipt — used to REPLACE the reason, and the withdraw view (which finds a
+// job's rows by that head) lost the row the moment its cancel progressed.
+// The store now owns the rule: a row whose reason starts with the withdraw
+// prefix keeps it, and each later reason is appended after the separator —
+// an audit trail with a named bound: at most CANCEL_REREQUEST_MAX re-request
+// appends per process boot (default 5; RequestCancel restarts the count on a
+// new boot, B2, so N boots allow N×5) plus one terminal write (the
+// order_update, the snapshot confirm or a placement receipt) — each append a
+// few dozen bytes. Plain SQL (CASE, LIKE, ||) so it holds on both store
+// dialects.
+const (
+	WithdrawReasonPrefix = "withdraw: "
+	WithdrawReasonSep    = " ‖ "
+)
+
+// reasonKeepingWithdraw is the state_reason value every lifecycle writer
+// uses.
+func reasonKeepingWithdraw(reason string) any {
+	return gorm.Expr("CASE WHEN state_reason LIKE ? THEN state_reason || ? || ? ELSE ? END",
+		WithdrawReasonPrefix+"%", WithdrawReasonSep, reason, reason)
+}
+
+// ListWithdrawn lists the rows a withdraw with exactly this head asked to
+// cancel: the reason IS the head, or starts with the head and the separator.
+// Never a bare prefix — "…job job1" must not match "…job job10".
+func (s *ArmedOrderStore) ListWithdrawn(head string) ([]ArmedOrderDB, error) {
+	var out []ArmedOrderDB
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("armed_orders: no ledger")
+	}
+	esc := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(head + WithdrawReasonSep)
+	err := s.db.Where("state_reason = ? OR state_reason LIKE ? ESCAPE '\\'", head, esc+"%").Order("id").Find(&out).Error
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // BeginPlacement persists identity BEFORE the socket write. A received reply can
@@ -478,7 +521,7 @@ func (s *ArmedOrderStore) ApplyPlacementReceipt(traderID, signalID, state, reaso
 	default:
 		return fmt.Errorf("armed_orders: unsupported placement receipt %q", state)
 	}
-	return q.Updates(map[string]any{"state": state, "state_reason": reason}).Error
+	return q.Updates(map[string]any{"state": state, "state_reason": reasonKeepingWithdraw(reason)}).Error
 }
 
 // RequestCancel moves a row to cancel_pending and records that a cancel was
@@ -505,7 +548,7 @@ func (s *ArmedOrderStore) RequestCancel(id int64, reason string, nowMs int64) er
 	}
 	upd := map[string]any{
 		"state":                StateCancelPending,
-		"state_reason":         reason,
+		"state_reason":         reasonKeepingWithdraw(reason),
 		"cancel_attempts":      attempts,
 		"cancel_attempts_boot": ProcessBootID(),
 	}
@@ -524,7 +567,7 @@ func (s *ArmedOrderStore) ConfirmCancel(id int64, snapshotID int64, reason strin
 	}
 	return s.db.Model(&ArmedOrderDB{}).Where("id = ?", id).Updates(map[string]any{
 		"state":                      StateCancelled,
-		"state_reason":               reason,
+		"state_reason":               reasonKeepingWithdraw(reason),
 		"cancel_settled_snapshot_id": snapshotID,
 	}).Error
 }

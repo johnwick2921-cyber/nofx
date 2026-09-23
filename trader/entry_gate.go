@@ -414,7 +414,10 @@ func (at *AutoTrader) entryGateForArm(plan *kernel.ActivePlan, sc kernel.PlanSce
 // EntryGate. livePrice is the execution-time market price (the caller resolves
 // it; ≤0 skips the R:R/min-SL legs, fail-open). All plan inputs resolve from
 // the trader's ActivePlan; absent plan → those legs skip.
-func (at *AutoTrader) entryGateForDecision(d *kernel.Decision, livePrice float64) (string, bool) {
+//
+// W-EXEC-TRUTH W0: it takes the caller's clock (admitEntry passes it; the
+// wall-clock wrapper had no production caller left and was removed).
+func (at *AutoTrader) entryGateForDecisionAt(d *kernel.Decision, livePrice float64, now time.Time) (string, bool) {
 	if d == nil {
 		return "", false
 	}
@@ -441,7 +444,6 @@ func (at *AutoTrader) entryGateForDecision(d *kernel.Decision, livePrice float64
 	// with no value silently got a DIFFERENT floor from the arm seam's 2.0.
 	// Both paths now call the same resolver.
 	minRR := at.armMinRRFor(nil)
-	now := time.Now()
 	session := ""
 	if s, ok := at.sessionRegistry(now).ActiveSession(now); ok {
 		session = s.Name

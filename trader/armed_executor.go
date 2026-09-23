@@ -372,6 +372,12 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 	// whose scenario is currently declined is retired here, before D4's slot
 	// check and before the placement pass — never placed. OFF → no-op.
 	at.oneSetupRetireDeclined(osCycle, plan, ledger, now)
+	// W-EXEC-TRUTH W0 (G1) — the legs THIS pass's authoring gates admitted.
+	// The placement below places only these: a leg a gate refused this pass
+	// (daily force-flat, invalidation, strict, R:R, min-SL, HTF veto, quality,
+	// an unmet wait_confirm, a kind refusal, split capacity…) stays armed and
+	// is NOT placed — it was, by any later pass, before this wave.
+	admitted := armAdmission{}
 	for _, sc := range kernel.OneSetupOrder(doc.Scenarios, osCycle.allowed()) {
 		if sc.Arm == nil || !sc.Arm.Enabled {
 			continue
@@ -777,6 +783,7 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 				continue
 			}
 
+			admitted.admit(plan.PlanID, sc.ID, li) // G1: every authoring gate passed THIS pass
 			if geometry != nil {
 				geometry.Quantity = 1
 				geometry.Reason = "admitted"
@@ -888,7 +895,7 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 
 	// PHASE 2 — placement engine (armed → working within the tick band), wire
 	// cancel/modify, and the order_update event machine.
-	at.runArmedPlacementAt(bars, plan.BirthMs, now)
+	at.runArmedPlacementAt(bars, plan.BirthMs, now, admitted)
 }
 
 // biasDirectionFor normalizes the plan bias direction ("" → empty).
@@ -1154,14 +1161,12 @@ func (at *AutoTrader) armedLines() string {
 	return b.String()
 }
 
-// runArmedPlacement drives the armed→place_pending transition, the churn guard, and
-// the order_update event machine. No-op unless a TCPTrader is bound.
+// runArmedPlacementAt drives the armed→place_pending transition, the churn
+// guard, and the order_update event machine. No-op unless a TCPTrader is bound.
 // sinceMs = the plan's birth (the E7 stop-entry fallback window is measured
-// from it).
-// runArmedPlacement is the wall-clock ENTRY POINT (A28 / class 60): it owns the
-// clock and delegates. Everything beneath takes the clock as an argument.
+// from it). It takes the clock as an argument (A28 / class 60).
 //
-// ADDED 2026-09-10. maybeManageArmedOrdersAt already received `now` and then
+// ADDED 2026-09-10 (as the wall-clock wrapper runArmedPlacement + this *At). maybeManageArmedOrdersAt already received `now` and then
 // dropped it here — this function read time.Now() itself. In production the two
 // are microseconds apart and nothing was wrong; the SEAM was broken, which meant
 // no test could control the arm path's clock. TestSplitArmWritesTwoLedgerRows
@@ -1174,11 +1179,13 @@ func (at *AutoTrader) armedLines() string {
 // maybeManageArmedOrders was registered and its callee was not, which is why the
 // lint stayed green across the whole failure: a seam is only as deep as the
 // chain that honours it.
-func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
-	at.runArmedPlacementAt(bars, sinceMs, time.Now())
-}
-
-func (at *AutoTrader) runArmedPlacementAt(bars []market.Kline, sinceMs int64, now time.Time) {
+//
+// admitted is the authoring pass's
+// verdict for THIS pass (W-EXEC-TRUTH W0 G1): only a leg in it is placed, and
+// nil admits NOTHING (fail-closed, CTO M2). The production caller,
+// maybeManageArmedOrdersAt, passes its set; the wall-clock wrapper
+// runArmedPlacement was removed (no production caller — A29).
+func (at *AutoTrader) runArmedPlacementAt(bars []market.Kline, sinceMs int64, now time.Time, admitted armAdmission) {
 	nt := at.armedTrader()
 	if nt == nil {
 		return
@@ -1268,6 +1275,9 @@ func (at *AutoTrader) runArmedPlacementAt(bars []market.Kline, sinceMs int64, no
 					at.refuseMaintenanceHold(r, holdReason, "stop-entry", now, nil)
 					continue
 				}
+				if !at.armAdmitted(r, side, price, now, admitted) {
+					continue // a refusal, never a cancellation — the row stays armed
+				}
 				if !contract.Allowed() || placedThisPass {
 					at.refuseContract(r, contract, placedThisPass, "stop", now)
 					continue
@@ -1308,6 +1318,9 @@ func (at *AutoTrader) runArmedPlacementAt(bars []market.Kline, sinceMs int64, no
 				if held {
 					at.refuseMaintenanceHold(r, holdReason, "limit", now, nil)
 					continue
+				}
+				if !at.armAdmitted(r, side, price, now, admitted) {
+					continue // a refusal, never a cancellation — the row stays armed
 				}
 				if !contract.Allowed() || placedThisPass {
 					at.refuseContract(r, contract, placedThisPass, "limit", now)
@@ -1352,8 +1365,11 @@ func (at *AutoTrader) runArmedPlacementAt(bars []market.Kline, sinceMs int64, no
 	at.confirmPendingPlacements(ledger, now)
 	at.confirmPendingCancels(ledger, func(sid string) error {
 		// A re-request is still a cancel. If the entry filled while the first
-		// cancel was in flight, re-sending would reach the protections.
-		at.cancelSignalIfSafe(nt.CancelOrder, sid, "cancel re-request", now)
+		// cancel was in flight, re-sending would reach the protections — and a
+		// refused re-request is not recorded as one (W-EXEC-TRUTH W0 (f)).
+		if !at.cancelSignalIfSafe(nt.CancelOrder, sid, "cancel re-request", now) {
+			return errCancelRefused
+		}
 		return nil
 	}, now)
 	// D4 — the once-per-boot three-state reconciliation, run at the first cycle

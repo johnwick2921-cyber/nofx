@@ -2,6 +2,7 @@ package trader
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -351,10 +352,21 @@ func (at *AutoTrader) refuseSlot(r store.ArmedOrderDB, v slotVerdict, what strin
 //
 // A10/class 23: it is telemetry-shaped — a failed read WARNs and returns; it
 // never stops the loop and never promotes a row on ignorance.
+// errCancelRefused is what a re-request's cancelFn returns when the filled-arm
+// guard refused the cancel: nothing was sent (W-EXEC-TRUTH W0 (f), canon 35).
+var errCancelRefused = errors.New("cancel refused by the filled-arm guard")
+
 func (at *AutoTrader) confirmPendingCancels(ledger *store.ArmedOrderStore, cancelFn func(string) error, now time.Time) (settled, stillPending, reRequested int) {
 	if at == nil || ledger == nil {
 		return 0, 0, 0
 	}
+	// W-EXEC-TRUTH W0 (f): the armed pass (runCycle) and the withdraw
+	// (monitorTick) both settle cancels — never both at once, or one re-request
+	// is sent and counted twice.
+	if !at.cancelConfirmMu.TryLock() {
+		return 0, 0, 0
+	}
+	defer at.cancelConfirmMu.Unlock()
 	rows, err := ledger.ListCancelPending(at.id)
 	if err != nil {
 		at.logWarnf("🧾 cancel confirm: ledger read failed — settling nothing this cycle: %v", err)
@@ -407,7 +419,14 @@ func (at *AutoTrader) confirmPendingCancels(ledger *store.ArmedOrderStore, cance
 				r.Scenario, shortID(r.SignalID), reqAge.Round(time.Second), why)
 			continue
 		}
-		if cerr := cancelFn(r.SignalID); cerr != nil {
+		if cerr := cancelFn(r.SignalID); errors.Is(cerr, errCancelRefused) {
+			// The filled-arm guard refused it: nothing was sent, so nothing is
+			// recorded or counted as a re-request (canon 35). The row stays
+			// cancel_pending and the guard is asked again next pass.
+			at.logWarnf("🧾 cancel re-request REFUSED %s signal=%s after %s — not sent, not recorded (%s)",
+				r.Scenario, shortID(r.SignalID), reqAge.Round(time.Second), why)
+			continue
+		} else if cerr != nil {
 			at.logWarnf("🧾 cancel re-request SEND FAILED %s signal=%s: %v", r.Scenario, shortID(r.SignalID), cerr)
 		}
 		// The re-request is recorded whether or not the SEND returned nil —

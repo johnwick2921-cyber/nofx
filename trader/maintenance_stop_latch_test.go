@@ -35,6 +35,7 @@ func TestStopEntryHoldRefusalNeverCancelsTheSiblingArm(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	waitAddonRegistered(t, s) // CTO M7: the producer must not race the accept
 	defer conn.Close()
 	go func() {
 		for {
@@ -67,7 +68,8 @@ func TestStopEntryHoldRefusalNeverCancelsTheSiblingArm(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	at.runArmedPlacementAt([]market.Kline{{Close: 29599}}, now.Add(-time.Hour).UnixMilli(), now)
+	at.runArmedPlacementAt([]market.Kline{{Close: 29599}}, now.Add(-time.Hour).UnixMilli(), now,
+		armAdmission{armAdmitKey("latch", "S1", 0): true, armAdmitKey("latch", "S2", 0): true}) // the authoring pass admitted both (G1)
 
 	for _, r := range []store.ArmedOrderDB{stop, sibling} {
 		var got store.ArmedOrderDB

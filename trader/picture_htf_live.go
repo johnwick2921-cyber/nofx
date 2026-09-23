@@ -57,6 +57,15 @@ func (at *AutoTrader) registerPictureHtf() {
 	pictureHtfTraders.Store(at.id, at)
 }
 
+// pictureHtfResolvedConfig is the trader's Picture knobs with defaults
+// applied — the one resolution the evaluator and the plan card both read.
+func (at *AutoTrader) pictureHtfResolvedConfig() store.PictureHtfConfig {
+	if sc := at.GetStrategyConfig(); sc != nil && sc.DayPlan != nil && sc.DayPlan.PictureHtf != nil {
+		return store.PictureHtfResolved(sc.DayPlan.PictureHtf)
+	}
+	return store.PictureHtfResolved(nil)
+}
+
 // pictureHtfEvaluator lazily builds (or rebuilds, when the strategy knobs
 // change) the trader's two-picture evaluator. Returns nil when the mode is
 // absent/disabled or the trader is not on the NT8 path.
@@ -66,12 +75,7 @@ func (at *AutoTrader) pictureHtfEvaluator() *PictureHtfEvaluator {
 	}
 	at.pictureHtfMu.Lock()
 	defer at.pictureHtfMu.Unlock()
-	var cfg store.PictureHtfConfig
-	if sc := at.GetStrategyConfig(); sc != nil && sc.DayPlan != nil && sc.DayPlan.PictureHtf != nil {
-		cfg = store.PictureHtfResolved(sc.DayPlan.PictureHtf)
-	} else {
-		cfg = store.PictureHtfResolved(nil)
-	}
+	cfg := at.pictureHtfResolvedConfig()
 	sig := fmt.Sprintf("%t|%.5f|%d|%d|%d|%d|%.4f",
 		cfg.Enabled, cfg.TickSize, cfg.PivotWindow, cfg.SwingLookback, cfg.EntryWindowSec, cfg.FreshnessSec, cfg.MinRR)
 	if at.pictureHtf != nil && at.pictureHtfSig == sig {
@@ -109,7 +113,10 @@ func (at *AutoTrader) pictureHtfTickFallback(now time.Time) {
 // pictureHtfBootLine is the mode's boot line: mode, rule version, SIM status,
 // native-data readiness, and the AddOn capability verdict — READ from the
 // live far side, never assumed.
-func (at *AutoTrader) pictureHtfBootLine() string {
+func (at *AutoTrader) pictureHtfBootLine() string { return at.pictureHtfBootLineAt(time.Now()) }
+
+// pictureHtfBootLineAt is the 📷 boot line on an injected clock.
+func (at *AutoTrader) pictureHtfBootLineAt(now time.Time) string {
 	ev := at.pictureHtfEvaluator()
 	mode := "off"
 	if ev != nil && ev.Enabled() {
@@ -121,8 +128,15 @@ func (at *AutoTrader) pictureHtfBootLine() string {
 	if pictureHtfCapabilityProven(at) {
 		cap = "proven"
 	}
-	return fmt.Sprintf("picture-htf: mode=%s rule=v1 %s data=%s addon=%s (build=%q, need ≥ %s)",
-		mode, sim, native, cap, at.farSideBuildID(), ntwire.MinAddonBuildPictureHtf)
+	// W-EXEC-TRUTH W0 (CTO Q6): the plan-mode verdict, READ — under strict
+	// Picture is refused until W5 makes it a Day Plan scenario, and the line
+	// says so in those words.
+	planGate := "admitted (plan mode is not strict)"
+	if r := at.pictureStrictVisible(now); r != "" {
+		planGate = r
+	}
+	return fmt.Sprintf("picture-htf: mode=%s rule=v1 %s data=%s addon=%s (build=%q, need ≥ %s) plan_gate=%s",
+		mode, sim, native, cap, at.farSideBuildID(), ntwire.MinAddonBuildPictureHtf, planGate)
 }
 
 // logPictureHtfBootLine prints the boot line at trader start.

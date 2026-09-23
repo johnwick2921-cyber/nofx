@@ -52,6 +52,7 @@ func newDropWire(t *testing.T) *dropWire {
 	if err != nil {
 		t.Fatal(err)
 	}
+	waitAddonRegistered(t, s) // CTO M7: the producer must not race the accept
 	top := ntwire.MinAddonBuildPictureHtf
 	if err := ntwire.WriteFrame(c, ntwire.FrameHeartbeat, ntwire.HeartbeatPayload{BuildID: top}); err != nil {
 		t.Fatal(err)

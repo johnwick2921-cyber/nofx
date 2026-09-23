@@ -1,6 +1,7 @@
 package trader
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -48,6 +49,24 @@ type PictureHtfEvaluator struct {
 	// holdRefusedKey dedupes the maintenance-hold refusal (count + WARN) to
 	// once per opportunity rather than once per frame.
 	holdRefusedKey string
+
+	// levelsSymbol is the symbol the levels snapshot belongs to (W-EXEC-TRUTH
+	// W0 defect 4: the snapshot used to be shared across symbols).
+	levelsSymbol string
+
+	// pendingAdmission is the evidence the evaluator admitted this
+	// opportunity on, handed to the send's re-admission within the SAME call
+	// (both run under e.mu).
+	pendingAdmission *pictureAdmission
+}
+
+// ownsSymbol reports whether a frame's symbol is this trader's instrument.
+// The live sink fans every symbol's frames out to every trader; an MNQ trader
+// evaluating ES bars claimed ES opportunities and sent them on MNQ with ES
+// geometry (W-EXEC-TRUTH W0 defect 4).
+func (e *PictureHtfEvaluator) ownsSymbol(symbol string) bool {
+	_, own := e.at.latchScope()
+	return instrumentRoot(symbol) != "" && instrumentRoot(symbol) == instrumentRoot(own)
 }
 
 // NewPictureHtfEvaluator builds the evaluator from the resolved strategy knob.
@@ -62,7 +81,10 @@ func (e *PictureHtfEvaluator) Enabled() bool { return e != nil && e.enabled }
 // concrete NT8 market-entry method (with the before-send persistence callback);
 // tests replace it to prove the admission sequence. The seam receives the
 // already-claimed opportunity row and the computed geometry.
-var pictureHtfSubmitSeam = func(e *PictureHtfEvaluator, row *store.PictureHtfOpportunityDB, stopPx, targetPx, qty float64) error {
+//
+// now is the EVALUATION's clock (W-EXEC-TRUTH W0, class 60): the send-time
+// re-checks read the same instant the evaluator judged, never the wall.
+var pictureHtfSubmitSeam = func(e *PictureHtfEvaluator, row *store.PictureHtfOpportunityDB, stopPx, targetPx, qty float64, now time.Time) error {
 	return fmt.Errorf("picture_htf submit seam unbound (the NT8 market-entry method is wired in the next wave commit)")
 }
 
@@ -100,6 +122,10 @@ func (e *PictureHtfEvaluator) bars(symbol, tf string, n int, nowMs int64) []mark
 
 // rebuildLevels recomputes the 4H body-pivot snapshot from completed bars.
 func (e *PictureHtfEvaluator) rebuildLevels(symbol string, nowMs int64) {
+	if e.levelsSymbol != symbol {
+		// the snapshot is per symbol — never another instrument's levels
+		e.levels, e.levelsEval4H, e.levelsSymbol = nil, 0, symbol
+	}
 	bars := e.bars(symbol, "4h", e.cfg.PivotWindow+4, nowMs)
 	if len(bars) == 0 {
 		return
@@ -122,6 +148,9 @@ func (e *PictureHtfEvaluator) OnBars(symbol, tf string, bars []market.Kline, rec
 	if tf != "4h" && tf != "1h" && tf != "5m" {
 		return
 	}
+	if !e.ownsSymbol(symbol) {
+		return // another instrument's frame — never this trader's opportunity
+	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if tf == "5m" {
@@ -136,6 +165,9 @@ func (e *PictureHtfEvaluator) OnBars(symbol, tf string, bars []market.Kline, rec
 func (e *PictureHtfEvaluator) Evaluate(symbol string, now time.Time) EvaluateResult {
 	if e == nil || !e.enabled {
 		return EvaluateResult{Stage: "watching"}
+	}
+	if !e.ownsSymbol(symbol) {
+		return EvaluateResult{Stage: "watching", Reason: "not this trader's instrument"}
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -258,14 +290,12 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 	if risk > 0 {
 		rr = reward / risk
 	}
-	minRR := e.cfg.MinRR
-	if minRR <= 0 {
-		if sc := e.at.GetStrategyConfig(); sc != nil {
-			minRR = sc.RiskControl.MinRiskRewardRatio
-			if minRR <= 0 {
-				minRR = store.SafeDefaultMinRiskReward
-			}
-		}
+	// W-EXEC-TRUTH W0 (Q7, D12): the floor is max(Picture's own knob, the
+	// strategy floor) — a knob below the strategy floor never loosens it — and
+	// with no strategy config there is no floor, so the opportunity refuses.
+	minRR, floorOK := e.at.pictureMinRR(e.cfg.MinRR)
+	if !floorOK {
+		return e.refuse(oppKey, "refused", "no R:R floor resolvable (no strategy config) — fail-closed", stall)
 	}
 	if rr < minRR {
 		return e.refuse(oppKey, "refused", fmt.Sprintf("nearest opposing zone offers %.2fR; the configured minimum is %.2fR — the nearer zone is never skipped", rr, minRR), stall)
@@ -297,6 +327,21 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 	if reason, held := MaintenanceHeld(); held {
 		return e.refuseHeld(oppKey, reason, stall)
 	}
+	// W-EXEC-TRUTH W0 (a) — THE ONE ADMISSION GATE, before the claim. A
+	// refusal here writes NO row: a transient gate (a pause, a feed flap, the
+	// dead-man) must not kill the hour's opportunity for good — the next frame
+	// asks again. Counted and logged once per change (admitRefuse).
+	adm := &pictureAdmission{
+		EntryRef: entryRef, LatestClose: e.latestClose(symbol, nowMs), Stop: stopPx, Target: targetPx,
+		ATR5m: armSeamATR5mFromBars(fiveM), KnobMinRR: e.cfg.MinRR,
+	}
+	if refusal, refused := e.at.admitEntry(admitIntent{
+		Path: admitPicture, Symbol: symbol, Action: "open_" + breakVerdict.Direction, Now: now,
+		Key: oppKey, Price: entryRef, Picture: adm,
+	}); refused {
+		return EvaluateResult{Stage: "watching", Reason: "admission refused: " + refusal, OppKey: oppKey, Momentum: stall}
+	}
+	e.pendingAdmission = adm
 	_, fresh, err := e.at.store.PictureHtfClaim(row)
 	if err != nil {
 		return EvaluateResult{Stage: "watching", Reason: "store claim failed: " + err.Error(), OppKey: oppKey, Momentum: stall}
@@ -311,11 +356,15 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 	if err != nil || !won {
 		return EvaluateResult{Stage: "watching", Reason: "submission ownership lost", OppKey: oppKey, Momentum: stall}
 	}
+	// W-EXEC-TRUTH W0 defect 2: the claim id rides into the send, whose ledger
+	// stamp is refused for any other owner. It was never assigned, so every
+	// stamp was refused and Picture's wire path was dead.
+	row.SignalID = signalID
 	// The atomic owner sends. The seam is the production market-entry method
 	// (wired with the next wave commit); until then it returns unbound and the
 	// row stays place_pending for the reconciliation sweep — never a blind
 	// resend.
-	if err := pictureHtfSubmitSeam(e, row, stopPx, targetPx, 0); err != nil {
+	if err := pictureHtfSubmitSeam(e, row, stopPx, targetPx, 0, now); err != nil {
 		// A maintenance-hold refusal PROVES nothing reached the wire: the
 		// permit is taken before the ledger stamp and the send, and a queued
 		// entry dropped under the hold is never written. So the row settles
@@ -323,7 +372,17 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 		if ntTrader.IsMaintenanceHold(err) {
 			return e.refuseHeld(oppKey, err.Error(), stall)
 		}
-		// The send failed AFTER the claim — the row stays place_pending and
+		// W-EXEC-TRUTH W0: the submission stamp is written in beforeSend, the
+		// last step before the wire. No stamp = the send never started, so the
+		// row settles refused — provably unsent — instead of an ambiguous
+		// place_pending that blocks every later Picture entry and the
+		// installation gate.
+		// An explicit "a write had started" (the hold's ambiguous drop) is
+		// evidence the other way and always stays pending.
+		if cur, ok, gerr := e.at.store.PictureHtfGet(oppKey); gerr == nil && ok && cur.SubmittedAt == 0 && !errors.Is(err, ntwire.ErrEntryDropAmbiguous) {
+			return e.refuse(oppKey, "refused", "never sent — "+err.Error(), stall)
+		}
+		// The send failed AFTER the stamp — the row stays place_pending and
 		// blocks re-entry until reconciled against NT8 orders (addendum #4).
 		return EvaluateResult{Stage: "submitted", Reason: "send ambiguous: " + err.Error(), OppKey: oppKey, Momentum: stall}
 	}
@@ -344,7 +403,24 @@ func (e *PictureHtfEvaluator) refuseHeld(oppKey, reason string, stall *kernel.Mo
 func (e *PictureHtfEvaluator) refuse(oppKey, stage, reason string, stall *kernel.MomentumStall) EvaluateResult {
 	if e.at != nil && e.at.store != nil && oppKey != "" {
 		_, _, _ = e.at.store.PictureHtfClaim(&store.PictureHtfOpportunityDB{OppKey: oppKey, TraderID: e.at.id, Stage: stage, StageReason: reason})
-		_ = e.at.store.PictureHtfTransition(oppKey, stage, reason)
+		// W-EXEC-TRUTH W0 (Q8): only a row no send has started may be refused.
+		_, _ = e.at.store.PictureHtfRefuse(oppKey, stage, reason)
 	}
 	return EvaluateResult{Stage: stage, Reason: reason, OppKey: oppKey, Momentum: stall}
+}
+
+// latestClose is the newest 1m close for symbol (forming allowed — it is the
+// price a market entry would meet), 0 when unknown (W-EXEC-TRUTH W0 Q19).
+func (e *PictureHtfEvaluator) latestClose(symbol string, nowMs int64) float64 {
+	if market.FuturesBarsProvider == nil {
+		return 0
+	}
+	raw := market.FuturesBarsProvider(symbol, "1m", 2)
+	if len(raw) == 0 {
+		return 0
+	}
+	if b := raw[len(raw)-1]; b.OpenTime <= nowMs {
+		return b.Close
+	}
+	return 0
 }

@@ -114,6 +114,10 @@ func (at *AutoTrader) traderScope(traderID string) (account, symbol string, ok b
 		a, s := at.latchScope()
 		return a, s, true
 	}
+	if other, found := runningTrader(traderID); found {
+		a, s := other.latchScope()
+		return a, s, true
+	}
 	if v, found := pictureHtfTraders.Load(traderID); found {
 		if other, _ := v.(*AutoTrader); other != nil {
 			a, s := other.latchScope()
@@ -163,8 +167,7 @@ func (at *AutoTrader) entryLatchLedgers() ([]string, error) {
 		return nil, fmt.Errorf("picture ledger: %w", err)
 	}
 	for _, p := range prows {
-		stage := strings.ToLower(strings.TrimSpace(p.Stage))
-		if stage != store.StateWorking && !(stage == store.StatePlacePending && p.SubmittedAt > 0) {
+		if !store.PictureSendStarted(p) {
 			continue
 		}
 		if strings.TrimSpace(p.Account) != "" && !strings.EqualFold(p.Account, acct) {
