@@ -210,9 +210,9 @@ func TestArmedSourcePinAcrossVersions(t *testing.T) {
 // must come out untouched (source_ref, version, prices, deadline).
 func TestArmedRowNeverChangesOpportunity(t *testing.T) {
 	for _, st0 := range []struct{ state, signal string }{
-		{StateArmed, ""},         // the armed-branch overwrite (armed_orders.go armed branch)
-		{StateCancelled, ""},     // the re-authorize-in-place branch
-		{StateFilled, "sig-1"},   // the next-placement mint
+		{StateArmed, ""},       // the armed-branch overwrite (armed_orders.go armed branch)
+		{StateCancelled, ""},   // the re-authorize-in-place branch
+		{StateFilled, "sig-1"}, // the next-placement mint
 	} {
 		st := NewArmedOrderStore(newArmedTestDB(t))
 		a := pictureRow(1, "P1", "strat|sim101|MNQ|long|support|1|2", StateArmed, "")
