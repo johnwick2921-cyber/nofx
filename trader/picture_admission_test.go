@@ -3,10 +3,12 @@ package trader
 import (
 	"context"
 	"net"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"nofx/kernel"
 	"nofx/market"
 	ntwire "nofx/provider/ninjatrader"
 	"nofx/store"
@@ -97,21 +99,24 @@ func TestPictureRRFloorFailsClosedWithoutAConfig(t *testing.T) {
 	}
 }
 
-// Q6 — under plan_mode=strict Picture is REFUSED, and the refusal is VISIBLE:
-// the evaluation says so and the 📷 boot line carries the same text.
-func TestPictureRefusedUnderStrictVisibly(t *testing.T) {
+// W5 (was Q6) — under plan_mode=strict Picture is NO LONGER refused: it enters
+// as a Day Plan scenario, so the pre-claim admission lets it through to the
+// hand-off seam, and the 📷 boot line READS the route and the plan mode —
+// never a "refused under strict" text.
+func TestPictureAdmittedUnderStrictAsADayPlanScenario(t *testing.T) {
 	env := admittedPictureEnv(t, store.PictureHtfConfig{Enabled: true, MinRR: 2.5})
 	env.at.config.StrategyConfig.DayPlan.PlanMode = "strict"
 	env.eval.markFresh5mReceivedAt(env.now)
 	res := env.eval.Evaluate("MNQ", env.now)
-	if len(env.submits) != 0 {
-		t.Fatalf("strict must refuse Picture, got %d submission(s)", len(env.submits))
+	if len(env.submits) != 1 {
+		t.Fatalf("strict must admit Picture to the hand-off (it is a Day Plan scenario since W5), got %d submission(s): %+v", len(env.submits), res)
 	}
-	if !strings.Contains(res.Reason, PictureStrictRefusal) {
-		t.Fatalf("the evaluation must SAY why: %+v", res)
+	line := env.at.pictureHtfBootLineAt(env.now)
+	if !strings.Contains(line, "plan_gate="+PictureRouteDayPlan+" · plan_mode=strict") {
+		t.Fatalf("the 📷 boot line must READ the route and the plan mode: %q", line)
 	}
-	if line := env.at.pictureHtfBootLineAt(env.now); !strings.Contains(line, PictureStrictRefusal) {
-		t.Fatalf("the 📷 boot line must carry the strict refusal: %q", line)
+	if strings.Contains(line, "refused under strict") {
+		t.Fatalf("the 📷 boot line must not claim a strict refusal any more: %q", line)
 	}
 }
 
@@ -177,11 +182,18 @@ func TestPictureUnsentSendSettlesRefused(t *testing.T) {
 	}
 }
 
-// DEFECT 2 + the CTO's pin — the REAL send: the claim id reaches the stamp, so
-// Picture's wire path works, and a Picture claim does NOT latch its own send
-// (the entry latch is wired and the claim row is place_pending, unstamped).
-func TestPictureClaimDoesNotLatchItsOwnSend(t *testing.T) {
+// DEFECT 2 + the CTO's pin, re-pointed by W5 — the REAL path from the
+// PRODUCTION seam: Evaluate claims the opportunity and the bound seam (the Day
+// Plan hand-off) records it as a machine scenario; the evaluator reports the
+// seam's word (F1: "planned", never "submitted" — nothing was sent), the row
+// settles planned under the claim id, and NO frame reaches the wire from the
+// evaluator. Then the one door to the wire, the armed pass, places the
+// scenario as ONE LIMIT frame through the WIRED entry latch: the Picture
+// claim never latches its own scenario's order.
+func TestPictureClaimDoesNotLatchItsOwnScenario(t *testing.T) {
+	prod := pictureHtfSubmitSeam
 	env := admittedPictureEnv(t, store.PictureHtfConfig{Enabled: true, MinRR: 2.5})
+	pictureHtfSubmitSeam = prod // the harness recorder out; the production hand-off in (its cleanup restores prod)
 	s := ntwire.NewTCPServer(nil)
 	s.SetAddrForTest("127.0.0.1:0")
 	s.SetAccountsList([]ntwire.AccountInfo{{Name: "Sim101", IsSim: true}}, "Sim101")
@@ -196,61 +208,98 @@ func TestPictureClaimDoesNotLatchItsOwnSend(t *testing.T) {
 	}
 	waitAddonRegistered(t, s) // CTO M7: the producer must not race the accept
 	t.Cleanup(func() { _ = conn.Close() })
-	frames := make(chan ntwire.FrameType, 64)
-	go func() {
-		for {
-			f, err := ntwire.ReadFrame(conn)
-			if err != nil {
-				return
-			}
-			frames <- f.Type
-		}
-	}()
-	if err := ntwire.WriteFrame(conn, ntwire.FrameHeartbeat, ntwire.HeartbeatPayload{BuildID: ntwire.MinAddonBuildPictureHtf}); err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < 400 && !ntwire.FarSideProven(s.FarSideBuildID(), ntwire.MinAddonBuildPictureHtf); i++ {
-		time.Sleep(5 * time.Millisecond)
-	}
+	ev := make(chan zoneFrame, 64)
+	done := make(chan struct{})
+	t.Cleanup(func() { close(done) })
+	go readZoneFrames(conn, ev, done)
 	nt := ntTrader.NewTCPTrader(s, "MNQ", "Sim101")
 	env.at.trader = nt
 	env.at.config.NinjaTraderSymbol = "MNQ"
 	wireNT8EntryLatch(env.at, nt)
+	if !nt.EntryLatchWired() {
+		t.Fatal("fixture: the entry latch must be wired as production wires it")
+	}
 	s.OrderSnapshots().PutAt(ntwire.OrderSnapshotPayload{Account: "Sim101", Orders: []ntwire.NT8Order{}}, time.Now())
-	pictureHtfSubmitSeam = pictureHtfSend
+	// The Picture ladders on the tick grid, and a 1m tape whose newest close
+	// (101.50) is the entry: the zone is the one price 101.50.
+	passAt := env.now.Add(time.Second) // inside the 10 s eligibility window
+	oneMin := zoneTape(101.5, env.now, 0)
+	fourH, oneH, fiveM := pictureBars4H(), pictureBarsH1(), pictureOnGrid5M()
+	market.FuturesBarsProvider = func(_ string, tf string, count int) []market.Kline {
+		switch tf {
+		case "4h":
+			return tailOf(fourH, count)
+		case "1h":
+			return tailOf(oneH, count)
+		case "5m":
+			return tailOf(fiveM, count)
+		case "1m":
+			return tailOf(oneMin, count)
+		}
+		return nil
+	}
+	env.at.markPictureRunEpoch(env.now)
+	t.Cleanup(env.at.clearPictureRunEpoch)
+	r := &zoneRig{t: t, at: env.at, st: env.st, srv: s, conn: conn, ev: ev, now: passAt}
 
 	env.eval.markFresh5mReceivedAt(env.now)
-	res := env.eval.Evaluate("MNQ", env.now) // the PRODUCTION call site → claim → the real send
-	if res.Stage != "submitted" || strings.Contains(res.Reason, "ambiguous") {
-		t.Fatalf("the Picture send must reach the wire (claim id stamped, own claim not latched): %+v", res)
+	res := env.eval.Evaluate("MNQ", env.now) // the PRODUCTION call site → claim → the production seam
+	if res.Stage != store.PictureStagePlanned || res.Reason != "" || res.OppKey == "" {
+		t.Fatalf("the evaluator must report the seam's word %q after a clean hand-off (F1 — nothing was submitted): %+v", store.PictureStagePlanned, res)
 	}
-	sent := false
-	for deadline := time.After(2 * time.Second); !sent; {
-		select {
-		case f := <-frames:
-			sent = f == ntwire.FrameSignal
-		case <-deadline:
-			t.Fatal("no signal frame reached the wire")
-		}
+	if sigs, _ := r.drain(); len(sigs) != 0 {
+		t.Fatalf("the evaluator never reaches the wire — %d frame(s): %+v", len(sigs), sigs)
 	}
-	got, _, _ := env.st.PictureHtfGet(res.OppKey)
-	if got.SubmittedAt == 0 || got.SignalID == "" || strings.HasPrefix(got.SignalID, "picture-htf-") {
-		t.Fatalf("the broker signal must be stamped on the row: %+v", got)
+	row, _, _ := env.st.PictureHtfGet(res.OppKey)
+	if row == nil || row.Stage != store.PictureStagePlanned || row.SubmittedAt != 0 || row.SignalID != "picture-htf-"+strconv.FormatInt(env.now.UnixMilli(), 10) {
+		t.Fatalf("the row settles planned under the claim id, never stamped as sent: %+v", row)
+	}
+
+	installActivePlanProviderAt(env.at, env.st, func() time.Time { return passAt })
+	env.at.maybeManageArmedOrdersAt(nil, passAt) // the ONE door to the wire
+	sigs, _ := r.drain()
+	if len(sigs) != 1 {
+		t.Fatalf("the armed pass must place the Picture scenario once — its own claim must not latch it: %d frame(s) %+v", len(sigs), sigs)
+	}
+	limitOnly(t, sigs)
+	plan := kernel.ActivePlanFor(env.at.id, env.at.futuresSymbol())
+	if plan == nil {
+		t.Fatal("fixture: the recorded plan must be active at the pass")
+	}
+	r.pid = plan.PlanID
+	armed := r.row("P1")
+	if armed.Source != store.ArmSourcePicture || armed.SourceRef != res.OppKey || armed.SignalID != sigs[0].SignalID || sigs[0].LimitPrice != 101.5 {
+		t.Fatalf("the frame is the P1 scenario's LIMIT at 101.50 (source picture, ref = the opportunity): row=%+v frame=%+v", armed, sigs[0])
 	}
 }
 
-// Q6 — the plan card's read: on an NT8 trader with Picture on, strict carries
-// the refusal text; advisory carries none.
+// W5 — the plan card's read: on an NT8 trader with Picture on, the ROUTE is
+// the Day Plan scenario route under every plan mode (strict included) and the
+// refusal carries only a real refusal — the running / Day Plan checks
+// admitChain applies to Picture's source, in their own words.
 func TestPicturePlanGateViewIsTheGatesRead(t *testing.T) {
 	env := admittedPictureEnv(t, store.PictureHtfConfig{Enabled: true, MinRR: 2.5})
 	env.at.exchange = "ninjatrader"
 	env.at.config.StrategyConfig.DayPlan.PictureHtf = &store.PictureHtfConfig{Enabled: true, MinRR: 2.5}
-	env.at.config.StrategyConfig.DayPlan.PlanMode = "strict"
-	if v := env.at.PicturePlanGateAt(env.now); !v.Enabled || v.Refusal != PictureStrictRefusal {
-		t.Fatalf("strict: the card must read enabled + the refusal, got %+v", v)
+	for _, mode := range []string{"strict", "advisory"} {
+		env.at.config.StrategyConfig.DayPlan.PlanMode = mode
+		if v := env.at.PicturePlanGateAt(env.now); !v.Enabled || v.Route != PictureRouteDayPlan || v.Refusal != "" {
+			t.Fatalf("%s: the card must read enabled + the route, no refusal, got %+v", mode, v)
+		}
 	}
-	env.at.config.StrategyConfig.DayPlan.PlanMode = "advisory"
-	if v := env.at.PicturePlanGateAt(env.now); !v.Enabled || v.Refusal != "" {
-		t.Fatalf("advisory: enabled, no refusal, got %+v", v)
+	env.at.config.StrategyConfig.DayPlan.PlanEnabled = false
+	if v := env.at.PicturePlanGateAt(env.now); v.Refusal != pictureRefusalDayPlanOff {
+		t.Fatalf("Day Plan off is a real refusal, got %+v", v)
+	}
+	env.at.config.StrategyConfig.DayPlan.PlanEnabled = true
+	env.at.isRunningMutex.Lock()
+	env.at.isRunning = false
+	env.at.isRunningMutex.Unlock()
+	if v := env.at.PicturePlanGateAt(env.now); v.Refusal != pictureRefusalStopped {
+		t.Fatalf("a stopped trader is a real refusal, got %+v", v)
+	}
+	env.at.config.StrategyConfig.DayPlan.PictureHtf = &store.PictureHtfConfig{Enabled: false}
+	if v := env.at.PicturePlanGateAt(env.now); v.Enabled || v.Route != "" || v.Refusal != "" {
+		t.Fatalf("Picture off: no route, no refusal, got %+v", v)
 	}
 }

@@ -102,15 +102,17 @@ func NewPictureHtfEvaluator(at *AutoTrader, cfg store.PictureHtfConfig) *Picture
 // Enabled reports the resolved mode switch.
 func (e *PictureHtfEvaluator) Enabled() bool { return e != nil && e.enabled }
 
-// pictureHtfSubmitSeam is the submission seam: the production wiring calls the
-// concrete NT8 market-entry method (with the before-send persistence callback);
-// tests replace it to prove the admission sequence. The seam receives the
-// already-claimed opportunity row and the computed geometry.
+// pictureHtfSubmitSeam is the hand-off seam: since W5 the production wiring
+// (trader/picture_plan_source.go init) records the claimed opportunity as a Day
+// Plan scenario, and the shared armed executor places it as a LIMIT — Picture
+// has no send path of its own. Tests replace it to prove the admission
+// sequence. The seam receives the already-claimed opportunity row and the
+// computed geometry.
 //
 // now is the EVALUATION's clock (W-EXEC-TRUTH W0, class 60): the send-time
 // re-checks read the same instant the evaluator judged, never the wall.
 var pictureHtfSubmitSeam = func(e *PictureHtfEvaluator, row *store.PictureHtfOpportunityDB, stopPx, targetPx, qty float64, now time.Time) error {
-	return fmt.Errorf("picture_htf submit seam unbound (the NT8 market-entry method is wired in the next wave commit)")
+	return fmt.Errorf("picture_htf submit seam unbound (the Day Plan hand-off binds it in picture_plan_source.go)")
 }
 
 // pictureHtfCapabilityProven gates the mode on the AddOn's evidence surface
@@ -681,10 +683,9 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 	// stamp is refused for any other owner. It was never assigned, so every
 	// stamp was refused and Picture's wire path was dead.
 	row.SignalID = signalID
-	// The atomic owner sends. The seam is the production market-entry method
-	// (wired with the next wave commit); until then it returns unbound and the
-	// row stays place_pending for the reconciliation sweep — never a blind
-	// resend.
+	// The atomic owner hands off. The seam is the Day Plan hand-off (W5): it
+	// records the scenario and settles the row planned; an error before the
+	// record leaves the row for the refusal below, never a blind resend.
 	// D25 — THE LAST GATE BEFORE THE WIRE. W0b checks running and Day Plan at
 	// ADMISSION; this is the re-check immediately before the send, where a
 	// Stop, a restart or a Day Plan switch-off between the two would otherwise
@@ -694,7 +695,7 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 	if !e.traderStillTheSame(startGen) {
 		e.staleTraderSends++
 		logger.Warnf("picture-htf: send REFUSED — the trader that began this evaluation is gone (generation %d → %d, running=%v, day_plan=%v); opportunity %s not sent",
-			startGen, pictureTraderGenerationOf(e.at), e.at.runningNow(), e.at.dayPlanEnabled(), oppKey)
+			startGen, pictureTraderGenerationOf(e.at), e.at.runningNow(), e.at.dayPlanEnabled(), store.RedactPictureOppKey(oppKey))
 		return e.refuse(oppKey, "refused", "trader stopped or restarted before the send — no entry", stall)
 	}
 	if err := pictureHtfSubmitSeam(e, row, stopPx, targetPx, 0, now); err != nil {
@@ -719,7 +720,7 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 		// blocks re-entry until reconciled against NT8 orders (addendum #4).
 		return EvaluateResult{Stage: "submitted", Reason: "send ambiguous: " + err.Error(), OppKey: oppKey, Momentum: stall}
 	}
-	return EvaluateResult{Stage: "submitted", OppKey: oppKey, Momentum: stall}
+	return EvaluateResult{Stage: pictureHtfSeamDoneStage, OppKey: oppKey, Momentum: stall}
 }
 
 // refuseHeld is the maintenance-hold refusal: a durable "refused" row, counted
@@ -728,7 +729,7 @@ func (e *PictureHtfEvaluator) refuseHeld(oppKey, reason string, stall *kernel.Mo
 	if e.holdRefusedKey != oppKey {
 		e.holdRefusedKey = oppKey
 		telemetry.IncGateBlock(e.at.id, "maintenance_hold")
-		logger.Warnf("🔒 picture-htf: opportunity %s REFUSED — maintenance hold: %s. It will not be traded after the update.", oppKey, reason)
+		logger.Warnf("🔒 picture-htf: opportunity %s REFUSED — maintenance hold: %s. It will not be traded after the update.", store.RedactPictureOppKey(oppKey), reason)
 	}
 	return e.refuse(oppKey, "refused", "maintenance hold — "+reason, stall)
 }

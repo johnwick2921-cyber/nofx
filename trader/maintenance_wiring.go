@@ -7,7 +7,7 @@ import ntTrader "nofx/trader/ninjatrader"
 // NewAutoTrader calls it unconditionally for every *TCPTrader (both pinned —
 // review 3 F2: a whole-body AST walk passed with the calls under 'if false').
 //
-//	SetEntryPermit        site 4  — the four entry sends take the permit
+//	SetEntryPermit        site 4  — the three entry sends take the permit
 //	SetEntryHoldCheck     site 4b — the reconnect queue drops held entries
 //	SetMaintenanceSource  site 7  — the AddOn is told the hold over the wire
 //	SetDroppedEntrySink   M-2     — a dropped entry settles what was recorded

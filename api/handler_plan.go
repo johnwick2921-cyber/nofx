@@ -19,6 +19,7 @@ import (
 	"nofx/trader"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // traderDayPlanEnabled reports whether a trader has the day-plan feature on — the
@@ -381,25 +382,32 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 	// and falls back to the base doc on failure (the plan-doc analog of B2 armor).
 	overlays, _ := s.store.Plan().ListOverlays(row.PlanID, row.Version)
 	var overlayErrStrings []string // A8: surfaced on the response below
+	// W-EXEC-TRUTH W5 — the ONE fold (kernel.ResolvePlanFinal): user overlays
+	// exactly as before, machine (Picture) scenarios appended after, never
+	// counted against the caps. composed_of records which overlay rows made
+	// the doc the card shows (CTO requirement); [] when none, never null.
+	composedUser := []int{}
+	composedMachine := []gin.H{}
 	if len(overlays) > 0 {
-		patches := make([]string, 0, len(overlays))
-		for _, ov := range overlays {
-			patches = append(patches, ov.Patch)
-		}
 		if base, mErr := json.Marshal(doc); mErr == nil {
-			final, overlayErrs := kernel.ApplyOverlayPatches(base, patches)
-			// A8 (F14): a stored overlay that no longer applies must never be a
-			// silent no-op — the owner's edit visibly vanished. WARN (deduped
-			// by content via log_events) + expose on the response.
-			for _, oe := range overlayErrs {
-				if oe != nil {
-					overlayErrStrings = append(overlayErrStrings, oe.Error())
-					logger.Warnf("⚠️ plan overlay SKIPPED at read-merge (%s %s): %v — the owner edit in that patch is not in the rendered plan", row.PlanID, row.Session, oe)
+			if pf, pErr := kernel.ResolvePlanFinal(base, kernel.OverlayRefsFrom(overlays)); pErr == nil {
+				// A8 (F14): a stored overlay that no longer applies must never be a
+				// silent no-op — the owner's edit visibly vanished. WARN (deduped
+				// by content via log_events) + expose on the response.
+				for _, oe := range pf.OverlayErrs {
+					if oe != nil {
+						overlayErrStrings = append(overlayErrStrings, oe.Error())
+						logger.Warnf("⚠️ plan overlay SKIPPED at read-merge (%s %s): %v — the owner edit in that patch is not in the rendered plan", row.PlanID, row.Session, oe)
+					}
 				}
-			}
-			var merged kernel.PlanDoc
-			if json.Unmarshal(final, &merged) == nil && kernel.ValidatePlanDocWithCaps(&merged, kernel.PlanHardMaxLevels, kernel.PlanHardMaxScenarios) == nil {
-				doc = merged // plan_final
+				for _, ms := range pf.MachineSkipped {
+					logger.Warnf("⚠️ machine overlay SKIPPED at read-merge (%s %s): %v — that Picture scenario is not in the rendered plan", row.PlanID, row.Session, ms)
+				}
+				doc = pf.Doc // plan_final (the base on a failed user fold, as before)
+				composedUser = append(composedUser, pf.UserApplied...)
+				for _, m := range pf.MachineApplied {
+					composedMachine = append(composedMachine, gin.H{"overlay_version": m.OverlayVersion, "scenario_id": m.ScenarioID, "ref": m.Ref})
+				}
 			}
 		}
 	}
@@ -540,6 +548,12 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		// ITEM 4 — owner edits that could NOT be re-anchored onto this version.
 		// Never dropped silently: the card asks for review.
 		"uncarried_edits": s.uncarriedEdits(row.PlanID, row.Version),
+		// W-EXEC-TRUTH W5 — what composed this doc: the user overlay versions
+		// applied, and every machine (Picture) scenario the fold appended.
+		"composed_of": gin.H{"user_overlays": composedUser, "machine": composedMachine},
+		// W5 — the row is a MACHINE plan (the Picture no-plan door): no AI
+		// plan exists yet for this session.
+		"machine_plan": store.IsMachinePlan(row),
 	}
 	if lifecycleReason != "" {
 		resp["lifecycle_reason"] = lifecycleReason
@@ -1075,9 +1089,15 @@ func (s *Server) applyPlanOverlay(traderID, symbol, patchJSON, origin string, no
 		return 0, 0, 404, "active plan not found"
 	}
 	overlays, _ := s.store.Plan().ListOverlays(row.PlanID, row.Version)
+	// W-EXEC-TRUTH W5 — `current` folds USER overlays only: a machine (Picture)
+	// scenario folds after every user patch, so an owner or planner-revised
+	// patch is judged against the doc it can actually reach, and its indexes
+	// never point at a machine scenario.
 	patches := make([]string, 0, len(overlays))
 	for _, ov := range overlays {
-		patches = append(patches, ov.Patch)
+		if !kernel.IsMachineOverlayOrigin(ov.Origin) {
+			patches = append(patches, ov.Patch)
+		}
 	}
 	current, _ := kernel.ApplyOverlayPatches([]byte(row.Doc), patches)
 	candidate, err := kernel.ApplyPatchStrict(current, patchJSON)
@@ -1087,6 +1107,13 @@ func (s *Server) applyPlanOverlay(traderID, symbol, patchJSON, origin string, no
 	var merged kernel.PlanDoc
 	if json.Unmarshal(candidate, &merged) != nil || kernel.ValidatePlanDocWithCaps(&merged, kernel.PlanHardMaxLevels, kernel.PlanHardMaxScenarios) != nil {
 		return 0, 0, 400, "patch produces an invalid plan (enum/count/sign armor)"
+	}
+	// W5 (D18) — AI commentary cannot rewrite Picture evidence: an edit that
+	// adds, alters or removes a machine scenario is refused, judged on the
+	// user fold (a machine plan's own P scenarios live in its base doc) AND on
+	// the full fold with the machine overlays appended after both sides.
+	if msg := machineScenarioEditRefusal(row, overlays, current, merged, patchJSON, origin); msg != "" {
+		return 0, 0, 409, msg
 	}
 	// B2 price armor — sweep the RESULTING plan_final's prices (levels +
 	// scenario targets), robust to every patch shape (/levels, /levels/N,
@@ -1107,6 +1134,44 @@ func (s *Server) applyPlanOverlay(traderID, symbol, patchJSON, origin string, no
 		return 0, 0, 500, "append overlay: " + err.Error()
 	}
 	return overlayVersion, row.Version, 0, ""
+}
+
+// machineScenarioEditRefusal is applyPlanOverlay's D18 check: "" when the
+// candidate leaves every machine scenario exactly as recorded.
+func machineScenarioEditRefusal(row *store.PlanDB, overlays []*store.PlanOverlayDB, current []byte, merged kernel.PlanDoc, patchJSON, origin string) string {
+	var cur kernel.PlanDoc
+	if err := json.Unmarshal(current, &cur); err != nil {
+		return "overlay refused: the current plan does not parse, so a machine (Picture) scenario cannot be proven untouched"
+	}
+	if err := kernel.MachineScenariosPreserved(cur, merged); err != nil {
+		return "overlay refused: " + err.Error()
+	}
+	refs := kernel.OverlayRefsFrom(overlays)
+	next := 1
+	for _, r := range refs {
+		if r.Version >= next {
+			next = r.Version + 1
+		}
+	}
+	// The FULL-fold comparison (machine overlays appended after both sides)
+	// is the CTO spec's literal form. With today's ValidateMachineScenario —
+	// a machine overlay's validity reads only ids, refs and the doc's levels —
+	// every violation it can see is refused first by the user-fold check above
+	// (mutation A29 in the W5 builder-A report survives for exactly that
+	// reason [B]). It stays as the guard for the day a machine overlay's fold
+	// comes to depend on something a user patch can change.
+	before, err := kernel.ResolvePlanFinal([]byte(row.Doc), refs)
+	if err != nil {
+		return "overlay refused: the stored plan does not parse, so a machine (Picture) scenario cannot be proven untouched"
+	}
+	after, err := kernel.ResolvePlanFinal([]byte(row.Doc), append(append([]kernel.OverlayRef(nil), refs...), kernel.OverlayRef{Version: next, Origin: origin, Patch: patchJSON}))
+	if err != nil {
+		return "overlay refused: the stored plan does not parse, so a machine (Picture) scenario cannot be proven untouched"
+	}
+	if err := kernel.MachineScenariosPreserved(before.Doc, after.Doc); err != nil {
+		return "overlay refused: " + err.Error()
+	}
+	return ""
 }
 
 // handlePlanAlertDismiss POST /api/plan/alert-dismiss — ITEM 5a. Hides ONE alert
@@ -1754,7 +1819,7 @@ func (s *Server) handlePlanTrades(c *gin.Context) {
 	grades := make([]string, 0, len(rows))
 	for _, p := range rows {
 		grades = append(grades, p.AdherenceGrade)
-		trades = append(trades, gin.H{
+		t := gin.H{
 			"symbol": p.Symbol, "side": p.Side,
 			"entry_price": p.EntryPrice, "exit_price": p.ExitPrice,
 			"entry_time": p.EntryTime, "exit_time": p.ExitTime,
@@ -1766,9 +1831,56 @@ func (s *Server) handlePlanTrades(c *gin.Context) {
 			"plan_version":    p.PlanVersion,
 			"adherence_grade": p.AdherenceGrade,
 			"adherence_label": kernel.AdherenceLabel(p.AdherenceGrade),
-		})
+			// W-EXEC-TRUTH W5 (F15) — every trade names its session plan and
+			// its source. plan_id / plan_session are the position's own stamp
+			// (written at entry); source is JOINED from the armed ledger row
+			// whose signal is the position's entry order, never inferred.
+			"plan_id": p.PlanID, "plan_session": p.PlanSession,
+		}
+		source, sourceRef, unresolved := s.tradeSource(traderID, p)
+		t["source"] = source
+		if sourceRef != "" {
+			t["source_ref"] = sourceRef
+		}
+		if unresolved {
+			t["source_unresolved"] = true
+		}
+		trades = append(trades, t)
 	}
 	c.JSON(200, gin.H{"trades": trades, "summary": kernel.SummarizeAdherence(grades)})
+}
+
+// tradeSource names where a trade came from (W5): the armed ledger row whose
+// signal id is the position's entry order carries its source ("picture" for a
+// Picture scenario, with the opportunity key as source_ref; a planner arm
+// reads "armed_entry"). No armed row: a position the armed executor wrote
+// still says "armed_entry"; the decision path's default position source
+// ("system" / empty) reads "ai"; any other stored source (e.g. "snapshot", a
+// reconcile row) is shown as stored — never relabelled. The inference runs
+// ONLY when the ledger answered "no such row": a ledger that could not be read
+// says so — source "unknown", unresolved true (W5 R7) — never a guess.
+func (s *Server) tradeSource(traderID string, p *store.TraderPosition) (string, string, bool) {
+	if id := strings.TrimSpace(p.EntryOrderID); id != "" && s.store != nil {
+		row, err := s.store.ArmedOrders().FindBySignal(traderID, id)
+		switch {
+		case err == nil && row != nil:
+			if row.Source != "" {
+				return row.Source, row.SourceRef, false
+			}
+			return "armed_entry", "", false
+		case err != nil && !errors.Is(err, gorm.ErrRecordNotFound):
+			logger.Warnf("plan/trades: the armed ledger could not be read for position #%d (%v) — source unresolved, not inferred", p.ID, err)
+			return "unknown", "", true
+		}
+	}
+	switch strings.TrimSpace(p.Source) {
+	case "armed_entry":
+		return "armed_entry", "", false
+	case "", "system":
+		return "ai", "", false
+	default:
+		return p.Source, "", false
+	}
 }
 
 // handlePlanStats GET /api/plan/stats?trader_id=xxx — the matched-random honesty
@@ -2146,6 +2258,8 @@ func (s *Server) planRegistry() kernel.SessionRegistry {
 
 // resolvePlanFinal folds a plan row's overlays into plan_final (the doc the card
 // and the executor see), armored: a bad overlay falls back to the base doc.
+// W5 — through kernel.ResolvePlanFinal, the ONE fold (machine scenarios
+// appended after the user fold; byte-identical with none).
 func (s *Server) resolvePlanFinal(row *store.PlanDB) (kernel.PlanDoc, bool) {
 	var doc kernel.PlanDoc
 	if json.Unmarshal([]byte(row.Doc), &doc) != nil {
@@ -2155,20 +2269,18 @@ func (s *Server) resolvePlanFinal(row *store.PlanDB) (kernel.PlanDoc, bool) {
 	if len(overlays) == 0 {
 		return doc, true
 	}
-	patches := make([]string, 0, len(overlays))
-	for _, ov := range overlays {
-		patches = append(patches, ov.Patch)
-	}
 	base, err := json.Marshal(doc)
 	if err != nil {
 		return doc, true
 	}
-	final, _ := kernel.ApplyOverlayPatches(base, patches)
-	var merged kernel.PlanDoc
-	if json.Unmarshal(final, &merged) == nil && kernel.ValidatePlanDocWithCaps(&merged, kernel.PlanHardMaxLevels, kernel.PlanHardMaxScenarios) == nil {
-		return merged, true
+	pf, err := kernel.ResolvePlanFinal(base, kernel.OverlayRefsFrom(overlays))
+	if err != nil {
+		return doc, true
 	}
-	return doc, true
+	for _, ms := range pf.MachineSkipped {
+		logger.Warnf("⚠️ machine overlay SKIPPED at the re-align fold (%s v%d): %v — that Picture scenario is not in plan_final", row.PlanID, row.Version, ms)
+	}
+	return pf.Doc, true
 }
 
 // RealignDebounceSec collapses rapid saves (bulk-add rows, fast successive edits)
