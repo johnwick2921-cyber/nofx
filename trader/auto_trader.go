@@ -383,7 +383,11 @@ type AutoTrader struct {
 	// (lastRollWarnContract, lastCalFailClosedAlert, lastT1NoCurrencyWarn,
 	// lastClockWidenLog): W-EXEC-TRUTH W0 (Q15) — the admission gate reaches
 	// them from Picture's live-bar goroutine as well as from runCycle.
-	onceMu             sync.Mutex
+	onceMu sync.Mutex
+	// admitLast dedupes arm/picture admission refusals per (path, key) —
+	// W-EXEC-TRUTH W0 (a): a 2-minute pass or a live-bar frame is not a new
+	// event. Locked (Picture runs on the live-bar goroutine).
+	admitLast          admitDedupe
 	lastHalfDaySeedDay string // P4 half-days producer: once-per-CME-session-day throttle
 	lastCycleBarSig    string // P10.4 no-new-data dedup: newest primary-TF bar signature at last cycle
 
