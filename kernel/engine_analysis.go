@@ -815,7 +815,7 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 
 	// 1. First fetch data for position coins (must fetch)
 	for _, pos := range ctx.Positions {
-		data, err := market.GetWithTimeframes(pos.Symbol, timeframes, primaryTimeframe, klineCount, indPeriods)
+		data, err := market.GetWithTimeframesVenue(pos.Symbol, engine.venue, timeframes, primaryTimeframe, klineCount, indPeriods)
 		if err != nil {
 			logger.Infof("⚠️  Failed to fetch market data for position %s: %v", pos.Symbol, err)
 			continue
@@ -836,15 +836,16 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 			continue
 		}
 
-		data, err := market.GetWithTimeframes(coin.Symbol, timeframes, primaryTimeframe, klineCount, indPeriods)
+		data, err := market.GetWithTimeframesVenue(coin.Symbol, engine.venue, timeframes, primaryTimeframe, klineCount, indPeriods)
 		if err != nil {
 			logger.Infof("⚠️  Failed to fetch market data for %s: %v", coin.Symbol, err)
 			continue
 		}
 
 		// Liquidity filter (skip for xyz dex assets - they don't have OI data from Binance).
-		// CME futures (NT8 path) likewise have no crypto open-interest feed, so the
-		// OI gate would wrongly drop them (OI=0 < threshold) — exempt them too.
+		// CME futures (NT8 path) likewise have no crypto open-interest feed (OI is
+		// absent — nil — since W-NO-BINANCE A), so the OI gate must not judge
+		// them — exempt them too.
 		isExistingPosition := positionSymbols[coin.Symbol]
 		isXyzAsset := market.IsXyzDexAsset(coin.Symbol)
 		isFutures := market.IsCMEFuturesSymbol(coin.Symbol)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"nofx/kernel"
 	"nofx/logger"
+	"nofx/market"
 	"nofx/mcp"
 	_ "nofx/mcp/payment"
 	_ "nofx/mcp/provider"
@@ -644,6 +645,17 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		config.Exchange = "binance"
 	}
 
+	// CTO F2 (critic G1), fail-closed at the SOURCE: the NinjaTrader venue
+	// trades CME futures only. A trader configured on it with a non-CME symbol
+	// (its NT8 symbol or a strategy static coin) is REFUSED here — named, never
+	// started — instead of reading that symbol from a crypto source every
+	// cycle (CoinAnk exchange=Binance + Binance OI/funding).
+	if strings.EqualFold(strings.TrimSpace(config.Exchange), "ninjatrader") {
+		if bad := nonCMESymbolsForNT8(config); len(bad) > 0 {
+			return nil, fmt.Errorf("refused: trader %q is on the NinjaTrader venue but trades %s — not CME futures symbols; this trader does not load", config.Name, strings.Join(bad, ","))
+		}
+	}
+
 	// Create corresponding trader based on configuration
 	var trader Trader
 	var err error
@@ -808,6 +820,8 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		claw402Key = config.CustomAPIKey
 	}
 	strategyEngine := kernel.NewStrategyEngine(config.StrategyConfig, claw402Key)
+	// CTO F2: the cycle's market reads route through the trader's venue.
+	strategyEngine.SetVenue(config.Exchange)
 	logger.Infof("✓ [%s] Using strategy engine (strategy configuration loaded)", config.Name)
 
 	at := &AutoTrader{
@@ -1300,4 +1314,24 @@ func (at *AutoTrader) firstFor(f *string, key string) bool {
 	}
 	*f = key
 	return true
+}
+
+// nonCMESymbolsForNT8 lists the symbols an NT8-venue trader is configured to
+// trade that are not CME futures symbols: its NT8 symbol (when set) and its
+// strategy's static coins (the engine's candidates). Empty = the pair is valid.
+func nonCMESymbolsForNT8(config AutoTraderConfig) []string {
+	var syms []string
+	if s := strings.TrimSpace(config.NinjaTraderSymbol); s != "" {
+		syms = append(syms, s)
+	}
+	if config.StrategyConfig != nil {
+		syms = append(syms, config.StrategyConfig.CoinSource.StaticCoins...)
+	}
+	var bad []string
+	for _, s := range syms {
+		if strings.TrimSpace(s) != "" && !market.IsCMEFuturesSymbol(market.Normalize(s)) {
+			bad = append(bad, s)
+		}
+	}
+	return bad
 }

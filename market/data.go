@@ -24,6 +24,67 @@ var (
 	frCacheTTL     = 1 * time.Hour
 )
 
+// futuresOIFunding is the ONE place the CME futures path decides open interest
+// and funding (W-NO-BINANCE A): ABSENT — OI nil, funding not known — because
+// the futures path makes no external market-data call. OI and funding are
+// Binance crypto-perp feeds; there is no CME symbol behind them.
+func futuresOIFunding() (oi *OIData, funding float64, fundingKnown bool) {
+	return nil, 0, false
+}
+
+// marketRoute is where one market read for (symbol, venue) goes — the ONE
+// decision GetWithExchange takes and the 📊 boot line READS (W-NO-BINANCE A).
+type marketRoute int
+
+const (
+	routeCrypto       marketRoute = iota // CoinAnk / Hyperliquid klines + Binance OI/funding
+	routeFutures                         // NT8 bars; OI/funding absent (futuresOIFunding)
+	routeRefusedVenue                    // the NinjaTrader venue with a non-CME symbol
+)
+
+// marketRouteFor decides the route. The NinjaTrader venue IS the futures
+// path: a non-CME symbol there is REFUSED — it must never fall through to the
+// crypto branch (CoinAnk maps the unknown venue to exchange=Binance, and the
+// crypto branch calls fapi OI/funding). Critic G1, fail-closed.
+func marketRouteFor(symbol, exchange string) marketRoute {
+	if IsCMEFuturesSymbol(symbol) {
+		return routeFutures
+	}
+	if strings.EqualFold(strings.TrimSpace(exchange), "ninjatrader") {
+		return routeRefusedVenue
+	}
+	return routeCrypto
+}
+
+// FuturesOIFundingBootLine READS what the market read does for OI and funding
+// on the NinjaTrader venue, for the symbols the loaded NT8 traders trade:
+// each goes through marketRouteFor and, on the futures route, through
+// futuresOIFunding — the same two functions the read calls. No symbol → n/a.
+func FuturesOIFundingBootLine(nt8Symbols ...string) string {
+	if len(nt8Symbols) == 0 {
+		return "oi/funding: n/a (no NinjaTrader trader loaded)"
+	}
+	external, refused := false, []string{}
+	for _, s := range nt8Symbols {
+		switch marketRouteFor(Normalize(s), "ninjatrader") {
+		case routeFutures:
+			if oi, _, known := futuresOIFunding(); oi != nil || known {
+				external = true
+			}
+		case routeRefusedVenue:
+			refused = append(refused, s)
+		}
+	}
+	line := "oi/funding: n/a (no external market data on the futures path)"
+	if external {
+		line = "oi/funding: EXTERNAL (the futures path reads an external feed)"
+	}
+	if len(refused) > 0 {
+		line += " · REFUSED on the NinjaTrader venue (non-CME symbol): " + strings.Join(refused, ",")
+	}
+	return line
+}
+
 // Get retrieves market data for the specified token (uses Binance data by default)
 func Get(symbol string) (*Data, error) {
 	return GetWithExchange(symbol, "binance")
@@ -41,7 +102,13 @@ func GetWithExchange(symbol, exchange string) (*Data, error) {
 	// CME futures (NT8) read the live BarCache via the injected provider —
 	// never CoinAnk. BarCache holds 5m/15m/1h (not 3m/4h), so we map 5m->short
 	// and 1h->longer. Crypto path below is untouched.
-	isFutures := IsCMEFuturesSymbol(symbol)
+	// W-NO-BINANCE A: the route is the ONE decision (marketRouteFor); the
+	// NinjaTrader venue with a non-CME symbol is refused, never a crypto read.
+	route := marketRouteFor(symbol, exchange)
+	if route == routeRefusedVenue {
+		return nil, fmt.Errorf("%s: the NinjaTrader venue reads CME futures only — a non-CME symbol is refused (no crypto market read on the futures venue)", symbol)
+	}
+	isFutures := route == routeFutures
 
 	// For hyperliquid exchange, also use Hyperliquid API
 	useHyperliquidAPI := isXyzAsset || strings.ToLower(exchange) == "hyperliquid"
@@ -126,15 +193,24 @@ func GetWithExchange(symbol, exchange string) (*Data, error) {
 		}
 	}
 
-	// Get OI data
-	oiData, err := getOpenInterestData(symbol)
-	if err != nil {
-		// OI failure doesn't affect overall result, use default values
-		oiData = &OIData{Latest: 0, Average: 0}
+	// OI + funding. W-NO-BINANCE A: the CME futures path makes NO external
+	// market-data call — both are Binance crypto-perp feeds with no CME symbol
+	// — and reports them ABSENT (nil / not known), never a fabricated 0.
+	var oiData *OIData
+	var fundingRate float64
+	var fundingKnown bool
+	if isFutures {
+		oiData, fundingRate, fundingKnown = futuresOIFunding()
+	} else {
+		oiData, err = getOpenInterestData(symbol)
+		if err != nil {
+			// OI failure doesn't affect overall result, use default values
+			oiData = &OIData{Latest: 0, Average: 0}
+		}
+		var ferr error
+		fundingRate, ferr = getFundingRate(symbol)
+		fundingKnown = ferr == nil
 	}
-
-	// Get Funding Rate
-	fundingRate, _ := getFundingRate(symbol)
 
 	// Calculate intraday series data
 	intradayData := calculateIntradaySeries(klines3m)
@@ -152,6 +228,7 @@ func GetWithExchange(symbol, exchange string) (*Data, error) {
 		CurrentRSI7:       currentRSI7,
 		OpenInterest:      oiData,
 		FundingRate:       fundingRate,
+		FundingRateKnown:  fundingKnown,
 		IntradaySeries:    intradayData,
 		LongerTermContext: longerTermData,
 	}, nil
@@ -185,6 +262,19 @@ func maxConfiguredPeriod(ip IndicatorPeriods) int {
 		}
 	}
 	return m
+}
+
+// GetWithTimeframesVenue is GetWithTimeframes for a KNOWN venue (CTO F2): the
+// read goes through marketRouteFor exactly like GetWithExchange, so the
+// NinjaTrader venue with a non-CME symbol is REFUSED — never the crypto branch
+// (CoinAnk exchange=Binance + fapi OI/funding). The engine's two cycle reads
+// and the indicator mirror call this with the trader's exchange; an empty
+// venue routes by symbol, as GetWithTimeframes does.
+func GetWithTimeframesVenue(symbol, venue string, timeframes []string, primaryTimeframe string, count int, indPeriods ...IndicatorPeriods) (*Data, error) {
+	if marketRouteFor(Normalize(symbol), venue) == routeRefusedVenue {
+		return nil, fmt.Errorf("%s: the NinjaTrader venue reads CME futures only — a non-CME symbol is refused (no crypto market read on the futures venue)", Normalize(symbol))
+	}
+	return GetWithTimeframes(symbol, timeframes, primaryTimeframe, count, indPeriods...)
 }
 
 func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe string, count int, indPeriods ...IndicatorPeriods) (*Data, error) {
@@ -330,16 +420,21 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 	priceChange4h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 240) // 4 hours
 
 	// Get OI + Funding Rate (Binance crypto-perp feeds). CME futures have no
-	// Binance symbol, so these return zeros anyway and just waste a round-trip
-	// per cycle — skip them on futures. oiData stays {0,0} and fundingRate stays
-	// 0 (identical to the prior values for MNQ), but no network call is made.
-	oiData := &OIData{Latest: 0, Average: 0}
+	// Binance symbol: the futures path makes no call and reports both ABSENT
+	// (W-NO-BINANCE A — never the fabricated {0,0} / 0 this used to write).
+	var oiData *OIData
 	var fundingRate float64
-	if !isFutures {
+	var fundingKnown bool
+	if isFutures {
+		oiData, fundingRate, fundingKnown = futuresOIFunding()
+	} else {
+		oiData = &OIData{Latest: 0, Average: 0}
 		if d, oiErr := getOpenInterestData(symbol); oiErr == nil {
 			oiData = d
 		}
-		fundingRate, _ = getFundingRate(symbol)
+		var ferr error
+		fundingRate, ferr = getFundingRate(symbol)
+		fundingKnown = ferr == nil
 	}
 
 	return &Data{
@@ -354,6 +449,7 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 		CurrentRSIByPeriod: currentRSIByPeriod,
 		OpenInterest:       oiData,
 		FundingRate:        fundingRate,
+		FundingRateKnown:   fundingKnown,
 		TimeframeData: timeframeData,
 	}, nil
 }
