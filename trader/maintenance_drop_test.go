@@ -69,9 +69,8 @@ func newDropWire(t *testing.T) *dropWire {
 	nt := ntTrader.NewTCPTrader(s, "MNQ", "Sim101")
 	at := &AutoTrader{id: "drop-trader-1", store: st, exchange: "ninjatrader", trader: nt}
 	at.config.StrategyConfig = &store.StrategyConfig{}
-	// Exactly what NewAutoTrader wires.
-	nt.SetEntryHoldCheck(maintenanceQueueHeld)
-	nt.SetDroppedEntrySink(at.onMaintenanceDroppedEntry)
+	// The production wiring NewAutoTrader calls (pinned there).
+	wireNT8Maintenance(at, nt)
 	return &dropWire{s: s, nt: nt, at: at, st: st, dir: dir, addr: s.ListenAddrForTest().String()}
 }
 
@@ -244,4 +243,15 @@ func TestAttemptedDropRaisesAP1(t *testing.T) {
 		}
 	}
 	t.Fatalf("an attempted drop must raise a P1 naming the signal; alerts: %+v", rows)
+}
+
+// dialRaw connects a bare client (no hello) to the drop fixture's server.
+func dialRaw(t *testing.T, addr string) net.Conn {
+	t.Helper()
+	c, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	return c
 }
