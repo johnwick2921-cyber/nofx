@@ -10,7 +10,6 @@ import (
 	"nofx/store"
 	"nofx/telemetry"
 	"nofx/trader/aster"
-	"nofx/trader/binance"
 	"nofx/trader/bitget"
 	"nofx/trader/bybit"
 	"nofx/trader/gate"
@@ -248,7 +247,7 @@ type AutoTraderConfig struct {
 	AIModelID string
 
 	// Trading platform selection
-	Exchange   string // Exchange type: "binance", "bybit", "okx", "bitget", "gate", "hyperliquid", "aster", "lighter", "indodax", or "ninjatrader"
+	Exchange   string // Exchange type: "bybit", "okx", "bitget", "gate", "hyperliquid", "aster", "lighter", "indodax", or "ninjatrader"
 	ExchangeID string // Exchange account UUID (for multi-account support)
 
 	// Binance API configuration
@@ -357,7 +356,7 @@ type AutoTrader struct {
 	id                string // Trader unique identifier
 	name              string // Trader display name
 	aiModel           string // AI model name
-	exchange          string // Trading platform type (binance/bybit/etc)
+	exchange          string // Trading platform type (ninjatrader/bybit/etc)
 	exchangeID        string // Exchange account UUID
 	showInCompetition bool   // Whether to show in competition page
 	config            AutoTraderConfig
@@ -639,9 +638,11 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		logger.Infof("🔧 [%s] Custom config - URL: %s, Model: %s", config.Name, config.CustomAPIURL, config.CustomModelName)
 	}
 
-	// Set default trading platform
-	if config.Exchange == "" {
-		config.Exchange = "binance"
+	// W-NO-BINANCE B (CTO ruling): a trader with no exchange never gets a
+	// broker by default — it used to be handed the Binance broker. REFUSED,
+	// named; the trader does not load.
+	if strings.TrimSpace(config.Exchange) == "" {
+		return nil, fmt.Errorf("refused: trader %q has no exchange configured — a trader never gets a broker by default", config.Name)
 	}
 
 	// Create corresponding trader based on configuration
@@ -656,9 +657,6 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 	logger.Infof("📊 [%s] Position mode: %s", config.Name, marginModeStr)
 
 	switch config.Exchange {
-	case "binance":
-		logger.Infof("🏦 [%s] Using Binance Futures trading", config.Name)
-		trader = binance.NewFuturesTrader(config.BinanceAPIKey, config.BinanceSecretKey, userID)
 	case "bybit":
 		logger.Infof("🏦 [%s] Using Bybit Futures trading", config.Name)
 		trader = bybit.NewBybitTrader(config.BybitAPIKey, config.BybitSecretKey)
@@ -755,7 +753,9 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		// This is set AFTER the AutoTrader is partially initialized, so we defer
 		// it until later in NewAutoTrader.
 	default:
-		return nil, fmt.Errorf("unsupported trading platform: %s", config.Exchange)
+		// An exchange removed from the build (W-NO-BINANCE B) lands here too:
+		// a stored row naming it is REFUSED with its name, never coerced.
+		return nil, fmt.Errorf("refused: unsupported trading platform %q — this trader does not load", config.Exchange)
 	}
 
 	// Validate initial balance configuration, auto-fetch from exchange if 0
@@ -942,14 +942,6 @@ func (at *AutoTrader) Run() error {
 		if asterTrader, ok := at.trader.(*aster.AsterTrader); ok && at.store != nil {
 			asterTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 30*time.Second)
 			at.logInfof("🔄 Aster order+position sync enabled (every 30s)")
-		}
-	}
-
-	// Start Binance order sync if using Binance exchange
-	if at.exchange == "binance" {
-		if binanceTrader, ok := at.trader.(*binance.FuturesTrader); ok && at.store != nil {
-			binanceTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 30*time.Second)
-			at.logInfof("🔄 Binance order+position sync enabled (every 30s)")
 		}
 	}
 
