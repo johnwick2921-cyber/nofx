@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"nofx/kernel"
 	"nofx/store"
 )
 
@@ -209,5 +210,116 @@ func TestReappendLinesNeverCarryTheAccountName(t *testing.T) {
 	}
 	if strings.Contains(strings.ToLower(out), "sim101") {
 		t.Fatalf("a re-append line carries the account name:\n%s", out)
+	}
+}
+
+// W5 R13(b) (CTO round 2): opportunity A lives on v1 as P1; the planner
+// appends v2 and opportunity B is handed off onto v2 BEFORE A's re-append.
+// B must not take P1 — P ids are minted past every id an earlier version
+// used — so A's re-append lands on v2 under its own P1 and the two
+// opportunities keep distinct ids (and therefore distinct ledger keys).
+func TestPictureIDsNeverCollideAcrossVersions(t *testing.T) {
+	at, st := handOffTrader(t)
+	now := handOffNow()
+	at.markPictureRunEpoch(now)
+	v1 := seedAIPlan(t, st, "active")
+	evA := handOffEvidence(now, 1)
+	claimHandOff(t, st, evA)
+	if err := at.pictureHandOffAt(evA, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Plan().AppendPlan(&store.PlanDB{PlanID: v1.PlanID, TradeDate: v1.TradeDate, Session: v1.Session, StrategyID: v1.StrategyID,
+		TriggerReason: "NY_scheduled_read", Lifecycle: "active", ModelID: "m", Doc: validTraderPlanJSON}); err != nil {
+		t.Fatal(err)
+	}
+	evB := handOffEvidence(now, 2)
+	claimHandOff(t, st, evB)
+	if err := at.pictureHandOffAt(evB, now); err != nil {
+		t.Fatal(err)
+	}
+	at.reappendLiveMachineScenarios(v1.PlanID, 2, now)
+	ids := map[string]string{}
+	for _, o := range listOverlays(t, st, v1.PlanID, 2) {
+		if !kernel.IsMachineOverlayOrigin(o.Origin) {
+			continue
+		}
+		s, err := kernel.MachineScenarioFromPatch(o.Patch)
+		if err != nil || s.Machine == nil {
+			t.Fatalf("v2 machine overlay unreadable: %v", err)
+		}
+		ids[s.Machine.Ref] = s.ID
+	}
+	if ids[evA.OppKey] != "P1" {
+		t.Fatalf("A must be re-appended to v2 under its own P1 (a collision refuses the re-append): ids=%v", redactIDs(ids))
+	}
+	if ids[evB.OppKey] == "" || ids[evB.OppKey] == "P1" {
+		t.Fatalf("B handed off onto v2 before A's re-append must not take P1 — distinct ids per opportunity: ids=%v", redactIDs(ids))
+	}
+}
+
+func redactIDs(ids map[string]string) map[string]string {
+	out := map[string]string{}
+	for k, v := range ids {
+		out[store.RedactPictureOppKey(k)] = v
+	}
+	return out
+}
+
+// W5 R13(a) at the pass (the authoring loop's UpsertArm call sites): A's
+// unplaced row holds P1; a later version carries a DIFFERENT opportunity
+// under P1. The ledger refuses by type, the loop names the refusal (WARN +
+// counter, once per change) and withdraws the admit, and A's row keeps its
+// opportunity, version and prices — nothing is placed on B's admission.
+func TestAReusedPIDNeverRewritesAnotherOpportunitysRow(t *testing.T) {
+	r, epoch := newPicRig(t, "w5-r13a", nil)
+	scA := picScenario("P1", "opp-r13-a", r.now, epoch, picDefault)
+	picPlan(r, scA) // v1 carries A as P1
+	// A's authored, never-placed row on v1 — exactly what the authoring loop
+	// writes (stampPictureSource), before any placement.
+	seed := &store.ArmedOrderDB{TraderID: r.at.id, PlanID: r.pid, Version: 1, Session: "TEST", Scenario: "P1", Side: "long",
+		EntryPx: 100.5, StopPx: 97, TargetPx: 110, State: store.StateArmed, EntryClass: "armed_fill", Kind: "limit",
+		Policy: store.ArmPolicyMarketInZone, CreatedAt: r.now, UpdatedAt: r.now}
+	stampPictureSource(seed, scA)
+	if err := r.st.ArmedOrders().UpsertArm(seed); err != nil {
+		t.Fatal(err)
+	}
+	a := r.rows()[0]
+	if a.SourceRef != "opp-r13-a" || a.State != store.StateArmed {
+		t.Fatalf("fixture: A must be armed and unplaced on v1, rows=%+v", r.rows())
+	}
+	g := picDefault
+	g.stop = 96.5
+	scB := picScenario("P1", "opp-r13-b", r.now, epoch, g)
+	picPlan(r, scB) // v2: B under A's id
+	logs := captureTraderLog(t)
+	picPass(r, 5*time.Second, 100.25) // in the zone
+	picPass(r, 10*time.Second, 100.25)
+	if sigs, _ := r.drain(); len(sigs) != 0 {
+		t.Fatalf("nothing may be placed on B's admission of A's row: %d frame(s) %+v", len(sigs), sigs)
+	}
+	var after store.ArmedOrderDB
+	nB := 0
+	for _, row := range r.rows() {
+		if row.ID == a.ID {
+			after = row
+		}
+		if row.SourceRef == "opp-r13-b" {
+			nB++
+		}
+	}
+	if after.SourceRef != "opp-r13-a" || after.Version != a.Version || after.StopPx != a.StopPx || after.EntryPx != a.EntryPx ||
+		after.EligibleUntilMs == nil || *after.EligibleUntilMs != *a.EligibleUntilMs {
+		t.Fatalf("A's row must be untouched: before %+v after %+v", a, after)
+	}
+	if nB != 0 {
+		t.Fatalf("B must not get a row under A's key: %d", nB)
+	}
+	out := logs.String()
+	named := "NOT authored — arm_source_mismatch"
+	if strings.Count(out, named) != 1 {
+		t.Fatalf("the loop names the refusal once per change (WARN), got %d:\n%s", strings.Count(out, named), out)
+	}
+	if n := store.ArmRefusalCount(r.st, r.at.id, "2026-09-11", "TEST", "arm_source_mismatch"); n != 1 {
+		t.Fatalf("the refusal is counted once per change: %d", n)
 	}
 }

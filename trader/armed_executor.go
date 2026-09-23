@@ -903,6 +903,9 @@ func (at *AutoTrader) maybeManageArmedOrdersAtOpts(snap map[string]kernel.Struct
 			}
 			if row.ID == 0 {
 				if err := ledger.UpsertArm(row); err != nil {
+					if at.armSourceRefused(plan, sc, li, err, scope, admitted) {
+						continue
+					}
 					at.logWarnf("⚔️ arm write failed %s %s leg %d: %v", plan.Session, sc.ID, li+1, err)
 					continue
 				}
@@ -958,7 +961,12 @@ func (at *AutoTrader) maybeManageArmedOrdersAtOpts(snap map[string]kernel.Struct
 				}
 				row.EntryPx, row.StopPx, row.TargetPx = leg.Entry, leg.Stop, leg.Target
 				row.Version = plan.Version
-				_ = ledger.UpsertArm(row)
+				// W5 R13(a): the refresh write can be REFUSED by type (a live row
+				// under this key that carries another opportunity) — a named,
+				// counted refusal, never a discarded error.
+				if err := ledger.UpsertArm(row); err != nil {
+					at.armSourceRefused(plan, sc, li, err, scope, admitted)
+				}
 			}
 		}
 	}
@@ -2005,6 +2013,36 @@ func armRefusalClass(verdict string) string {
 // armRefusalChanged (F4) — true when this arm-spec's refusal verdict is new or
 // changed (the caller logs); false when the identical verdict was already
 // logged for the same spec (the caller stays silent).
+// armSourceRefused handles UpsertArm's W5 R13(a) typed refusal at the
+// authoring loop (CTO round 2): ErrArmSourceMismatch — the row under this
+// (plan, scenario, leg) key belongs to ANOTHER opportunity, and a ledger row
+// never changes opportunity. The leg was NOT authored: the G1 admit this pass
+// granted is withdrawn (the admit key is version-insensitive, so it would
+// otherwise admit the other opportunity's row), scope.note names the refusal,
+// and one WARN + one per-session counter fire per change. false = err is not
+// that refusal (the caller keeps its own handling).
+func (at *AutoTrader) armSourceRefused(plan *kernel.ActivePlan, sc kernel.PlanScenario, li int, err error, scope *armedPassScope, admitted armAdmission) bool {
+	if !errors.Is(err, store.ErrArmSourceMismatch) {
+		return false
+	}
+	const class = "arm_source_mismatch"
+	if admitted != nil {
+		admitted.retract(plan.PlanID, sc.ID, li)
+	}
+	scope.note(sc.ID, "refused: "+class+": "+err.Error())
+	key := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID + ":leg" + strconv.Itoa(li+1) + ":source"
+	if armRefusalChanged(&at.armRefusalLast, key, class) {
+		shown := ""
+		if at.store != nil {
+			if n, cerr := store.IncArmRefusal(at.store, at.id, kernel.PlanTradeDateFor(plan), plan.Session, class); cerr == nil {
+				shown = fmt.Sprintf(" · %s this session: %d", class, n)
+			}
+		}
+		at.logWarnf("✕ armed %s %s leg %d NOT authored — %s: %v%s", plan.Session, sc.ID, li+1, class, err, shown)
+	}
+	return true
+}
+
 func armRefusalChanged(last *map[string]string, key, verdict string) bool {
 	if *last == nil {
 		*last = map[string]string{}

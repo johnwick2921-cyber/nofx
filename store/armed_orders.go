@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -302,6 +303,13 @@ func (s *ArmedOrderStore) Migrate() error {
 	return s.db.AutoMigrate(&ArmedOrderDB{})
 }
 
+// ErrArmSourceMismatch is UpsertArm's refusal for a write that would land on
+// a row carrying ANOTHER opportunity (W5 R13, CTO round 2): a ledger row never
+// changes opportunity. The (plan, scenario, leg) key is version-insensitive,
+// so a P id reused on a later version used to rewrite the older opportunity's
+// row — source_ref, deadline, epoch and prices — with only an INFO.
+var ErrArmSourceMismatch = errors.New("armed_orders: the ledger row belongs to another opportunity")
+
 // UpsertArm writes/refreshes the arm row for (plan_id, scenario, leg_index).
 // Same key = same row (state reset to armed only when the spec CHANGED
 // materially — entry/stop/target diff >= 2 ticks — the caller decides and
@@ -359,6 +367,18 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 	err := s.db.Where("plan_id = ? AND scenario = ? AND leg_index = ?", row.PlanID, row.Scenario, row.LegIndex).
 		Order("CASE WHEN " + NonTerminalArmStateSQL() + " THEN 0 ELSE 1 END, placement_seq DESC, id DESC").First(&existing).Error
 	if err == nil {
+		// W5 R13(a) — A LEDGER ROW NEVER CHANGES OPPORTUNITY. Every branch
+		// below writes onto (or mints the next placement of) this key; when the
+		// row already carries a DIFFERENT opportunity, none of them may run —
+		// the armed branch would rewrite A's unplaced row to B's source_ref,
+		// deadline, epoch and prices. Refused by type, loudly.
+		if ex := strings.TrimSpace(existing.SourceRef); ex != "" && ex != strings.TrimSpace(row.SourceRef) {
+			logger.Warnf("⛔ arm write refused: %s leg %d row #%d (%s) holds opportunity %s — the write carries %s; a ledger row never changes opportunity",
+				row.Scenario, row.LegIndex+1, existing.ID, existing.State, RedactPictureOppKey(ex), RedactPictureOppKey(strings.TrimSpace(row.SourceRef)))
+			return fmt.Errorf("%w: row #%d (%s leg %d, %s) holds %s, the write carries %s",
+				ErrArmSourceMismatch, existing.ID, row.Scenario, row.LegIndex+1, existing.State,
+				RedactPictureOppKey(ex), RedactPictureOppKey(strings.TrimSpace(row.SourceRef)))
+		}
 		// D5 — a WORKING row is a LIVE BROKER ORDER. Rewriting its prices in
 		// place overwrote the slot and lost the brackets (rows 582, 585): the
 		// ledger and the broker then held two different orders under one id.
