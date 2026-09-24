@@ -21,12 +21,15 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"nofx/auth"
 
 	"github.com/gin-gonic/gin"
+
+	"gorm.io/gorm"
 )
 
 var futureEpochLine = regexp.MustCompile(`token predates the account's last credential change — credential epoch is (\d+)s in the future — clock stepped back; sign-in refused until then`)
@@ -112,4 +115,44 @@ func TestCredentialGuardFutureEpochRefusalSaysTheClockSteppedBack(t *testing.T) 
 		t.Fatalf("no credential-guard refusal line:\n%s", all)
 	}
 	assertAheadAbout(t, "credential guard", all, 30*time.Minute)
+}
+
+// The same line from the credential guard at the PRODUCTION ROUTER (fapi
+// verify note 1: the direct-handler pin above is not L8, and the guard IS
+// reachable through the router). authMiddleware reads the users row and
+// admits the token (its epoch is in the past); a one-shot gorm query hook
+// then moves updated_at 30 min AHEAD — a clock that stepped back between the
+// two reads — so the guard's own read of the row sees a future epoch and
+// must refuse with the clock note.
+func TestCredentialGuardFutureEpochRefusalSaysTheClockSteppedBackAtTheRouter(t *testing.T) {
+	logs := captureLogs(t)
+	e := newUpdEnv(t)
+	setAdminUpdatedAt(t, e, time.Now().Add(-10*time.Minute))
+	db := e.st.GormDB()
+	var moved atomic.Bool
+	const hook = "f6:epoch_ahead_after_first_users_read"
+	if err := db.Callback().Query().After("gorm:query").Register(hook, func(tx *gorm.DB) {
+		if tx.Statement != nil && tx.Statement.Table == "users" && moved.CompareAndSwap(false, true) {
+			if err := tx.Session(&gorm.Session{NewDB: true}).Exec(`UPDATE users SET updated_at = ? WHERE id = ?`, time.Now().Add(30*time.Minute).UTC(), updAdminID).Error; err != nil {
+				t.Errorf("hook: moving updated_at ahead: %v", err)
+			}
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Callback().Query().Remove(hook) })
+
+	tok := mintJWT(t, updAdminID, updAdminEmail, time.Now().Add(-2*time.Second), time.Now().Add(time.Hour), updSecret)
+	w := credCall(t, e, "PUT", "/api/user/password", tok, `{"current_password":"`+updAdminPass+`","new_password":"guard-router-future-1"}`)
+	if !moved.Load() {
+		t.Fatal("the hook never fired — the request read no users row")
+	}
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("PUT /api/user/password with the epoch moved 30 min ahead between the middleware's read and the guard's = %d %s — want the guard's 403", w.Code, w.Body.String())
+	}
+	all := logs()
+	if !strings.Contains(all, "[credentials] refused PUT /api/user/password from 127.0.0.1") {
+		t.Fatalf("no credential-guard refusal line at the router:\n%s", all)
+	}
+	assertAheadAbout(t, "credential guard at the router", all, 30*time.Minute)
 }
