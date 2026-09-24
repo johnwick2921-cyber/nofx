@@ -77,8 +77,10 @@ To restore: first confirm you can sign in with the new password, then run the sa
 Password reset by email is disabled (`POST /api/reset-password` answers 410), so the fix is one statement on the box. Back up `data/data.db` first; it is the live database.
 
 ```sql
-UPDATE users SET password_hash='<bcrypt hash of the new password>', updated_at=CURRENT_TIMESTAMP WHERE email='<your account email>';
+UPDATE users SET password_hash='NEW_BCRYPT_HASH', updated_at=CURRENT_TIMESTAMP WHERE email='YOUR_ACCOUNT_EMAIL';
 ```
+
+Replace `NEW_BCRYPT_HASH` with a bcrypt hash of the new password and `YOUR_ACCOUNT_EMAIL` with the account's exact email; keep the quotes. The 410 body serves this same statement with the same placeholders, readable as-is in raw `curl` output.
 
 - **Set both columns in ONE statement.** `users.updated_at` is the credential epoch (`auth.CredentialEpoch`). Moving it is what signs out every session issued before the reset, including a stolen one. A hash-only UPDATE leaves every one of those sessions valid until it expires. This is pinned by executing the served advice against a temp SQLite store (`TestResetPasswordAdviceRetiresPreResetSessionsOnSQLite`).
 - **No restart.** The bot reads the users row on each request.

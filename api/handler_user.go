@@ -272,7 +272,7 @@ func (s *Server) handleResetPasswordDisabled(c *gin.Context) {
 
 const resetPasswordLockedOutAdvice = "Password reset by email is disabled. Sign in and use PUT /api/user/password. " +
 	"Locked out? Set the new hash AND the credential epoch in ONE statement: " +
-	"UPDATE users SET password_hash='<bcrypt hash of the new password>', updated_at=CURRENT_TIMESTAMP WHERE email='<your account email>'; " +
+	"UPDATE users SET password_hash='NEW_BCRYPT_HASH', updated_at=CURRENT_TIMESTAMP WHERE email='YOUR_ACCOUNT_EMAIL'; " +
 	"— moving updated_at is what signs out every session issued before the reset; a hash-only UPDATE leaves those sessions valid."
 
 // handleResetAccount clears user authentication data so the system returns to
