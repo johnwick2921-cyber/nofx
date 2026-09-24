@@ -17,7 +17,10 @@ package updaterworker
 //   - the hash algorithm is sha512 (ssh-keygen also accepts sha256; we do not);
 //   - the signing key is BYTE-EQUAL to an ssh-ed25519 key the allowed-signers
 //     file lists for the principal "release" — by exact principal, never by
-//     pattern: a wildcard line ssh-keygen would honour admits nothing here;
+//     pattern: a wildcard line ssh-keygen would honour admits nothing here,
+//     and a line whose principal list carries ANY negation ("!…") admits
+//     nothing either (ssh-keygen vetoes the line only when the negated
+//     pattern matches; not implementing patterns, we veto it always);
 //   - ed25519 verifies over "SSHSIG" ‖ string(namespace) ‖ string("") ‖
 //     string("sha512") ‖ string(SHA-512(message)) (PROTOCOL.sshsig).
 //
@@ -224,11 +227,14 @@ func releaseSignerKeys(path string) ([][]byte, error) {
 			continue
 		}
 		fields := strings.Fields(line)
-		forRelease := false
+		forRelease, negated := false, false
 		for _, p := range strings.Split(fields[0], ",") {
 			forRelease = forRelease || p == ReleaseSignaturePrincipal
+			negated = negated || strings.HasPrefix(p, "!")
 		}
-		if !forRelease {
+		// ssh-keygen lets a matching negation ("release,!rel*") veto the line;
+		// patterns are not implemented here, so ANY negation vetoes it.
+		if !forRelease || negated {
 			continue
 		}
 		if len(fields) < 3 {
