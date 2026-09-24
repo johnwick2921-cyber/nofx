@@ -40,7 +40,7 @@ export const updates: GuideSection = {
     },
     {
       kind: 'p',
-      text: 'A password change ends EVERY session signed in before it — on every page, not only on Settings — including the one you changed it from: the page signs you out and you sign in again with the new password. A token issued in the same second as the change is ended too, so a sign-in within that second is refused once. A session token whose account no longer exists (after a reset-account) is refused everywhere. The Telegram bot notices its own token was ended and mints a new one before its next reply; that chat’s conversation memory starts fresh.',
+      text: 'A password change ends EVERY session signed in before it — on every page, not only on Settings — including the one you changed it from: the page signs you out and you sign in again with the new password. A token issued in the same second as the change is ended too: a sign-in within that second succeeds, but its new session is refused on first use and the page signs you out — sign in again. A session token whose account no longer exists (after a reset-account) is refused everywhere. The Telegram bot notices its own token was ended and mints a new one before its next reply; that chat’s conversation memory starts fresh.',
     },
   ],
 }
