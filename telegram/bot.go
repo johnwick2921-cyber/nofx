@@ -66,50 +66,10 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 		allowedChatID = id
 	}
 
-	// botUserID / botToken / agents are resolved lazily and refresh when user registers.
-	var (
-		botUserID    string
-		botUserEmail string
-		botToken     string
-		agents       *agent.Manager
-	)
-
-	resolveBotUser := func() bool {
-		users, err := st.User().GetAll()
-		if err != nil || len(users) == 0 {
-			return false
-		}
-		u := users[0]
-		// M3 red-team H2: the API refuses a token issued at or before the
-		// account's last credential change on every route, so the SAME user
-		// also re-mints when its token would be refused (botTokenStale).
-		if u.ID == botUserID && !botTokenStale(botToken, u) {
-			return true
-		}
-		newToken, err := agent.GenerateBotToken(u.ID)
-		if err != nil {
-			logger.Errorf("Failed to generate bot JWT for user %s: %v", u.ID, err)
-			return false
-		}
-		prev := botUserID
-		botUserID = u.ID
-		botUserEmail = u.Email
-		botToken = newToken
-		agents = agent.NewManager(cfg.APIServerPort, botToken, botUserEmail, botUserID,
-			func() mcp.AIClient { return newLLMClient(st, botUserID) },
-			api.GetAPIDocs(),
-		)
-		switch prev {
-		case "":
-			logger.Infof("Bot: resolved user %s (%s)", botUserID, botUserEmail)
-		case botUserID:
-			logger.Infof("Bot: token re-minted for %s — the previous one would be refused (credential change or expiry)", botUserID)
-		default:
-			logger.Infof("Bot: user changed → %s (%s)", botUserID, botUserEmail)
-		}
-		return true
-	}
-	resolveBotUser()
+	// The bot's account binding — user, JWT, agent manager — resolved lazily;
+	// ident.refresh() re-reads it (and re-mints a token the API would refuse).
+	ident := newBotIdentity(st, cfg.APIServerPort)
+	ident.refresh()
 
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
@@ -130,7 +90,7 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 			if lang := parseLangChoice(text); lang != "" {
 				awaitingLang = false
 				st.TelegramConfig().SetLanguage(lang) //nolint:errcheck
-				sendMarkdownMsg(bot, chatID, statusMsg(st, botUserID, cfg.APIServerPort, lang))
+				sendMarkdownMsg(bot, chatID, statusMsg(st, ident.userID, cfg.APIServerPort, lang))
 			} else {
 				sendMarkdownMsg(bot, chatID, langMenuMsg())
 			}
@@ -139,8 +99,8 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 
 		// ── /start ────────────────────────────────────────────────────────────
 		if text == "/start" {
-			resolveBotUser()
-			if botUserID == "" {
+			ident.refresh()
+			if ident.userID == "" {
 				sendMsg(bot, chatID,
 					"No account found.\nOpen the web dashboard to register, then send /start.")
 				continue
@@ -158,10 +118,10 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 				sendMsg(bot, chatID, "This bot is already bound to another account.")
 				continue
 			} else {
-				agents.Reset(chatID)
+				ident.agents.Reset(chatID)
 			}
 			lang := st.TelegramConfig().GetLanguage()
-			sendMarkdownMsg(bot, chatID, statusMsg(st, botUserID, cfg.APIServerPort, lang))
+			sendMarkdownMsg(bot, chatID, statusMsg(st, ident.userID, cfg.APIServerPort, lang))
 			continue
 		}
 
@@ -193,8 +153,8 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 		}
 
 		// ── Refresh user before every AI call ────────────────────────────────
-		resolveBotUser()
-		if botUserID == "" {
+		ident.refresh()
+		if ident.userID == "" {
 			sendMsg(bot, chatID, "No account found. Open the web dashboard to register.")
 			continue
 		}
@@ -202,8 +162,8 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 		lang := st.TelegramConfig().GetLanguage()
 
 		// ── Guard: show status if not ready for trading ───────────────────────
-		if newLLMClient(st, botUserID) == nil {
-			sendMarkdownMsg(bot, chatID, statusMsg(st, botUserID, cfg.APIServerPort, lang))
+		if newLLMClient(st, ident.userID) == nil {
+			sendMarkdownMsg(bot, chatID, statusMsg(st, ident.userID, cfg.APIServerPort, lang))
 			continue
 		}
 
@@ -233,7 +193,7 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 				bot.Send(edit) //nolint:errcheck
 			}
 
-			reply := agents.Run(chatID, text, onChunk)
+			reply := ident.agents.Run(chatID, text, onChunk)
 
 			if placeholderID != 0 {
 				edit := tgbotapi.NewEditMessageText(chatID, placeholderID, reply)
@@ -253,6 +213,64 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 		}(chatID, text)
 	}
 
+	return true
+}
+
+// botIdentity is the bot's account binding: the user it acts for, the JWT
+// its agent's API tool calls with, and the agent manager built on that
+// token. runBot calls refresh() at start, on /start and before every AI
+// call — so the M3 red-team H2 re-mint (botTokenStale) is exercised where
+// runBot reaches it (bot_token_test.go drives refresh against the
+// production server).
+type botIdentity struct {
+	st      *store.Store
+	apiPort int
+	userID  string
+	email   string
+	token   string
+	agents  *agent.Manager
+}
+
+func newBotIdentity(st *store.Store, apiPort int) *botIdentity {
+	return &botIdentity{st: st, apiPort: apiPort}
+}
+
+// refresh re-reads the account (the first user) and, when the user changed
+// or the current token would be refused, mints a new token and rebuilds the
+// agent manager on it. false = no account (or the mint failed).
+func (b *botIdentity) refresh() bool {
+	users, err := b.st.User().GetAll()
+	if err != nil || len(users) == 0 {
+		return false
+	}
+	u := users[0]
+	// M3 red-team H2: the API refuses a token issued at or before the
+	// account's last credential change on every route, so the SAME user
+	// also re-mints when its token would be refused (botTokenStale).
+	if u.ID == b.userID && !botTokenStale(b.token, u) {
+		return true
+	}
+	newToken, err := agent.GenerateBotToken(u.ID)
+	if err != nil {
+		logger.Errorf("Failed to generate bot JWT for user %s: %v", u.ID, err)
+		return false
+	}
+	prev := b.userID
+	b.userID = u.ID
+	b.email = u.Email
+	b.token = newToken
+	b.agents = agent.NewManager(b.apiPort, b.token, b.email, b.userID,
+		func() mcp.AIClient { return newLLMClient(b.st, b.userID) },
+		api.GetAPIDocs(),
+	)
+	switch prev {
+	case "":
+		logger.Infof("Bot: resolved user %s (%s)", b.userID, b.email)
+	case b.userID:
+		logger.Infof("Bot: token re-minted for %s — the previous one would be refused (credential change or expiry)", b.userID)
+	default:
+		logger.Infof("Bot: user changed → %s (%s)", b.userID, b.email)
+	}
 	return true
 }
 

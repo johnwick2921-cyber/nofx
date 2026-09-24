@@ -11,6 +11,9 @@ package telegram
 
 import (
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"net"
 	"net/http"
@@ -184,5 +187,119 @@ func TestBotTokenStaleOnAnythingTheAPIWouldRefuse(t *testing.T) {
 		if !botTokenStale(tok, u) {
 			t.Errorf("%s token: botTokenStale = false, want true", name)
 		}
+	}
+}
+
+// Verifier gap (M3 ha, defect 1): the re-mint is pinned WHERE runBot reaches
+// it — botIdentity.refresh, which runBot calls at start, on /start and before
+// every AI call (TestRunBotMintsOnlyThroughRefresh pins those calls). A
+// compiling revert of refresh's condition to "same user ⇒ keep the token"
+// goes RED here, not only a revert of the predicate: after the owner's
+// password change the bot must carry a token the API admits.
+func TestBotRefreshReMintsAfterAPasswordChangeAtItsCallSite(t *testing.T) {
+	base, st := btBoot(t)
+	ident := newBotIdentity(st, 0)
+	if !ident.refresh() {
+		t.Fatal("refresh with an account on the box = false")
+	}
+	first, firstAgents := ident.token, ident.agents
+	if ident.userID != btOwnerID || first == "" || firstAgents == nil {
+		t.Fatalf("refresh resolved user=%q token-set=%v agents-set=%v", ident.userID, first != "", firstAgents != nil)
+	}
+	if code, _ := btCall(t, base, "GET", "/api/my-traders", first, ""); code != http.StatusOK {
+		t.Fatalf("control: the bot's first token on GET /api/my-traders = %d", code)
+	}
+	// Nothing changed: the token and the agent manager (the chats' memory)
+	// are kept.
+	if !ident.refresh() || ident.token != first || ident.agents != firstAgents {
+		t.Fatal("a refresh with nothing changed re-minted or rebuilt the agent manager")
+	}
+
+	// The owner changes the password through the web flow.
+	code, body := btCall(t, base, "POST", "/api/login", "", `{"email":"`+btOwnerEmail+`","password":"`+btOwnerPass+`"}`)
+	if code != http.StatusOK {
+		t.Fatalf("owner login = %d", code)
+	}
+	var login struct {
+		Token string `json:"token"`
+	}
+	_ = json.Unmarshal([]byte(body), &login)
+	if code, body := btCall(t, base, "PUT", "/api/user/password", login.Token, `{"current_password":"`+btOwnerPass+`","new_password":"owner-rotated-pass-2"}`); code != http.StatusOK {
+		t.Fatalf("the owner's password change = %d %s", code, body)
+	}
+	if code, _ := btCall(t, base, "GET", "/api/my-traders", first, ""); code != http.StatusUnauthorized {
+		t.Fatalf("the bot's pre-change token on GET /api/my-traders = %d — want 401 (H2)", code)
+	}
+
+	// The bot's next refresh (its next message), past the change's second.
+	now := time.Now()
+	time.Sleep(now.Truncate(time.Second).Add(time.Second + 20*time.Millisecond).Sub(now))
+	if !ident.refresh() {
+		t.Fatal("refresh after the password change = false")
+	}
+	if ident.token == first {
+		t.Fatal("refresh kept the token the API now refuses — every agent call would get 401 until a restart")
+	}
+	if ident.agents == firstAgents {
+		t.Fatal("refresh re-minted but kept the agent manager built on the refused token")
+	}
+	if code, body := btCall(t, base, "GET", "/api/my-traders", ident.token, ""); code != http.StatusOK {
+		t.Fatalf("the bot's token after refresh on GET /api/my-traders = %d %s — want 200", code, body)
+	}
+}
+
+// runBot reaches the bot's identity ONLY through botIdentity.refresh: it
+// calls refresh at start, on /start and before every AI call, and nothing
+// in the package but refresh mints the bot's token — so the refresh the test
+// above drives is the code runBot runs.
+func TestRunBotMintsOnlyThroughRefresh(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	refreshCalls, mintSites, parsed := 0, []string{}, 0
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") || strings.HasSuffix(e.Name(), "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(token.NewFileSet(), e.Name(), nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		parsed++
+		for _, d := range f.Decls {
+			fd, ok := d.(*ast.FuncDecl)
+			if !ok {
+				continue
+			}
+			name := fd.Name.Name
+			if fd.Recv != nil && len(fd.Recv.List) == 1 {
+				if s, ok := fd.Recv.List[0].Type.(*ast.StarExpr); ok {
+					if id, ok := s.X.(*ast.Ident); ok {
+						name = "(*" + id.Name + ")." + name
+					}
+				}
+			}
+			ast.Inspect(fd, func(n ast.Node) bool {
+				if sel, ok := n.(*ast.SelectorExpr); ok {
+					if sel.Sel.Name == "GenerateBotToken" {
+						mintSites = append(mintSites, name)
+					}
+					if name == "runBot" && sel.Sel.Name == "refresh" {
+						refreshCalls++
+					}
+				}
+				return true
+			})
+		}
+	}
+	if parsed == 0 {
+		t.Fatal("no package source parsed — the pin walked nothing")
+	}
+	if refreshCalls < 3 {
+		t.Fatalf("runBot calls refresh %d times — want at start, on /start and before every AI call (≥ 3)", refreshCalls)
+	}
+	if strings.Join(mintSites, ",") != "(*botIdentity).refresh" {
+		t.Fatalf("the bot's token is minted in %v — want ONLY (*botIdentity).refresh (the call site the re-mint test drives)", mintSites)
 	}
 }
