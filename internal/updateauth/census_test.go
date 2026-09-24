@@ -451,8 +451,10 @@ func updateAuthOffenders(root string) (offenders []string, scanned int, err erro
 //     not re-declared in the declaration either (census-repair verify P2: a
 //     fake bound after a shadowing `updateauth := …` received the key), the
 //     call sits inside that binding's scope after it, and the name is
-//     declared nowhere else in the declaration; or clear(key) with clear the builtin (declared
-//     neither in the declaration nor at the package's top level).
+//     declared nowhere else in the declaration; or clear(key) with clear the
+//     builtin (declared neither in the declaration — a generic method's
+//     receiver type parameters included, census-repair verify P1 — nor at
+//     the package's top level).
 //
 // It is judged by NAME, not by type: a second variable that happens to share
 // the key's name, a struct-literal field spelled like it, or a key re-bound
@@ -558,6 +560,9 @@ func keyFlowOffenders(rel string, fset *token.FileSet, f *ast.File, aliases map[
 					check(x.Name)
 				case *ast.FuncDecl:
 					check(x.Name)
+					for _, id := range receiverTypeParams(x) {
+						check(id)
+					}
 				}
 				return true
 			})
@@ -630,6 +635,49 @@ func keyFlowOffenders(rel string, fset *token.FileSet, f *ast.File, aliases map[
 			}
 			return true
 		})
+	}
+	return out
+}
+
+// receiverTypeParams returns the type parameters a generic method's receiver
+// DECLARES: `func (r *T[K, clear]) m()` declares K and clear for the whole
+// method inside an index expression of the receiver type — not in any
+// ast.Field, so a Field walk never sees them (census-repair verify P1:
+// `func (vccP1Box[clear]) …` made clear(key) a conversion that carried the
+// key out). go/types' unpackRecv reads unparen, an optional *, unparen, then
+// the indices; parentheses and stars are unwrapped here in any order and
+// depth (a superset). A non-identifier index does not compile ("receiver
+// type parameter … must be an identifier") and declares nothing.
+func receiverTypeParams(fd *ast.FuncDecl) []*ast.Ident {
+	if fd.Recv == nil {
+		return nil
+	}
+	var out []*ast.Ident
+	for _, fld := range fd.Recv.List {
+		t := fld.Type
+		for {
+			if p, ok := t.(*ast.ParenExpr); ok {
+				t = p.X
+				continue
+			}
+			if st, ok := t.(*ast.StarExpr); ok {
+				t = st.X
+				continue
+			}
+			break
+		}
+		var indices []ast.Expr
+		switch x := t.(type) {
+		case *ast.IndexExpr:
+			indices = []ast.Expr{x.Index}
+		case *ast.IndexListExpr:
+			indices = x.Indices
+		}
+		for _, e := range indices {
+			if id, ok := e.(*ast.Ident); ok {
+				out = append(out, id)
+			}
+		}
 	}
 	return out
 }
