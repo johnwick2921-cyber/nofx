@@ -1,16 +1,16 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strings"
-	"time"
 
 	"nofx/auth"
 	"nofx/logger"
 	"nofx/store"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
+	"gorm.io/gorm"
 )
 
 // ── M3 red-team H1 — who may act on an account's CREDENTIALS ─────────────
@@ -164,24 +164,50 @@ func (s *Server) credentialActorRefusal(c *gin.Context) (*store.User, string) {
 	if cl.Email == "" || cl.Email != u.Email {
 		return nil, "token email is not the account's email"
 	}
-	// H2 (red1 R2): a token issued before the row's last credential change
-	// (users.updated_at — the retire epoch Q8 applies on /api/updates) cannot
-	// act on the credentials again: a thief's older token cannot change the
-	// password the owner just rotated, log in, and lock the owner out. A row
-	// that never recorded a change (zero updated_at) retires nothing here; the
-	// /updates gate stays stricter (zero ⇒ refuse).
-	if cl.IssuedAt == nil || (!u.UpdatedAt.IsZero() && issuedBefore(cl.IssuedAt, u.UpdatedAt)) {
+	// H2 (red1 R2): a token issued at or before the row's last credential
+	// change cannot act on the credentials again. authMiddleware already
+	// refuses such a token on EVERY protected route (tokenRetirement, below);
+	// the guard re-checks with the SAME predicate (auth.RetiredBy — the
+	// whole-second Q8 rule; a row that never changed retires nothing) so the
+	// handlers can never be wired without it. The /updates gate stays stricter
+	// (zero updated_at ⇒ refuse).
+	if auth.RetiredBy(cl.IssuedAt, u.CreatedAt, u.UpdatedAt) {
 		return nil, "token predates the account's last credential change"
 	}
 	return u, ""
 }
 
-// issuedBefore reports whether a token's iat lies before epoch, compared in
-// the whole seconds a JWT NumericDate carries (nil iat ⇒ true, fail closed).
-// The ONE retire predicate: the credential guard above and the /updates gate's
-// Q8 both call it.
-func issuedBefore(iat *jwt.NumericDate, epoch time.Time) bool {
-	return iat == nil || iat.Time.Unix() < epoch.Unix()
+// tokenRetirement is authMiddleware's H2 check (CTO ruling 1790231205208):
+// a token is refused on EVERY protected route when it was issued at or before
+// its account's credential epoch (auth.RetiredBy — iat STRICTLY after
+// users.updated_at truncated to the second, the /updates Q8 rule), when it
+// carries no iat, or when its account row no longer exists (reset-account
+// wiped it — no epoch can be established; fail closed). It returns the HTTP
+// status and a log category ("" = admitted): 401 for a retired/unaccountable
+// token (the web UI's 401 path signs the user out and back in), 503 when the
+// users store cannot be read (the request is refused, the session is not
+// ended by a transient read error).
+func (s *Server) tokenRetirement(cl *auth.Claims) (int, string) {
+	if cl == nil || cl.IssuedAt == nil {
+		return http.StatusUnauthorized, "token carries no iat"
+	}
+	if s.store == nil {
+		return http.StatusServiceUnavailable, "no user store"
+	}
+	u, err := s.store.User().GetByID(cl.UserID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return http.StatusUnauthorized, "no account row for the token"
+		}
+		return http.StatusServiceUnavailable, "user row unreadable"
+	}
+	if u == nil {
+		return http.StatusUnauthorized, "no account row for the token"
+	}
+	if auth.RetiredBy(cl.IssuedAt, u.CreatedAt, u.UpdatedAt) {
+		return http.StatusUnauthorized, "token predates the account's last credential change"
+	}
+	return 0, ""
 }
 
 func credentialForbid(c *gin.Context, why string) {

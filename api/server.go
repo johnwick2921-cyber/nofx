@@ -922,6 +922,20 @@ func (s *Server) authMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		// M3 red-team H2 (CTO ruling 1790231205208): a token issued at or
+		// before its account's last credential change — or with no iat, or
+		// whose account row is gone — acts NOWHERE (credential_guard.go
+		// tokenRetirement; the whole-second rule /api/updates Q8 applies).
+		if code, why := s.tokenRetirement(claims); why != "" {
+			logger.Warnf("🔒 [auth] refused %s %s from %s: %s", c.Request.Method, c.FullPath(), c.ClientIP(), why)
+			msg := "Session ended — please log in again"
+			if code == http.StatusServiceUnavailable {
+				msg = "Account check unavailable — try again"
+			}
+			c.AbortWithStatusJSON(code, gin.H{"error": msg})
+			return
+		}
+
 		// M3 red-team H1: a machine token (the Telegram bot's, gate-jwt's —
 		// any scope claim, or bot@internal) is denied BY DEFAULT on the
 		// credential, Telegram-config and update routes (credential_guard.go).

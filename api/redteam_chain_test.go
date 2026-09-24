@@ -8,6 +8,7 @@ package api
 //	          /telegram config, /updates*                  → refused
 //	owner token + WRONG current_password                   → refused
 //	owner token + the right current_password               → ok
+//	every token issued before that change (H2)             → refused everywhere
 //
 // Each leg asserts the SECURE outcome and that nothing was written.
 
@@ -71,5 +72,20 @@ func TestRedTeamChainAtTheProductionRouter(t *testing.T) {
 	}
 	if _, code := credLogin(t, e, updAdminEmail, "owner-new-pass-01"); code != http.StatusOK {
 		t.Fatalf("leg 4: login with the new password = %d", code)
+	}
+
+	// Leg 5 (H2): every token issued before that change — the Q8-retired
+	// older session, the session that made the change, the bot's — acts
+	// nowhere: 401 on ordinary and bot-config routes, 403 on /updates.
+	for name, tok := range map[string]string{"older session (Q8-retired)": e.tok, "the changing session": owner, "bot": bot} {
+		for _, p := range []string{"/api/my-traders", "/api/config/resolved"} {
+			if w := credCall(t, e, "GET", p, tok, ""); w.Code != http.StatusUnauthorized {
+				t.Fatalf("leg 5: %s after the change → GET %s = %d — want 401", name, p, w.Code)
+			}
+		}
+		e.expectAllForbidden("leg 5: "+name+" after the change → /api/updates*", withToken(tok))
+	}
+	if w := credCall(t, e, "DELETE", "/api/telegram/binding", e.tok, ""); w.Code != http.StatusUnauthorized {
+		t.Fatalf("leg 5: the Q8-retired session → DELETE /api/telegram/binding = %d — want 401", w.Code)
 	}
 }

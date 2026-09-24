@@ -254,8 +254,11 @@ func (s *Server) updatesRefusal(c *gin.Context) string {
 	// TimePrecision), updated_at has whatever precision its writer stored, so
 	// the rule correct at every precision is iat STRICTLY after updated_at
 	// truncated to the second (red-team red-1 #5): a token from the same
-	// second as the change — either side of it — is refused.
-	if claims.IssuedAt == nil || u.UpdatedAt.IsZero() || claims.IssuedAt.Time.Unix() <= u.UpdatedAt.Unix() {
+	// second as the change — either side of it — is refused. The comparison
+	// is auth.IssuedNotAfter, the one H2 rule authMiddleware applies too; Q8
+	// stays stricter than it (zero updated_at ⇒ refuse, and updated_at is
+	// the epoch even on a never-changed row).
+	if u.UpdatedAt.IsZero() || auth.IssuedNotAfter(claims.IssuedAt, u.UpdatedAt) {
 		return "token older than the user row"
 	}
 	return ""

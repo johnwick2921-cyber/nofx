@@ -38,5 +38,9 @@ export const updates: GuideSection = {
       kind: 'p',
       text: 'Changing the password needs your CURRENT password as well as the new one: the bot checks it against the stored password and refuses a wrong one ("current password is incorrect", shown under the form). A signed-in session alone can no longer set a new password. Machine tokens — the Telegram bot’s and the gate-jwt tool’s — can never change a password, reset the account, change the Telegram settings or reach Updates, whatever they carry. A password change also un-enrolls Updates: every Updates route answers 403 until you re-enroll on the box with `go run ./cmd/updater-bootstrap enroll --replace <email>` (confirm you can sign in with the new password first).',
     },
+    {
+      kind: 'p',
+      text: 'A password change ends EVERY session signed in before it — on every page, not only on Settings — including the one you changed it from: the page signs you out and you sign in again with the new password. A token issued in the same second as the change is ended too, so a sign-in within that second is refused once. A session token whose account no longer exists (after a reset-account) is refused everywhere. The Telegram bot notices its own token was ended and mints a new one before its next reply; that chat’s conversation memory starts fresh.',
+    },
   ],
 }

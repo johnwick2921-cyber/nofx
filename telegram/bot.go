@@ -80,7 +80,10 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 			return false
 		}
 		u := users[0]
-		if u.ID == botUserID {
+		// M3 red-team H2: the API refuses a token issued at or before the
+		// account's last credential change on every route, so the SAME user
+		// also re-mints when its token would be refused (botTokenStale).
+		if u.ID == botUserID && !botTokenStale(botToken, u) {
 			return true
 		}
 		newToken, err := agent.GenerateBotToken(u.ID)
@@ -96,9 +99,12 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 			func() mcp.AIClient { return newLLMClient(st, botUserID) },
 			api.GetAPIDocs(),
 		)
-		if prev == "" {
+		switch prev {
+		case "":
 			logger.Infof("Bot: resolved user %s (%s)", botUserID, botUserEmail)
-		} else {
+		case botUserID:
+			logger.Infof("Bot: token re-minted for %s — the previous one would be refused (credential change or expiry)", botUserID)
+		default:
 			logger.Infof("Bot: user changed → %s (%s)", botUserID, botUserEmail)
 		}
 		return true

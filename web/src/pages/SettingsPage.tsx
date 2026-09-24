@@ -41,7 +41,7 @@ function configBadge(label: string, active: boolean) {
 }
 
 export function SettingsPage() {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const { language } = useLanguage()
   const [activeTab, setActiveTab] = useState<Tab>('account')
 
@@ -152,9 +152,14 @@ export function SettingsPage() {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || 'Failed to update password')
       }
-      toast.success('Password updated successfully')
+      // M3 red-team H2: the server now refuses EVERY session issued before
+      // the change — this one included — so sign out and let the owner sign
+      // in again with the new password (instead of a dead session 401-ing
+      // on its next call).
+      toast.success(t('passwordChangedSignInAgain', language))
       setCurrentPassword('')
       setNewPassword('')
+      logout()
     } catch (err) {
       // The server's own refusal text (403 "current password is incorrect",
       // 400 "current_password and new_password … are required", …) is shown
