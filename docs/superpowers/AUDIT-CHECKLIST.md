@@ -6590,7 +6590,7 @@ real time)".
 **The tell:** `x == 0 || x <= now`. A zero that shares a comparison with a real
 value is a fabricated value wearing the type's clothes (canon: absent ≠ []).
 
-**Instance 2026-09-24 M3:** **OPEN.** After enrollment, a missing `data/updater/seen_job_ids.json` reads as an empty store, so a spent update code is authorized again (red-3 #4 [A]). fa's fix `dd3c472e` is not on the branch; the runbook's "never delete the seen store" is the only control, and it is a PR-body known limit (red-3 #4; fa `dd3c472e`, not folded)
+**Instance 2026-09-24 M3:** **CLOSED** in `fix/m3-install-path-lows` `cb23f6ca` (fa `dd3c472e` cherry-picked): `Enroll` creates the seen store; once enrolled, a missing store is `ErrSeenCorrupt`, never empty; pinned by `TestEnrollCreatesTheSeenStoreAndAMissingOneAfterwardsIsCorrupt` and `TestInstallRefusesWhenTheSeenStoreIsMissingAfterEnrollment`.
 
 ## CLASS 210 — a requirement whose own fetch cannot satisfy it
 
@@ -6864,7 +6864,7 @@ At HEAD `c4111476` (FOLD-3 + FOLD-10) the NT8 decision path is: `executeOpen*Wit
 **Probe:** grep `>= 0 &&` next to `now.Sub(` (or `d >= 0`, `age >= 0`) in any window check. Find where that `now` is captured: if it is captured before the read, negative ages must pass.
 **Residual [B] (FOLD-11 builder C3):** `fresh()` has no lower bound now. A row whose `UpdatedAt` is in the future (a clock step back) reads as fresh until the wall clock passes it. This fails closed: the AI open is refused and nothing is flattened. Any future upper bound must exceed the test's +30 s stamp.
 
-**Instance 2026-09-24 M3:** **OPEN.** The update install read `now` once, then waited on an unbounded `.seen.lock` flock, so a code was consumed about 1 h after it expired (red-3 #3 [A]). fa's clock-read-under-the-lock `100371ff` is not on the branch; it is a PR-body known limit (red-3 #3; fa `100371ff`, not folded)
+**Instance 2026-09-24 M3:** **CLOSED** in `fix/m3-install-path-lows` `c777235f` (fa `100371ff` cherry-picked): `Consume` now takes a clock function and judges expiry on a reading taken UNDER the seen-store lock; pinned by `TestInstallJudgesExpiryUnderTheSeenStoreLock`.
 
 ## CLASS 233 — a per-pass sweep that re-sends an unpaced cancel
 
