@@ -29,7 +29,9 @@ import (
 //     Server wiring, the attended CLI's one file, and the M4 worker package
 //     by its exact directory (never a prefix: "internal/updater" also covered
 //     the APP-linked internal/updaterwire — red-team 3 #1(b)); never a dot or
-//     blank import;
+//     blank import, never the same file importing it twice, and EVERY name a
+//     file imports it under is resolved before a reference is judged
+//     (verifier D1: a second name hid every reference through the first);
 //  3. every exported identifier an outside file references is CLASSIFIED:
 //     restricted ones (enroll, mint, load the key/admin, consume, verify,
 //     and every enrollment path helper) are admitted per FILE; open ones
@@ -255,8 +257,12 @@ func updateAuthOffenders(root string) (offenders []string, scanned int, err erro
 			}
 		}
 
-		// 2. imports; 4. crypto/hmac and updater-area imports
-		alias := ""
+		// 2. imports; 4. crypto/hmac and updater-area imports. EVERY name the
+		// file imports this package under is resolved (verifier D1: one
+		// variable overwritten per import let a second name — `ua` beside
+		// `updateauth` — hide every reference through the first).
+		aliases := map[string]bool{}
+		imported := 0
 		for _, im := range f.Imports {
 			ip, _ := strconv.Unquote(im.Path.Value)
 			if ip == "crypto/hmac" {
@@ -273,13 +279,18 @@ func updateAuthOffenders(root string) (offenders []string, scanned int, err erro
 			if !importers(rel) {
 				offend(rel + ": imports nofx/internal/updateauth")
 			}
-			alias = "updateauth"
+			if imported++; imported == 2 {
+				offend(rel + ": imports nofx/internal/updateauth more than once")
+			}
+			alias := "updateauth"
 			if im.Name != nil {
 				alias = im.Name.Name
 				if alias == "." || alias == "_" {
 					offend(rel + ": " + alias + "-imports nofx/internal/updateauth")
+					continue
 				}
 			}
+			aliases[alias] = true
 		}
 
 		// 1. literals and constant-folded runs; 4. a path element "updater"
@@ -308,7 +319,7 @@ func updateAuthOffenders(root string) (offenders []string, scanned int, err erro
 					reach("references " + x.Name)
 				}
 			case *ast.SelectorExpr: // 3. classified references (any reference, not only calls)
-				if id, ok := x.X.(*ast.Ident); ok && alias != "" && id.Name == alias {
+				if id, ok := x.X.(*ast.Ident); ok && aliases[id.Name] {
 					name := x.Sel.Name
 					if allowed, restricted := updateAuthRestricted[name]; restricted {
 						if !allowed[rel] {
