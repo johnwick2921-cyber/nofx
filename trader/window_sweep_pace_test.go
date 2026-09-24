@@ -142,25 +142,27 @@ func TestWindowSweepPacesTheNoLinkIntentRecord(t *testing.T) {
 // Only a cancel_pending row is paced: a row in any other non-terminal state is
 // sent its cancel even when the sweep's own record says it sent one 4 s ago.
 func TestWindowSweepPacesOnlyACancelPendingRow(t *testing.T) {
-	for _, st := range []string{store.StateWorking, store.StatePlacePending} {
-		t.Run(st, func(t *testing.T) {
-			r, sid := windowSweepRig(t, "w1b-fold12-only-pending-"+st)
-			sweep := r.windowPass(e13Lead, sid)
-			if sweep == 0 {
-				t.Fatal("fixture: the window sweep must send the working arm's cancel")
-			}
-			got := r.row("S1")
-			if got.State != store.StateCancelPending {
-				t.Fatalf("fixture: %s", cancelBrief(got))
-			}
-			if err := r.st.ArmedOrders().DB().Model(&store.ArmedOrderDB{}).Where("id = ?", got.ID).UpdateColumn("state", st).Error; err != nil {
-				t.Fatal(err)
-			}
-			if n := r.windowPass(e13Lead.Add(4*time.Second), sid); n != sweep {
-				t.Fatalf("a %s row (the sweep's record 4 s old) was paced: sent %d frame(s), want %d", st, n, sweep)
-			}
-		})
+	// One subtest per non-terminal state, called by name — no retyped state
+	// list (store TestArmStateNoRetypedLists).
+	check := func(t *testing.T, st string) {
+		r, sid := windowSweepRig(t, "w1b-fold12-only-pending-"+st)
+		sweep := r.windowPass(e13Lead, sid)
+		if sweep == 0 {
+			t.Fatal("fixture: the window sweep must send the working arm's cancel")
+		}
+		got := r.row("S1")
+		if got.State != store.StateCancelPending {
+			t.Fatalf("fixture: %s", cancelBrief(got))
+		}
+		if err := r.st.ArmedOrders().DB().Model(&store.ArmedOrderDB{}).Where("id = ?", got.ID).UpdateColumn("state", st).Error; err != nil {
+			t.Fatal(err)
+		}
+		if n := r.windowPass(e13Lead.Add(4*time.Second), sid); n != sweep {
+			t.Fatalf("a %s row (the sweep's record 4 s old) was paced: sent %d frame(s), want %d", st, n, sweep)
+		}
 	}
+	t.Run(store.StateWorking, func(t *testing.T) { check(t, store.StateWorking) })
+	t.Run(store.StatePlacePending, func(t *testing.T) { check(t, store.StatePlacePending) })
 }
 
 // "Requested" is any path's request the ledger records, not only the sweep's
