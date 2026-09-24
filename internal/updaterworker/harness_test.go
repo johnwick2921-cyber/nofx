@@ -92,10 +92,13 @@ type box struct {
 	badToken       bool // the app refuses the token (401)
 	verdictMissing bool
 	holdWriteLies  bool // the hold write lands on disk, then errs (U1 item 9)
+	holdWriteFails bool // the hold write errs before anything lands
 
 	calls       []string
 	violations  []string
 	watchOpts   []WatchOpts
+	watchSHAs   []string
+	rollbackArg [][2]Release
 	activateIDs []Identity
 	rollbackIDs []Identity
 }
@@ -180,6 +183,9 @@ func newRig(t *testing.T, opts ...rigOpt) *rig {
 	t.Cleanup(func() { writeMaintenanceHold, clearMaintenanceHold = origW, origC })
 	writeMaintenanceHold = func(d string, h store.MaintenanceHold) error {
 		b.expect("hold_write", false, updaterjob.StateMaintenanceHeld)
+		if b.holdWriteFails {
+			return errors.New("open .hold-*.tmp: no space left on device")
+		}
 		if err := origW(d, h); err != nil {
 			return err
 		}
@@ -435,6 +441,7 @@ func (f *fakeLib) Watch(rel Release, id Identity, opts WatchOpts) (Receipt, erro
 	f.b.expect("watch", true, updaterjob.StateBooted, updaterjob.StateRollingBack)
 	f.b.mu.Lock()
 	f.b.watchOpts = append(f.b.watchOpts, opts)
+	f.b.watchSHAs = append(f.b.watchSHAs, rel.SHA)
 	fail, running := f.b.watchFail[rel.SHA], f.b.running
 	f.b.mu.Unlock()
 	ev := map[string]string{"expect_sha": rel.SHA}
@@ -451,6 +458,7 @@ func (f *fakeLib) RollbackTo(prev, install Release, id Identity) (Identity, Rece
 	f.b.expect("rollback", true, updaterjob.StateRollingBack)
 	f.b.mu.Lock()
 	f.b.rollbackIDs = append(f.b.rollbackIDs, id)
+	f.b.rollbackArg = append(f.b.rollbackArg, [2]Release{prev, install})
 	fail := f.b.rollbackFail
 	f.b.mu.Unlock()
 	if fail {
