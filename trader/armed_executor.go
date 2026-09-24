@@ -892,11 +892,13 @@ func (at *AutoTrader) maybeManageArmedOrdersAtOpts(snap map[string]kernel.Struct
 			}
 			zl.stamp(row)               // W3 — policy, zone (inward-rounded), provenance, planned entry
 			stampPictureSource(row, sc) // W5 — source, opportunity, rule, deadline, run epoch
+			// W1b E1: the matched ledger row is KEPT — its prices are what went to the wire.
+			var prior store.ArmedOrderDB
 			existing, err := ledger.ListNonTerminal(at.id)
 			if err == nil {
 				for i := range existing {
 					if existing[i].TraderID == at.id && existing[i].PlanID == row.PlanID && existing[i].Scenario == sc.ID && existing[i].LegIndex == row.LegIndex {
-						row.ID = existing[i].ID // already in the ledger — leave state (churn guard applies to placement)
+						row.ID, prior = existing[i].ID, existing[i] // already in the ledger — leave state
 						break
 					}
 				}
@@ -946,18 +948,20 @@ func (at *AutoTrader) maybeManageArmedOrdersAtOpts(snap map[string]kernel.Struct
 					at.logInfof("⚔️ armed %s %s leg %d %s limit %.2f SL %.2f TP %.2f (tick-managed placement is Phase 2)%s", plan.Session, sc.ID, li+1, side, leg.Entry, leg.Stop, leg.Target, postLossNote)
 				}
 			} else {
-				// CHURN GUARD (2.1): re-spec a working arm's bracket only when the
-				// plan moved SL or TP by ≥ 2 ticks (cancel+re-place on modify).
-				tick := market.FuturesTickSize(at.futuresSymbol())
-				if tick <= 0 {
-					tick = 0.25
+				// W1b E1+E2 — a WORKING row the new version re-priced (bracket ≥ 2
+				// ticks under a newer version, or a zone that no longer holds its
+				// limit) is CANCELLED through the filled-arm guard and re-arms under
+				// the new version once the book confirms (arm_respec.go). The AddOn
+				// cannot modify a resting entry's bracket, so nothing is modified.
+				if at.respecWorkingArm(ledger, plan, sc, li, prior, leg, zl, now) {
+					continue
 				}
-				if row.State == "working" && churnNeedsModify(row.StopPx, row.TargetPx, leg.Stop, leg.Target, tick) {
-					if nt := at.armedTrader(); nt != nil {
-						_ = nt.ModifyBracket(row.SignalID, leg.Stop, leg.Target)
-						at.logInfof("📌 armed %s leg %d bracket modify (churn guard) SL %.2f→%.2f TP %.2f→%.2f",
-							sc.ID, li+1, row.StopPx, leg.Stop, row.TargetPx, leg.Target)
-					}
+				// A live broker order is never rewritten in place (store D5), so the
+				// refresh write for a non-armed row was refused and dropped every
+				// pass. Skipped — unless the row carries ANOTHER opportunity, whose
+				// typed refusal (W5 R13(a)) must still reach armSourceRefused.
+				if prior.State != store.StateArmed && strings.TrimSpace(prior.SourceRef) == strings.TrimSpace(row.SourceRef) {
+					continue
 				}
 				row.EntryPx, row.StopPx, row.TargetPx = leg.Entry, leg.Stop, leg.Target
 				row.Version = plan.Version
