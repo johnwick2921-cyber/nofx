@@ -33,7 +33,12 @@ func IssuedNotAfter(iat *jwt.NumericDate, epoch time.Time) bool {
 // Creating the row stamps updated_at == created_at, which is NOT a credential
 // change — so a row that never changed (or a legacy row with a NULL/zero
 // updated_at) has no epoch and retires nothing (the registration token,
-// minted in the row's creation second, works at once).
+// minted in the row's creation second, works at once). The converse is
+// documented too (FOLD-M3-B): a row whose updated_at differs from created_at
+// for any OTHER reason — a legacy value some older writer or migration left —
+// IS an epoch, and retires the tokens issued at or before it although the
+// password never changed; one sign-in with the same password clears it
+// (api TestLegacyUpdatedAtIsAnEpochWithoutAPasswordChange).
 func CredentialEpoch(createdAt, updatedAt time.Time) time.Time {
 	if updatedAt.IsZero() || updatedAt.Equal(createdAt) {
 		return time.Time{}
