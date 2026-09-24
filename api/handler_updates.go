@@ -33,11 +33,16 @@ import (
 // OFF state) every route refuses and nothing else in the app changes.
 //
 // Install = the gate (identity factor: JWT of the enrolled admin) AND an
-// HMAC-SHA256 over nofx-update-install/v1|release_id|job_id|expires_at under
-// device.key (possession factor; updateauth.Message is the one layout).
+// HMAC-SHA256 over nofx-update-install/v1|admin_user_id|release_id|job_id|
+// expires_at under device.key (possession factor; updateauth.Message is the
+// one layout).
 // Nothing on the API side can mint a MAC (CTO ruling Q1(a)): the
 // owner runs the attended `updater-bootstrap authorize <release_id>` on the
 // box and pastes its {job_id, expires_at, hmac}.
+
+// updatesAdminIDKey carries the enrolled admin's user_id from the gate to the
+// install handler: the MAC is verified over THAT identity (red-4 #4).
+const updatesAdminIDKey = "updates_admin_user_id"
 
 // UpdateHeader is the custom header every /api/updates request must carry
 // with the exact value "1". It is NOT in the CORS Access-Control-Allow-Headers
@@ -246,6 +251,7 @@ func (s *Server) updatesRefusal(c *gin.Context) string {
 	if claims.IssuedAt == nil || u.UpdatedAt.IsZero() || claims.IssuedAt.Time.Unix() <= u.UpdatedAt.Unix() {
 		return "token older than the user row"
 	}
+	c.Set(updatesAdminIDKey, admin.UserID)
 	return ""
 }
 
@@ -285,6 +291,9 @@ func (s *Server) handleUpdatesInstall(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "bad request"})
 		return
 	}
+	// the enrolled admin the gate admitted (fail closed when absent: the MAC
+	// is bound to that identity and cannot verify without it)
+	adminID := c.GetString(updatesAdminIDKey)
 	now := s.updatesClock()
 	if err := updateauth.CheckExpiry(g.ExpiresAt, now); err != nil {
 		// Red-team red-3 #2: a GENUINE code refused as expired raises the
@@ -293,7 +302,7 @@ func (s *Server) handleUpdatesInstall(c *gin.Context) {
 		// from the future (clock behind) is not "expired" and writes nothing.
 		if g.ExpiresAt <= now.Unix() {
 			if key, kerr := updateauth.LoadDeviceKey(dataDir); kerr == nil {
-				genuine := updateauth.VerifyMAC(key, g.ReleaseID, g.JobID, g.ExpiresAt, g.HMAC)
+				genuine := adminID != "" && updateauth.VerifyMAC(key, adminID, g.ReleaseID, g.JobID, g.ExpiresAt, g.HMAC)
 				clear(key)
 				if genuine {
 					if nerr := updateauth.NoteExpired(dataDir, now); nerr != nil {
@@ -310,7 +319,7 @@ func (s *Server) handleUpdatesInstall(c *gin.Context) {
 		updatesForbid(c, "install: device key unreadable")
 		return
 	}
-	ok := updateauth.VerifyMAC(key, g.ReleaseID, g.JobID, g.ExpiresAt, g.HMAC)
+	ok := adminID != "" && updateauth.VerifyMAC(key, adminID, g.ReleaseID, g.JobID, g.ExpiresAt, g.HMAC)
 	clear(key)
 	if !ok {
 		updatesForbid(c, "install: MAC mismatch")
