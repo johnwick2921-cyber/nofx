@@ -250,6 +250,21 @@ func newBotIdentity(st *store.Store, apiPort int) *botIdentity {
 // called on runBot's main loop only.
 var botSleep = time.Sleep
 
+// botNow is the clock refresh computes that wait from (CTO 1790255882118): a
+// seam, like botSleep, so the same-second pins step the clock
+// deterministically instead of racing the machine's real second boundary. The
+// mint's own iat stays time.Now() — auth pins that
+// (TestServerNeverMintsAFutureIat, TestEveryMintEntryPointStampsNowNotTheFuture).
+var botNow = time.Now
+
+// botMint mints the bot's token. Production is agent.GenerateBotToken, whose
+// iat is time.Now() (auth pins that); the same-second pins replace it with a
+// mint stamped from botNow, so the whole-second boundary is the test's, not
+// the machine's (CTO 1790255882118). refresh is its only caller
+// (TestRunBotMintsOnlyThroughRefresh), and the production value is pinned by
+// TestBotClockSeamsAreTheRealClockInProduction.
+var botMint = agent.GenerateBotToken
+
 // botNextSecondMargin is slack past the whole-second boundary, so a wall
 // clock slewed a few milliseconds behind the monotonic one still reads the
 // next second when the wait ends.
@@ -290,7 +305,7 @@ func (b *botIdentity) refresh() bool {
 	// with a token the API refuses.
 	var newToken string
 	for attempt := 1; ; attempt++ {
-		tok, err := agent.GenerateBotToken(u.ID)
+		tok, err := botMint(u.ID)
 		if err != nil {
 			logger.Errorf("Failed to generate bot JWT for user %s: %v", u.ID, err)
 			b.dropIfUserChanged(u.ID)
@@ -305,7 +320,7 @@ func (b *botIdentity) refresh() bool {
 			b.dropIfUserChanged(u.ID)
 			return false
 		}
-		botSleep(botUntilNextSecond(time.Now()))
+		botSleep(botUntilNextSecond(botNow()))
 	}
 	prev := b.userID
 	b.userID = u.ID

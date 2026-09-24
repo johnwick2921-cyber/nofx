@@ -258,6 +258,7 @@ func TestRunBotMintsOnlyThroughRefresh(t *testing.T) {
 		t.Fatal(err)
 	}
 	refreshCalls, mintSites, parsed := 0, []string{}, 0
+	var pkgMintRefs []string
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") || strings.HasSuffix(e.Name(), "_test.go") {
 			continue
@@ -268,6 +269,18 @@ func TestRunBotMintsOnlyThroughRefresh(t *testing.T) {
 		}
 		parsed++
 		for _, d := range f.Decls {
+			// A package-level reference to GenerateBotToken is allowed ONCE: the
+			// botMint seam's production default (CTO 1790255882118), itself
+			// pinned by TestBotClockSeamsAreTheRealClockInProduction.
+			if gd, ok := d.(*ast.GenDecl); ok {
+				ast.Inspect(gd, func(n ast.Node) bool {
+					if sel, ok := n.(*ast.SelectorExpr); ok && sel.Sel.Name == "GenerateBotToken" {
+						pkgMintRefs = append(pkgMintRefs, e.Name())
+					}
+					return true
+				})
+				continue
+			}
 			fd, ok := d.(*ast.FuncDecl)
 			if !ok {
 				continue
@@ -281,6 +294,13 @@ func TestRunBotMintsOnlyThroughRefresh(t *testing.T) {
 				}
 			}
 			ast.Inspect(fd, func(n ast.Node) bool {
+				// A call through the botMint seam is a mint (its default is
+				// agent.GenerateBotToken).
+				if call, ok := n.(*ast.CallExpr); ok {
+					if id, ok := call.Fun.(*ast.Ident); ok && id.Name == "botMint" {
+						mintSites = append(mintSites, name)
+					}
+				}
 				if sel, ok := n.(*ast.SelectorExpr); ok {
 					if sel.Sel.Name == "GenerateBotToken" {
 						mintSites = append(mintSites, name)
@@ -298,6 +318,9 @@ func TestRunBotMintsOnlyThroughRefresh(t *testing.T) {
 	}
 	if refreshCalls < 3 {
 		t.Fatalf("runBot calls refresh %d times — want at start, on /start and before every AI call (≥ 3)", refreshCalls)
+	}
+	if len(pkgMintRefs) != 1 || pkgMintRefs[0] != "bot.go" {
+		t.Fatalf("package-level references to GenerateBotToken: %v — want exactly one, the botMint seam's default in bot.go", pkgMintRefs)
 	}
 	if strings.Join(mintSites, ",") != "(*botIdentity).refresh" {
 		t.Fatalf("the bot's token is minted in %v — want ONLY (*botIdentity).refresh (the call site the re-mint test drives)", mintSites)

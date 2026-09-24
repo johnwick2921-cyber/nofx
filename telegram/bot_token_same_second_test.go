@@ -30,12 +30,15 @@ package telegram
 
 import (
 	"net/http"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 
 	"nofx/auth"
+	"nofx/store"
+	"nofx/telegram/agent"
 )
 
 // btWaits records refresh's waits. real=false: nothing sleeps (the second
@@ -155,49 +158,101 @@ func TestBotRefreshSameSecondReMintIsBoundedAndFailsClosedAtItsCallSite(t *testi
 	}
 }
 
-// The production wait (real, at most a second): the one extra mint lands in
-// the next second and the router admits it.
+// The one wait, then the admitted re-mint — DETERMINISTIC (CTO
+// 1790255882118: the real-sleep version failed once under the full -race
+// gate, "refresh = false after waiting to the next second", a real-clock
+// second-boundary race: this box's chrony steps the clock back ~1 s every
+// ~2 min). No real sleep, and no dependence on which second the machine is
+// in. The mint's iat is time.Now() by design (auth pins it), so the test
+// moves the OTHER side of the comparison — the credential epoch, which it
+// owns:
+//   - the epoch starts 30 s AHEAD of the clock, so the first mint is retired
+//     at birth (the same-second case, whatever the second);
+//   - the sleep seam stands in for the wall clock reaching the next second:
+//     instead of sleeping, it moves the epoch 2 s into the PAST — the
+//     relation the real wait produces (the re-mint's iat is past the
+//     epoch's second);
+//   - the clock seam fixes "now", so the wait refresh asks for is exactly
+//     botUntilNextSecond(botNow()).
 func TestBotRefreshSameSecondReMintWaitsForTheNextSecondAtItsCallSite(t *testing.T) {
 	base, st := btBoot(t)
 	btPrivateSecret(t)
-	hash, err := auth.HashPassword("owner-rotated-pass-f7-real")
-	if err != nil {
-		t.Fatal(err)
-	}
 	ident := newBotIdentity(st, 0)
 	if !ident.refresh() {
 		t.Fatal("refresh with an account on the box = false")
 	}
-	w := btRecordWaits(t, true)
-	for attempt := 1; ; attempt++ {
-		if attempt > btSameSecondAttempts {
-			t.Fatalf("the same-second path was never reached in %d attempts", btSameSecondAttempts)
-		}
-		before, beforeAgents := ident.token, ident.agents
-		if err := st.User().UpdatePassword(btOwnerID, hash); err != nil {
-			t.Fatal(err)
-		}
-		epoch := btRow(t, st).UpdatedAt.Unix()
-		w.reset()
-		ok := ident.refresh()
-		btNeverSucceedsRefused(t, base, ok, ident)
-		if len(w.d) > 1 {
-			t.Fatalf("refresh waited %d times — the re-mint must be bounded to ONE extra mint", len(w.d))
-		}
-		if len(w.d) == 0 {
-			continue // the first mint landed past the epoch's second on its own; retry
-		}
-		btWaitReachesPast(t, w, epoch)
-		if !ok {
-			t.Fatal("refresh = false after waiting to the next second — the re-mint there is admitted")
-		}
-		if ident.token == before || ident.agents == beforeAgents {
-			t.Fatal("refresh succeeded without re-minting / rebuilding the manager on the retired token")
-		}
-		if code, _ := btCall(t, base, "GET", "/api/my-traders", before, ""); code != http.StatusUnauthorized {
-			t.Fatalf("control: the pre-change token on GET /api/my-traders = %d — want 401", code)
-		}
-		return
+	ident.token = btEarlierSecondBotToken(t) // retired: stamped before the epoch
+	before, beforeAgents := ident.token, ident.agents
+
+	// One fake clock drives the wait (botNow) AND the mint's iat (botMint);
+	// the sleep seam advances it. It starts 300 ms into the real current
+	// second S, so the tokens it stamps are within the parser's leeway.
+	cur := time.Now().Truncate(time.Second).Add(300 * time.Millisecond)
+	prevNow, prevMint, prevSleep := botNow, botMint, botSleep
+	t.Cleanup(func() { botNow, botMint, botSleep = prevNow, prevMint, prevSleep })
+	botNow = func() time.Time { return cur }
+	botMint = btMintStampedBy(func() time.Time { return cur })
+	var waits []time.Duration
+	botSleep = func(d time.Duration) { waits = append(waits, d); cur = cur.Add(d) }
+	// The owner's password change in second S: a mint stamped in S is
+	// retired at birth; one stamped in S+1 is admitted.
+	btSetOwnerUpdatedAt(t, st, cur.Truncate(time.Second).Add(100*time.Millisecond))
+
+	ok := ident.refresh()
+	if len(waits) != 1 {
+		t.Fatalf("refresh waited %d times — want exactly ONE wait before its one extra mint", len(waits))
+	}
+	if want := 700*time.Millisecond + botNextSecondMargin; waits[0] != want {
+		t.Fatalf("refresh asked to wait %v — want botUntilNextSecond(botNow()) = %v (the wait must come from the clock seam)", waits[0], want)
+	}
+	if !ok {
+		t.Fatal("refresh = false after its one wait — the re-mint in the next second is admitted")
+	}
+	if ident.token == before || ident.agents == beforeAgents {
+		t.Fatal("refresh succeeded without re-minting / rebuilding the manager on the retired token")
+	}
+	if code, body := btCall(t, base, "GET", "/api/my-traders", ident.token, ""); code != http.StatusOK {
+		t.Fatalf("the re-minted token on GET /api/my-traders = %d %s — want 200", code, body)
+	}
+	if code, _ := btCall(t, base, "GET", "/api/my-traders", before, ""); code != http.StatusUnauthorized {
+		t.Fatalf("control: the retired token on GET /api/my-traders = %d — want 401", code)
+	}
+}
+
+// btMintStampedBy mints a bot token exactly as agent.GenerateBotToken does,
+// but with iat = nbf = the given clock (whole seconds) and exp = iat + 24h.
+func btMintStampedBy(now func() time.Time) func(string) (string, error) {
+	return func(userID string) (string, error) {
+		at := jwt.NewNumericDate(now())
+		return jwt.NewWithClaims(jwt.SigningMethodHS256, auth.Claims{
+			UserID: userID, Email: auth.BotInternalEmail, Scope: auth.ScopeTelegram,
+			RegisteredClaims: jwt.RegisteredClaims{IssuedAt: at, NotBefore: at, ExpiresAt: jwt.NewNumericDate(now().Add(24 * time.Hour)), Issuer: "nofxAI"},
+		}).SignedString(auth.JWTSecret)
+	}
+}
+
+// btSetOwnerUpdatedAt moves the owner row's credential epoch (users.updated_at)
+// directly — the test owns the epoch so no pin depends on the machine's
+// second.
+func btSetOwnerUpdatedAt(t *testing.T, st *store.Store, at time.Time) {
+	t.Helper()
+	if err := st.GormDB().Exec(`UPDATE users SET updated_at = ? WHERE id = ?`, at.UTC(), btOwnerID).Error; err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The seams are the real clock and the real minter in production (a pin, so
+// a test-only default can never ship): botNow is time.Now, botSleep is
+// time.Sleep, botMint is agent.GenerateBotToken.
+func TestBotClockSeamsAreTheRealClockInProduction(t *testing.T) {
+	if reflect.ValueOf(botNow).Pointer() != reflect.ValueOf(time.Now).Pointer() {
+		t.Fatal("botNow is not time.Now in production")
+	}
+	if reflect.ValueOf(botSleep).Pointer() != reflect.ValueOf(time.Sleep).Pointer() {
+		t.Fatal("botSleep is not time.Sleep in production")
+	}
+	if reflect.ValueOf(botMint).Pointer() != reflect.ValueOf(agent.GenerateBotToken).Pointer() {
+		t.Fatal("botMint is not agent.GenerateBotToken in production")
 	}
 }
 
