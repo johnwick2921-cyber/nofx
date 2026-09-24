@@ -33,6 +33,11 @@ export const updates: GuideSection = {
       kind: 'p',
       text: 'The readiness panel reports how far the native 4-hour history load has got. PivotWindow is read from the resolved strategy settings; the completed-bar target is PivotWindow + 4. Where the bot exposes no number — the completed count, the last progress, or a paused-while-loading flag — the panel prints n/a rather than computing or guessing one in the browser. Reload history asks the bot for a deep bars backfill through the existing backfill route.',
     },
+    { kind: 'h', text: 'Enrolling this box for updates' },
+    {
+      kind: 'p',
+      text: 'Updates stay OFF until the installation’s update administrator is enrolled, on the box itself, as the bot’s own user: `go run ./cmd/updater-bootstrap --install-dir <the bot’s folder> enroll <your exact account email>`, then type the confirmation it asks for. No page and no API can enroll, reset or read the enrollment. Once enrolled, the Updates routes answer only a browser on this box that opens the bot directly at 127.0.0.1 or localhost — never through a proxy, a tunnel or the LAN address — signed in as the enrolled account. Every refusal is the same "forbidden"; the bot logs the reason (🔒 [updates] refused …). In this build nothing installs yet: the release verifier refuses every release and the install button stays disabled. The full procedure, including un-enrolling, is docs/superpowers/runbooks/2026-09-24-m3-update-enrollment.md.',
+    },
     { kind: 'h', text: 'Changing the password (Settings → Account)' },
     {
       kind: 'p',
