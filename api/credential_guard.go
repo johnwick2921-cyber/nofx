@@ -44,12 +44,19 @@ import (
 //   - /api/reset-password (CTO ruling 1790231205208 item 2 names it): a
 //     PUBLIC route (no authMiddleware) that answers 410 to everyone; a
 //     machine token presented there is refused 403 by denyMachineBearer.
+//   - /api/logout (PR #200 fold F4a, CTO 1790252194343): a machine token has
+//     no user session to end. The handler blacklists the presented token
+//     until its exp, so a bot steered into logging itself out (the agent's
+//     api_request tool has no path allowlist) was locked out for the token's
+//     whole life. Refused here, the handler never runs and nothing is
+//     blacklisted (TestMachineTokenCannotLogOutAndIsNotBlacklisted).
 var machineDeniedRoutes = []string{
 	"/api/user/password",
 	"/api/reset-account",
 	"/api/reset-password",
 	"/api/telegram",
 	"/api/updates",
+	"/api/logout",
 }
 
 // machineDenied reports whether fullPath (a registered route pattern) is one
@@ -66,14 +73,13 @@ func machineDenied(fullPath string) bool {
 // agentOnlyHiddenRoutes are left out of the agent's route list (GetAPIDocs)
 // on top of every machine-denied route: session/account management a
 // machine token has no business with. They are NOT denied (the web UI's
-// login/register are public; logout only revokes the caller's own token) —
-// omitting them only stops handing the LLM the map (red1 R1: /login was
-// advertised and was step 2 of the chain). /api/reset-password moved to
+// login/register are public) — omitting them only stops handing the LLM the
+// map (red1 R1: /login was advertised and was step 2 of the chain).
+// /api/reset-password and (PR #200 F4a) /api/logout moved to
 // machineDeniedRoutes (still hidden — agentHidden covers both lists).
 var agentOnlyHiddenRoutes = []string{
 	"/api/login",
 	"/api/register",
-	"/api/logout",
 }
 
 // denyMachineBearer guards a PUBLIC machine-denied route (one registered

@@ -4,7 +4,10 @@ package api
 // production router (canon 53): machine tokens (scope=telegram — the bot's —
 // and a bot@internal token with NO scope claim, fail closed) are DENIED BY
 // DEFAULT on /user/password, /reset-account, /reset-password, /telegram*
-// config and /updates*. The ruled list below is written from the ruling, not
+// config and /updates* — and (PR #200 fold F4a, CTO 1790252194343) on
+// /api/logout: a machine token has no user session to end, and a bot that
+// logs itself out blacklists its own token for the token's whole life. The
+// ruled list below is written from the ruling, not
 // read from production's machineDeniedRoutes, so a route the production list
 // forgets is caught here; every REGISTERED route under a ruled prefix is
 // probed with both machine tokens, public routes included.
@@ -16,13 +19,15 @@ import (
 	"testing"
 )
 
-// ruledMachineDenied: the CTO ruling's list, verbatim.
+// ruledMachineDenied: the CTO ruling's list, verbatim (1790231205208 item 2),
+// plus /api/logout (1790252194343 F4a).
 var ruledMachineDenied = []string{
 	"/api/user/password",
 	"/api/reset-account",
 	"/api/reset-password",
 	"/api/telegram",
 	"/api/updates",
+	"/api/logout",
 }
 
 func underRuledMachineDenied(path string) bool {
@@ -97,6 +102,7 @@ func TestEveryRuledMachineDeniedRouteRefusesMachineTokens(t *testing.T) {
 		"PUT /api/user/password", "POST /api/reset-account", "POST /api/reset-password",
 		"GET /api/telegram", "POST /api/telegram", "POST /api/telegram/model", "DELETE /api/telegram/binding",
 		"GET /api/updates", "POST /api/updates/install",
+		"POST /api/logout",
 	} {
 		if !seen[want] {
 			t.Fatalf("census never walked %s — is it still registered?", want)
