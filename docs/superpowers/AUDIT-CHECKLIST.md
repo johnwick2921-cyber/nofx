@@ -10,7 +10,7 @@ in CLAUDE.md).
 
 ## PART 1 — THE BUG CLASSES (name · root cause · probe · law)
 
-*Highest occupied class: **238** (2026-09-24). Numbers are assigned AT MERGE and
+*Highest occupied class: **247** (2026-09-24). Numbers are assigned AT MERGE and
 never renumbered; a gap means a wave took a later slot to avoid a collision.*
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
@@ -6685,6 +6685,42 @@ state keyed by a shared id, cleared by a bare Delete (second instance)" below.
 
 **Probe:** for every id a writer mints, find every table keyed on it and ask whether the key's scope (per version, per plan, per chain) is the mint's scope. A key wider than its mint lets two things share one row.
 
+## CLASS 217 — a UI state not backed by an API field
+
+**Found:** 2026-09-24, W-ONE-BUTTON M5 build [A]. The Updates page vocabulary
+(Update available, Installing, Up to date) had no backing fields on
+GET /api/updates — the M3 payload is exactly {enrolled, manifest_verifier,
+install_enabled}. The page would have had to invent a verdict to fill them.
+Shipped: the optional fields are typed but ABSENT today, and the badge maps
+them to Unknown whenever the API does not affirm a state; the page's Blocked
+is the only M3-reachable verdict.
+
+**Probe:** for every label a component can render, ask which API field it reads.
+A label with no field is either dead (remove it) or a future field (type it
+optional, render Unknown / n/a until the server ships it) — never a browser-side
+derivation.
+
+## CLASS 218 — a spinner with no timeout
+
+**Found:** 2026-09-24, W-ONE-BUTTON M5 build [A]. The header badge's first-fetch
+spinner would hang forever if the poll promise neither resolved nor rejected
+(a hung connection). Shipped: the first fetch races a 10 s cap and the badge
+settles to Unknown; a rejected poll is caught and also settles to Unknown.
+
+**Probe:** every spinner in the UI must name the condition that ends it, and one
+of those conditions must be a clock.
+
+## CLASS 219 — a null rendered as false
+
+**Found:** 2026-09-24, W-ONE-BUTTON M5 build [A]. A null addon_ack (the AddOn
+has not acknowledged the hold yet) read naturally as "false" in JS boolean
+context; rendering it as false claims the AddOn REFUSED the hold, which the
+server never said. Shipped: null renders "no ack yet" and a test pins that the
+page never renders the word false for it.
+
+**Probe:** every nullable verdict field rendered into a yes/no slot must have an
+explicit null branch with its own text — null is "no answer yet", never "no".
+
 ## CLASS 220 — a re-spec gate that compares the COMPOSED wire price, so drift reads as a plan change
 
 **Found:** 2026-09-23, W-EXEC-TRUTH Wave 1b E1 (lane Claude-101, `fix/executor-owed-1`), by the E1-E2 verifier's probe on the first build [A]. The first E1 fix compared the resting order's bracket (`prior.StopPx`/`prior.TargetPx`, composed when it was placed) with THIS pass's composed leg (`leg.Stop`/`leg.Target`) under a newer version. The wire stop is composed at every pass from live ATR (the min-SL floor), the structure anchor and the obstacle target, so any version bump — an overlay on another scenario, a replan, a Picture re-append — carried all accumulated ATR drift through as a "bracket re-spec": an identical scenario re-published as v2 cancelled a working order as "SL 97.70→96.82" and counted `arm:respec_cancel` for a change nobody made (class 35: counters record, never infer). The version gate only stopped the churn inside one version.
@@ -6839,3 +6875,13 @@ At HEAD `c4111476` (FOLD-3 + FOLD-10) the NT8 decision path is: `executeOpen*Wit
 **Shape.** A write and the read that consumes it are separate calls on shared state, reachable from two goroutines, and the lock (if any) covers each call but not the pair.
 **Fixed in W1b FOLD-10 (`5e49cb14`; f10 `8f7e0a9e`):** ONE AutoTrader-level entry-send section, `entrySendMu`, taken only in `openEntryWithRecord` through `lockEntrySend` (idempotent release, deferred for every early return and panic, and called where the section ends). Section 1 spans the pre-entry bracket set (run only when the broker does not carry the bracket, FOLD-3) → the open send (released as soon as the send returns; the order-confirmation poll runs outside it). Section 2 covers the post-open `SetStopLoss` / `SetTakeProfit`, which on a map-keyed broker would otherwise land inside ANOTHER entry's set → read. Both paths take it: the AI decision's and, since FOLD-2, the chat door's. No other send takes it: armed entries (`PlaceLimitEntry` / `PlaceStopEntry`) and the debug test trade (`DebugPlaceTestTrade` → `OpenWithBracket`) carry their own prices into the send. The Trader interface is unchanged (19 methods). On the live NT8 path, FOLD-3's `OpenWithBracket` already carries each entry's own bracket; the section closes the class for every map-keyed broker (legacy NT8 `placeEntry`, the CSV transport). Pinned: `TestConcurrentAIAndChatEntriesEachSendTheirOwnBracket` (production call sites `executeOpenLongWithRecord` + `OpenManualEntryAt`, a broker that records the maps' (sl, tp) AT OPEN and forces the interleave deterministically, both orders). RED at base ("AI sent (SL 28983.25, TP 29078.25) want (28981.25, 29080.25)") and on both compiling reverts (both sections off; post-open section only) — the builder's record, not re-run in the W1b docs pass.
 **Probe:** for every shared map or field that a producer writes and a later call reads (`Set…` then `Open…`), find every goroutine that can reach the pair. If more than one can, one lock must span write → read. Test it by forcing the interleave in a fake that records what the read saw, in both orders — never by a timing loop.
+
+## CLASS 247 — a guard exemption keyed by a function NAME silently expires on a rename
+
+**Found:** 2026-09-24, the Wave 1b full gate at `3f0c831c` [A]. `store/arm_state_source_guard_test.go` `TestArmStateNoRetypedLists` exempts the reviewed broker order-status readers by FUNCTION NAME (its `brokerFunctions` map: `trader/auto_trader_decision.go` → `recordAndConfirmOrder`). W1b FOLD-2 moved the broker-status poll into `recordAndConfirmOrderAs`, and the old name became a thin wrapper. The exemption no longer covered the code it was written for: the guard read the broker's `FILLED`/`CANCELED` as a copied arm-state set and failed twice. Every fold builder's targeted run passed because none ran the store package; only the full gate saw it.
+
+**Shape.** An allow-list keyed by a symbol name inside a static guard. A refactor that moves the reviewed code under a new name silently turns the exemption into a false positive (loud), or, when the old name keeps a different body, into a false negative (silent).
+
+**Fixed in W1b (`99a7c323`):** the exemption names `recordAndConfirmOrderAs`, and nothing else in the guard changed. FOLD-12's pin (`TestWindowSweepPacesOnlyACancelPendingRow`) also retyped a state list; it now calls two named subtests.
+
+**Probe:** for every guard exemption keyed by a name (function, file, type), grep the repo for that name at HEAD. Zero hits, or a hit that is now a thin wrapper, means the exemption has expired. A wave that renames code inside a guarded file must run that guard's package, not only the targeted tests of the files it edited.

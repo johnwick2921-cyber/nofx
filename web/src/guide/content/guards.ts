@@ -50,7 +50,7 @@ export const guards: GuideSection = {
     },
     {
       kind: 'p',
-      text: 'The AddOn sends its working-order book every 30 seconds and whenever an order changes state. Leg 4 compares that book with placed ledger orders. An armed row with no signal id is only an authorization: it appears on a separate informational line and does not fail the gate. A placement awaiting a broker receipt still counts as working/unconfirmed and blocks cutover, even if the book is empty. Working orders at either source, or disagreement between them, fail the leg. Terminal rows are excluded by one shared classifier, also used by audit queries. A book older than 60 seconds is refused as stale. Before the first AddOn snapshot, the existing explicitly labelled ledger fallback remains; it is not broker proof.',
+      text: 'The AddOn sends its working-order book every 30 seconds and whenever an order changes state. Leg 4 compares that book with placed ledger orders. An armed row with no signal id is only an authorization: it appears on a separate informational line and does not fail the gate. A placement awaiting a broker receipt still counts as working/unconfirmed and blocks cutover, even if the book is empty. Working orders at either source, or disagreement between them, fail the leg. Terminal rows are excluded by one shared classifier, also used by audit queries. A book older than 60 seconds is refused as stale. Before the first AddOn snapshot, the existing explicitly labelled ledger fallback remains; it is not broker proof. The Settings → Updates page shows the installation-wide gate, which includes the cutover legs of every trader, with the exact reason text of every leg.',
     },
     { kind: 'h', text: 'Overriding the gate with a position open' },
     {
