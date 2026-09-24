@@ -113,6 +113,18 @@ func (w *Worker) retry(j updaterjob.Job) (updaterjob.Job, error) {
 // execute runs the started state's side effect and persists its outcome.
 func (w *Worker) execute(ctx context.Context, j updaterjob.Job) error {
 	w.boundary(string(j.State) + "/started")
+	// A cancel may land between the started write and here (the socket takes
+	// the job mutex, the runner does not hold it across a step): never start
+	// an effect for a job that has moved. The mutex on every WRITE is what
+	// guarantees no hold after a cancel; this keeps a cancelled job's
+	// preflight reads from running at all.
+	cur, err := updaterjob.Read(w.dataDir(), j.JobID)
+	if err != nil {
+		return err
+	}
+	if cur.State != j.State || cur.Phase != j.Phase || cur.Attempts != j.Attempts {
+		return fmt.Errorf("%w: at %s/%s before its effect", errMoved, cur.State, cur.Phase)
+	}
 	res := w.step(ctx, j)
 	if res.abort != nil {
 		return res.abort
