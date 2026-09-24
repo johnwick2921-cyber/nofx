@@ -245,9 +245,28 @@ func newBotIdentity(st *store.Store, apiPort int) *botIdentity {
 	return &botIdentity{st: st, apiPort: apiPort}
 }
 
+// botSleep is the wait before refresh's one extra mint (PR #200 F7): a
+// package variable so the pins drive that path without sleeping. It is
+// called on runBot's main loop only.
+var botSleep = time.Sleep
+
+// botNextSecondMargin is slack past the whole-second boundary, so a wall
+// clock slewed a few milliseconds behind the monotonic one still reads the
+// next second when the wait ends.
+const botNextSecondMargin = 10 * time.Millisecond
+
+// botUntilNextSecond is how long to wait from now until the wall clock is in
+// the next whole second — the resolution of a JWT's iat (golang-jwt
+// NumericDate) and of the API's retire rule (auth.RetiredBy).
+func botUntilNextSecond(now time.Time) time.Duration {
+	return now.Truncate(time.Second).Add(time.Second + botNextSecondMargin).Sub(now)
+}
+
 // refresh re-reads the account (the first user) and, when the user changed
 // or the current token would be refused, mints a new token and rebuilds the
-// agent manager on it. false = no account (or the mint failed).
+// agent manager on it. false = no account, or the mint failed, or no token
+// the API would admit could be minted (PR #200 F7) — and on false nothing
+// is installed.
 func (b *botIdentity) refresh() bool {
 	users, err := b.st.User().GetAll()
 	if err != nil || len(users) == 0 {
@@ -260,10 +279,31 @@ func (b *botIdentity) refresh() bool {
 	if u.ID == b.userID && !botTokenStale(b.token, u) {
 		return true
 	}
-	newToken, err := agent.GenerateBotToken(u.ID)
-	if err != nil {
-		logger.Errorf("Failed to generate bot JWT for user %s: %v", u.ID, err)
-		return false
+	// PR #200 F7 (CTO bridge msg 1790252194343, #22): a JWT's iat is whole
+	// seconds, so a mint in the SAME second as the password change is
+	// retired at birth (auth.RetiredBy), and one in the same second as a
+	// blacklisted token's own mint is that token, byte for byte (F4b).
+	// Re-check the fresh token with the predicate that sent us here; if the
+	// API would refuse it, wait to the next whole second and mint ONCE more.
+	// Still refused (a wall-clock step back, an epoch ahead of the clock) →
+	// fail closed: false, nothing installed — refresh never reports success
+	// with a token the API refuses.
+	var newToken string
+	for attempt := 1; ; attempt++ {
+		tok, err := agent.GenerateBotToken(u.ID)
+		if err != nil {
+			logger.Errorf("Failed to generate bot JWT for user %s: %v", u.ID, err)
+			return false
+		}
+		if !botTokenStale(tok, u) {
+			newToken = tok
+			break
+		}
+		if attempt == 2 {
+			logger.Warnf("Bot: a token minted for %s after waiting to the next second would still be refused (credential epoch not behind the clock?) — not installed; the next message retries", u.ID)
+			return false
+		}
+		botSleep(botUntilNextSecond(time.Now()))
 	}
 	prev := b.userID
 	b.userID = u.ID
