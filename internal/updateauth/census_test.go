@@ -1,6 +1,7 @@
 package updateauth
 
 import (
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -11,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"unicode"
+	"unicode/utf8"
 
 	"nofx/internal/censuswalk"
 )
@@ -55,7 +58,18 @@ import (
 //     file at COMPILE time from any package (../ and absolute paths too) —
 //     the verifier's N2 compiled the key in with every census green. The
 //     module has no cgo [A: go list CgoFiles empty over ./...]; none is
-//     admitted, under any import name;
+//     admitted, under any import name. And //go:embed, which reads a file
+//     under the package directory at COMPILE time (verify #3 N1a/N1b: a
+//     root-package embed of data/updater/device.key, then the glob
+//     data/upd*r/dev*, each minted with every census green): none in the
+//     module-root package, whose directory holds the default data dir; and,
+//     in EVERY package, no pattern with an element that can match "updater"
+//     or "device.key" (path.Match, after "all:", in bare, "quoted" and
+//     `raw` spellings) — the data dir is the directory of DB_PATH anchored on
+//     the bot's WorkingDirectory, the checkout it is built in, so
+//     DB_PATH=kernel/data.db would put the key in reach of package kernel. An
+//     argument list that cannot be parsed is refused. The module's real
+//     embeds (kernel/, branding/, agent/) match neither;
 //  6. the LOADED device key is used only to verify (verifier D3: the file
 //     admitted LoadDeviceKey minted a grant through golang-jwt's HS256 —
 //     rule 4 sees only crypto/hmac). In every file that references
@@ -84,7 +98,11 @@ import (
 // trips it and must be spelled another way); rule 6 judges by NAME, so an
 // unrelated variable sharing the key's name in the same function is
 // reported, and a trusted name re-declared ANYWHERE in the declaration —
-// even in a scope the admitted call is not in — refuses that call.
+// even in a scope the admitted call is not in — refuses that call; rule 5
+// refuses any //go:embed in the root package whatever its pattern, and
+// anywhere a pattern element such as `*`, `*.key` or `u*` that COULD match
+// "updater" / "device.key" (spell it narrower: `*.json`, a literal file), and
+// any import of "C" even in a file a build tag excludes.
 //
 // WHAT THIS CANNOT PROVE (M3 fold M4 — stated, not implied): it is a
 // syntactic census over identifiers, imports, comments and constant
@@ -308,14 +326,34 @@ func updateAuthOffenders(root string) (offenders []string, scanned int, err erro
 		// (nofx/internal/updateauth.ComputeMAC included) with no import, no
 		// selector and no restricted identifier, so nothing above could see
 		// it. None is admitted in non-test code; the module has none.
+		dir := path.Dir(rel)
 		for _, cg := range f.Comments {
 			for _, c := range cg.List {
 				if strings.HasPrefix(c.Text, "//go:linkname") {
 					offend(rel + ": //go:linkname — binds a symbol of another package past every rule of this census; none is admitted")
 				}
+				// //go:embed reads a file under the package directory at
+				// COMPILE time — no literal, no import, no call (verify #3
+				// N1a/N1b), so it is judged here or nowhere.
+				args, isEmbed := embedDirectiveArgs(c.Text)
+				if !isEmbed {
+					continue
+				}
+				if dir == "." {
+					offend(rel + ": //go:embed in the module-root package — its directory holds the default data dir (data/updater/…), so any pattern there can compile the enrollment into the binary; none is admitted")
+				}
+				patterns, perr := parseEmbedPatterns(args)
+				if perr != nil {
+					offend(rel + ": //go:embed arguments cannot be parsed, so they cannot be checked (" + perr.Error() + ")")
+					continue
+				}
+				for _, p := range patterns {
+					if name, hit := embedPatternReachesEnrollment(p); hit {
+						offend(rel + ": //go:embed pattern " + strconv.Quote(p) + " can match the enrollment (" + strconv.Quote(name) + ") — a data dir configured at this package's directory (DB_PATH) puts it in reach; spell the pattern so no element can match \"updater\" or the key file")
+					}
+				}
 			}
 		}
-		dir := path.Dir(rel)
 		facts := pkgs[dir]
 		if facts == nil {
 			facts = &pkgFacts{topNames: map[string]bool{}}
@@ -720,6 +758,94 @@ func receiverTypeParams(fd *ast.FuncDecl) []*ast.Ident {
 		}
 	}
 	return out
+}
+
+// embedDirectiveArgs reports whether a comment is a //go:embed directive and
+// returns the text after "//go:embed". The toolchain reads "//go:embed"
+// followed by a space (cmd/compile noder, which also takes the bare form) or a
+// tab (go/build findEmbed) — go1.25.13 [A read]; this accepts all three, a
+// superset. Prose ("// uses go:embed", "//go:embedded") is not a directive.
+func embedDirectiveArgs(text string) (string, bool) {
+	const d = "//go:embed"
+	if !strings.HasPrefix(text, d) {
+		return "", false
+	}
+	rest := text[len(d):]
+	if rest == "" || rest[0] == ' ' || rest[0] == '\t' {
+		return rest, true
+	}
+	return "", false
+}
+
+// parseEmbedPatterns splits //go:embed arguments exactly as go/build's
+// parseGoEmbed does: space-separated bare patterns, "double-quoted" Go
+// strings and `back-quoted` strings. A malformed list is an error (the caller
+// refuses it: what cannot be parsed cannot be checked).
+func parseEmbedPatterns(args string) ([]string, error) {
+	var out []string
+	for args = strings.TrimLeftFunc(args, unicode.IsSpace); args != ""; args = strings.TrimLeftFunc(args, unicode.IsSpace) {
+		var p string
+		switch args[0] {
+		case '`':
+			q, rest, ok := strings.Cut(args[1:], "`")
+			if !ok {
+				return nil, errors.New("unterminated `")
+			}
+			p, args = q, rest
+		case '"':
+			i := 1
+			for ; i < len(args) && args[i] != '"'; i++ {
+				if args[i] == '\\' {
+					i++
+				}
+			}
+			if i >= len(args) {
+				return nil, errors.New("unterminated \"")
+			}
+			q, err := strconv.Unquote(args[:i+1])
+			if err != nil {
+				return nil, err
+			}
+			p, args = q, args[i+1:]
+		default:
+			i := strings.IndexFunc(args, unicode.IsSpace)
+			if i < 0 {
+				i = len(args)
+			}
+			p, args = args[:i], args[i:]
+		}
+		if args != "" {
+			if r, _ := utf8.DecodeRuneInString(args); !unicode.IsSpace(r) {
+				return nil, errors.New("pattern not followed by a space: " + args)
+			}
+		}
+		out = append(out, p)
+	}
+	return out, nil
+}
+
+// embedPatternReachesEnrollment reports whether any element of a //go:embed
+// pattern (after an "all:" prefix) can match the updater dir name or the key
+// file name. The key sits at <dataDir>/updater/device.key and a pattern
+// matching a directory embeds its whole subtree, so from a package directory
+// that IS the data dir every pattern that reaches the key has an element
+// matching "updater" (or, from a package placed inside the updater dir,
+// "device.key"). Judged per element, at any position — fail closed: `*`
+// matches both and is refused wherever it stands. A malformed element is
+// refused too.
+func embedPatternReachesEnrollment(pattern string) (string, bool) {
+	for _, e := range strings.Split(strings.TrimPrefix(pattern, "all:"), "/") {
+		for _, name := range []string{updaterDirName, deviceKeyName} {
+			ok, err := path.Match(e, name)
+			if err != nil {
+				return "malformed element " + strconv.Quote(e), true
+			}
+			if ok {
+				return name, true
+			}
+		}
+	}
+	return "", false
 }
 
 // constantStrings returns every string the file spells as a constant: each
