@@ -195,6 +195,9 @@ func TestActivationIsNeverPersistedWithoutItsRollbackInputs(t *testing.T) {
 	j := mustNew(t, "job-0050", "v1.2.0", now)
 	mustWrite(t, dd, j)
 	for _, s := range []State{StateDownloaded, StateVerified, StatePreflightOK, StateMaintenanceHeld, StateDrainedAcked, StateGateOK, StateBackupDone, StateNT8Skipped} {
+		if s == StateNT8Skipped { // the branch carries its own decision (TestNT8StateCarriesItsOwnDecision)
+			j.NT8 = &NT8Decision{Decision: NT8Skipped}
+		}
 		step(t, dd, &j, &now, s)
 	}
 	sha := "0123456789abcdef0123456789abcdef01234567"

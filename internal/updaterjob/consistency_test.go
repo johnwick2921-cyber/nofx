@@ -247,3 +247,58 @@ func TestLeavingTheParkNeedsAnAttendedResume(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// TestNT8StateCarriesItsOwnDecision (U1 verifier defect 4, probe H2): a
+// history that enters nt8_skipped carries nt8.decision "skipped", one that
+// enters nt8_updated carries "updated" — present, and never the other one,
+// when entered and at every later write.
+func TestNT8StateCarriesItsOwnDecision(t *testing.T) {
+	restoreSeams(t)
+	toBackup := []State{StateDownloaded, StateVerified, StatePreflightOK, StateMaintenanceHeld, StateDrainedAcked, StateGateOK, StateBackupDone}
+	for _, c := range []struct {
+		name string
+		to   State
+		dec  *NT8Decision
+	}{
+		{"H2: nt8_skipped with decision updated", StateNT8Skipped, &NT8Decision{Decision: NT8Updated, Reason: "C# changed"}},
+		{"nt8_updated with decision skipped", StateNT8Updated, &NT8Decision{Decision: NT8Skipped}},
+		{"nt8_skipped with no decision", StateNT8Skipped, nil},
+		{"nt8_updated with no decision", StateNT8Updated, nil},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dd := t.TempDir()
+			j, now := walkTo(t, dd, "job-0120", toBackup...)
+			j.NT8 = c.dec
+			if err := j.Enter(c.to, now.Add(time.Second)); err != nil {
+				t.Fatal(err)
+			}
+			if err := Write(dd, j); !errors.Is(err, ErrCorrupt) {
+				t.Errorf("Write(%s) = %v, want ErrCorrupt", c.name, err)
+			}
+			if got, err := Read(dd, j.JobID); err != nil || got.State != StateBackupDone {
+				t.Errorf("a refused decision changed the file: %s %v", got.State, err)
+			}
+			refusedAtBothCallSites(t, c.name, j)
+		})
+	}
+	// the decision cannot flip after the state was entered
+	for _, c := range []struct {
+		to   State
+		flip string
+	}{{StateNT8Skipped, NT8Updated}, {StateNT8Updated, NT8Skipped}} {
+		dd := t.TempDir()
+		j, _ := walkTo(t, dd, "job-0121", append(append([]State(nil), toBackup...), c.to)...)
+		j.NT8 = &NT8Decision{Decision: c.flip}
+		if err := Write(dd, j); !errors.Is(err, ErrCorrupt) {
+			t.Errorf("%s/done with the decision flipped to %q: Write = %v, want ErrCorrupt", c.to, c.flip, err)
+		}
+	}
+	// positive controls: both branches, with their own decision, write and read
+	for _, to := range []State{StateNT8Skipped, StateNT8Updated} {
+		dd := t.TempDir()
+		j, _ := walkTo(t, dd, "job-0122", append(append([]State(nil), toBackup...), to)...)
+		if got, err := Read(dd, j.JobID); err != nil || got.State != to || got.NT8 == nil {
+			t.Fatalf("positive control %s: %+v %v", to, got, err)
+		}
+	}
+}
