@@ -422,8 +422,8 @@ func (at *AutoTrader) maybeManageArmedOrdersAtOpts(snap map[string]kernel.Struct
 		// E4 (2026-08-30) — split-entry legs: a two-leg arm writes one ledger
 		// row PER leg (LegIndex 0/1, LegCount 2). A single arm is leg 0 of a
 		// one-row pair (LegCount 0 = legacy shape).
-		legs := sc.Arm.Legs
-		if len(legs) == 0 {
+		legs := armScenarioLegs(sc) // W1b E1 — the ONE scenario→legs turn, AS AUTHORED (arm_respec.go)
+		if len(sc.Arm.Legs) == 0 {
 			// D3 (2026-09-04): the entry TYPE follows the condition, from the
 			// same table the planner prompt is rendered from. This was
 			// hardcoded "limit", which is wrong for a reclaim — it only
@@ -433,8 +433,7 @@ func (at *AutoTrader) maybeManageArmedOrdersAtOpts(snap map[string]kernel.Struct
 				at.logWarnf("✕ armed %s NOT authored — %s", sc.ID, refusal)
 				continue
 			}
-			legs = []kernel.PlanArmLeg{{Entry: sc.Arm.Entry, Stop: sc.Arm.Stop, Target: sc.Arm.Target,
-				WaitConfirm: sc.Arm.WaitConfirm, Rule: "touch", Kind: kind, Policy: sc.Arm.Policy}}
+			legs[0].Kind = kind // a fresh one-leg list; every other field is the arm spec's own
 		}
 		legCount := 0
 		if len(sc.Arm.Legs) == 2 {
@@ -867,13 +866,6 @@ func (at *AutoTrader) maybeManageArmedOrdersAtOpts(snap map[string]kernel.Struct
 			}
 
 			admitted.admit(plan.PlanID, sc.ID, li) // G1: every authoring gate passed THIS pass
-			if geometry != nil {
-				geometry.Quantity = 1
-				geometry.Reason = "admitted"
-				if !at.saveArmGeometry(*geometry) {
-					return // unavailable decision record must not expose older authorizations
-				}
-			}
 
 			// D4 (2026-09-04) — FAR-ARM COUNTER, WARN-first. Nothing is refused
 			// for being far; a week of counts decides the threshold. Per side,
@@ -901,6 +893,22 @@ func (at *AutoTrader) maybeManageArmedOrdersAtOpts(snap map[string]kernel.Struct
 						row.ID, prior = existing[i].ID, existing[i] // already in the ledger — leave state
 						break
 					}
+				}
+			}
+			// W1b E1+E2 — a WORKING row the new version re-priced (its AUTHORED
+			// bracket ≥ 2 ticks under a newer version — legs[li] is the leg before
+			// composition — or a zone that no longer holds its limit) is CANCELLED
+			// through the filled-arm guard and re-arms under the new version once
+			// the book confirms (arm_respec.go); nothing is modified in place. A leg
+			// cancelled here is not recorded "admitted" (its order was just pulled).
+			if row.ID != 0 && at.respecWorkingArm(ledger, plan, sc, li, prior, legs[li], leg, zl, now) {
+				continue
+			}
+			if geometry != nil {
+				geometry.Quantity = 1
+				geometry.Reason = "admitted"
+				if !at.saveArmGeometry(*geometry) {
+					return // unavailable decision record must not expose older authorizations
 				}
 			}
 			if row.ID == 0 {
@@ -948,14 +956,6 @@ func (at *AutoTrader) maybeManageArmedOrdersAtOpts(snap map[string]kernel.Struct
 					at.logInfof("⚔️ armed %s %s leg %d %s limit %.2f SL %.2f TP %.2f (tick-managed placement is Phase 2)%s", plan.Session, sc.ID, li+1, side, leg.Entry, leg.Stop, leg.Target, postLossNote)
 				}
 			} else {
-				// W1b E1+E2 — a WORKING row the new version re-priced (bracket ≥ 2
-				// ticks under a newer version, or a zone that no longer holds its
-				// limit) is CANCELLED through the filled-arm guard and re-arms under
-				// the new version once the book confirms (arm_respec.go). The AddOn
-				// cannot modify a resting entry's bracket, so nothing is modified.
-				if at.respecWorkingArm(ledger, plan, sc, li, prior, leg, zl, now) {
-					continue
-				}
 				// A live broker order is never rewritten in place (store D5), so the
 				// refresh write for a non-armed row was refused and dropped every
 				// pass. Skipped — unless the row carries ANOTHER opportunity, whose

@@ -115,7 +115,8 @@ func onGridWithin(got, want, tick float64) bool {
 	return math.Abs(steps-math.Round(steps)) < 1e-6 && math.Abs(got-want) <= tick+1e-9
 }
 
-// E1 — a new version that moves the bracket ≥ 2 ticks cancels the working
+// E1 — a new version that moves the AUTHORED bracket ≥ 2 ticks (SL 98 → 96,
+// TP 110 → 112 in the plan doc) cancels the working
 // order (the AddOn cannot modify a resting entry's bracket) and the scenario
 // re-arms under the new version with the NEW stop and target.
 func TestWorkingArmBracketRespecByNewVersionReplacesTheOrder(t *testing.T) {
@@ -141,8 +142,8 @@ func TestWorkingArmBracketRespecByNewVersionReplacesTheOrder(t *testing.T) {
 		t.Fatalf("a re-spec'd bracket must cancel the working order %s exactly once and place nothing: sigs=%+v cancels=%+v", sid, sigs, cancels)
 	}
 	row := r.row("S1")
-	if row.State != store.StateCancelPending || !strings.Contains(row.StateReason, "bracket re-spec by v2") {
-		t.Fatalf("the working row must be cancel_pending 'bracket re-spec by v2': %+v", row)
+	if row.State != store.StateCancelPending || !strings.Contains(row.StateReason, "bracket re-spec by v2: authored SL 98.00→96.00 TP 110.00→112.00") {
+		t.Fatalf("the working row must be cancel_pending naming the AUTHORED change 'bracket re-spec by v2: authored SL 98.00→96.00 TP 110.00→112.00': %+v", row)
 	}
 	if n, _ := store.SystemCounter(r.st, "arm:respec_cancel"); n != before+1 {
 		t.Fatalf("the re-spec cancel must be counted once (%d → %d)", before, n)
@@ -321,14 +322,23 @@ func TestRespecSkipKeepsTheTypedSourceRefusalForAWorkingRow(t *testing.T) {
 
 // The predicate's edges (pure): only a WORKING planner row with a signal is
 // ever judged, and a version bump that both moves the zone and re-specs the
-// bracket yields ONE decision (E2 first) — at most one cancel per row.
+// bracket yields ONE decision (E2 first) — at most one cancel per row. E1
+// compares AUTHORED brackets (the prior version's, read lazily, vs this
+// version's); the composed prices never decide, and an absent prior is named,
+// never read as a change.
 func TestArmRespecForEdges(t *testing.T) {
 	zl := zoneLeg{on: true, v: kernel.ZoneVerdict{Lo: 99, Hi: 100, Far: 100, Near: 99}}
-	leg := kernel.PlanArmLeg{Entry: 100, Stop: 96, Target: 112}
+	authored := kernel.PlanArmLeg{Entry: 100, Stop: 96, Target: 112} // v2's plan doc
+	composed := kernel.PlanArmLeg{Entry: 100, Stop: 95.5, Target: 112}
+	wasLeg := kernel.PlanArmLeg{Entry: 100, Stop: 98, Target: 110} // v1's plan doc
+	reads := 0
+	was := func(l kernel.PlanArmLeg, why string) func() (kernel.PlanArmLeg, string) {
+		return func() (kernel.PlanArmLeg, string) { reads++; return l, why }
+	}
 	base := store.ArmedOrderDB{State: store.StateWorking, SignalID: "sig", Version: 1, Policy: kernel.EntryPolicyMarketInZone,
 		EntryPx: 100.5, StopPx: 97.7, TargetPx: 110}
-	if c, ok := armRespecFor(2, base, leg, zl, 0.25); !ok || !strings.HasPrefix(c.reason, "zone moved by v2") || c.counter != "market_in_zone:zone_moved" {
-		t.Fatalf("zone moved AND bracket re-spec'd → ONE decision, the zone's: %+v %v", c, ok)
+	if c, _, ok := armRespecFor(2, base, authored, composed, zl, 0.25, was(wasLeg, "")); !ok || !strings.HasPrefix(c.reason, "zone moved by v2") || c.counter != "market_in_zone:zone_moved" || reads != 0 {
+		t.Fatalf("zone moved AND bracket re-spec'd → ONE decision, the zone's, with no history read: %+v %v reads=%d", c, ok, reads)
 	}
 	for name, mut := range map[string]func(*store.ArmedOrderDB){
 		"armed":          func(r *store.ArmedOrderDB) { r.State = store.StateArmed },
@@ -336,29 +346,167 @@ func TestArmRespecForEdges(t *testing.T) {
 		"cancel_pending": func(r *store.ArmedOrderDB) { r.State = store.StateCancelPending },
 		"no signal":      func(r *store.ArmedOrderDB) { r.SignalID = " " },
 		"picture row":    func(r *store.ArmedOrderDB) { r.Source = "picture" },
+		"picture row ws": func(r *store.ArmedOrderDB) { r.Source = " picture " },
 	} {
 		p := base
 		mut(&p)
-		if c, ok := armRespecFor(2, p, leg, zl, 0.25); ok {
+		if c, _, ok := armRespecFor(2, p, authored, composed, zl, 0.25, was(wasLeg, "")); ok {
 			t.Fatalf("%s: must never be judged, got %+v", name, c)
 		}
 	}
 	in := base
 	in.EntryPx = 100
-	if c, ok := armRespecFor(2, in, leg, zl, 0.25); !ok || !strings.HasPrefix(c.reason, "bracket re-spec by v2: SL 97.70→96.00 TP 110.00→112.00") {
-		t.Fatalf("a contained limit with a re-spec'd bracket under a newer version is E1: %+v %v", c, ok)
+	if c, _, ok := armRespecFor(2, in, authored, composed, zl, 0.25, was(wasLeg, "")); !ok ||
+		!strings.HasPrefix(c.reason, "bracket re-spec by v2: authored SL 98.00→96.00 TP 110.00→112.00 (v1→v2; resting SL 97.70 TP 110.00, composed now SL 95.50 TP 112.00)") {
+		t.Fatalf("a contained limit whose AUTHORED bracket moved under a newer version is E1: %+v %v", c, ok)
 	}
-	if c, ok := armRespecFor(1, in, leg, zl, 0.25); ok {
-		t.Fatalf("the same version never re-specs a bracket (live ATR drift): %+v", c)
+	reads = 0
+	if c, _, ok := armRespecFor(1, in, authored, composed, zl, 0.25, was(wasLeg, "")); ok || reads != 0 {
+		t.Fatalf("the same version never re-specs a bracket and never reads history: %+v reads=%d", c, reads)
 	}
 	legacy := in
 	legacy.Policy = ""
-	if c, ok := armRespecFor(2, legacy, leg, zoneLeg{}, 0.25); !ok || c.counter != "arm:respec_cancel" {
-		t.Fatalf("a legacy working row re-spec'd by a newer version is E1 too: %+v %v", c, ok)
+	if c, _, ok := armRespecFor(2, legacy, authored, composed, zoneLeg{}, 0.25, was(wasLeg, "")); !ok || c.counter != "arm:respec_cancel" {
+		t.Fatalf("a legacy working row whose authored bracket a newer version moved is E1 too: %+v %v", c, ok)
 	}
-	small := leg
-	small.Stop, small.Target = 97.5, 110.25
-	if c, ok := armRespecFor(2, in, small, zl, 0.25); ok {
-		t.Fatalf("a < 2-tick move is not a re-spec: %+v", c)
+	// THE REPAIR: the authored bracket did not move (< 2 ticks), the COMPOSED one
+	// moved a full point from the resting order — ATR drift, not a re-spec.
+	same := kernel.PlanArmLeg{Entry: 100, Stop: 97.75, Target: 110.25}
+	drift := kernel.PlanArmLeg{Entry: 100, Stop: 96.7, Target: 110}
+	if c, _, ok := armRespecFor(2, in, same, drift, zl, 0.25, was(wasLeg, "")); ok {
+		t.Fatalf("a < 2-tick AUTHORED move is not a re-spec, however far the composed stop drifted: %+v", c)
+	}
+	// Absent prior → no decision, the reason is handed back (absent ≠ changed).
+	if c, absent, ok := armRespecFor(2, in, authored, composed, zl, 0.25, was(kernel.PlanArmLeg{}, "v1 carried no scenario S1")); ok || absent != "v1 carried no scenario S1" {
+		t.Fatalf("an absent prior authored leg must not fire and must be named: %+v %v %q", c, ok, absent)
+	}
+	if c, _, ok := armRespecFor(2, in, authored, composed, zl, 0.25, nil); ok {
+		t.Fatalf("no history reader → no E1: %+v", c)
+	}
+}
+
+// THE VERIFIER'S BLOCKING PROBE, pinned (W1b E1 repair): an IDENTICAL scenario
+// re-published as v2 plus a live-ATR tape wide enough to move the COMPOSED
+// stop ≥ 2 ticks is NOT a re-spec — the plan's authored bracket did not move.
+// Nothing is sent, the row stays working under v1, and arm:respec_cancel is
+// not incremented (class 35: counters record, never infer).
+func TestArmRespecIgnoresATRDriftAcrossVersions(t *testing.T) {
+	r := newZoneRig(t, "w1b-respec-atr-v2", zoneDoc(zoneScenario("S1", kernel.EntryPolicyMarketInZone, zone, false)))
+	first := r.placeWorking(100.5)
+	before, _ := store.SystemCounter(r.st, "arm:respec_cancel")
+	r.newVersion(zoneScenario("S1", kernel.EntryPolicyMarketInZone, zone, false)) // v2: byte-identical scenario
+	t1 := r.now.Add(time.Minute)
+	r.restingBook(t1, first.SignalID, 100.5)
+	r.setTape(respecTape(101.95, t1, 0.8)) // ATR5m up → composed stop ≥ 2 ticks lower
+	r.at.maybeManageArmedOrdersAt(nil, t1)
+	if sigs, cancels := r.drain(); len(sigs) != 0 || len(cancels) != 0 {
+		t.Fatalf("ATR drift across versions with an unchanged authored bracket must send nothing: sigs=%d cancels=%d %+v", len(sigs), len(cancels), cancels)
+	}
+	if row := r.row("S1"); row.State != store.StateWorking || row.Version != 1 {
+		t.Fatalf("the working row must stay working under v1: %+v", row)
+	}
+	if n, _ := store.SystemCounter(r.st, "arm:respec_cancel"); n != before {
+		t.Fatalf("arm:respec_cancel must record only a re-spec that happened (%d → %d)", before, n)
+	}
+}
+
+// E1 on a LEGACY (policy "") row at the production call site (verifier item
+// 2): v2 moves the AUTHORED stop 98 → 96 (≥ 2 ticks) → the working limit is
+// cancelled "bracket re-spec by v2: authored SL 98.00→96.00", counted once;
+// a fresh PERSISTED flat book (st.NT8OrderSnapshots) settles it, and the next
+// pass mints placement_seq 1 under v2 and places a NEW signal at the legacy
+// limit 100.00 (no D15 pin on a legacy row; the tape sits in the tick band).
+func TestLegacyWorkingArmAuthoredRespecByNewVersionReplacesTheOrder(t *testing.T) {
+	r := newZoneRig(t, "w1b-respec-legacy", zoneDoc(zoneScenario("S1", "", zone, false)))
+	first := r.placeWorking(100)
+	sid := first.SignalID
+	if row := r.row("S1"); row.Policy != "" {
+		t.Fatalf("fixture: the row must be legacy (no policy): %+v", row)
+	}
+	before, _ := store.SystemCounter(r.st, "arm:respec_cancel")
+	sc := zoneScenario("S1", "", zone, false)
+	sc.Arm.Stop = 96
+	r.newVersion(sc)
+	t1 := r.now.Add(time.Minute)
+	r.restingBook(t1, sid, 100)
+	r.setTape(zoneTape(101.95, t1, 0))
+	r.at.maybeManageArmedOrdersAt(nil, t1)
+	sigs, cancels := r.drain()
+	if len(cancels) != 1 || cancels[0].SignalID != sid || len(sigs) != 0 {
+		t.Fatalf("an authored re-spec must cancel the legacy working order %s exactly once and place nothing: sigs=%+v cancels=%+v", sid, sigs, cancels)
+	}
+	row := r.row("S1")
+	if row.State != store.StateCancelPending || !strings.Contains(row.StateReason, "bracket re-spec by v2: authored SL 98.00→96.00 TP 110.00→110.00") {
+		t.Fatalf("the legacy row must be cancel_pending naming the AUTHORED change: %+v", row)
+	}
+	if n, _ := store.SystemCounter(r.st, "arm:respec_cancel"); n != before+1 {
+		t.Fatalf("the re-spec cancel must be counted once (%d → %d)", before, n)
+	}
+	// Verifier item 3: the leg whose order this pass pulled is not recorded
+	// "admitted" under v2 (the structural record stops at pending_gates).
+	geo, err := r.st.StructuralGeometryFor(r.at.id, r.pid, 2)
+	if err != nil || len(geo) != 1 || geo[0].Scenario != "S1" || geo[0].Reason == "admitted" {
+		t.Fatalf("a re-spec-cancelled leg must not be recorded admitted: %+v %v", geo, err)
+	}
+	// NOTE [A]: on this legacy reject the structural composition takes the stop
+	// from the PDH zone (98.00) whatever the authored stop says, so the v2
+	// order re-places at the same composed bracket — E1 judges the AUTHORED
+	// change by contract, not what composition later makes of it.
+	sigs, cancels = r.settleAndReArm()
+	if len(cancels) != 0 || len(sigs) != 1 || sigs[0].SignalID == sid || sigs[0].LimitPrice != 100 {
+		t.Fatalf("the settled legacy scenario must re-arm and place ONE new signal at 100.00 under v2: sigs=%+v cancels=%+v", sigs, cancels)
+	}
+	nw := r.row("S1")
+	if len(r.rows()) != 2 || nw.PlacementSeq != 1 || nw.Version != 2 || nw.Policy != "" || nw.SignalID != sigs[0].SignalID {
+		t.Fatalf("the successor must be ONE legacy row, placement_seq 1 under v2, carrying the new signal: %+v", r.rows())
+	}
+}
+
+// Absent ≠ changed: a working row whose placing version cannot supply the
+// authored leg (here v1 never carried scenario S2) is NOT re-spec'd — nothing
+// is sent, no counter moves, the row stays working — and ONE WARN names why,
+// however many passes ask.
+func TestArmRespecAbsentPriorAuthoredLegNeverCancels(t *testing.T) {
+	r := newZoneRig(t, "w1b-respec-absent", zoneDoc(zoneScenario("S1", kernel.EntryPolicyMarketInZone, zone, false)))
+	r.newVersion(zoneScenario("S1", kernel.EntryPolicyMarketInZone, zone, false), zoneScenario("S2", kernel.EntryPolicyMarketInZone, zone, false))
+	ledger := r.st.ArmedOrders()
+	seed := &store.ArmedOrderDB{TraderID: r.at.id, PlanID: r.pid, Version: 1, Session: "TEST", Scenario: "S2", Side: "long",
+		EntryPx: 100.5, StopPx: 90, TargetPx: 120, State: store.StateArmed, EntryClass: "armed_fill", Kind: "limit",
+		Policy: store.ArmPolicyMarketInZone, CreatedAt: r.now, UpdatedAt: r.now}
+	if err := ledger.UpsertArm(seed); err != nil {
+		t.Fatal(err)
+	}
+	if err := ledger.BeginPlacement(seed.ID, "sig-respec-s2"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ledger.ApplyPlacementReceipt(r.at.id, "sig-respec-s2", store.StateWorking, "fixture"); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := store.SystemCounter(r.st, "arm:respec_cancel")
+	logs := captureTraderLog(t)
+	for i := 1; i <= 2; i++ {
+		ti := r.now.Add(time.Duration(i) * time.Minute)
+		r.srv.OrderSnapshots().PutAt(ntwire.OrderSnapshotPayload{Account: "Sim101", Orders: []ntwire.NT8Order{
+			{OrderID: "o-s2", Name: "sig-respec-s2", Symbol: "MNQ", Action: "buy", Type: "limit", LimitPrice: 100.5, Quantity: 1, State: "Working"},
+		}}, ti)
+		r.setTape(zoneTape(101.95, ti, 0))
+		r.at.maybeManageArmedOrdersAt(nil, ti)
+		for _, c := range func() []ntwire.CancelOrderPayload { _, c := r.drain(); return c }() {
+			if c.SignalID == "sig-respec-s2" {
+				t.Fatalf("pass %d: an absent prior authored leg must never cancel the working order: %+v", i, c)
+			}
+		}
+	}
+	if row := r.row("S2"); row.State != store.StateWorking || row.Version != 1 {
+		t.Fatalf("the working row must stay working under v1: %+v", row)
+	}
+	if n, _ := store.SystemCounter(r.st, "arm:respec_cancel"); n != before {
+		t.Fatalf("nothing happened, so nothing is recorded (%d → %d)", before, n)
+	}
+	if n := strings.Count(logs.String(), "armed re-spec NOT judged: TEST S2 leg 1"); n != 1 {
+		t.Fatalf("the absent prior must be named exactly once across two passes, got %d:\n%s", n, logs.String())
+	}
+	if !strings.Contains(logs.String(), "v1 carried no scenario S2") {
+		t.Fatalf("the WARN must say why the prior is absent:\n%s", logs.String())
 	}
 }
