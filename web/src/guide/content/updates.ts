@@ -33,5 +33,10 @@ export const updates: GuideSection = {
       kind: 'p',
       text: 'The readiness panel reports how far the native 4-hour history load has got. PivotWindow is read from the resolved strategy settings; the completed-bar target is PivotWindow + 4. Where the bot exposes no number — the completed count, the last progress, or a paused-while-loading flag — the panel prints n/a rather than computing or guessing one in the browser. Reload history asks the bot for a deep bars backfill through the existing backfill route.',
     },
+    { kind: 'h', text: 'Changing the password (Settings → Account)' },
+    {
+      kind: 'p',
+      text: 'Changing the password needs your CURRENT password as well as the new one: the bot checks it against the stored password and refuses a wrong one ("current password is incorrect", shown under the form). A signed-in session alone can no longer set a new password. Machine tokens — the Telegram bot’s and the gate-jwt tool’s — can never change a password, reset the account, change the Telegram settings or reach Updates, whatever they carry. A password change also un-enrolls Updates: every Updates route answers 403 until you re-enroll on the box with `go run ./cmd/updater-bootstrap enroll --replace <email>` (confirm you can sign in with the new password first).',
+    },
   ],
 }

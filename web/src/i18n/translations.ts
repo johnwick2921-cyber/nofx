@@ -410,6 +410,11 @@ export const translations = {
       'Each provider can hold multiple keys — click “+ Add key” on a row to add a named second entry.',
     entryName: 'Name (e.g. DeepSeek-backup)',
     deleteModelEntry: 'Delete this entry',
+    // Settings → Account → Change password (M3 red-team H1: the server
+    // requires the current password with every change)
+    currentPasswordLabel: 'Current Password',
+    currentPasswordPlaceholder: 'Your current password',
+    currentPasswordRequired: 'Enter your current password',
     confirmDeleteModel:
       'Are you sure you want to delete this AI model configuration?',
     cannotDeleteModelInUse:
@@ -1831,6 +1836,9 @@ export const translations = {
       '每个提供商可保存多个密钥 —— 点击某行的“+ 添加密钥”即可新增一个命名条目。',
     entryName: '名称（例如 DeepSeek-备用）',
     deleteModelEntry: '删除此条目',
+    currentPasswordLabel: '当前密码',
+    currentPasswordPlaceholder: '您的当前密码',
+    currentPasswordRequired: '请输入当前密码',
     confirmDeleteModel: '确定要删除此AI模型配置吗？',
     cannotDeleteModelInUse: '无法删除此AI模型，因为有交易员正在使用',
     tradersUsing: '正在使用此配置的交易员',
@@ -3211,6 +3219,9 @@ export const translations = {
       'Setiap penyedia dapat menyimpan beberapa kunci — klik “+ Tambah kunci” pada baris untuk menambah entri bernama.',
     entryName: 'Nama (mis. DeepSeek-cadangan)',
     deleteModelEntry: 'Hapus entri ini',
+    currentPasswordLabel: 'Kata Sandi Saat Ini',
+    currentPasswordPlaceholder: 'Kata sandi Anda saat ini',
+    currentPasswordRequired: 'Masukkan kata sandi Anda saat ini',
     confirmDeleteModel:
       'Apakah Anda yakin ingin menghapus konfigurasi model AI ini?',
     cannotDeleteModelInUse:
