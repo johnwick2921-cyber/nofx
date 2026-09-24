@@ -134,7 +134,7 @@ As the bot's user, remove **only** the two enrollment files. To see the exact `<
 rm <data>/updater/admin.json <data>/updater/device.key
 ```
 
-Keep `hold.json`, which is the maintenance hold. `seen_job_ids.json` may stay: its job ids are dead with the key.
+Keep `hold.json`, which is the maintenance hold. `seen_job_ids.json` may stay: its job ids are dead with the key. It must NOT be deleted on its own: once the installation is enrolled, a MISSING seen store reads as corrupt (never empty) and every install is refused `403` until `enroll --replace` re-creates it (red-team red-3 #4).
 
 ## Known limits (named, not implied)
 

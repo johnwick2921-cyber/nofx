@@ -50,11 +50,11 @@ func TestDegenerateDeviceKeyIsRefusedByTheLoaderVerifierAndMinter(t *testing.T) 
 			t.Errorf("fill %#02x: Authorize = %v, want ErrUnsafe", fill, err)
 		}
 		m := hmac.New(sha256.New, key)
-		m.Write([]byte(MACPurpose + "|" + rel + "|" + job + "|1800000300"))
-		if VerifyMAC(key, rel, job, exp, hex.EncodeToString(m.Sum(nil))) {
+		m.Write([]byte(MACPurpose + "|" + tUser + "|" + rel + "|" + job + "|1800000300"))
+		if VerifyMAC(key, tUser, rel, job, exp, hex.EncodeToString(m.Sum(nil))) {
 			t.Errorf("fill %#02x: VerifyMAC accepted a MAC under a degenerate key", fill)
 		}
-		if mac, err := ComputeMAC(key, rel, job, exp); err == nil || mac != "" {
+		if mac, err := ComputeMAC(key, tUser, rel, job, exp); err == nil || mac != "" {
 			t.Errorf("fill %#02x: ComputeMAC minted %q under a degenerate key", fill, mac)
 		}
 	}
@@ -74,8 +74,8 @@ func TestDegenerateDeviceKeyIsRefusedByTheLoaderVerifierAndMinter(t *testing.T) 
 	if err != nil {
 		t.Fatalf("positive control: sequential key: %v", err)
 	}
-	mac, err := ComputeMAC(k, rel, job, exp)
-	if err != nil || !VerifyMAC(k, rel, job, exp, mac) {
+	mac, err := ComputeMAC(k, tUser, rel, job, exp)
+	if err != nil || !VerifyMAC(k, tUser, rel, job, exp, mac) {
 		t.Fatalf("positive control: sequential key mint/verify: %v", err)
 	}
 	if !degenerateKey(nil) || !degenerateKey([]byte{}) {
@@ -118,18 +118,18 @@ func TestEnrollNeverWritesADegenerateKey(t *testing.T) {
 func TestConsumeAtAClockAtOrBeforeTheEpochRefusesAndTouchesNothing(t *testing.T) {
 	for _, clock := range []time.Time{time.Unix(0, 0), time.Unix(-1, 0), time.Unix(0, 999_999_999), time.Unix(-100, 0)} {
 		fresh := t.TempDir()
-		if err := Consume(fresh, "0123456789abcdef", 150, clock); !errors.Is(err, ErrBadClock) {
+		if err := Consume(fresh, "0123456789abcdef", 150, clockAt(clock)); !errors.Is(err, ErrBadClock) {
 			t.Errorf("clock %v: err = %v, want ErrBadClock", clock.Unix(), err)
 		}
 		if _, err := os.Lstat(Dir(fresh)); !errors.Is(err, os.ErrNotExist) {
 			t.Errorf("clock %v: the refused Consume created the updater dir", clock.Unix())
 		}
 		d := t.TempDir()
-		if err := Consume(d, "0123456789abcdee", tNow.Unix()+60, tNow); err != nil {
+		if err := Consume(d, "0123456789abcdee", tNow.Unix()+60, clockAt(tNow)); err != nil {
 			t.Fatal(err)
 		}
 		before, _ := os.ReadFile(SeenPath(d))
-		if err := Consume(d, "0123456789abcdef", 150, clock); !errors.Is(err, ErrBadClock) {
+		if err := Consume(d, "0123456789abcdef", 150, clockAt(clock)); !errors.Is(err, ErrBadClock) {
 			t.Errorf("clock %v on an existing store: err = %v, want ErrBadClock", clock.Unix(), err)
 		}
 		if after, _ := os.ReadFile(SeenPath(d)); !bytes.Equal(before, after) {
@@ -137,7 +137,7 @@ func TestConsumeAtAClockAtOrBeforeTheEpochRefusesAndTouchesNothing(t *testing.T)
 		}
 	}
 	// positive control: the first second after the epoch is a clock
-	if err := Consume(t.TempDir(), "0123456789abcdef", 301, time.Unix(1, 0)); err != nil {
+	if err := Consume(t.TempDir(), "0123456789abcdef", 301, clockAt(time.Unix(1, 0))); err != nil {
 		t.Fatalf("positive control: %v", err)
 	}
 }
@@ -152,6 +152,7 @@ func TestEncodeSeenRefusesWhatItsReaderRefuses(t *testing.T) {
 		"expires_at 0":         {IDs: []seenEntry{{JobID: good.JobID, ExpiresAt: 0, ConsumedAt: good.ConsumedAt}}},
 		"path-shaped id":       {IDs: []seenEntry{{JobID: "../x", ExpiresAt: good.ExpiresAt, ConsumedAt: good.ConsumedAt}}},
 		"negative watermark":   {PrunedThrough: -1, IDs: []seenEntry{good}},
+		"negative clock floor": {ClockFloor: -1, IDs: []seenEntry{good}},
 	} {
 		if b, err := encodeSeen(s); err == nil {
 			t.Errorf("%s: encodeSeen emitted %q", name, b)
@@ -161,6 +162,7 @@ func TestEncodeSeenRefusesWhatItsReaderRefuses(t *testing.T) {
 		"empty":          {},
 		"one entry":      {IDs: []seenEntry{good}},
 		"with watermark": {PrunedThrough: 1799999000, IDs: []seenEntry{good}},
+		"with floor":     {PrunedThrough: 1799999000, ClockFloor: 1800000000, IDs: []seenEntry{good}},
 	} {
 		b, err := encodeSeen(s)
 		if err != nil {
@@ -197,17 +199,17 @@ func TestPrunedThroughIsTheLargestPrunedExpiryAndBindsAtAnyClock(t *testing.T) {
 		}
 		return st
 	}
-	if err := Consume(d, "aaaaaaaaaaaaaaaa", T.Unix()+100, T); err != nil {
+	if err := Consume(d, "aaaaaaaaaaaaaaaa", T.Unix()+100, clockAt(T)); err != nil {
 		t.Fatal(err)
 	}
-	if err := Consume(d, "bbbbbbbbbbbbbbbb", T.Unix()+300, T); err != nil {
+	if err := Consume(d, "bbbbbbbbbbbbbbbb", T.Unix()+300, clockAt(T)); err != nil {
 		t.Fatal(err)
 	}
 	if st := read(); st.PrunedThrough != 0 {
 		t.Fatalf("nothing pruned yet: pruned_through = %d, want 0", st.PrunedThrough)
 	}
 	T2 := T.Add(901 * time.Second) // cutoff = T+301: both a and b prune
-	if err := Consume(d, "cccccccccccccccc", T2.Unix()+300, T2); err != nil {
+	if err := Consume(d, "cccccccccccccccc", T2.Unix()+300, clockAt(T2)); err != nil {
 		t.Fatal(err)
 	}
 	st := read()
@@ -220,21 +222,24 @@ func TestPrunedThroughIsTheLargestPrunedExpiryAndBindsAtAnyClock(t *testing.T) {
 		"bbbbbbbbbbbbbbbb": T.Unix() + 300, // the id AT the watermark
 		"dddddddddddddddd": T.Unix() + 300, // a never-seen id at the watermark
 	} {
-		if err := Consume(d, id, exp, back); !errors.Is(err, ErrPrunedReplay) || !errors.Is(err, ErrReplay) {
+		if err := Consume(d, id, exp, clockAt(back)); !errors.Is(err, ErrPrunedReplay) || !errors.Is(err, ErrReplay) {
 			t.Errorf("%s exp=%d at a stepped-back clock: err = %v, want ErrPrunedReplay", id, exp, err)
 		}
 	}
-	if err := Consume(d, "eeeeeeeeeeeeeeee", T.Unix()+301, back); err != nil { // one above: admitted
-		t.Fatalf("exp one above the watermark: %v", err)
+	// one above the watermark is not a replay; at this stepped-back clock it
+	// is at or below the clock floor (T2, recorded when c was consumed), so
+	// it is expired (red-3 #2) — the watermark boundary is still exact
+	if err := Consume(d, "eeeeeeeeeeeeeeee", T.Unix()+301, clockAt(back)); errors.Is(err, ErrReplay) || !errors.Is(err, ErrExpiredAtFloor) {
+		t.Fatalf("exp one above the watermark at a stepped-back clock: %v, want ErrExpiredAtFloor (not a replay)", err)
 	}
-	if err := Consume(d, "ffffffffffffffff", T2.Unix()+300, T2); err != nil { // prunes nothing new
+	if err := Consume(d, "ffffffffffffffff", T2.Unix()+300, clockAt(T2)); err != nil { // prunes nothing new
 		t.Fatal(err)
 	}
 	if st := read(); st.PrunedThrough != T.Unix()+300 {
 		t.Fatalf("a Consume that pruned nothing moved pruned_through to %d", st.PrunedThrough)
 	}
 	b, _ := os.ReadFile(SeenPath(d))
-	if !strings.HasPrefix(string(b), `{"v":2,"pruned_through":`) {
+	if !strings.HasPrefix(string(b), `{"v":3,"pruned_through":`) {
 		t.Fatalf("store shape %q", b)
 	}
 }

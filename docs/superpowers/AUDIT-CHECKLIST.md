@@ -10,7 +10,8 @@ in CLAUDE.md).
 
 ## PART 1 — THE BUG CLASSES (name · root cause · probe · law)
 
-*Highest occupied class: **266** (2026-09-24). Numbers are assigned AT MERGE and
+*Highest occupied class: **268** (2026-09-24). Numbers are assigned AT MERGE and
+
 never renumbered; a gap means a wave took a later slot to avoid a collision.*
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
@@ -257,6 +258,16 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     a string, ask where the string was normalized and whether BOTH sides use
     the same normalizer. **Law:** one canonicalizer per identifier, called at
     the boundary where the value enters, not at each comparison.
+   *Instance 2026-09-24 (WAVE 3b-A):* `NOFX_RELEASE_DIR` was read in TWO
+   packages — `api/release_dir.go` latched it behind a `sync.Once`, while
+   `kernel/boot_integrity.go:230` called `os.Getenv` on every use. One
+   identifier, two resolutions, and they DISAGREE the moment the environment
+   moves: the process serves a bundle from one release while judging its boot
+   integrity against another, each half internally consistent. **Resolving
+   "once" per package is not resolving once.** Fixed: one resolver in
+   `internal/installpath`, consumers pass through, exactly one `os.Getenv`
+   left in non-test code. The api file's own comment had named this exact
+   hazard — a comment warning about a hazard is not a control.
 
 29. **The silent-aggregate family.** Root cause: aggregates that answer
     confidently from data they should have excluded or never had — an exit
@@ -6590,7 +6601,7 @@ real time)".
 **The tell:** `x == 0 || x <= now`. A zero that shares a comparison with a real
 value is a fabricated value wearing the type's clothes (canon: absent ≠ []).
 
-**Instance 2026-09-24 M3:** **OPEN.** After enrollment, a missing `data/updater/seen_job_ids.json` reads as an empty store, so a spent update code is authorized again (red-3 #4 [A]). fa's fix `dd3c472e` is not on the branch; the runbook's "never delete the seen store" is the only control, and it is a PR-body known limit (red-3 #4; fa `dd3c472e`, not folded)
+**Instance 2026-09-24 M3:** **CLOSED** in `fix/m3-install-path-lows` `cb23f6ca` (fa `dd3c472e` cherry-picked): `Enroll` creates the seen store; once enrolled, a missing store is `ErrSeenCorrupt`, never empty; pinned by `TestEnrollCreatesTheSeenStoreAndAMissingOneAfterwardsIsCorrupt` and `TestInstallRefusesWhenTheSeenStoreIsMissingAfterEnrollment`.
 
 ## CLASS 210 — a requirement whose own fetch cannot satisfy it
 
@@ -6865,7 +6876,7 @@ At HEAD `c4111476` (FOLD-3 + FOLD-10) the NT8 decision path is: `executeOpen*Wit
 **Probe:** grep `>= 0 &&` next to `now.Sub(` (or `d >= 0`, `age >= 0`) in any window check. Find where that `now` is captured: if it is captured before the read, negative ages must pass.
 **Residual [B] (FOLD-11 builder C3):** `fresh()` has no lower bound now. A row whose `UpdatedAt` is in the future (a clock step back) reads as fresh until the wall clock passes it. This fails closed: the AI open is refused and nothing is flattened. Any future upper bound must exceed the test's +30 s stamp.
 
-**Instance 2026-09-24 M3:** **OPEN.** The update install read `now` once, then waited on an unbounded `.seen.lock` flock, so a code was consumed about 1 h after it expired (red-3 #3 [A]). fa's clock-read-under-the-lock `100371ff` is not on the branch; it is a PR-body known limit (red-3 #3; fa `100371ff`, not folded)
+**Instance 2026-09-24 M3:** **CLOSED** in `fix/m3-install-path-lows` `c777235f` (fa `100371ff` cherry-picked): `Consume` now takes a clock function and judges expiry on a reading taken UNDER the seen-store lock; pinned by `TestInstallJudgesExpiryUnderTheSeenStoreLock`.
 
 ## CLASS 233 — a per-pass sweep that re-sends an unpaced cancel
 
@@ -6932,6 +6943,8 @@ At HEAD `c4111476` (FOLD-3 + FOLD-10) the NT8 decision path is: `executeOpen*Wit
 **Fixed in 3a:** the workflow verifies against a COMMITTED allowed-signers file (`.github/workflows/release.yml:189-190`), refusing with owner instructions when it is absent; `deploy/release/README.md` gives the one-line creation step. `TestReleaseSignatureVerifiesOnlyWithAnAllowedSignersFile` proves both directions with a real generated keypair: the allowed-signers form VERIFIES, the bare-`.pub` form FAILS.
 
 **Probe:** every verification step ships proven in BOTH directions — a real artifact that must pass, and a tampered one that must fail. A step that has only ever been observed failing has not been tested, it has been assumed; a step that has only ever been observed passing may not be looking at anything.
+
+**Instances 2026-09-24 (WAVE 3b-A):** BOTH legs of `activation.Watch` were unpassable against the real machine — `/api/health` returns the SHORT sha and the boot line prints the short rev, while both comparisons used the full 40-hex, which appears ZERO times in the live log. Recorded in full as CLASS 267, because the cause there is not a mis-written step but evidence the system never emits in the form the proof expects.
 
 ## CLASS 241 — a parser written against a guessed output format
 
@@ -7473,7 +7486,6 @@ bot.go:263:51: b.userID — in a closure built by (*botIdentity).refresh
 
 **Instance 2026-09-24 PR #200 review F6:** a credential epoch in the FUTURE (a clock step-back after a password change) refuses every new sign-in until the clock passes it. That stays fail-closed, and the refusal now says so: "credential epoch is Ns in the future — clock stepped back; sign-in refused until then". The bound is the size of the step. It is pinned at the production router for authMiddleware and, through a gorm hook between the two reads, for the credential guard (`53bc9734`, `fc17a1c9`). The /updates gate's Q8 line has no clock note (a follow-up).
 
-
 ## CLASS 265 — a repair outcome recorded before the bookkeeping that rewrites its reason
 
 **Found:** 2026-09-24, WAVE 1a-plan P9 (issue #190 A1/A2 sites) [A]. Both born-dead repair sites called `recordRepairOutcome(raw, err, prevReason)` BEFORE `plannerRejectBookkeeping(..., &prevReason, ...)`, which unconditionally rewrites `*prevReason` to THIS attempt's defect. The "was repairing: %s" field therefore named the PREVIOUS attempt's reason at the A1/A2 sites while every sibling site logged the current one — the one place a reader goes to see what a repair was repairing.
@@ -7490,4 +7502,32 @@ bot.go:263:51: b.userID — in a closure built by (*botIdentity).refresh
 
 **Probe:** for every pin that asserts a zero or absence, run a control row that asserts the SAME path produces a nonzero (or a presence) with the fix removed. A pin whose RED is not demonstrated at least once is a comment, not a test.
 
+## CLASS 267 — a proof whose evidence the system never emits in the form the proof expects
+
+**Found:** 2026-09-24, WAVE 3b-A, by the read-only live evidence the dispatch required — not by any test [A]. `activation.Watch` proves an activation with two legs: a boot line written after the restart, and `/api/health` reporting the new revision. Both compared against the release's FULL 40-hex sha. The live box emits neither in that form:
+
+- `/api/health` returns the SHORT sha — `{"revision":"662c79bd236f", …}` [A]
+- the boot line prints the short rev too — `🔐 BOOT INTEGRITY OK — rev 662c79bd236f · built 2026-09-23T23:45:35Z` — and the full sha appears **zero times** in the live log (`grep -c` = 0) [A]
+
+So BOTH legs of a two-leg proof were unpassable. Every real activation would have watched, failed, and rolled back, and the failure would have read as "the bot did not come up" — sending whoever was on the boot to investigate a process that had started perfectly, while the rollback undid a good release.
+
+**The tests could not catch it, because they shared the defect.** Every unit test passed. They were written by the same author, in the same hour, from the same assumption, using full shas throughout. A test written from the author's belief about a value tests the belief, not the value.
+
+**The rule already existed in this repo.** `kernel/boot_integrity.go` has carried "a prefix match so short SHAs work" since it was written. The knowledge was present and had not been carried across to new code that needed it — CLASS 242's lesson in a different costume.
+
+**Fixed in 3b-A:** `revisionsAgree(reported, expected)` — the REPORTED value may abbreviate the expected one, never the reverse, with a 7-character floor so an abbreviation too short to identify anything is not evidence. `lineNamesRevision` scans a line's whitespace-separated TOKENS rather than substring-matching, so a hex-looking fragment inside another value cannot be mistaken for the revision. Pinned with the REAL artifacts copied off the live box: the actual boot line string, the actual short health value. A third defect fell out of the same run — logs are named by BOOT date, not calendar date (at 08:04 on 09-24 the active file was `nofx_2026-09-23.log`), so `NewestLogPath` now picks the file actually being written rather than building a path from today's date.
+
+**Probe:** before writing any comparison, obtain the evidence from the RUNNING SYSTEM — `curl` the endpoint, `grep` the real log — and pin the test with those captured bytes. A proof is a claim about what the system EMITS; writing it from what you expect the system to emit produces a check that cannot pass and a suite that agrees with you. Ask of every compared value: does it have a short form, a prefix form, a different case, a trailing newline, a unit?
+
+## CLASS 268 — a guard that no dry run reaches is first exercised during the cutover
+
+**Found:** 2026-09-24, WAVE 3b-A, reading `deploy/cutover.sh` v6 while replacing it [A]. v6 read the process start time with `awk '{n=split($0,a," "); print a[22]}' /proc/$p/stat`. Field 2 of that line is the executable name in parentheses and MAY CONTAIN SPACES AND PARENTHESES — `(nofx bin (x))` — which shifts every later field. The identity check could therefore compare the wrong number: refusing a valid restart, or, worse, ACCEPTING a recycled pid, which is the single thing the identity check exists to prevent.
+
+**It had never run.** Every `--dry-run` refuses earlier — at the token gate, or the dist check, or the binary proof — so the identity code sits *after* every exit a rehearsal takes. The rehearsal that exists to make the procedure safe never reached the line that makes it dangerous, and its first execution would have been during a real cutover, on a live trading box, under time pressure.
+
+That is the shape worth naming: a dry run proves the steps it REACHES. Code after the last refusal a rehearsal hits is unexercised no matter how many times the rehearsal is run, and a passing dry run is therefore evidence about a PREFIX of the procedure, not the procedure.
+
+**Fixed in 3b-A:** the parse moved into `internal/activation` and reads from the LAST `)` in the line, pinned by a test whose comm is literally `(nofx bin (x))`. `deploy/cutover.sh` v7 delegates rather than carrying its own copy, so the attended boot and the unattended worker share one implementation and one test suite.
+
+**Probe:** for every procedure with a rehearsal mode, list the steps the rehearsal never reaches and ask what tests them. If the answer is "nothing", they are exercised first in production. Either the rehearsal must reach them (a seam, a fixture, a `--force-through` for the safe parts) or they must be moved into code a unit test can call — the second is usually right, because a step that only a live cutover can exercise is a step nobody can afford to debug.
 

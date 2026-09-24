@@ -118,6 +118,27 @@ export const status: GuideSection = {
       kind: 'p',
       text: 'Before a release can claim you are able to go BACK to an older version, that rollback is actually performed first: the old build creates a database, the new build upgrades it, and then the old build is started again on the upgraded database. That last step is the one that matters, because an upgrade that removes something the old build still reads only fails at the moment you need to go back. A version pair that has not passed all three is published as untested rather than quietly left out.',
     },
+    { kind: 'h', text: 'What happens when the bot updates itself' },
+    {
+      kind: 'p',
+      text: 'An update is performed as a sequence of steps, and each one hands back a receipt saying what it actually did — not what it intended to do. The receipt records the values the step READ: the revision stamped into the new program, the checksum of the file, whether the database copy opened. If a step refuses, it still gives you its receipt, because the moment a step fails is the moment you most need to know what it saw.',
+    },
+    {
+      kind: 'p',
+      text: 'Nothing is swapped until the new program has been proven to BE the version it claims. If it carries no build stamp at all, the refusal says so and tells you the cause — a program built in the wrong kind of folder carries no stamp, and that is a different problem from having the wrong program. Two different causes never share one message, because a message that names the wrong cause sends you to fix something that is not broken.',
+    },
+    {
+      kind: 'p',
+      text: 'Then the database is copied while the bot is still running, and the copy is OPENED and checked before the update continues. A backup nobody has opened is just a file, and the moment you need it is the worst possible moment to discover that. Only after that do the three pieces of an installation move together — the program, the screens you are reading now, and the marker that records which version is live. All three or none: an update that swapped only the program would leave these screens describing a different build than the one taking your trades.',
+    },
+    {
+      kind: 'p',
+      text: 'Restarting is deliberate about WHICH program it stops. It identifies the running bot by more than its process number, because numbers get reused, and stopping the wrong thing because it inherited a number is exactly the accident worth preventing. If it cannot confirm the bot is still the one it measured, it refuses and changes nothing.',
+    },
+    {
+      kind: 'p',
+      text: 'Afterwards the new version has to prove itself twice: it must write a fresh start-up line NEWER than the restart, and it must report the expected version when asked directly. An old line from a previous start does not count — that line was written by a program that is no longer running and says nothing about the one that is. If either proof is missing, the update rolls back to the previous version and then proves THAT one came back, rather than assuming it did.',
+    },
     { kind: 'h', text: 'One entry at a time (the entry latch)' },
     {
       kind: 'p',

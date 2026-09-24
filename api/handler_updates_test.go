@@ -174,7 +174,7 @@ func (e *updEnv) rawMACBody(release, job string, exp int64) string {
 		e.t.Fatal(err)
 	}
 	m := hmac.New(sha256.New, key)
-	fmt.Fprintf(m, "%s|%s|%s|%d", updateauth.MACPurpose, release, job, exp)
+	fmt.Fprintf(m, "%s|%s|%s|%s|%d", updateauth.MACPurpose, updAdminID, release, job, exp)
 	b, _ := json.Marshal(map[string]any{"release_id": release, "job_id": job, "expires_at": exp, "hmac": hex.EncodeToString(m.Sum(nil))})
 	return string(b)
 }
@@ -791,10 +791,11 @@ func TestCorruptSeenStoreFailsClosedAndIsNotReset(t *testing.T) {
 		t.Fatalf("positive control = %d", w.Code)
 	}
 	garbage := []byte("{ not json")
+	g := e.grant(updRelease) // minted before the corruption: the minter refuses over a corrupt store (red-3 #5)
 	if err := os.WriteFile(updateauth.SeenPath(e.dataDir), garbage, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	w := e.do("POST", "/api/updates/install", grantBody(e.grant(updRelease)))
+	w := e.do("POST", "/api/updates/install", grantBody(g))
 	if w.Code != http.StatusForbidden || w.Body.String() != forbiddenBody {
 		t.Fatalf("corrupt store = %d %s, want 403", w.Code, w.Body.String())
 	}
@@ -817,7 +818,7 @@ func TestInstallExpiryWindow(t *testing.T) {
 	body := func(exp int64) string {
 		job++
 		id := fmt.Sprintf("expiry-job-%06d", job)
-		mac, err := updateauth.ComputeMAC(key, updRelease, id, exp)
+		mac, err := updateauth.ComputeMAC(key, updAdminID, updRelease, id, exp)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -865,9 +866,9 @@ func TestInstallRefusesABadMACAndDoesNotSpendTheJob(t *testing.T) {
 	for i := range otherKey {
 		otherKey[i] = byte(9 + i)
 	}
-	wrongKeyMAC, _ := updateauth.ComputeMAC(otherKey, g.ReleaseID, g.JobID, g.ExpiresAt)
+	wrongKeyMAC, _ := updateauth.ComputeMAC(otherKey, updAdminID, g.ReleaseID, g.JobID, g.ExpiresAt)
 	m := hmac.New(sha256.New, mustKey(t, e.dataDir))
-	fmt.Fprintf(m, "%s|%s|%s|%d", updateauth.MACPurpose, g.JobID, g.ReleaseID, g.ExpiresAt)
+	fmt.Fprintf(m, "%s|%s|%s|%s|%d", updateauth.MACPurpose, updAdminID, g.JobID, g.ReleaseID, g.ExpiresAt)
 	reordered := hex.EncodeToString(m.Sum(nil))
 	for name, mac := range map[string]string{
 		"flipped":   string(flip),
@@ -877,7 +878,7 @@ func TestInstallRefusesABadMACAndDoesNotSpendTheJob(t *testing.T) {
 		"empty":     "",
 		"reordered": reordered,
 		"other job": func() string {
-			x, _ := updateauth.ComputeMAC(mustKey(t, e.dataDir), g.ReleaseID, "another-job-0001", g.ExpiresAt)
+			x, _ := updateauth.ComputeMAC(mustKey(t, e.dataDir), updAdminID, g.ReleaseID, "another-job-0001", g.ExpiresAt)
 			return x
 		}(),
 	} {
