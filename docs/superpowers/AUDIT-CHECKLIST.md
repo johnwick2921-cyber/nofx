@@ -10,7 +10,7 @@ in CLAUDE.md).
 
 ## PART 1 — THE BUG CLASSES (name · root cause · probe · law)
 
-*Highest occupied class: **251** (2026-09-24). Numbers are assigned AT MERGE and
+*Highest occupied class: **266** (2026-09-24). Numbers are assigned AT MERGE and
 never renumbered; a gap means a wave took a later slot to avoid a collision.*
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
@@ -843,6 +843,8 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     label earns its default, and every kill switch must have an input that
     fires it and an output you can tell apart.
 
+    **Instance 2026-09-24 M3:** (c) the CTO's dictated boot-runbook line predicted a phantom-epoch owner re-login from FOLD-M3-B without reading the code: tokens live 24 h (`auth/auth.go:146` at 0cd6df49), the `updated_at` ALTER is Postgres-only (`store/user.go:32-42`) and the live store is SQLite. The CTO put it on the record as "class 45/49 shape, mine this time", and the ha2 verifier's corrected line (no re-login expected) replaced it. A claim about what the running process will show, written where nothing compares it to the process; read with 105 (CTO on the record; ha2 verifier)
+
 50. **The prompt withheld what the validator enforces — and the correction
     remembered only the last mistake.** (Dispatch "class 45"; checklist slot 45
     was already the pantry class, hence 50.) Root cause: the planner prompt and
@@ -944,10 +946,14 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     kept for every input. **Law:** a surface renders a rule's STATUS, never its
     text — and a rule with more than one definition has none.
 
+    **Instance 2026-09-24 M3:** **OPEN.** `ValidJobID`/`ValidReleaseID` are defined in both `internal/updateauth/ids.go` and `internal/updaterwire/ids.go`. They agreed on 2,000,014 and 2,402,098 differential samples, but only the comment was fixed and no parity pin exists [A: grep]. Owed: one source, or a parity pin such as `TestIDAllowListsAgreeAcrossAuthAndWire` (`34f24525`)
+
 53. **One question, two answers: a predicate shared by two callers that fed it
     different inputs.** (Numbered 51 at merge against a tree that did not
     yet carry class 50's entry; renumbered to 53 by owner ruling 2026-09-02 —
     class 50 keeps 51, the no-trade band keeps 52. Class 46 is deliberately
+
+    **Instance 2026-09-24 M3:** the Telegram bot's re-mint was tested only through its predicate `botTokenStale`, so a compiling revert of the call in runBot stayed green, and the bot would then 401 after every password change (ha-verify #1). The re-mint now lives in `botIdentity.refresh` and is pinned at that call site: `TestBotRefreshReMintsAfterAPasswordChangeAtItsCallSite`, `TestRunBotMintsOnlyThroughRefresh` (`d637b7e1`)
 
 54. **A refresh that deletes before it knows what comes back.** (Renumbered 52→54 AT MERGE, 2026-09-03 combined boot — 52 was taken by the no-trade-band class. Dispatch
     "bar-arbiter merge"; class 52 wave, 2026-09-02.) Root cause: the
@@ -1002,6 +1008,8 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     column named for a moment must be written once; and measure the rate before
     building for it — an alarming percentage over the wrong denominator will
     buy a large fix for a small problem.
+
+    **Instance 2026-09-24 M3:** FOLD-M3-B. `users.updated_at` was promoted to "credential epoch", but a legacy or migration value (the Postgres-only `ALTER … updated_at DEFAULT CURRENT_TIMESTAMP`, `store/user.go:42`) reads as a password change and retires older sessions. Documented and pinned by `TestLegacyUpdatedAtIsAnEpochWithoutAPasswordChange` (`b849e9eb`)
 
 56. **A default of 0 on a column that means "how far did it go against us".**
     (Highest occupied at merge: 53.) `trader_positions.mae REAL DEFAULT 0`
@@ -3611,6 +3619,8 @@ Partial remedy already on dev: `docs/superpowers/CLAUDE-canon.md` (landed `55749
 
 Related: **slot 50** (the prompt withheld what the validator enforces — a document that instructs a reader to do the thing a guard forbids; the dispatch called it "class 45", the merged slot is 50), the **SPEC-FRESHNESS LAW** (CLAUDE.md canon — it has NO checklist slot, and CLAUDE.md's claim that it is class 73 is instance 3 above), and the **GUIDE CONTENT LAW**, which is this law already applied to one surface: a guide that lies about the running binary is worse than no guide.
 
+**Instance 2026-09-24 M3:** eight M3 sites where prose described code that no test read: the admin.go crash comment (`a785fe45`); "censuswalk is test tooling only", now asked of the toolchain (`87255ef9`); `ids.go`'s "updateauth imports these" (`34f24525`); the guide's "refused once" and the same words in `auth/retire.go` (`06ca207d`, `efdf3988`); the census header's "spelled ONLY in paths.go" and `paths.go`'s "the ONLY place" (`3e368492`, `964396ef`); and the guide's bot sentence, true only for the bot's own account (`4699edce`). The census's false "can only over-report" is recorded in CLASS 259 (`a785fe45`, `87255ef9`, `34f24525`, `06ca207d`, `efdf3988`, `3e368492`, `964396ef`, `4699edce`)
+
 ## CLASS 106 — A CORRECT READ OF A NOT-YET-CORRECT STATE (born 2026-09-10; generalised out of class 104 at a peer's suggestion)
 
 **Number note (updated at merge):** 105 is now OCCUPIED on dev by *documentation
@@ -3756,12 +3766,16 @@ omission is deliberate BEFORE changing anything, and quote the code path*. Askin
 "is this a bug or a decision?" first is what separates 99 from 107; the
 refactor had already been written, tested and pushed on the other reading.
 
+**Instance 2026-09-24 M3:** Q8 on /api/updates is documented as STRICTER than the shared `auth.RetiredBy`, but the only same-second pin probed where the two agree, so moving Q8 onto `RetiredBy` stayed green (ha-verify #2). Pinned by `TestUpdatesQ8StaysStricterThanTheSharedRetireRule` (a never-changed row and a NULL row): one name per intent (`8f4b2d9b`)
+
 
 ## CLASS 108 — A SOURCE GUARD THAT SCANS NOTHING (assigned at arm-state cutover follow-up merge, 2026-09-10)
 
 **Finding:** TestTZGuardSingleTimeSource searched for a directory basename ending in nofx and swallowed walk errors. `/tmp/nofx-arm-state` therefore scanned `/kernel`, `/trader`, `/api`, `/agent`, read nothing and passed. A clean clone named nofx exposed four pre-existing timezone violations. A successful process exit was not evidence that the guard had examined source.
 
 **Law and pin:** resolve the package's actual repository parent, require go.mod and propagate directory/read errors. A restored bare layout must fail in a worktree whose name does not end in nofx. The four renderers now use canonical CT helpers with byte-identical output. This guard correction is independent of arm-state classification and never weakens a terminal-state or flat-gate check. Receipt: `reports/2026-09-10-arm-state-cutover.md`.
+
+**Instance 2026-09-24 M3:** the worker import guard asserted a package-count floor (20 vs 21 roots), which could not say which root went missing; every guarded root must now be walked (`911e69a3`)
 
 ## CLASS 109 — A CENSUS THAT CANNOT SEE ITS OWN THIRD FORMAT (born 2026-09-10, fix/episode-contract)
 
@@ -4536,6 +4550,8 @@ placed · level=… play=… permission=…` — and nothing is sent to the brok
 rows with a signal id are never touched. Pinned on the loopback wire: the
 declined scenario's pre-boot row is retired, never placed; the allowed one
 still places. Counted `one_setup:retired`; on the boot line.
+
+**Instance 2026-09-24 M3:** H2. Q8 retired pre-change tokens on /api/updates only, and authMiddleware consulted no credential epoch, so a stolen pre-change token kept every other route and could `PUT /user/password` again to re-mint an identity (red-1 #2). fh's narrow `3103894d` still left `GET /api/my-traders`, `POST /api/telegram` and `DELETE /api/telegram/binding` open (fh-verify #1). `0f48b52b` puts the ONE retire predicate (`auth.RetiredBy`) in authMiddleware and folds the guard's `<` copy into it (CLASS 257); the bot's own token is one of the inherited authorizations and re-mints (`d637b7e1`). Pins: `TestRetiredTokenCannotActAnywhere`, `TestTokenWithoutAnAccountRowOrIatIsRefusedEverywhere`, `TestCredentialGuardReChecksRetirement`, `TestBotReMintsItsTokenWhenAPasswordChangeRetiresIt` (`3103894d`, `0f48b52b`, `d637b7e1`)
 
 ## CLASS 122 — A CLASSIFIER THAT NAMES ITS OWN BLIND SPOT AND REPORTS THROUGH IT ANYWAY (assigned at merge of cleanup batch 2, 2026-09-11)
 
@@ -6228,6 +6244,8 @@ to owner ruling on "no new protocol work").
 - `ntHeldPosition` required `positionAmt > 0`, but a short is signed negative on NT8 and on every crypto broker: a held SHORT read as flat, so the AI's pre-open reconcile let an entry net onto it.
 **Probe:** for every comparison against a literal side/state/symbol, find where the compared value ENTERS and check it passes through the one canonicalizer before any comparison (canon 28). A test fixture that writes the value in the reader's casing hides it — drive the check with a row the PRODUCTION writer wrote. Fixed in W0a: `positionSide` / `brokerPositionSide` at every entry point. Pinned: `TestNtHeldPositionSeesBothSidesOnTheWire`, `TestDecisionLegSevenSeesAStoredPosition`, `TestArmLegSevenSeesAStoredPosition`, `TestOrderPathsReadBrokerSidesCanonically`.
 
+**Instance 2026-09-24 M3:** M2. The logout blacklist is an exact-string map, while jwt v5's lenient base64url accepted 3 other spellings of a 43-char HS256 signature, so a logged-out token was live again, /api/updates included (red-1 #4). `WithStrictDecoding` leaves one accepted spelling per token; pinned by `TestLoggedOutTokenStaysRevokedUnderASignatureRespelling`, `TestValidateJWTRefusesNonCanonicalSignatureSpellings` (`62579330`)
+
 ## CLASS 165 — four doors to the broker, no lock between them
 
 **Found:** 2026-09-23 in W-EXEC-TRUTH W0 (dispatch D10, confirmed by probe: three signal frames from three paths back to back on one TCPTrader with a position open) [A].
@@ -6242,6 +6260,8 @@ to owner ruling on "no new protocol work").
 **Probe:** enumerate every producer that can put an ENTRY on the wire (not the send functions — the callers that DECIDE to send) and, for each gate, ask which producers run it. A gate reached by a copy on each path is a finding even when every copy is correct today. Then drive each producer at its production call site with each gate tripped (a matrix, one row per gate per path) and remove each gate in turn: a gate whose removal turns no row red is not enforced anywhere the tests can see.
 **Fixed in W0b:** one chain, `admitEntry` (`trader/entry_admission.go`), in A's pinned order, called by every producer — A (decision), B (armed, at placement, behind G1's per-pass admitted set, fail-closed on nil), C (Picture, pre-claim and again pre-send), the agent door (`AdmitManualEntryAt`). Pinned: the gate-parity matrix (`TestGateParityMatrix`, `trader/gate_parity_matrix_test.go`: 95 `<gate>@<path>` rows over the five producer entry points, RED per gate removed — `scripts/w0b_gate_parity_mutations.py`, report `docs/superpowers/reports/2026-09-23-w0b-gate-parity-red-proof.md`); the five D10 sequences over one real TCPTrader (`TestDupS1ArmedWorkingThenPictureIsRefused`, `TestDupS2PictureSentThenArmedIsRefused`, `TestDupS3ArmedWorkingThenAIOpenIsRefusedNeverFlattened`, `TestDupS4PictureWorkingThenAIOpenIsRefusedNeverFlattened`, `TestDupS5AISentThenArmedIsRefused`, `TestDupS5AIAndArmedRaceYieldOneEntry`, `TestDupS5PictureAndArmedRaceYieldOneEntry`, + `S1r`/`S2r` across a restart); `TestArmRefusedAtAuthoringIsNotPlacedThatPass`, `TestArmPlacementWithNoAuthoringPassPlacesNothing`, `TestPictureRefusedWhenStoppedOrDayPlanOff`, `TestPictureRRFloorIsTheStricterOfKnobAndStrategy`, `TestChatEntryIsRefusedUnderStrictLikeADecision`, `TestChatEntryWithNoStopIsRefused` (was `TestChatEntryIsAdmittedInAdvisoryModeLegs5And6Abstain`, which pinned "the REAL chain ADMITS a chat entry in advisory mode … legs 5/6 ABSTAIN" as W0b's contract; flipped in W1b E9 by CTO ruling — a chat/agent-door entry with no explicit stop is now REFUSED, see the W1b class "a fail-open leg on a path that never supplies its input" below), `TestManualEntryDoorErrorsSayWhatHappened`, `TestChatEntryErrorsSayWhatHappened`, `TestW0bGuideAndGateLabelsMatchTheBinary`. Since W1b E9 the agent door is `OpenManualEntryAt` → `AdmitManualEntryBracketAt` (the chain with the entry's own Stop/Target); `AdmitManualEntryAt` remains as the bracket-less wrapper used by trader tests only.
 
+**Instance 2026-09-24 M3:** the machine-token deny lived in authMiddleware, which the PUBLIC `/api/reset-password` never runs, so a bot token met only the route's generic 410. `denyMachineBearer` now wraps the route itself, and the pin `TestEveryRuledMachineDeniedRouteRefusesMachineTokens` is written from the ruling, not read from `machineDeniedRoutes` (`f58088bb`)
+
 ## CLASS 167 — a refusal deduped on text that carries a moving value
 
 **Found:** 2026-09-23, CTO pre-review #1 of W0b (M3) [A].
@@ -6255,6 +6275,8 @@ to owner ruling on "no new protocol work").
 **Shape.** `TestArmStateNoRetypedLists` flags a re-typed arm-state set written as an `||` of two `State*` names. W0b's `reconcile_owned.go` wrote the Picture "send started" predicate that way and was caught — but W0a's `entry_latch_wiring.go` had written the SAME predicate as `!= … && !(… && …)` and passed the guard for a whole merged wave. Two copies of one predicate, one visible to the guard and one not; the guard's green on the second was read as "no copy exists".
 **Probe:** when a guard forbids a pattern, write the forbidden thing three ways (the positive `||` form, the negated `!=`/`&&` form, a `switch`) and run the guard on each. When a guard fires, grep the tree for the same predicate in its OTHER spellings before fixing only the hit. Fix by giving the predicate ONE owner beside its classifier and calling it from every reader.
 **Fixed in W0b:** `store.PictureSendStarted` (beside `IsTerminalArmState`), called from both readers. Pinned: `TestPictureSendStarted`; the negated-form copy is gone from `entry_latch_wiring.go`.
+
+**Instance 2026-09-24 M3:** the checklist numbering guard recognised only two placeholder spellings ("(assigned at merge)", "(pending)"), so the M3 drafts' `M3-07`-style class headings passed it silently. It is now an allow pattern, `^## CLASS \d+ — `, pinned RED-first by `TestChecklistNumberingRefusesEveryNonNumberedClassHeading` (`0cd6df49`)
 
 ## CLASS 169 — a test that returns while the goroutine it launched still reads the seam its cleanup resets
 
@@ -6340,6 +6362,8 @@ to owner ruling on "no new protocol work").
 **Probe:** for every "marker", "record", "confirmation", "claim" or "stamp" row that another reader uses to trust or refuse a primary row, find its writer. It must be in the SAME transaction as the primary write, and a failed marker must fail the whole save — so the caller sees an error, not a 200. Prove it by making ONLY the marker's write fail inside the database (a trigger, no seam in production code) and asserting the primary row is unchanged. Then read the marker's parser. A value it cannot vouch for (truncated, missing its time, naming an unknown field) must read as UNCONFIRMED, never as confirmed. Every surface that prints the verdict must say which save confirmed it, and when.
 **Fixed in W1:** `StrategyStore.CreateWithExplicitZeros` / `UpdateWithExplicitZeros` run the row write and the record upsert/delete inside one `s.db.Transaction`; `Duplicate` reads the source, creates the copy and copies the record verbatim inside one transaction; POST/PUT `/api/strategies` call them and answer 500 when the record fails (the row rolls back); `RecordExplicitZeros` is gone. The record is `{"fields":[…],"saved_at":"<RFC3339 UTC>"}`; the first W1 shape (bare comma list) still confirms with no time (`n/a — the record predates saved_at`); anything else confirms nothing. `store.ExplicitZeroVerdict` is the one phrase — `OFF — confirmed by Studio save <2006-01-02 15:04 CT>` (replan: `0 — …`) or `explicit 0 UNCONFIRMED — re-save in Studio` — printed on the 🩺 boot line and appended to the effective endpoint's `origin`. Pinned: store `TestSaveRollsBackTheRowWhenTheRecordFails`, `TestParseExplicitZeroMarker`, `TestUpdateWithExplicitZerosReplacesTheRecordPerSave`, `TestSettingsTruthRefusesOnlyUnconfirmedChanges` + the report golden (confirmed, UNCONFIRMED, legacy-shape, unparsable and CST rows); api `TestStudioSaveRowAndRecordAreOneTransaction` (PUT and POST through the real router), `TestEffectiveExplicitZeroSaysConfirmedOrUnconfirmed`. RED: 7 of 7 mutations were CAUGHT (9 seat runs): two separate writes in all three writers, in create only, and in Duplicate only; the effective row dropping the verdict; the verdict ignoring the record (store and api); a JSON record without `saved_at` accepted; a UTC clock labelled CT (store and api).
 
+**Instance 2026-09-24 M3:** the update enrollment is two files written by two renames. The half-written pair (a new device.key beside the old admin.json) was a WORKING enrollment of the incumbent, while the Enroll comment said the opposite (red-4 #4 [A]). Closed by the password-binding belt: the pair fails the binding, so it is 403 until an `enroll --replace` completes (`399ab651`, `a8f5db20`)
+
 ## CLASS 185 — a stored rule evaluated with an env default
 
 **Found:** 2026-09-23, W-EXEC-TRUTH W2 `fix/confirm-resolver` (master dispatch §2 W2 + amendment A5, extends D19) [A]. Siblings: the W1 "0 that means unset to one reader and off to another" class above (one value, two readers), and CLASS 38 (the prompt offers what the validator refuses). Here the plan STORES the rule and the evaluator reads the env instead.
@@ -6360,6 +6384,8 @@ to owner ruling on "no new protocol work").
 **Shape.** Go treats a `_<GOOS>` or `_<GOARCH>` filename suffix as a build constraint. A test named `confirm_resolver_arm_test.go` ("arm" as in armed orders) is built only on `GOARCH=arm`. On amd64, `go test -run <its test>` prints `testing: warning: no tests to run` and exits 0. `go list -f '{{.IgnoredGoFiles}}'` lists the file; nothing else does.
 **Probe:** `go list -f '{{.ImportPath}}: {{join .IgnoredGoFiles " "}}' ./...` must list only deliberate build-tagged files. On 2026-09-23 that is exactly one: `store/sqlitedriver/backend_cgofree.go`, a cgo/driver build tag [A]. Suspicious suffixes in this repo's vocabulary: `_arm`, `_arm64`, `_js`, `_linux`, `_windows`. A test that you just wrote must be seen to RUN (`-v`, its `=== RUN` line) before it counts as green. `ok … [no tests to run]` is a finding.
 **Fixed:** the file was renamed `confirm_resolver_armgate_test.go`. A repo scan for every GOOS/GOARCH suffix found no other hits (2026-09-23 [A]). Guarded (CTO ruling 1790181002671): `branding/test_file_build_suffix_test.go` `TestNoTestFileCarriesAPlatformBuildSuffix` walks every `*_test.go` and fails on a `_<GOOS>`/`_<GOARCH>` name suffix unless allowlisted with a reason (empty today); a vacuity floor of 500 files. RED: a planted `kernel/zz_probe_arm_test.go` is CAUGHT.
+
+**Instance 2026-09-24 M3:** `TestCensusWalkIsTestToolingOnly` read `go list .Imports`, which covers the current GOOS/GOARCH only, and `./...` never matches a package every file of which is excluded. `TestNonTestImportersSeesEveryPlatform` asks every platform (`6e7e7117`)
 
 ## CLASS 188 — an unparseable safety sentence accepted as UNKNOWN
 
@@ -6520,6 +6546,8 @@ to owner ruling on "no new protocol work").
 **Pre-W5 lines — CLOSED in W5 (CTO round 1 R5, ruled: W4 is dev's now):** the evaluator printed the raw key at two places, not the `:398` this entry first cited (that is the foreign-contract WARN, no key) — the generation-refusal WARN (`trader/picture_htf_evaluator.go` ~:696-697, "the trader that began this evaluation is gone … opportunity %s") and the 🔒 maintenance-hold WARN (~:731). Both now print `store.RedactPictureOppKey(oppKey)`. `trader/picture_htf_send.go:110` went with the file (W5 step 2 deleted the send path).
 **Probe:** grep every log/format call for a variable that holds a composite key (`OppKey`, `oppKey`, `SourceRef`, `Machine.Ref`); each goes through the redactor or names the row by id.
 
+**Instance 2026-09-24 M3:** `%v`, `%+v`, `%#v` and `%s` of `updateauth.Grant` printed its 64-hex MAC, and the install hand-off error is logged with `%v` (red-3 #6). Pinned by `TestGrantNeverFormatsItsMAC`, `TestInstallHandOffErrorNeverLogsTheGrantMAC` (`f1b7370d`)
+
 ## CLASS 208 — a level declared on fewer witnesses than its own definition names
 
 **Found:** 2026-09-23, W-EXEC-TRUTH W4 (`fix/w4-picture-evidence`), D22 [A].
@@ -6561,6 +6589,8 @@ real time)".
 
 **The tell:** `x == 0 || x <= now`. A zero that shares a comparison with a real
 value is a fabricated value wearing the type's clothes (canon: absent ≠ []).
+
+**Instance 2026-09-24 M3:** **OPEN.** After enrollment, a missing `data/updater/seen_job_ids.json` reads as an empty store, so a spent update code is authorized again (red-3 #4 [A]). fa's fix `dd3c472e` is not on the branch; the runbook's "never delete the seen store" is the only control, and it is a PR-body known limit (red-3 #4; fa `dd3c472e`, not folded)
 
 ## CLASS 210 — a requirement whose own fetch cannot satisfy it
 
@@ -6809,6 +6839,8 @@ At HEAD `c4111476` (FOLD-3 + FOLD-10) the NT8 decision path is: `executeOpen*Wit
 **Probe:** for every pin that claims to hold a specific guard, mutate THAT guard alone (compiling, restored with `cmp`) and confirm RED. When guards are stacked, assert on a signal only the named layer controls — a log line that proves the path was reached, a store state only that layer writes — not on the shared outcome "nothing was sent". Then mutate the layers together and confirm the harm the guards exist for actually appears.
 **Pinned (the corrected FOLD-8 pin):** `TestRespecCancelPendingRowIsNeverPlacedOnAFlatLiveBook` (`trader/arm_respec_test.go`) — switch alone mutated → RED on the "armed place failed" log line; compare-and-set alone → green (the switch holds); both → RED, the v1 order is re-sent.
 
+**Instance 2026-09-24 M3:** three cases. The update worker's second-Listen test was satisfied by both the flock AND the live-socket probe (`002ede41`, `TestListenRefusesWhileAnotherWorkerHoldsTheLock`); the triage repaired legs that were green for another reason (a trailing-newline leg with a zero key and a fake MAC, a Logf-only MAC check, a "within retention" leg that moved the clock forward); and the red-team's future-iat probe was refused by nbf before Q8 ran and was dropped, so the finding it masked returned later as CLASS 264 (`002ede41`, `0c0253db`)
+
 ## CLASS 230 — a log line that states an attribution the code never established
 
 **Found:** 2026-09-23, CTO ruling FOLD-6 (Wave 1b part 1) [A]. `trader/ninjatrader/reconcile.go` printed `🧩 reconcile: MATERIALIZED … manual/NT8-side entry now tracked` unconditionally, two lines after `🔗` had tagged the same position as this trader's own late AI fill. The first repair (`7095ef4c`) still worded failures as answers: a failed store read printed "not claimable by this trader", and a failed fallback read fell through to "manual/NT8-side (no … evidence)".
@@ -6833,6 +6865,8 @@ At HEAD `c4111476` (FOLD-3 + FOLD-10) the NT8 decision path is: `executeOpen*Wit
 **Probe:** grep `>= 0 &&` next to `now.Sub(` (or `d >= 0`, `age >= 0`) in any window check. Find where that `now` is captured: if it is captured before the read, negative ages must pass.
 **Residual [B] (FOLD-11 builder C3):** `fresh()` has no lower bound now. A row whose `UpdatedAt` is in the future (a clock step back) reads as fresh until the wall clock passes it. This fails closed: the AI open is refused and nothing is flattened. Any future upper bound must exceed the test's +30 s stamp.
 
+**Instance 2026-09-24 M3:** **OPEN.** The update install read `now` once, then waited on an unbounded `.seen.lock` flock, so a code was consumed about 1 h after it expired (red-3 #3 [A]). fa's clock-read-under-the-lock `100371ff` is not on the branch; it is a PR-body known limit (red-3 #3; fa `100371ff`, not folded)
+
 ## CLASS 233 — a per-pass sweep that re-sends an unpaced cancel
 
 **Found:** 2026-09-24, CTO ruling FOLD-12 (Wave 1b part 2) [A]. The E13 / no-trade-band window sweep (`trader/armed_executor.go` :377) re-sent a cancel EVERY pass — the scan AND each live-bar pass — to every non-terminal row, `cancel_pending` ones included: `cancelArmedOrdersSyncWith` filtered only `SignalID == ''`. Each re-send blocked under `armedPassMu` for up to 2× the ack timeout per row and incremented `cancel_attempts` when no ack came. On a dark book, the 2-minute T1 lead × per-bar passes could exhaust the re-request cap (`cancelReRequestMax`) the settlement pass paces by.
@@ -6846,6 +6880,8 @@ At HEAD `c4111476` (FOLD-3 + FOLD-10) the NT8 decision path is: `executeOpen*Wit
 **Found:** 2026-09-24, Wave 1b folds (CTO ruling part 2 names `b387f95f`; the fold lane found a second) [A]. An owner hold stopped the builders mid-run, and their uncommitted work was saved as `wip(STOP)` commits. On the f11 fold, `e3bff5d8` captured a mutation probe in flight: `trader/armed_executor.go` had lost the FOLD-12 pace check in the no-broker-link branch of `cancelArmedOrders` (3 lines deleted), and a verifier probe file `trader/zz_verifier_probe_test.go` (154 lines, "temporary, deleted after the run") had been added. The revert is `91dfadc4` (the file restored from the fold commit, the probe deleted, `git diff` against the pre-snapshot fold empty). `b387f95f` (M3, "snapshot at the second interruption") carries the same hazard and must never be cherry-picked alone.
 **Shape.** A snapshot captures the tree as it IS at that moment. A probe that mutates a guard to prove its test goes RED is, at that moment, a weakened guard, and the snapshot commits it under a message that says nothing about it.
 **Probe:** before building on any `wip(STOP)` / snapshot commit, diff it against the last fold commit and read every REMOVED line in production code; look for `zz_*probe*` files. Restore from the last fold commit, confirm with `cmp`, delete the probe file, and commit the revert as its own commit, naming the snapshot. Squash, or say so in the PR body, so nobody bisects or cherry-picks onto the mutated commit.
+
+**Instance 2026-09-24 M3:** `b387f95f`, already named above, was restored by `a51115ae`; the `ef03e033` wip(STOP) carried the red-team `zz_*` probe files, and the triage verified that no production file was mutated [A] (`a51115ae`, `ef03e033`)
 
 ## CLASS 235 — a side door that re-implements the send skips the producer's execute-side rails
 
@@ -6877,6 +6913,8 @@ At HEAD `c4111476` (FOLD-3 + FOLD-10) the NT8 decision path is: `executeOpen*Wit
 **Fixed in W1b FOLD-10 (`5e49cb14`; f10 `8f7e0a9e`):** ONE AutoTrader-level entry-send section, `entrySendMu`, taken only in `openEntryWithRecord` through `lockEntrySend` (idempotent release, deferred for every early return and panic, and called where the section ends). Section 1 spans the pre-entry bracket set (run only when the broker does not carry the bracket, FOLD-3) → the open send (released as soon as the send returns; the order-confirmation poll runs outside it). Section 2 covers the post-open `SetStopLoss` / `SetTakeProfit`, which on a map-keyed broker would otherwise land inside ANOTHER entry's set → read. Both paths take it: the AI decision's and, since FOLD-2, the chat door's. No other send takes it: armed entries (`PlaceLimitEntry` / `PlaceStopEntry`) and the debug test trade (`DebugPlaceTestTrade` → `OpenWithBracket`) carry their own prices into the send. The Trader interface is unchanged (19 methods). On the live NT8 path, FOLD-3's `OpenWithBracket` already carries each entry's own bracket; the section closes the class for every map-keyed broker (legacy NT8 `placeEntry`, the CSV transport). Pinned: `TestConcurrentAIAndChatEntriesEachSendTheirOwnBracket` (production call sites `executeOpenLongWithRecord` + `OpenManualEntryAt`, a broker that records the maps' (sl, tp) AT OPEN and forces the interleave deterministically, both orders). RED at base ("AI sent (SL 28983.25, TP 29078.25) want (28981.25, 29080.25)") and on both compiling reverts (both sections off; post-open section only) — the builder's record, not re-run in the W1b docs pass.
 **Probe:** for every shared map or field that a producer writes and a later call reads (`Set…` then `Open…`), find every goroutine that can reach the pair. If more than one can, one lock must span write → read. Test it by forcing the interleave in a fake that records what the read saw, in both orders — never by a timing loop.
 
+**Instance 2026-09-24 M3:** **OPEN.** The H2 retire check reads `users.updated_at`, then bcrypt runs, then `UpdatePassword` writes by id alone, with no lock spanning the three, so a retired token's in-flight password write can land after the owner's rotation (fh-verify #4 [B]). The route now also needs the current password; it is a PR-body known limit (fh-verify #4)
+
 ## CLASS 239 — a test that pins a defect will defend the defect
 
 **Found:** 2026-09-24, WAVE 3a (M4 release workflow) [A]. `TestReleaseWorkflowRefusesWithInstructionsWhenThePublicKeyIsMissing` asserted that `.github/workflows/release.yml` names `deploy/release.pub`. That path WAS the bug — `ssh-keygen -Y verify` reads its `-f` file as allowed-signers, so a bare public key can never verify (CLASS 240). When the fix landed the test went RED, and the red was the pin defending the broken shape, not the fix breaking anything. A green suite does not distinguish "this behaviour is correct" from "this behaviour is what I wrote down"; the pin had been written from the same wrong assumption as the code, in the same hour, by the same author.
@@ -6884,6 +6922,8 @@ At HEAD `c4111476` (FOLD-3 + FOLD-10) the NT8 decision path is: `executeOpen*Wit
 **Fixed in 3a:** the assertion moved WITH the fix in the same commit (`53051073`) and now pins `deploy/release_allowed_signers`, carrying a comment at `deploy/release_contract_test.go:122-127` that names the shape it used to pin and why that shape was wrong — so the next reader learns the defect instead of re-deriving it. The correct behaviour is proven independently by `TestReleaseSignatureVerifiesOnlyWithAnAllowedSignersFile` (`deploy/release_contract_test.go:173`), which mints a throwaway keypair and exercises BOTH directions.
 
 **Probe:** when a test goes red because a FIX landed, ask which of the two is wrong before touching either. If the test is, it moves with the fix, in the same commit, with a comment naming the superseded shape. Never adjust a fix to keep a pin green. A pin on a value the author has not independently verified is a pin on the author's own assumption.
+
+**Instance 2026-09-24 M3:** fa's characterization pin `TestEnrollCommentTruthACrashBetweenTheTwoRenames` pinned the pre-belt "the incumbent still works". It flipped WITH the belt and the comment in one commit, as this class prescribes (`a8f5db20`)
 
 ## CLASS 240 — a verification step that cannot succeed as written
 
@@ -6949,6 +6989,8 @@ At HEAD `c4111476` (FOLD-3 + FOLD-10) the NT8 decision path is: `executeOpen*Wit
 
 **Probe:** for every guard exemption keyed by a name (function, file, type), grep the repo for that name at HEAD. Zero hits, or a hit that is now a thin wrapper, means the exemption has expired. A wave that renames code inside a guarded file must run that guard's package, not only the targeted tests of the files it edited.
 
+**Instance 2026-09-24 M3:** the hold-writer census admitted the not-yet-existing `internal/updaterworker/hold.go` by a bare map entry that nothing proved admits exactly that path; `TestHoldWriterCensusAdmitsTheWorkerOnlyByName` proves it on a synthetic module (`b0749a47`)
+
 ## CLASS 248 — a verifier that rejects the artifact the workflow actually produces
 
 **Found:** 2026-09-24, WAVE 3a, while building a binary to exercise `cutover.sh --dry-run` [A]. The script proves a new binary by reading `vcs.revision`/`vcs.modified` back out of it — and a binary built in a linked git worktree carries NO `vcs.*` entries at all. Proven by elimination on one box, one toolchain (go1.25.13), one module, one commit: worktree `go build` → 0 vcs lines; worktree `go build -buildvcs=true` → **rc=0 and still 0 vcs lines** (the flag whose purpose is to make stamping mandatory fails OPEN); clean clone of the same commit `0adaee41` → `vcs.revision=0adaee41…`, `vcs.modified=false`. WORKTREE LAW puts every lane in a worktree, so the wave's central guarantee refused a correct binary for everyone except the deploy lane — and refused it with "it is not the binary for this sha", which accuses the artifact when the cause is the build LOCATION. An operator checks the sha, finds it already correct, and concludes the check is broken. That is how a guard gets deleted at 3am. (A linked worktree's `.git` is a FILE, `gitdir: …/worktrees/<name>` — the same layout fact that broke a `[ -d "$W/.git" ]` guard on 09-10, biting a second time in a different tool.)
@@ -6979,6 +7021,8 @@ At HEAD `c4111476` (FOLD-3 + FOLD-10) the NT8 decision path is: `executeOpen*Wit
 
 **Probe:** when you add a required build input, enumerate every place that produces the artifact — workflows, Dockerfiles, compose, deploy scripts, the manual boot procedure — and make the enumeration a TEST, not a list in a PR. Prove the guard fires (negative) AND that every producer satisfies it (positive); the second is the one that gets skipped, because the first feels like proof. And a census that stops at its first finding is not a census: report all, or you will fix what you found and ship what you did not.
 
+**Instance 2026-09-24 M3:** FOLD-M3-A. `auth/retire.go` rested the credential epoch on "updated_at is moved only by UpdatePassword", and no census of the users table's writers existed. `TestUsersTableWriterCensus` pins the writer set by (file, function, kind) and the comment names it; its walk hole was CLASS 258 (`7e47767d`), and the 11 compiling writer shapes it cannot see are named in its header (`efdf3988`) (`84954734`, `31605a24`)
+
 ## CLASS 251 — a check with no census of WHEN IT RUNS
 
 **Found:** 2026-09-24, WAVE 3a [A]. `Test Docker Compose Healthcheck` failed on PR #199. It was not caused by the PR: `gh run list --workflow=pr-docker-compose-healthcheck.yml` returns FOUR runs in the workflow's entire life and **all four are failures** — three on an unrelated branch on 2026-09-13, one here. It has never once been green. The cause is one missing line: its "Create minimal .env for testing" step writes `DATA_ENCRYPTION_KEY` and `JWT_SECRET` and never `RSA_PRIVATE_KEY`, so since that key became mandatory the backend has FATALed at `main.go:60` and restart-looped until the healthcheck timed out. What hid it is the paths filter — `docker-compose.yml`, `docker/Dockerfile.frontend`, the workflow itself — narrow enough that months pass between triggers. A wave that touches none of those never sees it, and the one that does assumes it broke it.
@@ -6994,7 +7038,443 @@ At HEAD `c4111476` (FOLD-3 + FOLD-10) the NT8 decision path is: `executeOpen*Wit
 **KNOWN LIMIT, named rather than left implied [A]:** with that loopback bind, compose's published `8080:8080` forwards to the container's `eth0`, which the API never answers — so a `docker compose` deployment is DEAD ON ARRIVAL until the owner opts in with `API_SERVER_HOST=0.0.0.0` inside the container, where the container network is the security boundary (`config/config.go:134-140`). This check therefore proves the backend BOOTS and SERVES ON LOOPBACK; it does NOT prove the published port works, and nothing in this repo currently does [B]. Setting that variable is a security-posture decision and belongs to the owner, not to a CI fix.
 
 **Probe:** for every workflow in `.github/workflows/`, name what triggers it and when it last ran GREEN — `gh run list --workflow=<file>` answers both in one line. A workflow with no green run in its history is broken or vestigial; decide which and act, rather than leaving a red name that everyone learns to ignore. Treat "this check has always been red" as a finding, never as context.
-## CLASS NN (assigned at merge) — a repair outcome recorded before the bookkeeping that rewrites its reason
+## CLASS 252 — a single-use ledger that forgets by wall clock re-admits a spent id after a clock step-back
+
+**Found:** 2026-09-24 00:46 CT, M3 triage of the stop-snapshot red-team probes (`0c0253db`) [A]. The red team's `TestRT_ClockRollbackAfterPruneReopensReplay` and `TestRTA_ClockRollbackAfterPruneReplaysThroughTheRouter` (in the `ef03e033` wip(STOP)) were kept RED behind `NOFX_M3_OPEN_FINDINGS=1` as `TestConsumeRefusesAReplayAfterAClockRollbackPastRetention` and `TestInstallReplayRefusedAfterAClockStepBackPastRetention`.
+
+The seen-job store pruned an entry once `expires_at < now − SeenRetention` (`internal/updateauth/seen.go`, then :116-119).
+
+The replay:
+1. Install A.
+2. A later install at ≥ expA+600 s prunes A.
+3. The wall clock steps back more than 600 s. Causes: NTP, a WSL2 resync, or chrony `makestep 1 -1` on this box (red-3).
+4. POST A again. Expiry, MAC and Consume all pass.
+
+RED at the router: `handler_updates_adversarial_test.go:321: job rollback-job-a0001 admitted twice after a prune + 611s step-back: 422 …, want 409`. That breaks the spec's unconditional "job_id single-use", and it disproved the design note's "pruning cannot re-open a replay" (§4.1).
+
+**Shape.** A ledger whose forgetting is keyed on the wall clock assumes the clock only moves forward. Every test drove it forward, so every test agreed.
+
+**Fixed in M3 (`f0a0c15e`):**
+- The store is now v2, `{"v":2,"pruned_through":N,"ids":[…]}`, where N is the largest `expires_at` ever pruned.
+- Any grant with `expires_at ≤ N` is refused with `ErrPrunedReplay`, whatever the clock says. It wraps `ErrReplay`, so the API answers 409 and logs a separate WARN.
+- CTO ruling 00:53 CDT: "a clock step-back is a fault, refusing until the clock passes the floor is the right fail-closed".
+- A v1 store is refused and never reset. That is safe only because M3 never shipped (`2a58cc84`).
+- Pins: `TestConsumeRefusesAReplayAfterAClockRollbackPastRetention`, `TestInstallReplayRefusedAfterAClockStepBackPastRetention`, `TestPrunedThroughIsTheLargestPrunedExpiryAndBindsAtAnyClock`.
+
+**OPEN, same shape.** These are not folded, because the CTO ruled LOWs to known limits:
+- **Red-3 #2:** an UNUSED code that the server refused as expired is admitted after a step-back, because the watermark covers consumed-then-pruned ids only [A]. A `clock_floor` fix was built on fa `d970b7e0`, which is not on this branch.
+- **Built-0 Q4** [B]: a far-forward jump followed by an install lifts the watermark into the future. Every later install then gets 409 until real time catches up.
+
+**Probe:** for every single-use, replay or expiry verdict that consults the wall clock:
+- prune, then step the clock BACK past retention, and replay;
+- separately, let a code expire, step back, and resend it.
+
+The verdict must not depend on the clock being monotonic. Persist a high-water mark of what the ledger forgot or refused, and refuse at or below it.
+
+## CLASS 253 — a writer that can emit a record its own strict reader refuses (under never-reset, a permanent wedge)
+
+**Found:** 2026-09-24 00:46 CT, M3 triage (`0c0253db`). The red-team probe `TestRT_ConsumedAtNonPositivePoisons` (in `ef03e033`) only logged the problem; the triage made it assert, as `TestConsumeNeverWritesARecordItsReaderRefuses` [A].
+
+What happened:
+- `Consume` wrote `ConsumedAt: now.Unix()` unchecked (`seen.go:126` then).
+- The strict reader refuses `n <= 0` as corrupt (`strict.go:99`).
+- A corrupt store is never reset, by design.
+
+Reproduced through the router with a scratch probe:
+1. An install at clock 0 returns 422, and the store records `"consumed_at":0`.
+2. The next install at a real clock returns 403 "job-id store refused".
+3. Every later install is refused until someone repairs the file by hand.
+
+RED: `adversarial_test.go:262: clock 0: the store no longer accepts a fresh id at a sane clock: updateauth: seen-job store unreadable`.
+
+**Shape.** Writer and reader are each correct alone. The writer never runs the predicate the reader will judge it by. A fail-closed, never-reset policy then turns one bad write into a permanent outage. It is invisible because it cannot be triggered by an attacker and it fails SAFE.
+
+**CTO ruling (00:53 CDT), generalized as the class:** "every record the store WRITES is validated with the SAME predicate its reader applies BEFORE it is persisted (write-through-the-read-validator)".
+
+**Fixed in M3:**
+- `f0a0c15e`:
+  - `Consume` refuses a clock at or before the epoch with `ErrBadClock`, before it creates the dir, takes the lock or writes.
+  - `encodeSeen` runs every store through `parseSeen`.
+  - `Enroll` never writes a degenerate key.
+- `399ab651` applies the law to the enrollment: `validateAdmin` is the ONE predicate `LoadAdmin` applies to what it reads and `Enroll` applies to what it writes.
+- Pins:
+  - `TestConsumeAtAClockAtOrBeforeTheEpochRefusesAndTouchesNothing`
+  - `TestEncodeSeenRefusesWhatItsReaderRefuses`
+  - `TestConsumeNeverWritesARecordItsReaderRefuses`
+  - `TestEnrollNeverWritesADegenerateKey`
+  - `TestEnrollWritesTheRecordItsReaderAccepts`
+
+**Read beside 120,** its mirror: there a reader re-refused what the writer had accepted, and the law says the reader yields. Here the strict reader is the security boundary and stays; the writer goes through it.
+
+**Probe:** for every store with a strict reader:
+- list each field the reader refuses;
+- find the writer's path for each field, and confirm the writer calls the reader's validator on the exact bytes it persists;
+- drive the writer at its boundaries (a clock ≤ 0, empty, maximum, a constant fill) and read back through the production reader.
+
+## CLASS 254 — a secret checked for its form, never for whether anyone else can know it
+
+**Found:** 2026-09-24. There are two instances of one shape.
+
+**F2** (triage `0c0253db`; the red-team probe `TestRTA_AllZeroDeviceKeyIsAccepted` in `ef03e033`) [A]:
+- `LoadDeviceKey` checked the length only (`admin.go:88` then), and `VerifyMAC` checked the key's length only.
+- With a 32-byte all-zero `device.key`, mode 0600 and our uid (a zero-filled restore or a sparse copy [C]), anyone holding the admin JWT computes the second factor.
+- RED: `handler_updates_adversarial_test.go:340: a MAC under the all-zero device.key = 422 …, want 403`.
+
+**M1** (red-team 1 #3, ~01:2x CT) [A]:
+- The /updates gate refused only the loader's default JWT secret.
+- A token forged under the `.env.example` placeholder, under the CI workflow literal, or under a 1-byte secret was an admin identity (GET 200, install 422).
+- RED: `handler_updates_secret_test.go:123: JWT secret tracked literal at .env.example:35 (len 41): GET /api/updates = 200 …`.
+
+**Shape.** The check asks whether the secret is PRESENT and WELL-FORMED: non-empty, the right length, not the one known default. The property that matters is that nobody else can know it. A constant fill is guessable, and a value committed to a public repository is published. A deny-list of the one public value you remember is a list of one.
+
+**Fixed in M3:**
+- `f0a0c15e`: a degenerate key (all bytes equal) is refused by `LoadDeviceKey` (`ErrUnsafe` → uniform 403), by `VerifyMAC` and by `ComputeMAC`. `Enroll` draws from crypto/rand through a `randRead` seam and never writes one.
+- `4e1283b3`: `config.JWTSecretUnfitForUpdates` refuses, on `/api/updates*` only, an empty secret, every public literal and anything under 32 bytes. Per the CTO ruling, the loader and its WARN are unchanged.
+- Pins:
+  - `TestDegenerateDeviceKeyIsRefusedByTheLoaderVerifierAndMinter`
+  - `TestInstallRefusesAMACUnderAnAllZeroDeviceKey`
+  - `TestUpdatesRefuseEveryPublicPlaceholderAndShortJWTSecret`. It is a census of every literal `JWT_SECRET` in the TRACKED tree (`git ls-files`, never the untracked `.env`). It fails if it stops finding `.env.example` or the CI workflow, and any new 32+-byte literal turns it RED until listed. It is the census that caught CLASS 261 at the merged head.
+
+**Known limits:**
+- The list is exact-match. An edited or re-cased placeholder passes (fa-verify [A]).
+- The scan needs git, and fails closed without it.
+
+**Probe:**
+- For every secret a gate relies on, ask who else can know its value: the repo (census tracked files for the variable's name), a default, a constant fill, or a PID-sized family.
+- Refuse the published values by census, not by memory.
+- Refuse constant fills at the loader AND at the writer (CLASS 253).
+
+## CLASS 255 — an identity factor a machine credential can re-mint through a credential route
+
+**Found:** the design anticipated it; red-team 1 R1 and red-team 2 #1 proved it on 2026-09-24 ~01:2x CT [A].
+
+**The design** (§4.4, 09-23) named the risk "an owner-only gate a same-user machine credential (bot JWT) passes". F1 answered it: the JWT's user_id AND email must equal admin.json, and the bot token used directly gets 403.
+
+**Both red teams went round F1** (at the production router, and red-2 also through the agent's own `apiCallTool.execute`):
+1. `GenerateBotToken` carries the OWNER's user_id.
+2. `PUT /api/user/password` took only `new_password`, acted on the JWT's user_id, and returned 200.
+3. `POST /api/login` with the owner's email (which is in the agent's prompt) returned a genuine owner token.
+4. That token passed F1, F3 and Q8: `GET /api/updates` 200, install 422. The owner was locked out.
+
+`GetAPIDocs` handed the LLM both links of the chain. The CTO verified it live at 662c79bd with the bot running (ruling 1790231205208, 01:26 CDT): fold in M3.
+
+**Shape.** The test asked "does the machine token pass?" and not "what can the machine token MAKE?". A factor is only as strong as the weakest credential that can mint it. An account route with no current-password check let a bearer token re-mint the identity the gate trusts.
+
+**Fixed in M3:**
+- `18577f99`: `credentialActorRefusal` requires the token's email to equal the row's email. It runs first on the credential routes.
+- `366d024c`: a `scope` claim. `IsMachine` is true for any scope, for the bot's constant email with no scope, and for nil claims. Machine tokens are denied by default on `/user/password`, `/reset-account`, `/telegram*` and `/updates*`.
+- `36f94bb5`: the agent's route list drops these routes plus login, register, logout and reset-password.
+- `399ab651`: the M3-local belt. admin.json binds HMAC(device.key, password_hash), so any password change un-enrolls until `enroll --replace`.
+- `7db37ec9`: `current_password` is required, with the server and the SettingsPage field in ONE commit. A server that demands a field the UI does not send locks the owner out.
+- `f58088bb`: `/api/reset-password` (the M3 instance under CLASS 166).
+- Pins:
+  - `TestBotTokenCannotChangeTheOwnersPassword`
+  - `TestAgentToolCannotTakeOverTheOwnersAccount`
+  - `TestMachineScopedTokenIsDeniedOnCredentialTelegramAndUpdateRoutes`
+  - `TestAgentRouteListOmitsAccountBotConfigAndUpdateRoutes`
+  - `TestPasswordChangeUnbindsTheEnrollment`
+  - `TestPasswordChangeRequiresTheCurrentPassword`
+  - `TestRedTeamChainAtTheProductionRouter`
+  - `TestEveryRuledMachineDeniedRouteRefusesMachineTokens`
+  - `TestGateJWTTokenPassesTheCutoverGateAndIsDeniedTheMachineDeniedRoutes` (`c3f5d247`: the cutover tool's scoped token keeps `/api/cutover-gate`).
+
+**Known limits** (red-1, outside M3 [A read]):
+- The bot binds to the first chat that sends `/start`.
+- `/api/onboarding/beginner` returns the wallet key to any token carrying the owner's id.
+
+**Probe:**
+- For each factor of a gate, walk every account-management route (password, reset, email, register) with each machine token, and CHAIN the outputs: a login response is a new credential.
+- Run the chain at the production router through the machine client's own request builder.
+- Read the route list the client is handed; it is the client's map.
+
+## CLASS 256 — a loopback check that a same-box relay satisfies for every remote client
+
+**Found:** 2026-09-24 ~01:2x CT, red-team 2 #2, over real sockets [A].
+
+The /updates gate judged `RemoteAddr` (loopback) and `Host` (a loopback name). Both are properties of the LAST HOP:
+- An `httputil.ReverseProxy` on the box's LAN address rewrote Host to the upstream, as nginx's default does, and added X-Forwarded-*.
+- A LAN client got GET 200 and install 422.
+- `config/config.go:147` and the P0 report both tell operators to put "a firewall/reverse proxy" in front of an off-loopback API.
+
+**Shape.** A locality check certifies the hop it can see. A relay on the same box is a local peer for everyone it relays, so the check certifies the relay. Every test dialled directly, and the positive control (a LAN client straight to a LAN-bound router gets 403) passed.
+
+**Fixed in M3 (`2606f7f4`):**
+- The gate refuses any request that carries any of these headers, whatever the value, even empty: Forwarded, any X-Forwarded-*, X-Real-IP, Via, CF-Connecting-IP, True-Client-IP, X-Client-IP, X-Cluster-Client-IP, Fastly-Client-IP, X-Original-Forwarded-For.
+- Names are compared case-insensitively, with `_` read as `-`.
+- The log names our own constant spelling, never the client's.
+- Pins:
+  - `TestUpdatesRefuseRequestsCarryingAForwardingHeader`: 13 names × canonical/lower-case/underscore/empty × 5 routes. Control: a look-alike `X-Forwarding-Note` is admitted.
+  - `TestUpdatesRefuseAClientRelayedByASameBoxReverseProxy`: real sockets, both Rewrite+SetXForwarded and legacy Director proxies. Control: a direct client is admitted.
+
+**Known limits (named):**
+- A relay that adds no header (nginx's default `proxy_pass`, `ssh -L`, socat) cannot be told apart from a local client. Updates are loopback-DIRECT only (runbook `45739f9f`).
+- fa-verify [A]: bare `X-Forwarded`, `X-Envoy-External-Address`, `X-Original-Host`, `Client-IP` and similar are still admitted. This is optional hardening.
+- Under WSL mirrored networking, every Windows process is a loopback peer [B].
+
+**Probe:**
+- For every locality or identity check, name the hop it judges.
+- Put a same-box relay (reverse proxy, tunnel) in front of it and dial from elsewhere. A check the relay satisfies for every client is a check on the relay.
+- Write the runbook line for the relays that cannot be detected.
+
+## CLASS 257 — a whole-second claim compared with a sub-second column by a strict operator
+
+**Found:** 2026-09-24, red-team 1 #5 [A].
+
+Q8 retires, on /updates, any token issued before the admin's last password change, and it compared `iat < updated_at`:
+- A JWT `iat` is whole seconds. golang-jwt v5 has `TimePrecision = time.Second`, and a fractional iat is truncated on parse.
+- GORM stored `users.updated_at` with sub-second precision (`…:29.9Z`).
+
+So a token issued 800 ms BEFORE the change, in the same wall second, compared as not-before and was admitted (GET 200). The control, one second older, got 403.
+
+A second copy then drifted: the H2 credential guard's own `issuedBefore` used `<` while Q8 had moved to `<=`. A same-second token was admitted there and refused on /updates (`0f48b52b` message).
+
+**Shape.** Two timestamps of different precision are compared with a strict operator. The truncation window falls to whichever side the operator favours, and here that was the permissive side. Tests set times whole seconds apart, where every operator agrees.
+
+**Fixed in M3:**
+- `4df2a429`: iat must be STRICTLY after `updated_at` truncated to the second.
+- `0f48b52b` made that THE rule: `auth.RetiredBy` / `IssuedNotAfter` / `CredentialEpoch` in `auth/retire.go`, used by authMiddleware, the credential guard, the bot and Q8.
+- The cost, named: a sign-in within the change's own second succeeds, but its session is refused on first use. The guide says exactly that (`06ca207d`), and so does `auth/retire.go` since `efdf3988`.
+- Pins:
+  - `TestUpdatesQ8RefusesATokenIssuedInTheSameSecondAsThePasswordChange` (row at sec.900: tokens at sec.100 and sec.950 refused, sec+1 admitted; row at sec.000: iat=sec refused)
+  - `TestRetiredByIsTheWholeSecondRuleAgainstTheCredentialEpoch`
+  - RED on `<=` → `<`: `retire_test.go:33/:38`.
+
+**Probe:**
+- Wherever two timestamps meet, find each one's precision at its WRITER: a token claim, a DB column, a log field.
+- Compare at the coarser precision and send the tie to the safe side.
+- Test at .100 and .950 of the same second, never only whole seconds apart.
+- Grep for every copy of the comparison; there must be one.
+
+## CLASS 258 — a census walk that skips a directory NAME at any depth exempts compiled packages
+
+**Found:** 2026-09-24 ~01:2x CT, red-team 4 #1 [A].
+
+Five censuses each `SkipDir`'d any directory NAMED web, node_modules, vendor, .git, .claude, .Codex or .understand-anything, at ANY depth; the import guard also skipped testdata. The five were the hold-writer census, the worker import guard, the update-auth census, the worker-socket literal census and M2's maintenance-setter census.
+
+Go compiles and links `api/web`, `internal/node_modules/x`, `api/.git`, `x/testdata/y`, `_x` and `api/.hidden` like any other package ([A] go1.25.13). A planted `api/web` minter passed `TestUpdateAuthCensus`, and `go list -deps` showed the app linking the worker side through `nofx/api/web`.
+
+**It happened again inside M3.** FOLD-M3-A's users-table writer census (`84954734`) did its own walk and skipped `.*`, `_*` and testdata at any depth. The ha verifier (note A [A]) planted `api/.hidden/w.go`, a raw `UPDATE users`: it was linked (`go list -deps` names `nofx/api/.hidden`), and the census passed. A writer there would move the credential epoch unseen.
+
+**Shape.** A skip list copied from habit ("keep the census off node_modules") reads as hygiene. It encodes a model of which directories the toolchain builds, and nobody compared that model with the toolchain. Even `go list ./...` is not the answer: it never matches `_x` or `testdata`, yet an import still links them.
+
+**Fixed in M3:**
+- `053d8618`: ONE walk, `internal/censuswalk`, which skips names only as direct children of the module root.
+  - All five censuses call it.
+  - `TestWalkCoversEveryPackageTheToolchainLinks` cross-checks the walk against `go list -deps`, run offline.
+  - `TestTradingAppLinkageFromTheToolchain` answers the import guard from the toolchain.
+- `7e47767d`: the users census moves onto `censuswalk.NonTestGoFiles`, accepted by the CTO at integration (1790242842706).
+- `11348765`: **a third time inside M3**, found while drafting this entry. Two auth censuses M3 itself added, `TestOnlyLoginAndRegisterMintUnscopedTokens` (`366d024c`) and `TestServerNeverMintsAFutureIat` (`45e1404a`), skipped `.`, `_` and testdata at ANY depth. The first one's comment said "the way the go tool skips them", which is true of `./...` pattern matching and false of an import. Both now walk with censuswalk. `TestMintCensusesSeeNestedSkipNamedDirs` plants an unscoped `auth.GenerateJWT` and a direct `jwt.NewWithClaims` in every probe dir. It went RED with the old any-depth skip re-imposed ("api/.Codex/unscoped.go … the mint census counts 0 — want 1") [A].
+- Pins: every census has a `…SeesNestedSkipNamedDirs` over `censuswalk.NestedProbeDirs`, including `TestUsersWriterCensusSeesNestedSkipNamedDirs` and `TestMintCensusesSeeNestedSkipNamedDirs`; plus `TestWalkSkipsOnlyAtTheModuleRoot` and `TestRootSkipsArePinned`.
+
+**OPEN.** Nine older walks still use their own `SkipDir` and not censuswalk. The fc builder read them as skipping names at any depth [A at 2a58cc84]:
+  - `trader/cancel_contract_test.go`
+  - `trader/clock_seam_walk_test.go`
+  - `kernel/confirm_resolver_test.go`
+  - `trader/bars_store_depth_test.go`
+  - `trader/ninjatrader/bar_horizon_warn_test.go`
+  - `store/knob_method_readers_test.go`
+  - `kernel/acceptance_interval_guard_test.go`
+  - `trader/wiring_gate_test.go`
+  - `branding/test_file_build_suffix_test.go`
+
+The follow-up is to move all nine onto censuswalk.
+
+**Read beside 108** (a source guard that scans nothing).
+
+**Probe:**
+- Grep every census for `SkipDir` and name-based skips. A skip must be anchored at the module root.
+- Ask the toolchain: every file of every package that `go list -deps` links must lie inside the walk.
+- Plant the offender at `api/<skipname>/` and `internal/<skipname>/p`, and require RED.
+
+## CLASS 259 — a security census that judges spellings (names as IT resolves them), not the capability
+
+**Found:** 2026-09-24, in three rounds, each ended by a FAIL [A].
+
+**Round 1** (red-team 3 #1, red-team 4 #2, ~01:2x CT). The update-auth census pinned four NAMES (Enroll, Authorize, ComputeMAC, LoadDeviceKey) and admitted any importer under `internal/updater*`. With every census green, an API file minted a MAC from the raw key with `crypto/hmac` and `"device"+".key"` (422 at the router), a worker file minted through the exported `DeviceKeyPath` and `Message`, and the app could link the minting CLI. Fold M4 (`90ff04d0`) classified every exported identifier, admitted importers exactly, refused `crypto/hmac` beside the updater dir and constant-folded `+`.
+
+**Round 2** (fc verifier FAIL). D1: one `alias` variable per file, so a second import name went unchecked, and V1 minted a MAC that production `VerifyMAC` accepted. D3: the key holder minted with `jwt.SigningMethodHS256.Sign`. Repairs: `eb999df0` resolves every import name; `d8fa81bf` (rule 6) confines the loaded key's VALUE to VerifyMAC, PasswordStillBound and the builtin `clear`.
+
+**Round 3** (cc verifier FAIL). Rule 6 admitted by name: `updateauth := fakeNS{…}` shadowed the import (P2), and a generic receiver type parameter named `clear` made `clear(key)` a conversion (P1). Both minted accepted MACs while the census comment said rule 6 "can only over-report". `88d4af24` and `f6c5fe07` close them; `a3bccf5e` replaces the sentence with a test over 84 cells, go/types as the oracle. The directive round that followed is CLASS 262.
+
+**Shape.** A census used as a SECURITY tripwire lists spellings of a capability, and the next spelling passes. CLASS 168 is this with honest duplicates; here the spelling is chosen. CLASS 113 certifies a name that is present; this certifies one that is absent. The remedy: confine where the protected VALUE flows, and take the oracle for names from the compiler.
+
+**Pins:** `TestUpdateAuthCensusRefusesTheAPISideRawKeyMinter`, `TestUpdateAuthCensusRefusesTheWorkerSideMinter`, `TestUpdateAuthImporterAdmissionIsExact`, `TestWorkerImportGuardRefusesTheMintingCLI`, `TestUpdateAuthCensusResolvesEveryImportName`, `TestUpdateAuthCensusRefusesTheKeyHolderMintingViaJWT`, `TestUpdateAuthLoadedKeyFlowsOnlyIntoVerification`, `TestUpdateAuthKeyFlowRefusesTheVerifierProbesOnTheRealHandler`, `TestUpdateAuthKeyFlowAdmissionMatchesTheCompilersResolution`, `TestUpdateAuthResolutionMatrixIsNamedInTheCensus`.
+
+**Stated limits** [A]: the census is syntactic (a run-time path, key bytes through an interface, a hand-rolled HMAC, a re-bound name in rule 1's fold `4c16dca2` all pass), and the process shares device.key's uid: a belt, never a boundary. **OPEN, same shape:** the hold-writer census matches direct call names and `"hold.json"` only (red-4 #3); the mint census matches only the `GenerateJWT` selector while `auth.JWTSecret` is exported (fh-verify #3); the users-writer census names 11 compiling writer shapes it cannot see (`efdf3988`).
+
+**Probe:** plant the capability in every spelling that compiles (another helper, a second import name, a shadowed name, a receiver type parameter, an equal-power primitive, a directive: CLASS 262) and require RED for each. Confine the value's flow, not the primitive's import. Check any "can only over-report" claim against go/types; never assert it in prose.
+
+## CLASS 260 — two waves each pinned their own side of a wire; nothing ran the call across it
+
+**Found:** 2026-09-24 ~04:4x CT, integrating M3 with M5 (#196, merged via `760eb015`). The CTO ruled it a class [A].
+
+The M3 gate (`updatesRefusal`, `api/handler_updates.go`) refuses any `/api/updates*` request without exactly one `X-NOFX-Update: 1`, with 403 "update header missing or wrong", before it reads the JWT. `web/src/lib/api/updates.ts` (M5 U1/U2) never sent the header [A: grep, no occurrence outside tests]. On the merged tree, the enrolled admin's own Updates page and header badge would have read not-authorized/Unknown forever.
+
+**Shape.** Each wave pinned its own half:
+- M5's shape pins mocked the transport.
+- M3's pins drove the server with hand-built Go requests.
+
+Both suites were green, and neither contained the call site that crosses the wire. The CTO called it "the canon 53 shape one level up": 53 is parity at one package's call sites; here the two call sites are in two languages and two waves. Ruling 1790243172089: M3 owns the wire contract.
+
+**Fixed in M3** (`eece064d`, gofmt `9a2cf44a`):
+- One `UPDATE_HEADERS` object, passed by the four /updates readers and by nothing else.
+- `web/src/lib/api/updates.header.test.ts` runs the REAL `httpClient`, interceptors included, over a capturing axios adapter:
+  - every /updates request carries the header once, with value "1";
+  - `/api/health`, `/api/maintenance` and `/api/installation-gate` do not.
+  - RED before the fix: `4 failed | 3 passed — expected [] to deeply equal [ '1' ]`.
+- `api/handler_updates_web_header_test.go` `TestWebUpdatesClientSendsTheGatesHeader` is the Go↔TS parity pin. It checks the client's header object against `api.UpdateHeader` + "1", and checks that every `${API_BASE}/updates` call passes it. It goes RED on a TS rename, on one dropped call and on a Go constant rename.
+
+**Known limits:**
+- Under the Vite dev proxy (changeOrigin), POSTs read cross-origin, so they get 403 in dev only [B].
+- The receipt link is a plain `<a href>` that carries neither the header nor the bearer token. M4/M5 must fetch it through the client.
+
+**Read beside 5** (the far side never emitted what the consumer waits for) **and 53**.
+
+**Probe:** for every contract that crosses a language or wave boundary (a header, a field, a route shape), find ONE test that runs the producer's real client code against the consumer's real rule. If each side has only its own pins (a mocked transport on one side, hand-built requests on the other), the wire is unpinned. Add a parity pin that reads the constant from one side and the call sites from the other.
+
+**Instance 2026-09-24 PR #200 review F1:** the web client typed the install body's `expires_at` as a STRING while `rawUnixSeconds` takes only a bare JSON number, so every UI install would have been 400. Pinned by ONE committed byte string (`web/src/lib/api/testdata/updates-install-body.wire.txt`) that vitest (wire bytes), api (parser, router, and the TS-declared kinds derived from the parser) and updaterbootstrap (the line `Run` prints) all read (`21a22d04`). The same review found an older test mock that invented a 403 body (`'install: MAC mismatch'`, which is a LOG category); the real body is `forbidden` (`0dc7bd2f`).
+
+## CLASS 261 — a literal that is green on each branch and red at the merged head
+
+**Found:** 2026-09-24 04:55 CT, merging dev 710e96aa (#199, WAVE 3a) into M3 (merge `c27a8851`) [A].
+
+M3's M1 census (CLASS 254) went RED at the merged head on all 5 routes:
+
+`handler_updates_secret_test.go:128: JWT secret tracked literal at deploy/release/db-compat.sh:119 (len 40): GET /api/updates = 200 {"enrolled":true,...}, want 403 {"error":"forbidden"}`
+
+db-compat's throwaway boot secret was a literal prefix + `$$` + a literal suffix. The repo is public, so the pattern is published and the values form a PID-sized family.
+
+Each branch was green alone: 3a had no such census, and M3 had no db-compat.sh. The failure exists only on the merged tree.
+
+**Shape.** Two lanes, each correct, each suite complete for its own tree. A tree-wide census on one side meets a new file on the other only at the merge. This is the CLAUDE.md canon "A branch green alone is not green merged" (09-03 boot: a bare time layout that failed only once two green lanes were on one HEAD). Until now that canon had no checklist slot.
+
+**Fixed in M3 (`775b2bcb`):**
+- `JWT_SECRET` is generated the way `DATA_ENCRYPTION_KEY` two lines above already was: `openssl rand -base64 48` (`deploy/release/db-compat.sh:121`).
+- The public-literal list is NOT widened, so no repo literal is added.
+- The cleanup trap still unsets it.
+- The file belongs to Claude-103 (3a); the change was announced to the CTO.
+- GREEN: `TestUpdatesRefuseEveryPublicPlaceholderAndShortJWTSecret`, `./deploy` (`TestDbCompatShredsItsEphemeralKeysOnExit` unchanged), and `bash -n`.
+
+**Probe:**
+- Run the FULL suite at the merged head before calling a merge green.
+- When a merge turns a census RED, read it as a finding about the incoming file, not about the census.
+- Fix the offender, not the census's allow-list. An allow-list entry for a published secret is a published secret.
+
+**Instance 2026-09-24 PR #200 review folds:** four fold builders each went green on the packages they touched. At the merged head, the users-table writer census (`store/`) went RED on F5's served advice constant, `UPDATE users SET … updated_at=CURRENT_TIMESTAMP …` in `api/handler_user.go`. The fix was to review and list it, because it IS a way to move the credential epoch (the owner runs it by hand), not to weaken the census (`35899dea`). Run every real-tree census at the merged head, not only the touched packages.
+
+## CLASS 262 — a census that reads one compiler directive but not its siblings
+
+**Found:** 2026-09-24, in two verifier rounds on the update-auth census [A].
+- **fc verifier D2:** the census parsed with mode 0, which drops comments. `//go:linkname v3ComputeMAC nofx/internal/updateauth.ComputeMAC` needs no import, no selector and no restricted name; a main linking `nofx/api` printed the exact HMAC with the census green. Fixed by `aa7da00a`: parse with comments, and refuse any `//go:linkname` in non-test code (`TestUpdateAuthCensusRefusesLinkname`).
+- **The next census-repair verifier FAIL** (the commits title it "verify #3"): rule 5 now read comments, but for `//go:linkname` ONLY. With a random key under `data/updater/`, three probes built, vetted (rc 0) and minted a MAC that production `VerifyMAC` accepted, with `TestUpdateAuthCensus`, the store censuses and censuswalk all green:
+  - **N1a:** `//go:embed data/updater/device.key` in the module-root package, minting through golang-jwt HS256;
+  - **N1b:** the glob `//go:embed data/upd*r/dev*`, which never spells the file name;
+  - **N2:** a cgo preamble with `.incbin "data/upd" "ater/dev" "ice.k" "ey"`.
+- That made two of the census header's claims false: "spelled ONLY in paths.go" and "the direct spellings … fail loudly".
+- Reach: an embed cannot cross a symlinked directory [A], so only a package whose directory holds the data dir can embed the key; `.incbin` takes `../` and absolute paths [B]. A clean-checkout CI build fails "no matching files", but `deploy/install-autostart.sh` builds in the checkout, where `data/` exists [B].
+
+**Shape.** A syntactic census learned to read ONE compiler directive after a verifier used it, and still treated the rest of the comment channel as prose. Every directive the toolchain acts on at compile time is code: `//go:linkname` binds a symbol; `//go:embed` and a cgo preamble (`.incbin`, `#embed`, `#cgo LDFLAGS`) pull a file into the binary with no literal, import or call for the census to read. Closing the directive that was used, one at a time, is CLASS 259 again, one channel down. And the protected path is not a constant: the data dir is the directory of DB_PATH (`os.Args[1]`, else the environment, else `.env`, else `data/data.db`), anchored on the checkout the service runs in, so a configured data dir moves the boundary the census defends [A read; precedence corrected in `964396ef`].
+
+**Fixed in M3:**
+- `f59b848d`: `import "C"` is refused in every non-test file, under any import name and even behind a build tag. The module has no cgo [A: `go list` CgoFiles empty over `./...`].
+- `ac947870`: no `//go:embed` at all in the module-root package; in every package, no pattern element that `path.Match`es "updater" or "device.key" (`all:` stripped; bare, quoted and raw forms parsed); an argument list that cannot be parsed is refused. The directive recognizer is a superset of what go/build and cmd/compile accept [A read, go1.25.13].
+- `3e368492`: the header's claims are qualified to the Go source the walk reads, and WHAT THIS CANNOT PROVE is regrouped as run time, compile time, build time, by hand and test files.
+- `964396ef` (the round's four notes): each pattern element is lower-cased before matching, because cmd/go resolves a literal pattern by Lstat and a case-insensitive filesystem would let `UPDATER/DEVICE.KEY` reach the key [C for the ext4 deploy; fail-closed anyway]. The DB-path precedence comment is corrected, `go.work` is named, and `paths.go`'s "the ONLY place" is qualified.
+- Pins, each judged by `updateAuthOffenders` (the function `TestUpdateAuthCensus` runs over the real tree) in a synthetic module:
+  - `TestUpdateAuthCensusRefusesCgo`: N2 byte-identical to the verifier's file, plus non-root, aliased and build-tag-excluded forms;
+  - `TestUpdateAuthCensusRefusesRootPackageEmbed`: N1a and N1b byte-identical, and each must draw BOTH the root and the pattern offence;
+  - `TestUpdateAuthCensusRefusesEmbedPatternsThatCanMatchTheEnrollment`, including `UPDATER/DEVICE.KEY` and `Updater`;
+  - control `TestUpdateAuthCensusAdmitsOrdinaryEmbeds` (the real tree's embeds in agent, branding and kernel stay admitted).
+- RED before, and RED on a compiling revert of each rule (cgo, root, pattern, unparseable, a widened recognizer), `vet` rc 0 each, restored `cmp`-identical [A: builder and verifier]. Round verdict PASS_WITH_NOTES at the cc worktree head `990d9096` (patch-identical to `f59b848d`/`ac947870`/`3e368492`), notes folded in `964396ef`. At that head the verifier replayed every earlier probe (RT3-1a/b, RT4-1, RT4-2a/b, V1–V3, P1, P2): all still refused [A].
+
+**Still named, not closed** (census header, WHAT THIS CANNOT PROVE) [B]:
+- a data dir configured strictly BELOW a package directory, reached by an embed of an ancestor directory (`DB_PATH=kernel/st/x.db` with `//go:embed st`);
+- source the walk never opens: an `.s` `#include`, a `.syso`, SWIG, third-party modules, a `go.mod` replace or `go.work` use/replace pointing outside the tree;
+- build inputs outside the source: `go generate`, `-toolexec`, `-ldflags -X`, `-overlay`, GOFLAGS/go.env;
+- by hand: a key file copied into the tree under another name.
+
+**Probe:** list every directive and non-Go input the toolchain acts on at compile time (for Go: `//go:linkname`, `//go:embed`, a cgo preamble behind `import "C"`, `.s` includes, `.syso`, SWIG). A census that reads source must read every one of them or refuse it outright; "we read comments for X" is a list of one. Plant each in a synthetic module at the census's production function, byte-identical to the probe that found it, and require RED on a compiling revert of each rule. Where the protected path is configurable, derive it the way the binary does and defend every place it can land.
+
+## CLASS 263 — loop-owned state read from a goroutine the loop spawned
+
+**Found:** 2026-09-24, ha verifier defect 3 [A read]. `telegram/bot.go` runBot answers each AI message on a goroutine, and that goroutine read `ident.agents`. The main loop's `ident.refresh()` (at start, on `/start`, before every AI call) reassigns the identity's agents, token, user id and email on every re-mint. The race predates M3 for a change of user; M3's H2 made it routine, because the bot now re-mints after every password change on its own account and at every 24 h expiry. `d637b7e1`'s own message names the race as not fixed there.
+
+The builder found a second path of the same shape while fixing the first [A]. The LLM factory that `refresh` hands to `agent.NewManager` was `func() mcp.AIClient { return newLLMClient(b.st, b.userID) }`. The manager calls it on the per-message goroutine (`Manager.Run → agent.New → getLLM`, then `Agent.Run → getLLM`) while the next refresh writes `b.userID` on the main loop.
+
+RED before the fix, structural [A]:
+```
+bot.go:196:13: ident.agents — read inside a closure in runBot
+bot.go:263:45: b.st — in a closure built by (*botIdentity).refresh
+bot.go:263:51: b.userID — in a closure built by (*botIdentity).refresh
+```
+
+**Shape.** A loop owns a struct and reassigns its fields, and a goroutine the loop spawns reads those fields: directly, or one call deep through a closure the struct handed to a long-lived consumer. No test without `-race` can see it, and the second path hides inside the consumer's call graph. Read beside CLASS 196, where a comment stood in for a lock until a second trigger arrived; here the second reader is created by the loop itself, once per message.
+
+**Fixed in M3:**
+- `570b58d4`: runBot captures `agents := ident.agents` on the main loop BEFORE the `go` statement and passes it in, so the goroutine references no field of `ident`. refresh's LLM factory closes over locals (`st, userID := b.st, b.userID`), never the receiver.
+- Structural pins, go/parser over the package's production source, each with vacuity guards:
+  - `TestRunBotGoroutinesReadNoBotIdentityField`: the identity variable is found from runBot's own `newBotIdentity(...)` assignment; no closure in runBot reads it, no `go` statement's function reads it, and none hands the pointer over. A selector in the `go` arguments is allowed, since it is evaluated on the loop.
+  - `TestBotIdentityClosuresReadNoReceiverField`: no closure built by a `*botIdentity` method reads the receiver.
+  - RED on each compiling revert: the goroutine back to `ident.agents.Run`, the factory back to `newLLMClient(b.st, b.userID)`, the pointer handed to the goroutine [A].
+- `1591e1c5`: `TestRaceBotRefreshAgainstInFlightManager`, race-tagged (a `//go:build race` / `!race` constant pair; it SKIPs without the detector). The production `refresh` re-mints on every call on the test goroutine while 64 answers run through managers captured before each `go` statement. Vacuity guards: 64 rebuilds, 64 no-model replies.
+  - **Run by the CTO in the race slot at `1591e1c5` [A, CTO-run]:** clean, `ok nofx/telegram 1.249s`. With the factory reverted to `newLLMClient(st, b.userID)`: `WARNING: DATA RACE` ×2, "race detected during execution of test", `--- FAIL: TestRaceBotRefreshAgainstInFlightManager (0.26s)`.
+  - It cannot drive runBot itself (that needs a live Telegram API); the structural pin covers that half.
+
+**Known limits:**
+- **Pin by TYPE, not by name (hc, `a34f467d` → `87963759`).** The ha2 verifier's compiling revert `id := ident; go func(…){ agents := id.agents … }` brought the race back with both name-based pins green [A]. The pins now type-check package telegram (go/types, gc importer over `go list -export -deps`). They flag any value that HOLDS or points INTO a `*botIdentity`, wherever it reaches a closure, a go statement or a method value: a pointer into a field, a captured holder reached through a helper, a method value on a holder, a generic hand-off. `TestBotIdentityPinRulesCatchEveryRoad` runs the same rule code over 45 synthetic roads, 9 of them allowed controls. Two verify rounds found 11 and then 9 compiling escapes [A]. After the second, the CTO ruled the rest NAMED, not chased (1790248662535). The pin is a belt; the boundary is the capture-before-go code.
+- **Named escapes** (the pin header): the interface conversion is read in single-value assignment contexts only. A tuple result (`f(g())`, `a, b = g()`, `return g()`), comma-ok, a re-declaring `:=`, `range =` and `panic`/`recover` each convert the identity unseen (hc re-verify T1–T9 [A]).
+- A message in flight across a re-mint keeps the manager and token it started with. Its remaining API calls get 401 once the credential event lands, whether or not a refresh has run yet. That is fail-closed and ruled acceptable [A read].
+- `/start` → `ident.agents.Reset` → `session.Memory.ResetFull` runs on the main loop while a goroutine may be inside `Agent.Run` on the same memory, and `telegram/session/memory.go` has no mutex [A read; the race itself B]. Named for a later wave (CTO ruling 1790244970032 (h)); untouched here.
+
+**Probe:**
+- For every `go` statement, list every identifier its function reads. Any field the spawning loop can reassign is a race: capture the value on the loop and pass it in.
+- For every closure a method hands to a consumer that outlives the call (a factory, a callback, a handler), require that it captures locals, never the receiver.
+- Pin by TYPE (go/types), not by variable name: an alias must not escape the pin.
+- Pair the structural pin with a race-tagged reproduction that skips without the detector, and see it RED on the revert in the race slot before calling it a pin (CLASS 196: a detector can stay green on a real race when nothing drives the interleave).
+
+**Instance 2026-09-24 PR #200 review F4b/F7:** the bot now re-mints when its own token is blacklisted, and a same-second re-mint is re-checked and retried once. Failing closed then had two gaps, both folded. On a USER change it kept acting for the PREVIOUS user; it now acts for nobody (`45197f48`). And the fail-closed pin's token check could never fire, because its starting token came from the same second (`89deaa5b`). Named, not folded: runBot still says "No account found" when an account exists but no admitted token could be minted.
+
+## CLASS 264 — a clock-skew fix judged at one instant, on a token shape the server never mints
+
+**Found:** 2026-09-24, three times, and each time the finding was narrower than it read.
+1. **Triage O3** [B]: a token minted while the server clock ran ahead survives a later password change once real time passes its iat. The red-team probe `TestRTA_FutureIatTokenSurvivesPasswordChange` (in `ef03e033`) was DROPPED as broken: its helper set nbf = iat−1m, 59 minutes in the future, so nbf refused the token before Q8 ran (the M3 instance under CLASS 229). Red-1 marked the same residual [B].
+2. **ha verifier defect 4** [A]: a token with iat = now+10 min and nbf = now−1 min, minted before a password change, still got `GET /api/my-traders` 200 after it. `RetiredBy(iat=t0+10m, epoch=t0+1m) = false`, and jwt v5 checks iat only when asked (`WithIssuedAt`).
+3. **The corrections** [A]:
+   - The ha2 builder: the proposed tightening, `WithIssuedAt`, refuses only while `now < iat − leeway` (jwt v5.2.2 `validator.go:198`). At t0+11m the same token validates again and is still not retired. It defers the hole; it does not close it.
+   - The ha2 verifier (defect 6) and the hb builder: the probe token has a shape `signToken` never mints. signToken stamps nbf == iat == now (`auth/auth.go`), and nbf is always checked, so a MINTED token with a future iat was already refused by nbf. With the real shape, at t0+2m today's parser says "token is not valid yet", `WithIssuedAt` only adds "token used before issued", and at t0+11m the parser returns `<nil>` with `RetiredBy = false`. The exposure the finding described (a minted future token accepted now) did not exist. The residual (it survives once the clock reaches its iat) does.
+
+**Shape.** One mistake with three faces: a time-based mitigation checked at a single point of its timeline, with inputs that are not the production inputs.
+- **Judged at one instant.** A clock-skew fix was checked at the moment of skew. It must be checked across the whole timeline, including after the clock catches up. A fix that only defers is a known limit, not a closure.
+- **On a token shape the server never mints.** The probe built its claims by hand. A defect argued on claims the minter never produces misstates the live exposure, and a pin assembled from the probe's shape can be green for a reason the name does not give.
+- **A shared leeway widening a second consumer.** jwt v5.2.2 has ONE `leeway` for iat, nbf and exp (`validator.go:177/198/219`). Adding `WithLeeway(60 s)` to forgive iat also admitted a token for 60 s past its exp, while the logout blacklist still dropped each entry AT exp, so a logged-out token came back for that minute. RED at the router: `token_clock_window_test.go:140: a token logged out 30 s past its exp: GET /api/my-traders = 200 [] — want 401`, and 200 on /api/updates. That is CLASS 102 (a fix that rebuilds its defect one layer down) inside this fix. It is kept in this class rather than numbered separately: it was born of and closed in the same commit, and its probe is the same walk over every consumer of the moved window.
+
+**Fixed in M3** (CTO ruling 1790243040753, TIGHTEN, fail-closed):
+- `45e1404a`: `strictParser = jwt.NewParser(jwt.WithStrictDecoding(), jwt.WithIssuedAt(), jwt.WithLeeway(ClockLeeway))` with `ClockLeeway = 60 s`. A token whose iat is more than 60 s ahead is 401 on the protected group and the uniform 403 on /api/updates. `BlacklistToken` holds each entry until exp + ClockLeeway. The guide (`web/src/guide/content/updates.ts`) states the cost. RED before: `token_clock_window_test.go:79: iat = now+2min (nbf past): GET /api/my-traders = 200 [] — want 401` (all 5 /updates routes admitted too).
+- Why 60 s: the leeway forgives this box's chrony backward steps, 138 since 09-23 20:40 CT with median 1.09 s, max 1.71 s and a median gap of 131 s [A, hb verifier]. Before, nbf == iat refused a just-minted session on ANY backward step. Now a step of 60 s or less costs nothing, and a larger one refuses the sessions signed in during the skipped interval until the clock catches up.
+- `b9e2511e`: the census `TestServerNeverMintsAFutureIat` judged the SPELLING (every IssuedAt/NotBefore written `jwt.NewNumericDate(time.Now())`). The hb verifier's compiling mutation `claims.IssuedAt.Time = claims.IssuedAt.Time.Add(30*time.Second)` minted a future iat while the census and the whole auth package stayed green; only an unrelated password-change test caught it [A]. `TestEveryMintEntryPointStampsNowNotTheFuture` mints through `auth.GenerateJWT`, `agent.GenerateBotToken` and `auth.GenerateScopedJWT(gate-jwt)`, decodes each token and asserts that iat is the mint instant, nbf ≈ iat and exp ≈ iat+24h (±1 s). RED under that mutation: `mint_behaviour_test.go:52: auth.GenerateJWT (login/register): minted iat 05:19:21 is not the mint instant …`. That is CLASS 259's shape: a census of how a value is written, not of the value.
+- Pins:
+  - api `TestFutureIatTokenIsRefusedEverywhere` (iat now+2 min with nbf past; iat = nbf = now+2 min, the minted shape; iat now+30 s admitted; defect 4 end to end), `TestClockLeewayOnExpAndNbfIsBoundedAtSixtySeconds` (30 s admitted, 2 min refused), `TestLoggedOutTokenStaysRevokedThroughTheExpiryLeeway`;
+  - auth `TestValidateJWTClockWindow`, `TestBlacklistEntryOutlivesExpByTheLeeway`, `TestServerNeverMintsAFutureIat`, `TestEveryMintEntryPointStampsNowNotTheFuture`.
+  - RED on each compiling revert: no `WithIssuedAt`; no `WithLeeway` (the existing `token_retire_global_test.go:114` also goes RED, so the leeway is required); leeway 180 s; blacklist held only to exp; minted iat +30 s; strict decoding removed [A: hb builder M1–M6, hb verifier R1–R6].
+
+**Known limits (named; fail-closed default):**
+- A token minted while the clock ran ahead, whose iat still lies after a later password change's epoch once the clock returns, survives that change as soon as the clock reaches its iat. No iat-versus-now check can tell it apart [B].
+- Inside the leeway: a token with iat up to +59 s, minted before a change, is admitted right after it (hb verifier: `GET /api/my-traders` 200; /api/updates 403 only because the change un-enrolls) [A].
+- `/api/updates` answers its own uniform 403, not 401, and the 60 s exp grace reaches `POST /api/updates/install` (422 at exp+30 s) [A].
+- **Proposed follow-up, NOT folded** (a new wave is an owner call): bind the token to the credential rather than to time, with a credential-generation claim (a fingerprint of the password hash, or a users-row counter that `UpdatePassword` bumps) checked in `authMiddleware`. It touches every mint site and the users-table writer census, and signs out every earlier token once.
+
+**Read beside** 252 (a ledger that forgets by wall clock) and 257 (whole-second against sub-second): the M3 clock family. The hb builder also saw one full-suite failure at the same second as a chrony step (04:56:05, 1.34 s) in the unchanged whole-second H2 rule [A for the timing, B for the cause]. Whole-second tests are flaky on a stepping clock; that is a follow-up, not folded.
+
+**Probe:**
+- For every clock-based mitigation, assert at three points of the timeline: before the skew, during it, and after the clock catches up. A verdict that flips back once the clock passes a stamped instant is deferred, not fixed.
+- Build every probe token with the production minter, or pin the probe's shape AND the minted shape side by side and say which one the fix changes.
+- When a parser option widens an accepted window, list every other structure keyed on the same claims (blacklists, caches, TTL sweeps, the UI's own expiry) and pin, at the production router, that each covers the new window.
+- Pin minted VALUES by decoding real mints from every entry point, not the spelling of the stamp (CLASS 259).
+
+**Instance 2026-09-24 PR #200 review F6:** a credential epoch in the FUTURE (a clock step-back after a password change) refuses every new sign-in until the clock passes it. That stays fail-closed, and the refusal now says so: "credential epoch is Ns in the future — clock stepped back; sign-in refused until then". The bound is the size of the step. It is pinned at the production router for authMiddleware and, through a gorm hook between the two reads, for the credential guard (`53bc9734`, `fc17a1c9`). The /updates gate's Q8 line has no clock note (a follow-up).
+
+
+## CLASS 265 — a repair outcome recorded before the bookkeeping that rewrites its reason
 
 **Found:** 2026-09-24, WAVE 1a-plan P9 (issue #190 A1/A2 sites) [A]. Both born-dead repair sites called `recordRepairOutcome(raw, err, prevReason)` BEFORE `plannerRejectBookkeeping(..., &prevReason, ...)`, which unconditionally rewrites `*prevReason` to THIS attempt's defect. The "was repairing: %s" field therefore named the PREVIOUS attempt's reason at the A1/A2 sites while every sibling site logged the current one — the one place a reader goes to see what a repair was repairing.
 
@@ -7002,11 +7482,12 @@ At HEAD `c4111476` (FOLD-3 + FOLD-10) the NT8 decision path is: `executeOpen*Wit
 
 **Probe:** when a function takes a pointer it rewrites (`*prevReason`), grep its call sites for consumers of the same variable on either side of the call. A consumer upstream of the writer reads the OLD value; one downstream reads the NEW — the order is part of the contract, not an implementation detail.
 
-## CLASS NN (assigned at merge) — a pin that asserts a recorded event which the fixture never produces
+## CLASS 266 — a pin that asserts a recorded event which the fixture never produces
 
 **Found:** 2026-09-24, WAVE 1a-plan P7 [A]. The first `TestZoneAcceptedIdentitySkipsHeuristicDisagreement` fixture built a scenario whose `ReferenceLevelID` never resolved against `IdentityLevels` (the derived reference id needs the identity fields the fixture's `PlanLevel` did not carry). `observeScenarioIdentity` therefore recorded NOTHING, the pin asserted "count == 0", and neutering BOTH predicate branches of `zoneAcceptedIdentity` still left it green — RED could not fire. The pin certified an empty path, not the fix.
 
 **Fixed:** the pin was rebuilt on the E1 fixture (real map candidates → `IdentityLevelsFromCandidates` → a control row that MUST record 1 disagreement with the same levels and anchor, then FVG + seated-Demand rows that MUST record 0). RED: neutering the predicate fails the two zone rows while the control keeps passing.
 
 **Probe:** for every pin that asserts a zero or absence, run a control row that asserts the SAME path produces a nonzero (or a presence) with the fix removed. A pin whose RED is not demonstrated at least once is a comment, not a test.
+
 

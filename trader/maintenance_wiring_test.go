@@ -5,12 +5,12 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"io/fs"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"nofx/internal/censuswalk"
 	ntwire "nofx/provider/ninjatrader"
 	ntTrader "nofx/trader/ninjatrader"
 )
@@ -148,30 +148,42 @@ func TestWireNT8MaintenanceCallsAllFourSettersUnconditionally(t *testing.T) {
 // The four setters are called in production ONLY from wireNT8Maintenance (and
 // forwarded to the server by the TCPTrader's own definitions).
 func TestOnlyWireNT8MaintenanceCallsTheMaintenanceSetters(t *testing.T) {
+	root, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	offenders, scanned, err := maintenanceSetterOffenders(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scanned < 100 {
+		t.Fatalf("scan saw only %d files — the walk is not covering the module", scanned)
+	}
+	if len(offenders) > 0 {
+		t.Fatalf("the maintenance setters may be called only from wireNT8Maintenance:\n%s", strings.Join(offenders, "\n"))
+	}
+}
+
+// maintenanceSetterOffenders scans every non-test .go file under root (the ONE
+// root-only walk, internal/censuswalk — M3 fold M5: a skip-named dir below the
+// root is a compiled package) for a call to one of the four setters outside
+// the admitted files. A file that cannot be parsed is an offender (it cannot
+// be checked), where it used to be skipped silently.
+func maintenanceSetterOffenders(root string) (offenders []string, scanned int, err error) {
 	setters := map[string]bool{"SetEntryPermit": true, "SetEntryHoldCheck": true, "SetMaintenanceSource": true, "SetDroppedEntrySink": true}
 	allowed := map[string]bool{"trader/maintenance_wiring.go": true, "trader/ninjatrader/tcp_trader.go": true}
-	root, _ := filepath.Abs("..")
-	var offenders []string
-	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			switch d.Name() {
-			case ".git", "node_modules", "web", "vendor", ".claude", ".Codex", ".understand-anything":
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
-			return nil
-		}
-		rel, _ := filepath.Rel(root, p)
-		rel = filepath.ToSlash(rel)
-		f, perr := parser.ParseFile(token.NewFileSet(), p, nil, 0)
+	files, err := censuswalk.NonTestGoFiles(root)
+	if err != nil {
+		return nil, 0, err
+	}
+	for _, file := range files {
+		rel := file.Rel
+		f, perr := parser.ParseFile(token.NewFileSet(), file.Path, nil, 0)
 		if perr != nil {
-			return nil
+			offenders = append(offenders, rel+": cannot be parsed, so it cannot be checked")
+			continue
 		}
+		scanned++
 		ast.Inspect(f, func(n ast.Node) bool {
 			if c, ok := n.(*ast.CallExpr); ok {
 				if s, ok := c.Fun.(*ast.SelectorExpr); ok && setters[s.Sel.Name] && !allowed[rel] {
@@ -180,11 +192,8 @@ func TestOnlyWireNT8MaintenanceCallsTheMaintenanceSetters(t *testing.T) {
 			}
 			return true
 		})
-		return nil
-	})
-	if len(offenders) > 0 {
-		t.Fatalf("the maintenance setters may be called only from wireNT8Maintenance:\n%s", strings.Join(offenders, "\n"))
 	}
+	return offenders, scanned, nil
 }
 
 // BEHAVIOUR: after wireNT8Maintenance, a hold refuses the entry at the permit

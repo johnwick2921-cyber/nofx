@@ -40,6 +40,7 @@ func newEffectiveServer(t *testing.T) (*Server, *store.Store, string) {
 	}
 	t.Cleanup(func() { st.Plan().Close(); _ = st.Close() })
 	auth.SetJWTSecret("effective-test-secret")
+	seedTokenOwner(t, st, effUser, "eff@test") // M3 H2: a token needs its account row
 	tok, err := auth.GenerateJWT(effUser, "eff@test")
 	if err != nil {
 		t.Fatalf("jwt: %v", err)
