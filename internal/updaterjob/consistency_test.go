@@ -302,3 +302,41 @@ func TestNT8StateCarriesItsOwnDecision(t *testing.T) {
 		}
 	}
 }
+
+// TestLastGoodReceiptIsAnOKReceipt (U1 verifier defect 5, probe H15): the
+// receipt recovery_needed names as the last good one is a receipt whose ok
+// is true — the operator restores from it.
+func TestLastGoodReceiptIsAnOKReceipt(t *testing.T) {
+	restoreSeams(t)
+	build := func(t *testing.T, good int) (Job, string) {
+		t.Helper()
+		dd := t.TempDir()
+		j, now := walkTo(t, dd, "job-0130", StateDownloaded)
+		now = now.Add(time.Second)
+		if err := j.Enter(StateVerified, now); err != nil {
+			t.Fatal(err)
+		}
+		mustWrite(t, dd, j)
+		if err := j.AddReceipt(Receipt{Step: "verify", StartedAt: now, EndedAt: now, OK: false, Err: "signature refused"}, now); err != nil {
+			t.Fatal(err)
+		}
+		j.LastGoodReceipt = &good
+		j.RecoveryReason = "attended"
+		if err := j.Enter(StateRecoveryNeeded, now.Add(time.Second)); err != nil {
+			t.Fatal(err)
+		}
+		return j, dd
+	}
+	// receipts: 0 = download (ok), 1 = verify (failed)
+	j, dd := build(t, 1)
+	if err := Write(dd, j); !errors.Is(err, ErrCorrupt) {
+		t.Errorf("H15: last_good_receipt → the failed receipt: Write = %v, want ErrCorrupt", err)
+	}
+	refusedAtBothCallSites(t, "H15: last_good_receipt → an ok:false receipt", j)
+	// positive control: the OK one
+	j, dd = build(t, 0)
+	mustWrite(t, dd, j)
+	if got, err := Read(dd, j.JobID); err != nil || got.LastGoodReceipt == nil || *got.LastGoodReceipt != 0 {
+		t.Fatalf("positive control: %+v %v", got, err)
+	}
+}
