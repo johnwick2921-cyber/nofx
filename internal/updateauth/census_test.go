@@ -42,7 +42,14 @@ import (
 //  4. crypto/hmac is imported ONLY by this package among the packages that
 //     reach the updater data dir (an updater/installpath/holdcli import, a
 //     data-dir or updater-dir helper, or a path element "updater") — a MAC
-//     minted beside the key's directory is a mint, whatever it calls.
+//     minted beside the key's directory is a mint, whatever it calls;
+//  5. no //go:linkname anywhere in non-test code (verifier D2: the directive
+//     binds a local name to updateauth.ComputeMAC with no import at all, and
+//     a mode-0 parse never saw the comment). Assembly is not a second route:
+//     go1.25.13 refuses an .s file's call to another package's Go function
+//     ("relocation target … not defined for ABI0"; the <ABIInternal>
+//     selector is "only permitted when compiling runtime") [A, probed
+//     2026-09-24], so without a linkname it cannot reach ComputeMAC.
 //
 // WHAT THIS CANNOT PROVE (M3 fold M4 — stated, not implied): it is a
 // syntactic census over identifiers, imports and constant strings. A file
@@ -239,12 +246,26 @@ func updateAuthOffenders(root string) (offenders []string, scanned int, err erro
 	}
 	for _, file := range files {
 		rel := file.Rel
-		f, perr := parser.ParseFile(token.NewFileSet(), file.Path, nil, 0)
+		// ParseComments: directives live in comments (verifier D2 — mode 0
+		// dropped them, so a //go:linkname was invisible).
+		f, perr := parser.ParseFile(token.NewFileSet(), file.Path, nil, parser.ParseComments)
 		if perr != nil {
 			offend(rel + ": cannot be parsed, so it cannot be checked (" + perr.Error() + ")")
 			continue
 		}
 		scanned++
+
+		// 5. //go:linkname binds a local name to ANY package's symbol
+		// (nofx/internal/updateauth.ComputeMAC included) with no import, no
+		// selector and no restricted identifier, so nothing above could see
+		// it. None is admitted in non-test code; the module has none.
+		for _, cg := range f.Comments {
+			for _, c := range cg.List {
+				if strings.HasPrefix(c.Text, "//go:linkname") {
+					offend(rel + ": //go:linkname — binds a symbol of another package past every rule of this census; none is admitted")
+				}
+			}
+		}
 		dir := path.Dir(rel)
 		facts := pkgs[dir]
 		if facts == nil {
