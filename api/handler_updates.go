@@ -257,7 +257,9 @@ func (s *Server) updatesRefusal(c *gin.Context) string {
 	// second as the change — either side of it — is refused. The comparison
 	// is auth.IssuedNotAfter, the one H2 rule authMiddleware applies too; Q8
 	// stays stricter than it (zero updated_at ⇒ refuse, and updated_at is
-	// the epoch even on a never-changed row).
+	// the epoch even on a never-changed row) — pinned by
+	// TestUpdatesQ8StaysStricterThanTheSharedRetireRule: do NOT move this
+	// line onto auth.RetiredBy.
 	if u.UpdatedAt.IsZero() || auth.IssuedNotAfter(claims.IssuedAt, u.UpdatedAt) {
 		return "token older than the user row"
 	}
