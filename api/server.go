@@ -149,7 +149,9 @@ func (s *Server) setupRoutes() {
 		// reset-password is now permanently disabled (no mail/token path exists to
 		// make it safe); reset-account moved into the protected group below and is
 		// additionally env-gated + confirm-token gated.
-		s.route(api, "POST", "/reset-password", "DISABLED — always 410 (no verification path)", s.handleResetPasswordDisabled)
+		// M3 red-team H1 (CTO ruling item 2): a machine token presented here is
+		// refused 403 (denyMachineBearer); everyone else still gets the 410.
+		s.route(api, "POST", "/reset-password", "DISABLED — always 410 (no verification path)", denyMachineBearer(s.handleResetPasswordDisabled))
 
 		// W-ONE-BUTTON M3: /api/updates* — their OWN gate (uniform 403), raw
 		// g.GET/g.POST so they never enter GetAPIDocs (F1). See handler_updates.go.

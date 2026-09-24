@@ -4,7 +4,8 @@ package api
 // PRODUCTION router NewServer builds with its real middleware (canon 53):
 //
 //	bot JWT → PUT /api/user/password                       → refused
-//	bot JWT → /reset-account, /telegram config, /updates*  → refused
+//	bot JWT → /reset-account, /reset-password,
+//	          /telegram config, /updates*                  → refused
 //	owner token + WRONG current_password                   → refused
 //	owner token + the right current_password               → ok
 //
@@ -33,6 +34,7 @@ func TestRedTeamChainAtTheProductionRouter(t *testing.T) {
 	// Leg 2: the bot's JWT on every other machine-denied surface.
 	for _, p := range []struct{ method, path, body string }{
 		{"POST", "/api/reset-account", `{"confirm":"RESET-ALL-DATA"}`},
+		{"POST", "/api/reset-password", `{"email":"` + updAdminEmail + `","new_password":"bot-chosen-pass-01"}`},
 		{"GET", "/api/telegram", ""},
 		{"POST", "/api/telegram", `{"bot_token":"123:abc","model_id":"m"}`},
 		{"POST", "/api/telegram/model", `{"model_id":"m"}`},
