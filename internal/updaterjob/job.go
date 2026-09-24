@@ -448,6 +448,19 @@ func (j Job) Validate() error {
 			}
 		}
 	}
+	// One release sha: a present release IS source_sha; the snapshot is a copy
+	// of the install (equal shas); neither is the build being installed.
+	if j.Release != nil && j.Release.SHA != j.SourceSHA {
+		return bad("release.sha is not source_sha")
+	}
+	if j.Install != nil && j.Snapshot != nil && j.Install.SHA != j.Snapshot.SHA {
+		return bad("snapshot.sha is not install.sha")
+	}
+	for name, r := range map[string]*Release{"install": j.Install, "snapshot": j.Snapshot} {
+		if r != nil && j.SourceSHA != "" && r.SHA == j.SourceSHA {
+			return bad("%s.sha is the release being installed", name)
+		}
+	}
 	for name, id := range map[string]*Identity{"identity_before": j.IdentityBefore, "identity_after": j.IdentityAfter, "identity_rollback": j.IdentityRollback} {
 		if id != nil && id.PID <= 0 {
 			return bad("%s: pid %d", name, id.PID)

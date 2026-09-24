@@ -340,3 +340,52 @@ func TestLastGoodReceiptIsAnOKReceipt(t *testing.T) {
 		t.Fatalf("positive control: %+v %v", got, err)
 	}
 }
+
+// TestReleaseInstallAndSnapshotSHAsAgree (U1 verifier defect 6, probes H4 and
+// H21): a present release is the source_sha; the snapshot is a copy of the
+// install, so their shas are equal; and neither is the release being
+// installed (installing the running build is refused upstream, and a
+// snapshot of the NEW build restores nothing).
+func TestReleaseInstallAndSnapshotSHAsAgree(t *testing.T) {
+	restoreSeams(t)
+	sha := "0123456789abcdef0123456789abcdef01234567"
+	old := "89abcdef0123456789abcdef0123456789abcdef"
+	other := "fedcba9876543210fedcba9876543210fedcba98"
+	rel := func(s string) *Release {
+		return &Release{Dir: "/r/" + s, SHA: s, Binary: "/r/" + s + "/nofx-bin", Dist: "/r/" + s + "/web/dist", ReleaseFile: "/r/" + s + "/RELEASE", ManifestPath: "/r/" + s + "/manifest.json"}
+	}
+	inst := func(dir, s string) *Release {
+		return &Release{Dir: dir, SHA: s, Binary: dir + "/nofx-bin", Dist: dir + "/web/dist", ReleaseFile: dir + "/deploy/RELEASE"}
+	}
+	for _, c := range []struct {
+		name string
+		set  func(j *Job)
+	}{
+		{"H4: source_sha differs from release.sha", func(j *Job) { j.SourceSHA, j.Release = old, rel(sha) }},
+		{"release present, source_sha absent", func(j *Job) { j.Release = rel(sha) }},
+		{"H21: install.sha is the release sha", func(j *Job) { j.SourceSHA, j.Release, j.Install = sha, rel(sha), inst("/i", sha) }},
+		{"install.sha is source_sha, release not yet resolved", func(j *Job) { j.SourceSHA, j.Install = sha, inst("/i", sha) }},
+		{"snapshot.sha differs from install.sha", func(j *Job) {
+			j.SourceSHA, j.Release, j.Install, j.Snapshot = sha, rel(sha), inst("/i", old), inst("/b/install", other)
+		}},
+		{"snapshot.sha is the release sha (no install)", func(j *Job) { j.SourceSHA, j.Release, j.Snapshot = sha, rel(sha), inst("/b/install", sha) }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dd := t.TempDir()
+			j, _ := walkTo(t, dd, "job-0140", StateDownloaded, StateVerified)
+			c.set(&j)
+			if err := Write(dd, j); !errors.Is(err, ErrCorrupt) {
+				t.Errorf("Write(%s) = %v, want ErrCorrupt", c.name, err)
+			}
+			refusedAtBothCallSites(t, c.name, j)
+		})
+	}
+	// positive control: release = source_sha, install = snapshot = the old build
+	dd := t.TempDir()
+	j, _ := walkTo(t, dd, "job-0141", StateDownloaded, StateVerified)
+	j.SourceSHA, j.Release, j.Install, j.Snapshot = sha, rel(sha), inst("/i", old), inst("/b/install", old)
+	mustWrite(t, dd, j)
+	if got, err := Read(dd, j.JobID); err != nil || got.Snapshot == nil {
+		t.Fatalf("positive control: %+v %v", got, err)
+	}
+}
