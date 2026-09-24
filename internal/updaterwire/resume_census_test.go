@@ -48,13 +48,19 @@ var resumeBuilders = map[string]bool{"NewResume": true, "VerbResume": true, "Res
 // resumeAdmittedDirs are the EXACT module-relative directories whose non-test
 // files may name a resume builder, each with its reason.
 var resumeAdmittedDirs = map[string]string{
-	"internal/updaterwire": "the wire package defines the resume verb",
-	"cmd/nofx-updater":     "the attended `nofx-updater resume <job>` CLI (M4 3b-B dispatch §0/§3) — the only sender",
+	resumeWireDir: "the wire package defines the resume verb",
+	resumeCLIDir:  "the attended `nofx-updater resume <job>` CLI (M4 3b-B dispatch §0/§3) — the only sender",
 }
 
 // resumeWireDir is where the builders must be DEFINED; the census checks they
 // are, so a rename cannot leave it judging names that no longer exist.
 const resumeWireDir = "internal/updaterwire"
+
+// resumeCLIDir is admitted ONLY for package main: a command cannot be
+// imported, so nothing else can reach a builder through it (U2 verifier
+// defect 3). Any other package name there is an offender, and the file is
+// judged like any file outside.
+const resumeCLIDir = "cmd/nofx-updater"
 
 // resumeFrameRe matches a hand-spelled resume frame (or a fragment of one)
 // inside a string literal. Case-insensitive, because json.Unmarshal into a
@@ -312,7 +318,9 @@ func resumeBuilderCensus(root string) (resumeCensus, error) {
 				}
 			}
 		}
-		if _, admitted := resumeAdmittedDirs[dir]; admitted {
+		if dir == resumeCLIDir && f.Name.Name != "main" {
+			hits[rel+": package "+f.Name.Name+" (the CLI directory admits only package main)"] = true
+		} else if _, admitted := resumeAdmittedDirs[dir]; admitted {
 			continue
 		}
 		local := map[string]bool{} // this file's names for the wire package
@@ -636,4 +644,27 @@ func TestResumeCensusSeesEveryResumeFieldWrite(t *testing.T) {
 			wantResumeOffenders(t, resumeCensusOf(t, map[string]string{ok.rel: ok.body}), ok.rel)
 		})
 	}
+}
+
+// PIN (U2 verifier defect 3, probe2.out G1): cmd/nofx-updater is admitted
+// because a main package cannot be imported. Any other package name there
+// could be (nu "nofx/cmd/nofx-updater"), wrapping a builder for the app, so
+// the file is an offender itself and is judged like any file outside.
+func TestResumeCensusAdmitsOnlyPackageMainInTheCLIDir(t *testing.T) {
+	const notMain = "package nofxupdater (the CLI directory admits only package main)"
+	t.Run("G1: an importable wrapper the app calls", func(t *testing.T) {
+		c := resumeCensusOf(t, map[string]string{
+			"cmd/nofx-updater/lib.go": "package nofxupdater\n\nimport \"nofx/internal/updaterwire\"\n\nfunc R(j string) updaterwire.Request { return updaterwire.NewResume(j) }\n",
+			"api/x.go":                "package api\n\nimport nu \"nofx/cmd/nofx-updater\"\n\nvar _ = nu.R(\"job-0001abcd\")\n",
+		})
+		wantResumeOffenders(t, c, "cmd/nofx-updater/lib.go", notMain, "names updaterwire.NewResume")
+	})
+	t.Run("a non-main package naming no builder", func(t *testing.T) {
+		c := resumeCensusOf(t, map[string]string{"cmd/nofx-updater/lib.go": "package nofxupdater\n\nfunc R() {}\n"})
+		wantResumeOffenders(t, c, "cmd/nofx-updater/lib.go", notMain)
+	})
+	t.Run("admitted package main", func(t *testing.T) {
+		c := resumeCensusOf(t, map[string]string{"cmd/nofx-updater/main.go": resumeCensusImp("main", "", "func main() { _ = updaterwire.NewResume(\"job-0001abcd\") }")})
+		wantResumeOffenders(t, c, "cmd/nofx-updater/main.go")
+	})
 }
