@@ -19,6 +19,13 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+    env:
+      # CLASS 250. This job never types "npm run build", but `docker compose up`
+      # BUILDS Dockerfile.frontend — so it is a producer, and docker-compose.yml
+      # now refuses (`:?`) without this. Found by the producers pin, not by the
+      # original census: it is the sixth producer and the only one nobody listed.
+      # Job-level because `compose down` reads the same file at cleanup.
+      VITE_GUIDE_BUILT_REV: ${{ github.event.pull_request.head.sha || github.sha }}
 
     steps:
       - name: Checkout code

@@ -33,6 +33,10 @@ services:
     build:
       context: .
       dockerfile: ./docker/Dockerfile.frontend
+      args:
+        # CLASS 250: the `:?` form makes compose REFUSE with this message rather
+        # than build a guide whose revision nobody can check.
+        VITE_GUIDE_BUILT_REV: ${VITE_GUIDE_BUILT_REV:?set to the 40-hex sha being built}
     container_name: nofx-frontend
     restart: unless-stopped
     ports:

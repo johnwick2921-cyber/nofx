@@ -65,3 +65,20 @@ refuses without them. Go does NOT stamp builds made from a linked git worktree
 — it produces zero `vcs.*` entries, and `-buildvcs=true` exits 0 while still
 stamping nothing. Build releases from a clean clone or the main tree, and verify
 with `go version -m <bin> | grep vcs.` before handing the binary to anything.
+
+## Producers of VITE_GUIDE_BUILT_REV (CLASS 250 — keep this list honest)
+
+A production frontend build REFUSES without this input, so every place that
+produces the bundle or the frontend image must supply it. Adding a new one?
+`go test ./deploy/ -run Producers` is the census and will tell you.
+
+| producer | how it supplies it |
+|---|---|
+| `.github/workflows/release.yml` | from the tag (and one step deliberately builds with it EMPTY, to prove the refusal) |
+| `.github/workflows/pr-checks.yml` | step `env:` from the PR head sha |
+| `.github/workflows/pr-checks-run.yml` | step `env:` (note: `continue-on-error` hides a failure here) |
+| `docker/Dockerfile.frontend` | `ARG` + `ENV` above `RUN npm run build` — the image cannot be built without `--build-arg` |
+| `.github/workflows/pr-docker-check.yml`, `docker-build.yml` | `build-args:` on the frontend image build |
+| `docker-compose.yml` | `args:` with `${VITE_GUIDE_BUILT_REV:?…}` — compose refuses rather than build unstamped |
+| `.github/workflows/pr-docker-compose-healthcheck.yml` | job-level `env:` — it builds via `docker compose up` |
+| the manual boot | `cd web && VITE_GUIDE_BUILT_REV=<sha> npm run build`, verified by finding the sha in `web/dist/assets/*.js` |
