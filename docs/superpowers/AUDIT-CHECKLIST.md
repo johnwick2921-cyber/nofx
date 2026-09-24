@@ -10,7 +10,7 @@ in CLAUDE.md).
 
 ## PART 1 — THE BUG CLASSES (name · root cause · probe · law)
 
-*Highest occupied class: **216** (2026-09-24). Numbers are assigned AT MERGE and
+*Highest occupied class: **246** (2026-09-24). Numbers are assigned AT MERGE and
 never renumbered; a gap means a wave took a later slot to avoid a collision.*
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
@@ -6660,3 +6660,65 @@ took my place". Ask who else Ranges the map before changing what is in it.
 **Fixed in W5:** (a) `UpsertArm` refuses any write whose existing row carries a non-empty `source_ref` different from the write's — typed `store.ErrArmSourceMismatch` + WARN (keys redacted); the authoring loop turns it into a named refusal (`arm_source_mismatch`: scope note, one WARN + counter per change, the leg's G1 admit withdrawn). (b) P ids are minted past every scenario id any EARLIER version of the plan used (`pictureIDsOfEarlierVersions`: resolved doc + every machine overlay; a read error refuses the hand-off). Pinned: `TestArmedRowNeverChangesOpportunity` (store; armed / cancelled-unplaced / filled), `TestPictureIDsNeverCollideAcrossVersions`, `TestAReusedPIDNeverRewritesAnotherOpportunitysRow`.
 
 **Probe:** for every id a writer mints, find every table keyed on it and ask whether the key's scope (per version, per plan, per chain) is the mint's scope. A key wider than its mint lets two things share one row.
+
+## CLASS 239 — a test that pins a defect will defend the defect
+
+**Found:** 2026-09-24, WAVE 3a (M4 release workflow) [A]. `TestReleaseWorkflowRefusesWithInstructionsWhenThePublicKeyIsMissing` asserted that `.github/workflows/release.yml` names `deploy/release.pub`. That path WAS the bug — `ssh-keygen -Y verify` reads its `-f` file as allowed-signers, so a bare public key can never verify (CLASS 240). When the fix landed the test went RED, and the red was the pin defending the broken shape, not the fix breaking anything. A green suite does not distinguish "this behaviour is correct" from "this behaviour is what I wrote down"; the pin had been written from the same wrong assumption as the code, in the same hour, by the same author.
+
+**Fixed in 3a:** the assertion moved WITH the fix in the same commit (`53051073`) and now pins `deploy/release_allowed_signers`, carrying a comment at `deploy/release_contract_test.go:122-127` that names the shape it used to pin and why that shape was wrong — so the next reader learns the defect instead of re-deriving it. The correct behaviour is proven independently by `TestReleaseSignatureVerifiesOnlyWithAnAllowedSignersFile` (`deploy/release_contract_test.go:173`), which mints a throwaway keypair and exercises BOTH directions.
+
+**Probe:** when a test goes red because a FIX landed, ask which of the two is wrong before touching either. If the test is, it moves with the fix, in the same commit, with a comment naming the superseded shape. Never adjust a fix to keep a pin green. A pin on a value the author has not independently verified is a pin on the author's own assumption.
+
+## CLASS 240 — a verification step that cannot succeed as written
+
+**Found:** 2026-09-24, WAVE 3a, CTO review of push 2 [A]. The release workflow ran `ssh-keygen -Y verify -f deploy/release.pub -I release`. `-Y verify` parses each line of `-f` as `<principal> <keytype> <base64>`; a `.pub` file's first field is `ssh-ed25519`, so the principal never matches `-I release` and verification ALWAYS fails. The step is named like a signature check, reads like one in review, and can never pass. Its realistic fate is deletion by whoever hits it mid-incident — which removes the guarantee entirely rather than fixing it, and does so under time pressure with no one reviewing.
+
+**Fixed in 3a:** the workflow verifies against a COMMITTED allowed-signers file (`.github/workflows/release.yml:189-190`), refusing with owner instructions when it is absent; `deploy/release/README.md` gives the one-line creation step. `TestReleaseSignatureVerifiesOnlyWithAnAllowedSignersFile` proves both directions with a real generated keypair: the allowed-signers form VERIFIES, the bare-`.pub` form FAILS.
+
+**Probe:** every verification step ships proven in BOTH directions — a real artifact that must pass, and a tampered one that must fail. A step that has only ever been observed failing has not been tested, it has been assumed; a step that has only ever been observed passing may not be looking at anything.
+
+## CLASS 241 — a parser written against a guessed output format
+
+**Found:** 2026-09-24, WAVE 3a, first real `--dry-run` on the live box [A]. `cutover.sh` read the installed binary's revision with an awk that split on spaces and took `$3`. `go version -m` emits TAB-separated fields — `build\tvcs.revision=<sha>` is TWO fields, not three — so `$3` was empty and the script refused EVERY cutover with "cannot read vcs.revision from the CURRENT binary". Written from memory of what the output looks like; never compared against the command. No syntax check and no unit test would have shown it, because both would have been written from the same memory.
+
+**Fixed in 3a:** `deploy/cutover.sh:82` normalises tabs and scans the fields for a `vcs.revision=` prefix rather than trusting a position, with the failure recorded in the comment above it (`deploy/cutover.sh:77-81`). The same read proves the NEW binary before anything is touched (`deploy/cutover.sh:49-53`).
+
+**Probe:** a parser for another tool's output is written with that tool's REAL output in front of you — `cmd | cat -A` when whitespace decides — and pinned by a test fed the captured bytes. Positional field reads (`$3`, `[2]`, `split()[1]`) are the tell. This is the same shape as every other entry here: a statement ABOUT a tool, written where nothing compares it to the tool.
+
+## CLASS 242 — a process guard that matches its own asker
+
+**Found:** 2026-09-24, WAVE 3a [A]. The load-rule guard `pgrep -f 'go test.*-race'` matches the shell that is RUNNING the pgrep, because the pattern is in that shell's own command line. It reported "race run in flight" on a box with no `go test` running at all, and the rule on that answer is to SKIP — so the guard had been unconditionally skipping and never once guarding. It failed in the direction that looks safe, which is why nothing surfaced it: no run was ever wrongly started, so no symptom appeared. Proven both ways: `pgrep -af 'go test.*-race'` → 1 match (itself), `pgrep -af '[g]o test'` → the real runs only. Exact twin of `pgrep -f nofx-bin` also matching `go version -m nofx-bin`, already fixed once at `deploy/leveltruth-cutover.sh:34-37` by reading `systemctl show -p MainPID --value nofx`: the one call site was fixed, the PATTERN survived and reappeared in a lane's procedure.
+
+**Probe:** a `pgrep -f` pattern either excludes itself (`'[g]o test'`) or is replaced by a positive identification of the target (`systemctl show -p MainPID`, a pidfile, a cgroup). Verify a guard by running it when the condition is KNOWN ABSENT and confirming it says absent — a guard is only trustworthy if its NEGATIVE answer has been observed. Fixing a pattern at one call site does not retire the pattern.
+
+## CLASS 243 — a refusal that is actually an absence
+
+**Found:** 2026-09-24, WAVE 3a [A]. A contract test asserting "this script refuses bad input" passed while the script did not exist: a missing file exits 127, which is non-zero, which the assertion read as a refusal. The test would have stayed GREEN if the entire guarantee had been deleted from the repo — the strongest possible false green, since it survives removal of the thing it tests.
+
+**Fixed in 3a:** `runScript` in `deploy/release_contract_test.go:81` requires the path to exist AND be executable (`st.Mode()&0o111`) before any exit code may be interpreted, and the refusal assertions match the refusal's own MESSAGE, not merely its status.
+
+**Probe:** for every test that asserts a non-zero exit, ask what happens if the subject is deleted. If the test still passes, it is asserting absence. Exit codes are a channel shared by "refused", "crashed", "not found" and "interpreter missing"; a refusal is identified by what it SAYS.
+
+## CLASS 244 — a wrapper masks the exit code it is reporting
+
+**Found:** 2026-09-24, WAVE 3a [A]. The db-compat run was reported as "exit code 0" while the script's own final line read `VERDICT EXIT=1`. `cmd | tee log` yields tee's status, not `cmd`'s. The harness was honest about what it observed; what it observed was the wrong process. Had the verdict line not been printed, a failing rollback proof would have been recorded as a passing one — and the whole point of that job is to be believed.
+
+**Fixed in 3a:** every db-compat and cutover verdict is READ from the output text (`db-compat: PROVEN <old> <-> <new>` / `ROLLBACK OK` / `ROLLBACK FAILED`), never inferred from a wrapper's status, and the scripts print a verdict line a human reads.
+
+**Probe:** any place a status crosses a pipe, a `tee`, a subshell, a timeout wrapper or a CI step boundary, name which process's status survived. Use `set -o pipefail` / `PIPESTATUS` where the code matters — and make the subject print its own verdict, so the truth does not depend on plumbing.
+
+## CLASS 245 — a one-line `local` expands before it assigns
+
+**Found:** 2026-09-24, WAVE 3a, first real run of the db-compat job [A]. `local bin="$1" dir="$2" label="$3" log="$WORK/$label.log"` expands `$label` BEFORE the assignment completes in the same statement: under `set -u` it aborts with "unbound variable", and without `set -u` it silently builds the wrong path. Invisible in review — it reads exactly like working code — and `bash -n` cannot see it, so the script had passed every check it had been given.
+
+**Fixed in 3a:** split into two statements at `deploy/release/db-compat.sh:70-71`, with the failure recorded in the comment above (`:66-69`).
+
+**Probe:** no assignment statement reads a name it assigns in the same statement — `local`, `declare`, `export`, and the same trap in `env A=1 B=$A`. Generalises past shell: a syntax check proves a file parses, never that it runs. A script whose only evidence is `bash -n` has not been tested.
+
+## CLASS 246 — an unpinned installer inside the job that holds the key
+
+**Found:** 2026-09-24, WAVE 3a, CTO review of push 2 [A]. The signing job ran `curl -sSfL <moving-branch>/install.sh | sh … || true` on the runner that LATER holds `RELEASE_SIGNING_KEY`: arbitrary code from a branch anyone upstream can move, executing beside the release private key. Worse, `|| true` meant a FAILED install silently downgraded the secret scan to a deny-list fallback that then PASSED — the control reported success in exactly the case where it had stopped working.
+
+**Fixed in 3a:** a pinned gitleaks version with a verified sha256 before anything executes (`.github/workflows/release.yml:143-156`), every action pinned by full commit sha, and `GITLEAKS_REQUIRED: '1'` in CI (`:161`) so an absent scanner FAILS the job instead of degrading it. The local deny-list fallback remains, with its NOTE, only outside CI.
+
+**Probe:** in any job that touches a signing key or a deploy credential, list every executable it fetches and ask who can change it between now and the next run. `| sh` from a branch, an unpinned action, `latest` — all the same finding. And `|| true` on a security control converts it into decoration: a control that cannot fail cannot protect.
