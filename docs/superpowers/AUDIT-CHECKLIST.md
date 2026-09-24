@@ -10,7 +10,7 @@ in CLAUDE.md).
 
 ## PART 1 — THE BUG CLASSES (name · root cause · probe · law)
 
-*Highest occupied class: **216** (2026-09-24). Numbers are assigned AT MERGE and
+*Highest occupied class: **219** (2026-09-24). Numbers are assigned AT MERGE and
 never renumbered; a gap means a wave took a later slot to avoid a collision.*
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
@@ -6660,3 +6660,39 @@ took my place". Ask who else Ranges the map before changing what is in it.
 **Fixed in W5:** (a) `UpsertArm` refuses any write whose existing row carries a non-empty `source_ref` different from the write's — typed `store.ErrArmSourceMismatch` + WARN (keys redacted); the authoring loop turns it into a named refusal (`arm_source_mismatch`: scope note, one WARN + counter per change, the leg's G1 admit withdrawn). (b) P ids are minted past every scenario id any EARLIER version of the plan used (`pictureIDsOfEarlierVersions`: resolved doc + every machine overlay; a read error refuses the hand-off). Pinned: `TestArmedRowNeverChangesOpportunity` (store; armed / cancelled-unplaced / filled), `TestPictureIDsNeverCollideAcrossVersions`, `TestAReusedPIDNeverRewritesAnotherOpportunitysRow`.
 
 **Probe:** for every id a writer mints, find every table keyed on it and ask whether the key's scope (per version, per plan, per chain) is the mint's scope. A key wider than its mint lets two things share one row.
+
+## CLASS 217 — a UI state not backed by an API field
+
+**Found:** 2026-09-24, W-ONE-BUTTON M5 build [A]. The Updates page vocabulary
+(Update available, Installing, Up to date) had no backing fields on
+GET /api/updates — the M3 payload is exactly {enrolled, manifest_verifier,
+install_enabled}. The page would have had to invent a verdict to fill them.
+Shipped: the optional fields are typed but ABSENT today, and the badge maps
+them to Unknown whenever the API does not affirm a state; the page's Blocked
+is the only M3-reachable verdict.
+
+**Probe:** for every label a component can render, ask which API field it reads.
+A label with no field is either dead (remove it) or a future field (type it
+optional, render Unknown / n/a until the server ships it) — never a browser-side
+derivation.
+
+## CLASS 218 — a spinner with no timeout
+
+**Found:** 2026-09-24, W-ONE-BUTTON M5 build [A]. The header badge's first-fetch
+spinner would hang forever if the poll promise neither resolved nor rejected
+(a hung connection). Shipped: the first fetch races a 10 s cap and the badge
+settles to Unknown; a rejected poll is caught and also settles to Unknown.
+
+**Probe:** every spinner in the UI must name the condition that ends it, and one
+of those conditions must be a clock.
+
+## CLASS 219 — a null rendered as false
+
+**Found:** 2026-09-24, W-ONE-BUTTON M5 build [A]. A null addon_ack (the AddOn
+has not acknowledged the hold yet) read naturally as "false" in JS boolean
+context; rendering it as false claims the AddOn REFUSED the hold, which the
+server never said. Shipped: null renders "no ack yet" and a test pins that the
+page never renders the word false for it.
+
+**Probe:** every nullable verdict field rendered into a yes/no slot must have an
+explicit null branch with its own text — null is "no answer yet", never "no".
