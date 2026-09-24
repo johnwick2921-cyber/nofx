@@ -1,0 +1,53 @@
+package auth
+
+import (
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+)
+
+// ── M3 red-team H2 — the ONE retire rule (CTO ruling 1790231205208) ─────────
+//
+// A password change retires every token issued before it, on EVERY protected
+// route (api authMiddleware), on the credential routes (api credential guard)
+// and on /api/updates (Q8). The comparison is in whole seconds, because a JWT
+// NumericDate carries whole seconds (golang-jwt TimePrecision) while
+// users.updated_at carries whatever precision its writer stored: the rule
+// correct at every precision is iat STRICTLY after the epoch truncated to the
+// second (red-team red-1 #5) — a token from the change's own second, either
+// side of it, is retired. The cost: a login in that same second is refused
+// once.
+
+// IssuedNotAfter reports whether a token with this iat is retired by epoch:
+// true unless iat is STRICTLY after epoch truncated to the second. A nil iat
+// is retired (fail closed — no epoch can be compared).
+func IssuedNotAfter(iat *jwt.NumericDate, epoch time.Time) bool {
+	return iat == nil || iat.Time.Unix() <= epoch.Unix()
+}
+
+// CredentialEpoch is the account's retire epoch: the instant of its last
+// credential change. users.updated_at is written only by the password change
+// (store.UserStore.UpdatePassword); creating the row stamps updated_at ==
+// created_at, which is NOT a credential change — so a row that never changed
+// (or a legacy row with a NULL/zero updated_at) has no epoch and retires
+// nothing (the registration token, minted in the row's creation second,
+// works at once).
+func CredentialEpoch(createdAt, updatedAt time.Time) time.Time {
+	if updatedAt.IsZero() || updatedAt.Equal(createdAt) {
+		return time.Time{}
+	}
+	return updatedAt
+}
+
+// RetiredBy reports whether a token with this iat is retired by an account
+// row carrying createdAt/updatedAt: a nil iat always is; otherwise it is when
+// the row has a credential epoch and iat is not strictly after it (whole
+// seconds). The ONE predicate authMiddleware, the credential guard and the
+// Telegram bot's re-mint decision share.
+func RetiredBy(iat *jwt.NumericDate, createdAt, updatedAt time.Time) bool {
+	if iat == nil {
+		return true
+	}
+	ep := CredentialEpoch(createdAt, updatedAt)
+	return !ep.IsZero() && IssuedNotAfter(iat, ep)
+}

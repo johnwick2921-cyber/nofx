@@ -143,6 +143,26 @@ describe('Settings → Account → Change password', () => {
     )
   })
 
+  it('a successful change signs this session out (H2: the server retires every earlier session)', async () => {
+    render(<SettingsPage />)
+    fillAndSubmit('the-current-pass', 'the-new-pass-01')
+    await waitFor(() => expect(mocks.logout).toHaveBeenCalledTimes(1))
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(
+      'Password updated — sign in again with the new password'
+    )
+  })
+
+  it('a refused change does NOT sign the session out', async () => {
+    passwordReply = {
+      status: 403,
+      body: { error: 'current password is incorrect' },
+    }
+    render(<SettingsPage />)
+    fillAndSubmit('a-wrong-guess', 'the-new-pass-01')
+    await screen.findByTestId('password-change-error')
+    expect(mocks.logout).not.toHaveBeenCalled()
+  })
+
   it('cannot submit without a current password (the button stays disabled)', () => {
     render(<SettingsPage />)
     fireEvent.change(screen.getByLabelText('New Password'), {

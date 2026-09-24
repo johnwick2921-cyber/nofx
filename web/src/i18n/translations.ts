@@ -415,6 +415,8 @@ export const translations = {
     currentPasswordLabel: 'Current Password',
     currentPasswordPlaceholder: 'Your current password',
     currentPasswordRequired: 'Enter your current password',
+    passwordChangedSignInAgain:
+      'Password updated — sign in again with the new password',
     confirmDeleteModel:
       'Are you sure you want to delete this AI model configuration?',
     cannotDeleteModelInUse:
@@ -1839,6 +1841,7 @@ export const translations = {
     currentPasswordLabel: '当前密码',
     currentPasswordPlaceholder: '您的当前密码',
     currentPasswordRequired: '请输入当前密码',
+    passwordChangedSignInAgain: '密码已更新 — 请使用新密码重新登录',
     confirmDeleteModel: '确定要删除此AI模型配置吗？',
     cannotDeleteModelInUse: '无法删除此AI模型，因为有交易员正在使用',
     tradersUsing: '正在使用此配置的交易员',
@@ -3222,6 +3225,8 @@ export const translations = {
     currentPasswordLabel: 'Kata Sandi Saat Ini',
     currentPasswordPlaceholder: 'Kata sandi Anda saat ini',
     currentPasswordRequired: 'Masukkan kata sandi Anda saat ini',
+    passwordChangedSignInAgain:
+      'Kata sandi diperbarui — masuk lagi dengan kata sandi baru',
     confirmDeleteModel:
       'Apakah Anda yakin ingin menghapus konfigurasi model AI ini?',
     cannotDeleteModelInUse:
