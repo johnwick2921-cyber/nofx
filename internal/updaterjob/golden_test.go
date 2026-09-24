@@ -268,8 +268,10 @@ var (
 )
 
 // TestReceiptTagsMatchActivationGolden: Receipt carries activation.Receipt's
-// exact fields and JSON tags, so a library receipt lands in the job file byte
-// for byte; Release and Identity carry the library's fields in its order.
+// exact fields and JSON tags, so a library receipt lands in the job file
+// field for field (its times normalized to UTC — the same instant, not
+// necessarily the same rendering); Release and Identity carry the library's
+// fields in its order.
 func TestReceiptTagsMatchActivationGolden(t *testing.T) {
 	type field struct{ name, typ, tag string }
 	fields := func(v any, withTags bool) []field {

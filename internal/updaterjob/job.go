@@ -109,7 +109,9 @@ type Transition struct {
 // Receipt mirrors activation.Receipt field for field — names, types, order
 // and JSON tags (TestReceiptTagsMatchActivationGolden) — so the worker can
 // convert one into the other directly and the job file carries the library's
-// receipt byte for byte.
+// receipt field for field. Not byte for byte: AddReceipt and Write
+// normalize every receipt time to UTC without a monotonic reading (norm) —
+// the same instant, possibly a different rendering than the library's.
 type Receipt struct {
 	Step      string            `json:"step"`
 	StartedAt time.Time         `json:"started_at"`
