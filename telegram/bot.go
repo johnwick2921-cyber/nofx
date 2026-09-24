@@ -293,6 +293,7 @@ func (b *botIdentity) refresh() bool {
 		tok, err := agent.GenerateBotToken(u.ID)
 		if err != nil {
 			logger.Errorf("Failed to generate bot JWT for user %s: %v", u.ID, err)
+			b.dropIfUserChanged(u.ID)
 			return false
 		}
 		if !botTokenStale(tok, u) {
@@ -301,6 +302,7 @@ func (b *botIdentity) refresh() bool {
 		}
 		if attempt == 2 {
 			logger.Warnf("Bot: a token minted for %s after waiting to the next second would still be refused (credential epoch not behind the clock?) — not installed; the next message retries", u.ID)
+			b.dropIfUserChanged(u.ID)
 			return false
 		}
 		botSleep(botUntilNextSecond(time.Now()))
@@ -327,6 +329,23 @@ func (b *botIdentity) refresh() bool {
 		logger.Infof("Bot: user changed → %s (%s)", b.userID, b.email)
 	}
 	return true
+}
+
+// dropIfUserChanged is refresh's fail-closed path on a USER change: when the
+// box's first account is no longer the one the bot holds a token for, and no
+// token the API admits could be minted for the new one, the bot acts for
+// NOBODY — never for the previous user, whose token may still be admitted
+// (PR #200 F7 verify note 3; TestBotRefreshFailingClosedOnAUserChangeActsForNobody).
+// The same user keeps its fields: its token is the one being replaced, and
+// the next message retries.
+func (b *botIdentity) dropIfUserChanged(firstUserID string) {
+	if b.userID == firstUserID {
+		return
+	}
+	if b.userID != "" {
+		logger.Warnf("Bot: first account changed %s → %s and no admitted token could be minted — acting for no account until a refresh succeeds", b.userID, firstUserID)
+	}
+	b.userID, b.email, b.token, b.agents = "", "", "", nil
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
