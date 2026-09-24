@@ -186,7 +186,11 @@ func (w *Worker) finish(ctx context.Context, j updaterjob.Job, res stepResult) (
 			if res.set != nil {
 				res.set(k)
 			}
-			k.Blocker, k.Error = res.blocker, ""
+			k.Blocker = res.blocker
+			// a rollback keeps WHY it rolled back: M5 shows rolled_back with it
+			if k.State != updaterjob.StateRollingBack && k.State != updaterjob.StateRolledBack {
+				k.Error = ""
+			}
 			return k.Finish(now)
 		}
 		k.Error = clipText(res.err.Error())

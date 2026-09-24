@@ -189,7 +189,12 @@ func newRig(t *testing.T, opts ...rigOpt) *rig {
 		return nil
 	}
 	clearMaintenanceHold = func(d, job string) error {
-		b.expect("hold_clear", true, updaterjob.StateComplete, updaterjob.StateRolledBack)
+		// a re-run clear (crash after the first) finds it already absent:
+		// ours or absent, never another's
+		b.expect("hold_clear", false, updaterjob.StateComplete, updaterjob.StateRolledBack)
+		if s, _ := ReadHoldFor(b.data, boxJobID); s != HoldOurs && s != HoldAbsent {
+			b.violate("hold_clear with a %s hold on disk", s)
+		}
 		return origC(d, job)
 	}
 	return r
@@ -718,3 +723,9 @@ func sortedKeys(m map[string][]byte) []string {
 // resumeRequest is the attended CLI's frame (a _test.go file is outside the
 // resume census by design: it is never linked into a binary).
 func resumeRequest(jobID string) updaterwire.Request { return updaterwire.NewResume(jobID) }
+
+func updaterwireInstallOf(jobID string) updaterwire.Request {
+	return updaterwire.NewInstall(boxReleaseID, jobID)
+}
+
+func updaterwireStatusOf(jobID string) updaterwire.Request { return updaterwire.NewStatus(jobID) }
