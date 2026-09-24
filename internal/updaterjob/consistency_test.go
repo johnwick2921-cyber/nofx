@@ -210,8 +210,8 @@ func TestLeavingTheParkNeedsAnAttendedResume(t *testing.T) {
 	// H18: a resume time on a job that never parked — mid-flight, and on the
 	// nt8_skipped path.
 	for name, states := range map[string][]State{
-		"H18: downloaded":       {StateDownloaded},
-		"nt8_skipped, no park":  {StateDownloaded, StateVerified, StatePreflightOK, StateMaintenanceHeld, StateDrainedAcked, StateGateOK, StateBackupDone, StateNT8Skipped},
+		"H18: downloaded":      {StateDownloaded},
+		"nt8_skipped, no park": {StateDownloaded, StateVerified, StatePreflightOK, StateMaintenanceHeld, StateDrainedAcked, StateGateOK, StateBackupDone, StateNT8Skipped},
 		"nt8_updated not done": {StateDownloaded, StateVerified, StatePreflightOK, StateMaintenanceHeld, StateDrainedAcked, StateGateOK, StateBackupDone},
 	} {
 		t.Run(name, func(t *testing.T) {
