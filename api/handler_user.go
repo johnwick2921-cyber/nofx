@@ -10,6 +10,7 @@ import (
 	"nofx/auth"
 	"nofx/logger"
 	"nofx/store"
+	"nofx/telemetry"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -20,6 +21,27 @@ import (
 // to run the destructive account reset — a deliberate speed bump so the endpoint
 // can never be triggered by a stray click or a replayed empty POST.
 const accountResetConfirmToken = "RESET-ALL-DATA"
+
+// ── PR #200 fold F9 (CTO 1790252194343 #21) — the current_password compare ──
+//
+// PUT /api/user/password had no limiter on the current_password compare. The
+// minimal, fail-closed fold: after a FAILED compare the answer waits a fixed
+// currentPasswordFailDelay, and the refusal is counted — the B6 gate-block
+// table (telemetry.IncGateBlock, the process-wide "" key: this chokepoint has
+// no trader; read at GET /api/risk/gate-blocks) — beside the existing WARN
+// line. A real limiter is a follow-up: a failure-only delay does not bound a
+// client that runs attempts in parallel, or stops waiting once the fast
+// success window has passed.
+const currentPasswordFailDelay = time.Second
+
+// currentPasswordWrongGate is the gate-block counter a failed compare bumps.
+const currentPasswordWrongGate = "credential_current_password_wrong"
+
+// currentPasswordFailSleep is the delay seam: production sleeps. The api test
+// binary swaps it in TestMain (testmain_test.go), so no test ever sleeps the
+// real second; TestWrongCurrentPasswordIsDelayedAndCounted pins that the
+// production value is time.Sleep and the delay 1 s.
+var currentPasswordFailSleep = time.Sleep
 
 // handleLogout Add current token to blacklist
 func (s *Server) handleLogout(c *gin.Context) {
@@ -207,6 +229,10 @@ func (s *Server) handleChangePassword(c *gin.Context) {
 	}
 	if !auth.CheckPassword(req.CurrentPassword, u.PasswordHash) {
 		logger.Warnf("🔒 [credentials] refused %s %s from %s: current password is incorrect", c.Request.Method, c.FullPath(), c.ClientIP())
+		// F9: count it, then hold the answer a fixed second (see the
+		// currentPasswordFailDelay block above).
+		telemetry.IncGateBlock("", currentPasswordWrongGate)
+		currentPasswordFailSleep(currentPasswordFailDelay)
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "current password is incorrect"})
 		return
 	}
