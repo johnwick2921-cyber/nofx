@@ -41,9 +41,13 @@ import (
 //     whoever sends it).
 //   - /api/updates: the updater (its own gate refuses machine tokens too —
 //     it does not run authMiddleware).
+//   - /api/reset-password (CTO ruling 1790231205208 item 2 names it): a
+//     PUBLIC route (no authMiddleware) that answers 410 to everyone; a
+//     machine token presented there is refused 403 by denyMachineBearer.
 var machineDeniedRoutes = []string{
 	"/api/user/password",
 	"/api/reset-account",
+	"/api/reset-password",
 	"/api/telegram",
 	"/api/updates",
 }
@@ -62,14 +66,39 @@ func machineDenied(fullPath string) bool {
 // agentOnlyHiddenRoutes are left out of the agent's route list (GetAPIDocs)
 // on top of every machine-denied route: session/account management a
 // machine token has no business with. They are NOT denied (the web UI's
-// login/register are public; logout only revokes the caller's own token;
-// reset-password always answers 410) — omitting them only stops handing the
-// LLM the map (red1 R1: /login was advertised and was step 2 of the chain).
+// login/register are public; logout only revokes the caller's own token) —
+// omitting them only stops handing the LLM the map (red1 R1: /login was
+// advertised and was step 2 of the chain). /api/reset-password moved to
+// machineDeniedRoutes (still hidden — agentHidden covers both lists).
 var agentOnlyHiddenRoutes = []string{
 	"/api/login",
 	"/api/register",
 	"/api/logout",
-	"/api/reset-password",
+}
+
+// denyMachineBearer guards a PUBLIC machine-denied route (one registered
+// outside authMiddleware — today only /api/reset-password): a request whose
+// Authorization is a valid machine token (auth.Claims.IsMachine — any scope
+// claim, or bot@internal with none) is refused 403 before the handler runs.
+// A request with no token, or a token that does not validate, proceeds to
+// the handler unchanged (the route is public; it proves nothing about a
+// caller that presents no valid machine identity).
+func denyMachineBearer(h gin.HandlerFunc) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if ah := c.Request.Header.Values("Authorization"); len(ah) > 0 {
+			for _, v := range ah {
+				parts := strings.Split(v, " ")
+				if len(parts) != 2 || parts[0] != "Bearer" {
+					continue
+				}
+				if cl, err := auth.ValidateJWT(parts[1]); err == nil && cl.IsMachine() {
+					credentialForbid(c, "machine token on a machine-denied route")
+					return
+				}
+			}
+		}
+		h(c)
+	}
 }
 
 // agentHidden reports whether a registered route path is omitted from the
