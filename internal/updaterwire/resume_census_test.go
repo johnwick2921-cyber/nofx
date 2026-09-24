@@ -118,6 +118,9 @@ func jsonSpellsResume(v any) bool {
 const (
 	resumeWriteReason   = "writes a Resume field"
 	resumePointerReason = "takes a pointer to an updaterwire.Request"
+	resumeShapeReason   = "declares a Resume field (a Request shape)"
+	resumeTypeReason    = "declares a type from updaterwire.Request"
+	resumeConvertReason = "converts to an updaterwire.Request"
 )
 
 // throughResume reports whether e reaches a Resume field (X.Resume, or
@@ -157,6 +160,20 @@ func throughResume(e ast.Expr) bool {
 //     because a decoder needs a pointer to fill Resume, and nothing in the
 //     wire API takes one (Client.Do and the worker's Handler take values).
 //
+// A Request can also be ASSEMBLED from a shape without any of those
+// (TestResumeCensusSeesEveryRequestShape): a read of r.Resume gives a
+// *ResumePayload whose type is never spelled, and a struct with the same
+// fields becomes a Request by conversion — or, unnamed, by plain assignment.
+// So, too:
+//
+//   - Every file: a struct type declaring a field named Resume (named or
+//     embedded) — struct identity needs that exact name. Fail closed, as
+//     above.
+//   - Files importing the wire package: a type declared from Request (alias
+//     or defined), a conversion to Request, and an unkeyed literal whose type
+//     is ELIDED inside a literal whose type mentions Request
+//     ([]Request{{v, nil, nil, nil, p}}).
+//
 // READS are not judged: r.Resume != nil and r.Resume.JobID stay admitted.
 func resumeWrites(f ast.Node, local map[string]bool, dot bool) []string {
 	isRequest := func(e ast.Expr) bool {
@@ -180,6 +197,42 @@ func resumeWrites(f ast.Node, local map[string]bool, dot bool) []string {
 				return ok && local[id.Name]
 			case *ast.Ident: // a dot import makes the wire package's calls bare
 				return dot && ast.IsExported(fn.Name)
+			}
+		}
+		return false
+	}
+	mentionsRequest := func(t ast.Expr) bool {
+		hit := false
+		ast.Inspect(t, func(n ast.Node) bool {
+			if e, ok := n.(ast.Expr); ok && isRequest(e) {
+				hit = true
+			}
+			return !hit
+		})
+		return hit
+	}
+	// elidedUnkeyed reports an unkeyed literal, at any depth, whose type is
+	// elided (keys too: a map may be keyed by a Request).
+	var elidedUnkeyed func(elts []ast.Expr) bool
+	elidedUnkeyed = func(elts []ast.Expr) bool {
+		for _, e := range elts {
+			if kv, ok := e.(*ast.KeyValueExpr); ok {
+				if elidedUnkeyed([]ast.Expr{kv.Key}) {
+					return true
+				}
+				e = kv.Value
+			}
+			cl, ok := e.(*ast.CompositeLit)
+			if !ok || cl.Type != nil {
+				continue
+			}
+			if len(cl.Elts) > 0 {
+				if _, keyed := cl.Elts[0].(*ast.KeyValueExpr); !keyed {
+					return true
+				}
+			}
+			if elidedUnkeyed(cl.Elts) {
+				return true
 			}
 		}
 		return false
@@ -248,11 +301,35 @@ func resumeWrites(f ast.Node, local map[string]bool, dot bool) []string {
 			if id, ok := x.Fun.(*ast.Ident); ok && id.Name == "new" && len(x.Args) == 1 && isRequest(x.Args[0]) {
 				found[resumePointerReason] = true
 			}
+			if len(x.Args) == 1 && isRequest(ast.Unparen(x.Fun)) {
+				found[resumeConvertReason] = true
+			}
 		case *ast.CompositeLit:
 			if isRequest(x.Type) && len(x.Elts) > 0 {
 				if _, keyed := x.Elts[0].(*ast.KeyValueExpr); !keyed {
 					found[resumeWriteReason] = true
 				}
+			}
+			if x.Type != nil && !isRequest(x.Type) && mentionsRequest(x.Type) && elidedUnkeyed(x.Elts) {
+				found[resumeWriteReason] = true
+			}
+		case *ast.StructType:
+			for _, fl := range x.Fields.List {
+				names := fl.Names
+				if len(names) == 0 { // embedded: the field is named after its type
+					if id := embeddedName(fl.Type); id != nil {
+						names = []*ast.Ident{id}
+					}
+				}
+				for _, nm := range names {
+					if nm.Name == "Resume" {
+						found[resumeShapeReason] = true
+					}
+				}
+			}
+		case *ast.TypeSpec:
+			if isRequest(ast.Unparen(x.Type)) {
+				found[resumeTypeReason] = true
 			}
 		}
 		return true
@@ -262,6 +339,29 @@ func resumeWrites(f ast.Node, local map[string]bool, dot bool) []string {
 		out = append(out, r)
 	}
 	return out
+}
+
+// embeddedName is the field name an embedded field takes: its type's name
+// (T, *T, pkg.T, T[X]).
+func embeddedName(e ast.Expr) *ast.Ident {
+	for {
+		switch x := e.(type) {
+		case *ast.StarExpr:
+			e = x.X
+		case *ast.ParenExpr:
+			e = x.X
+		case *ast.IndexExpr:
+			e = x.X
+		case *ast.IndexListExpr:
+			e = x.X
+		case *ast.SelectorExpr:
+			return x.Sel
+		case *ast.Ident:
+			return x
+		default:
+			return nil
+		}
+	}
 }
 
 // wireDecl is one top-level declaration of the wire package: its pin name
@@ -291,11 +391,12 @@ func wireDeclsOf(d ast.Decl) []wireDecl {
 		for _, s := range d.Specs {
 			switch s := s.(type) {
 			case *ast.TypeSpec:
-				parts := []ast.Node{s.Type}
-				if s.TypeParams != nil {
-					parts = append(parts, s.TypeParams)
-				}
-				out = append(out, wireDecl{s.Name.Name, parts})
+				// A blank-named copy of the spec: the TypeSpec rule of
+				// resumeWrites sees `type Req = Request` / `type Req Request`,
+				// and the defining name itself is never judged.
+				out = append(out, wireDecl{s.Name.Name, []ast.Node{&ast.TypeSpec{
+					Name: ast.NewIdent("_"), TypeParams: s.TypeParams, Assign: s.Assign, Type: s.Type,
+				}}})
 			case *ast.ValueSpec:
 				var parts []ast.Node
 				if s.Type != nil {
@@ -737,7 +838,9 @@ func TestResumeCensusSeesEveryResumeFieldWrite(t *testing.T) {
 		{"assignment below X.Resume", "api/w.go", file("api", "func f(r updaterwire.Request) updaterwire.Request {\n\tr.Resume.JobID = \"job-0002abcd\"\n\treturn r\n}"), []string{write}},
 		{"address below X.Resume", "api/w.go", file("api", "func f(b []byte, r updaterwire.Request) error {\n\treturn json.Unmarshal(b, &r.Resume.JobID)\n}"), []string{write}},
 		{"unkeyed Request literal", "api/w.go", file("api", "func f(r0 updaterwire.Request) updaterwire.Request {\n\treturn updaterwire.Request{r0.Verb, nil, nil, nil, r0.Resume}\n}"), []string{write}},
-		{"an unrelated Resume field (fail closed)", "agent/x.go", "package agent\n\ntype state struct{ Resume bool }\n\nfunc f(s *state) { s.Resume = true }\n", []string{write}},
+		// the struct declaring the field is judged too since the shape rule
+		// (TestResumeCensusSeesEveryRequestShape), so both reasons
+		{"an unrelated Resume field (fail closed)", "agent/x.go", "package agent\n\ntype state struct{ Resume bool }\n\nfunc f(s *state) { s.Resume = true }\n", []string{write, resumeShapeReason}},
 		// pointers to a wire Request
 		{"a decoder into a runtime frame", "api/p.go", file("api", "func f(b []byte) (updaterwire.Request, error) {\n\tvar r updaterwire.Request\n\terr := json.NewDecoder(bytes.NewReader(b)).Decode(&r)\n\treturn r, err\n}"), []string{ptr}},
 		{"a Request parameter's address", "api/p.go", file("api", "func f(b []byte, r updaterwire.Request) (updaterwire.Request, error) {\n\treturn r, json.Unmarshal(b, &r)\n}"), []string{ptr}},
@@ -867,5 +970,100 @@ func TestResumeCensusU4SocketDispatchesOnThePayloadPointer(t *testing.T) {
 	t.Run("offender: case VerbResume", func(t *testing.T) {
 		c := resumeCensusOf(t, map[string]string{rel: handler("\tswitch req.Verb {\n\tcase updaterwire.VerbResume:\n\t\treturn w.resume(req.Resume.JobID)\n\t}\n")})
 		wantResumeOffenders(t, c, rel, "names updaterwire.VerbResume")
+	})
+}
+
+// PIN (U2 fold 2, resumed builder's residual probe — residual-red-before.out
+// H7/H8/H9/H10/H12): a resume Request can be ASSEMBLED with no builder name,
+// no frame literal, no Resume write and no pointer to a Request. A READ of
+// r0.Resume (admitted) yields a nil *ResumePayload whose type is never
+// spelled; json.Unmarshal(&p) fills it; then the Request is built from a
+// SHAPE: a local alias or defined type of Request (unkeyed literal, or
+// converted back), an unkeyed literal whose type is elided inside a []Request
+// literal, or a generic struct with a `Resume P` field that is converted — or,
+// being unnamed, simply ASSIGNED (no conversion at all). Each form compiles
+// and encodes to exactly the NewResume frame (proven in the probe). So,
+// outside the admitted set:
+//   - a struct type declaring a field named Resume (every file, fail closed,
+//     like the Resume key rule: struct identity needs that exact field name);
+//   - a type declared from the wire Request (alias or defined);
+//   - a conversion to the wire Request;
+//   - an unkeyed literal whose type is elided inside a literal whose type
+//     mentions the wire Request.
+func TestResumeCensusSeesEveryRequestShape(t *testing.T) {
+	const (
+		write   = "writes a Resume field"
+		shape   = "declares a Resume field (a Request shape)"
+		typ     = "declares a type from updaterwire.Request"
+		convert = "converts to an updaterwire.Request"
+	)
+	file := func(body string) string {
+		return "package api\n\nimport (\n\t\"encoding/json\"\n\n\t\"nofx/internal/updaterwire\"\n)\n\nvar _ = json.Unmarshal\n\n" + body + "\n"
+	}
+	fill := "\tp := r0.Resume\n\t_ = json.Unmarshal([]byte(`{\"job_id\":\"`+job+`\"}`), &p)\n"
+	build := func(pre, ret string) string {
+		return file(pre + "func Build(r0 updaterwire.Request, job string) updaterwire.Request {\n" + fill + "\treturn " + ret + "\n}")
+	}
+	fields := "\tVerb updaterwire.Verb\n\tResume P\n"
+	for _, tc := range []struct {
+		name, body string
+		want       []string
+	}{
+		// the probes (their real-tree plants are residual-red-before.out)
+		{"H7 a generic shape, converted", build("type shape[P any] struct {\n"+fields+"}\n\nfunc shapeOf[P any](v updaterwire.Verb, p P) shape[P] { return shape[P]{v, p} }\n\n", "updaterwire.Request(shapeOf(updaterwire.Verbs()[3], p))"), []string{shape, convert}},
+		{"H8 an alias of Request, unkeyed", build("type req = updaterwire.Request\n\n", "req{updaterwire.Verbs()[3], nil, nil, nil, p}"), []string{typ}},
+		{"H9 an elided unkeyed Request in a slice", build("", "[]updaterwire.Request{{updaterwire.Verbs()[3], nil, nil, nil, p}}[0]"), []string{write}},
+		{"H10 a defined type from Request, converted", build("type req updaterwire.Request\n\n", "updaterwire.Request(req{updaterwire.Verbs()[3], nil, nil, nil, p})"), []string{typ, convert}},
+		{"H12 an unnamed generic shape, assigned", build("func shapeOf[P any](v updaterwire.Verb, p P) struct {\n"+fields+"} {\n\treturn struct {\n"+fields+"\t}{v, p}\n}\n\n", "shapeOf(updaterwire.Verbs()[3], p)"), []string{shape}},
+		// each rule alone
+		{"any conversion to Request", file("func f(r updaterwire.Request) updaterwire.Request { return (updaterwire.Request)(r) }"), []string{convert}},
+		{"an elided unkeyed Request in a map", file("func f(r updaterwire.Request) map[int]updaterwire.Request {\n\treturn map[int]updaterwire.Request{0: {r.Verb, nil, nil, nil, r.Resume}}\n}"), []string{write}},
+		{"an elided unkeyed Request two levels down", file("func f(r updaterwire.Request) [][]updaterwire.Request {\n\treturn [][]updaterwire.Request{{{r.Verb, nil, nil, nil, r.Resume}}}\n}"), []string{write}},
+		{"an embedded Resume field", "package agent\n\ntype Resume struct{}\n\ntype shape struct {\n\tVerb string\n\t*Resume\n}\n", []string{shape}},
+		{"an unrelated Resume field (fail closed)", "package agent\n\ntype state struct{ Resume bool }\n", []string{shape}},
+		{"renamed import", resumeCensusImp("api", "uw", "type req = uw.Request"), []string{typ}},
+		{"dot import", resumeCensusImp("api", ".", "func f(r Request) Request { return Request(r) }"), []string{convert}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			wantResumeOffenders(t, resumeCensusOf(t, map[string]string{"api/s.go": strings.Replace(tc.body, "package agent", "package api", 1)}), "api/s.go", tc.want...)
+		})
+	}
+	for _, ok := range []struct{ name, body string }{
+		{"a slice of constructed Requests", file("func f() []updaterwire.Request {\n\treturn []updaterwire.Request{updaterwire.NewStatus(\"\"), updaterwire.NewInstall(\"rel\", \"job-0001abcd\")}\n}")},
+		{"an elided KEYED Request without Resume", file("func f() []updaterwire.Request {\n\treturn []updaterwire.Request{{Verb: updaterwire.VerbStatus, Status: &updaterwire.StatusPayload{}}}\n}")},
+		{"conversion to another wire type", file("func f(s string) updaterwire.Verb { return updaterwire.Verb(s) }")},
+		{"an alias of another wire type", file("type resp = updaterwire.Response\n\nvar _ resp")},
+		{"a receipt field that is not exactly Resume", file("type receipt struct {\n\tResumedAt string\n\tResumeJob string\n}\n\nvar _ receipt")},
+		{"a parameter named Resume", file("func f(Resume int) int { return Resume }")},
+		{"an elided unkeyed literal of an unrelated type", file("var _ = [][2]int{{1, 2}}")},
+	} {
+		t.Run("admitted "+ok.name, func(t *testing.T) {
+			wantResumeOffenders(t, resumeCensusOf(t, map[string]string{"api/s.go": ok.body}), "api/s.go")
+		})
+	}
+}
+
+// PIN (the shape rules inside the wire package): the wire directory is
+// admitted wholesale, so a Request shape declared THERE — an exported alias or
+// defined type of Request, a conversion to it, a struct with a Resume field,
+// an elided unkeyed Request — would hand the app a way to assemble a resume
+// the app-side rules no longer see (updaterwire.Req{v, …, p}). Each reaches a
+// builder and, being outside resumeWireDecls, is an offender naming it.
+func TestResumeCensusPinsWireRequestShapes(t *testing.T) {
+	const more = "internal/updaterwire/more.go"
+	for _, tc := range []struct{ name, body, decl string }{
+		{"an alias of Request", "type Req = Request", "Req"},
+		{"a defined type from Request", "type Req Request", "Req"},
+		{"a conversion to Request", "func Same(r Request) Request { return Request(r) }", "Same"},
+		{"a generic shape with a Resume field", "type Shape[P any] struct {\n\tVerb   Verb\n\tResume P\n}", "Shape"},
+		{"an elided unkeyed Request", "func Many(r Request) []Request { return []Request{{r.Verb, r.Resume}} }", "Many"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			wantResumeOffenders(t, resumeCensusOf(t, map[string]string{more: "package updaterwire\n\n" + tc.body + "\n"}), more,
+				"declares "+tc.decl+", which reaches a resume builder outside the pinned set (resumeWireDecls)")
+		})
+	}
+	t.Run("admitted an alias of another wire type", func(t *testing.T) {
+		wantResumeOffenders(t, resumeCensusOf(t, map[string]string{more: "package updaterwire\n\ntype Word = Verb\n"}), more)
 	})
 }
