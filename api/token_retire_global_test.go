@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
+
 	"nofx/auth"
 	"nofx/manager"
 	"nofx/store"
@@ -38,13 +40,73 @@ func seedTokenOwner(t *testing.T, st *store.Store, userID, email string) {
 	}
 }
 
+// boundaryAfter is the whole-second wait target, as a pure function of now —
+// the seam that makes the chrony step-back flake drivable (this box steps the
+// clock BACK ~130×/day, median 1.09 s).
+func boundaryAfter(now time.Time) time.Time {
+	return now.Truncate(time.Second).Add(time.Second + 20*time.Millisecond)
+}
+
+// untilNextSecondRetries is the number of re-targets untilNextSecond gets.
+// 1 = the old single-read semantics (the flake); the test drives both sides.
+var untilNextSecondRetries = 3
+
 // untilNextSecond sleeps past the next whole-second boundary (the retire rule
 // compares whole seconds, so a token minted in the change's own second is
-// retired by design — red-team red-1 #5).
+// retired by design — red-team red-1 #5). After each sleep it RE-READS the
+// clock: a chrony step-back across the boundary leaves the first read stale
+// (the H2 whole-second pin failed once in a full run at exactly this —
+// "Time jumped backwards" at the failing second), so it re-targets.
 func untilNextSecond() {
-	now := time.Now()
-	time.Sleep(now.Truncate(time.Second).Add(time.Second + 20*time.Millisecond).Sub(now))
+	for i := 0; i < untilNextSecondRetries; i++ {
+		now := time.Now()
+		time.Sleep(boundaryAfter(now).Sub(now))
+		if time.Now().After(now.Truncate(time.Second).Add(time.Second)) {
+			return
+		}
+	}
 }
+
+// TestWholeSecondWaitReTargetsAcrossAClockStepBack reproduces the H2 flake
+// deterministically: read 1 lands 900 ms into the change's second, chrony
+// steps BACK across the boundary, and the whole-second rule judged under the
+// stepped clock refuses a token minted at read 1's boundary — the exact
+// positive-control failure line. The re-target (one more read) moves the
+// boundary past the stepped clock and the wait recovers.
+func TestWholeSecondWaitReTargetsAcrossAClockStepBack(t *testing.T) {
+	sec0 := time.Date(2026, 9, 24, 3, 0, 5, 0, time.UTC)
+	changed := sec0
+
+	// read 1: just before the boundary.
+	target1 := boundaryAfter(sec0.Add(900 * time.Millisecond))
+	if !target1.Equal(sec0.Add(time.Second + 20*time.Millisecond)) {
+		t.Fatalf("boundaryAfter = %v, want %v", target1, sec0.Add(time.Second+20*time.Millisecond))
+	}
+
+	// chrony steps BACK across the boundary: the next whole-second boundary
+	// from the stepped clock is now the change's own second again.
+	now2 := sec0.Add(-300 * time.Millisecond)
+	if boundaryAfter(now2).After(sec0.Add(time.Second)) {
+		t.Fatalf("step-back not reproduced: boundaryAfter(%v) = %v", now2, boundaryAfter(now2))
+	}
+
+	// The whole-second rule refuses a token minted UNDER the stepped clock
+	// (now2 ≤ sec0 lands at or before the change's second) — the H2 failure
+	// line: the positive control minted after the wait is refused because
+	// chrony stepped the clock back into the change's own second
+	// ("Time jumped backwards" at the failing second).
+	if !auth.IssuedNotAfter(jwtAt(now2), changed) {
+		t.Fatal("step-back shape not reproduced: a token minted under the stepped clock is NOT refused")
+	}
+
+	// A single-read wait cannot recover (the old flake); with the re-target
+	// the boundary moves past the stepped clock's second.
+	if untilNextSecondRetries <= 1 {
+		t.Fatal("the wait has no re-target — a chrony step-back strands the test in the change's own second (the H2 flake)")
+	}
+}
+
+func jwtAt(ts time.Time) *jwt.NumericDate { return jwt.NewNumericDate(ts) }
 
 func TestRetiredTokenCannotActAnywhere(t *testing.T) {
 	e := newUpdEnv(t)
