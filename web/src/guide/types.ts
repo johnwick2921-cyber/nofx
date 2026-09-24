@@ -3,9 +3,35 @@
 // against GET /api/health revision and warns on drift.
 import type { ReactNode } from 'react'
 
-// Stamped from the shipped binary at boot time; see deploy/ for the bump step.
-// The guide top banner compares this against GET /api/health revision.
-export const GUIDE_BUILT_REV = '662c79bd236f43fb15eb0c7950880123896be8c0'
+// The sha this guide was BUILT for. The top banner compares it against GET
+// /api/health revision, so a guide that disagrees with the running binary says
+// so instead of quietly lying about which behaviour it describes.
+//
+// It is now supplied AT BUILD TIME (VITE_GUIDE_BUILT_REV), not edited into
+// this file by hand. Hand-editing is how it went stale: the bump was a step in
+// a deploy procedure, and a step in a procedure is a step someone skips under
+// pressure — which is exactly when the guide matters most.
+//
+// A PRODUCTION build with the variable missing, or not a 40-hex sha, FAILS
+// here rather than shipping a guide that cannot be checked. A dev build shows
+// 'dev', which the banner renders as "not a release build" and never as a
+// matching revision.
+function resolveGuideBuiltRev(): string {
+  const raw = import.meta.env?.VITE_GUIDE_BUILT_REV
+  if (import.meta.env?.PROD) {
+    if (typeof raw !== 'string' || !/^[0-9a-f]{40}$/.test(raw)) {
+      throw new Error(
+        'VITE_GUIDE_BUILT_REV must be a 40-hex commit sha for a production build ' +
+          `(got ${raw === undefined ? 'nothing' : JSON.stringify(raw)}). ` +
+          'The release workflow sets it from the tag; see deploy/release/README.md.'
+      )
+    }
+    return raw
+  }
+  return typeof raw === 'string' && /^[0-9a-f]{40}$/.test(raw) ? raw : 'dev'
+}
+
+export const GUIDE_BUILT_REV = resolveGuideBuiltRev()
 
 export interface Card {
   title: string
