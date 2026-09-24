@@ -9,36 +9,72 @@ package telegram
 //
 // M3 hc (verifier ha2 defect 2): these pins are TYPE-based. Their first
 // version tracked the identity by VARIABLE NAME, so `id := ident; go func(){
-// agents := id.agents … }()` restored the race with both pins green, and an
-// LLM factory handed out as the method value b.llmClient was caught only by a
-// vacuity guard. Every rule below asks go/types what an expression IS, never
-// what it is called: package telegram's production files are type-checked
-// (imports from the go command's own export data), and "the identity" is any
-// value whose type is botIdentity or *botIdentity — through an alias, or a
-// named type declared from it.
+// agents := id.agents … }()` restored the race with both pins green. Every
+// rule asks go/types what an expression IS, never what it is called: package
+// telegram's production files are type-checked (imports from the go
+// command's own export data), and "the identity" is any value whose type is
+// botIdentity or *botIdentity — through an alias, or a named type declared
+// from it.
 //
-// The rules, pinned where runBot and refresh actually run (canon 53 — the
-// production source, type-checked; no copy of the loop):
+// M3 hc repair (verifier vf-hc defects 1-2): the type rules then asked only
+// "is this value the identity?", so a value that POINTS INTO it or HOLDS it
+// got through with every pin green — &ident.agents captured or handed to the
+// goroutine, a holder struct captured and read through a helper or its own
+// method, a method value or `go h.m()` on a holder, the identity handed to a
+// generic. Every rule now asks "does this value hold, or point into, the
+// identity?". TestBotIdentityPinRulesCatchEveryRoad runs the SAME rule code
+// over a synthetic package, one compiling road per case, beside the shapes
+// that stay allowed — so a rule that stops catching a road fails there.
+//
+// The rules, over the production source, type-checked (canon 53 — no copy of
+// the loop):
 //
 //   - TestRunBotGoroutinesReadNoBotIdentityField — no closure outside
-//     botIdentity's methods uses the identity: not a selector through it
-//     (ident.agents, w.id.agents, (*ident).x), not a field or method promoted
-//     through an embedded one (w.agents), not the bare value (an alias, <-ch,
-//     a conversion, a copy). A go statement binds no method of the identity
-//     (go ident.refresh()), starts no package function that uses it
-//     (go f(…)), and hands the goroutine no value that holds it. A go
-//     statement's ARGUMENTS are evaluated on the main loop (Go spec), so
-//     `}(ident.agents, chatID, text)` is the capture, and it is allowed.
+//     botIdentity's methods uses the identity (a selector through it, a field
+//     or method promoted through an embedded one, the bare value) or captures
+//     a variable that HOLDS it (a struct, slice, map, channel, pointer or
+//     generic value carrying one — whatever the closure then does with it: a
+//     method, a helper, a call two levels down). A go statement binds no
+//     method to a receiver that holds the identity (go ident.refresh(),
+//     go h.outer()), starts no package function whose body uses it, and hands
+//     the goroutine no argument that holds it. A go statement's ARGUMENTS are
+//     evaluated on the main loop (Go spec), so `}(ident.agents, chatID, text)`
+//     is the capture, and it is allowed; a POINTER into the identity is no
+//     capture, and the third rule refuses it wherever it is formed.
 //   - TestBotIdentityClosuresReadNoReceiverField — no closure a botIdentity
-//     method builds uses the identity, and no method value is bound to the
-//     identity anywhere in the package (b.llmClient, get := ident.refresh):
-//     a method value IS a closure over its receiver. The LLM factory refresh
+//     method builds uses the identity or captures a holder of it, and no
+//     method value anywhere in the package is bound to a receiver that holds
+//     it (b.llmClient, h.llm, f := h.touch, time.AfterFunc(d, h.touch)): a
+//     method value IS a closure over its receiver. The LLM factory refresh
 //     hands to agent.NewManager runs on the per-message goroutine
 //     (Manager.Run → agent.New / Agent.Run), so it closes over locals.
 //   - TestBotIdentityEscapesNoOtherWay — no package-level variable holds the
-//     identity, and no value holding it is converted to an interface (or
-//     unsafe.Pointer): through either, any goroutine could reach its fields
-//     by a road the two rules above cannot see.
+//     identity; no value holding it is converted to an interface or
+//     unsafe.Pointer; no pointer INTO it is formed — &ident.f, ident.arr[:],
+//     or implicitly, a pointer-receiver method selected on a value field of
+//     it; and no generic is instantiated with a type that holds it (inside
+//     the generic the identity is a type parameter no rule can see).
+//
+// Allowed, each a GREEN control in the synthetic proof: a field read on the
+// main loop (into a local first, or as a go argument); go on a field's own
+// method (go ident.agents.Run(…) — the receiver is evaluated on the main
+// loop); a synchronous call of an identity method; a pointer into the memory
+// a field POINTS TO (&ident.bx.n, &ident.sl[0]); a value-receiver method
+// value on a value field (a copy). The pins guard the fields refresh
+// REPLACES. A field's pointee mutated in place is outside what they can see:
+// the pre-existing /start → ident.agents.Reset (bot.go) against an in-flight
+// Agent.Run (agent/manager.go) is such a race.
+//
+// Known limits (fail-closed defaults): pointer arithmetic from memory that
+// holds no identity (unsafe past a conversion of something else) is not
+// traced; a production file behind a build constraint, or in cgo, fails the
+// load rather than going unchecked. Flagged on purpose though race-free: a
+// copied struct value; a closure that reads the identity, or a holder of it,
+// synchronously; logging it through fmt (an interface conversion); a generic
+// such as slices.Contains over identity pointers; and a value-typed field
+// with pointer methods — a sync.Mutex added to botIdentity trips the
+// implicit-address rule even at b.mu.Lock(): a locked field is a new model,
+// so re-anchor the pins with it.
 //
 // The -race reproduction of the factory half is
 // TestRaceBotRefreshAgainstInFlightManager (bot_refresh_race_test.go).
@@ -78,6 +114,7 @@ var (
 	typedTelegramOnce sync.Once
 	typedTelegramPkg  *typedTelegram
 	typedTelegramErr  error
+	telegramExports   map[string]string // import path → export data, from the same go list
 )
 
 func loadTypedTelegram(t *testing.T) *typedTelegram {
@@ -147,6 +184,7 @@ func typeCheckTelegram() (*typedTelegram, error) {
 			return nil, fmt.Errorf("production file %s sits behind a build constraint this pin does not type-check — extend it", n)
 		}
 	}
+	telegramExports = exports
 	fset := token.NewFileSet()
 	var files []*ast.File
 	for _, n := range strings.Split(self[3], ",") {
@@ -162,26 +200,37 @@ func typeCheckTelegram() (*typedTelegram, error) {
 	if len(files) == 0 {
 		return nil, errors.New("no production file listed — the pin would walk nothing")
 	}
-	imp := importer.ForCompiler(fset, "gc", func(path string) (io.ReadCloser, error) {
+	return checkTyped(fset, files, "nofx/telegram", exportImporter(fset, exports))
+}
+
+// exportImporter imports from the go command's export data.
+func exportImporter(fset *token.FileSet, exports map[string]string) types.Importer {
+	return importer.ForCompiler(fset, "gc", func(path string) (io.ReadCloser, error) {
 		p := exports[path]
 		if p == "" {
 			return nil, fmt.Errorf("no export data for %q", path)
 		}
 		return os.Open(p)
 	})
+}
+
+// checkTyped type-checks files as package path — the production package, or
+// the synthetic proof's — and anchors the rules on its botIdentity.
+func checkTyped(fset *token.FileSet, files []*ast.File, path string, imp types.Importer) (*typedTelegram, error) {
 	info := &types.Info{
 		Types:      map[ast.Expr]types.TypeAndValue{},
 		Defs:       map[*ast.Ident]types.Object{},
 		Uses:       map[*ast.Ident]types.Object{},
 		Selections: map[*ast.SelectorExpr]*types.Selection{},
+		Instances:  map[*ast.Ident]types.Instance{},
 	}
-	pkg, err := (&types.Config{Importer: imp}).Check("nofx/telegram", fset, files, info)
+	pkg, err := (&types.Config{Importer: imp}).Check(path, fset, files, info)
 	if err != nil {
 		return nil, err // any type error: the pin cannot trust what it did record
 	}
 	tn, ok := pkg.Scope().Lookup("botIdentity").(*types.TypeName)
 	if !ok {
-		return nil, errors.New("package telegram declares no type botIdentity — the identity the pins guard is gone (re-anchor them)")
+		return nil, fmt.Errorf("package %s declares no type botIdentity — the identity the pins guard is gone (re-anchor them)", path)
 	}
 	tp := &typedTelegram{fset: fset, files: files, info: info, pkg: pkg,
 		identNamed: tn.Type(), identStruct: tn.Type().Underlying(), decls: map[types.Object]*ast.FuncDecl{}}
@@ -295,10 +344,71 @@ func (tp *typedTelegram) viaEmbeddedIdentity(sel *types.Selection) bool {
 	return false
 }
 
-// boundToIdentity: sel is a method bound to an identity receiver — directly
-// (ident.refresh) or promoted through an embedded identity (w.refresh).
+// boundToIdentity: sel is a method bound to a receiver that holds the
+// identity — the identity itself (ident.refresh), one promoted through an
+// embedded identity (w.refresh), or a holder of it (h.touch, hp.outer,
+// vfW{h}.cur).
 func (tp *typedTelegram) boundToIdentity(sel *types.Selection) bool {
-	return sel != nil && sel.Kind() == types.MethodVal && (tp.isIdentity(sel.Recv()) || tp.viaEmbeddedIdentity(sel))
+	return sel != nil && sel.Kind() == types.MethodVal && (tp.holdsIdentity(sel.Recv()) || tp.viaEmbeddedIdentity(sel))
+}
+
+// selWalk follows the operand x of the selection x.f through the embedded
+// fields on the selection's path. in: the struct that finally holds f lies in
+// a botIdentity's own memory. viaPtr: that struct was reached through a
+// pointer (x is one, or the last embedded field on the path is), so a
+// pointer-receiver method binds that pointer, not a new address.
+func (tp *typedTelegram) selWalk(x ast.Expr, sel *types.Selection) (in, viaPtr bool) {
+	T := types.Unalias(sel.Recv())
+	if p, ok := T.Underlying().(*types.Pointer); ok {
+		T = types.Unalias(p.Elem())
+		in, viaPtr = tp.isIdentity(T), true
+	} else {
+		in = tp.isIdentity(T) || tp.inIdentity(x)
+	}
+	idx := sel.Index()
+	for _, i := range idx[:len(idx)-1] {
+		st, ok := T.Underlying().(*types.Struct)
+		if !ok {
+			return false, false
+		}
+		ft := types.Unalias(st.Field(i).Type())
+		if p, ok := ft.Underlying().(*types.Pointer); ok {
+			T = types.Unalias(p.Elem())
+			in, viaPtr = tp.isIdentity(T), true
+		} else {
+			T = ft
+			in, viaPtr = in || tp.isIdentity(T), false
+		}
+	}
+	return in, viaPtr
+}
+
+// inIdentity: the variable e denotes lies inside a botIdentity's own memory —
+// a field path through the identity with no pointer indirection after it
+// (ident.agents, (*ident).userID, ident.arr[1], a field promoted through an
+// embedded value). The memory a pointer field POINTS TO is not
+// (ident.bx.n, ident.sl[0]): refresh replaces the field, not its pointee.
+func (tp *typedTelegram) inIdentity(e ast.Expr) bool {
+	switch v := ast.Unparen(e).(type) {
+	case *ast.SelectorExpr:
+		if sel := tp.info.Selections[v]; sel != nil && sel.Kind() == types.FieldVal {
+			in, _ := tp.selWalk(v.X, sel)
+			return in
+		}
+	case *ast.IndexExpr:
+		if T := tp.valueType(v.X); T != nil {
+			if _, ok := types.Unalias(T).Underlying().(*types.Array); ok {
+				return tp.inIdentity(v.X)
+			}
+		}
+	case *ast.StarExpr:
+		if T := tp.valueType(v.X); T != nil {
+			if p, ok := types.Unalias(T).Underlying().(*types.Pointer); ok {
+				return tp.isIdentity(p.Elem())
+			}
+		}
+	}
+	return false
 }
 
 func (tp *typedTelegram) typeString(T types.Type) string {
@@ -339,6 +449,33 @@ func (tp *typedTelegram) identityUses(n ast.Node) []string {
 	return out
 }
 
+// capturedHolders: the variables fl captures (declared outside it, not at
+// package scope) whose type HOLDS the identity without being it — a struct,
+// slice, map, channel, pointer or generic value carrying one. What the
+// closure then does with the holder (its method, a helper, a call two levels
+// down) is out of any one rule's sight, so the capture is the use.
+func (tp *typedTelegram) capturedHolders(fl *ast.FuncLit) []string {
+	var out []string
+	ast.Inspect(fl.Body, func(n ast.Node) bool {
+		id, ok := n.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		v, ok := tp.info.Uses[id].(*types.Var)
+		if !ok || v.IsField() || v.Pkg() != tp.pkg || v.Parent() == tp.pkg.Scope() {
+			return true
+		}
+		if v.Pos() >= fl.Pos() && v.Pos() < fl.End() {
+			return true // declared inside the closure: not a capture
+		}
+		if T := v.Type(); !tp.isIdentity(T) && tp.holdsIdentity(T) {
+			out = append(out, fmt.Sprintf("%s: %s — a closure captures a %s, which holds the identity", tp.at(id.Pos()), id.Name, tp.typeString(T)))
+		}
+		return true
+	})
+	return out
+}
+
 // isIdentityMethod: fd is a method of the identity (pointer or value receiver).
 func (tp *typedTelegram) isIdentityMethod(fd *ast.FuncDecl) bool {
 	if fd == nil || fd.Recv == nil {
@@ -374,36 +511,45 @@ func (tp *typedTelegram) eachFunc(fn func(name string, fd *ast.FuncDecl, body as
 	}
 }
 
-// closureUses: every identity use inside a func literal in body, deduped (a
-// use inside nested literals is one use).
+// closureUses: every identity use, and every captured holder of it, inside a
+// func literal in body — deduped (a use inside nested literals is one use).
 func (tp *typedTelegram) closureUses(body ast.Node) []string {
 	seen := map[string]bool{}
 	var out []string
+	add := func(us []string) {
+		for _, u := range us {
+			if !seen[u] {
+				seen[u] = true
+				out = append(out, u)
+			}
+		}
+	}
 	ast.Inspect(body, func(n ast.Node) bool {
 		if fl, ok := n.(*ast.FuncLit); ok {
-			for _, u := range tp.identityUses(fl.Body) {
-				if !seen[u] {
-					seen[u] = true
-					out = append(out, u)
-				}
-			}
+			add(tp.identityUses(fl.Body))
+			add(tp.capturedHolders(fl))
 		}
 		return true
 	})
 	return out
 }
 
-// runBot's per-message goroutine uses no part of the bot identity: refresh on
-// the main loop may replace every field of it while a message is answered.
-func TestRunBotGoroutinesReadNoBotIdentityField(t *testing.T) {
-	tp := loadTypedTelegram(t)
+// declOf: the declaration of a function or method object, through a generic
+// instantiation to its origin.
+func (tp *typedTelegram) declOf(obj types.Object) *ast.FuncDecl {
+	if fn, ok := obj.(*types.Func); ok {
+		return tp.decls[fn.Origin()]
+	}
+	return nil
+}
+
+// goroutineRule is TestRunBotGoroutinesReadNoBotIdentityField's rule: no
+// closure outside botIdentity's methods uses or captures the identity, and
+// no go statement binds, starts or hands over what reaches it.
+func (tp *typedTelegram) goroutineRule() []string {
 	var bad []string
-	var runBot *ast.FuncDecl
 	tp.eachFunc(func(name string, fd *ast.FuncDecl, body ast.Node) {
-		if fd != nil && fd.Recv == nil && fd.Name.Name == "runBot" {
-			runBot = fd
-		}
-		// Closures outside botIdentity's methods (those are the next test's).
+		// Closures outside botIdentity's methods (those are closureRule's).
 		if !tp.isIdentityMethod(fd) {
 			for _, u := range tp.closureUses(body) {
 				bad = append(bad, u+" — used inside a closure in "+name)
@@ -417,30 +563,29 @@ func TestRunBotGoroutinesReadNoBotIdentityField(t *testing.T) {
 			}
 			switch fun := ast.Unparen(g.Call.Fun).(type) {
 			case *ast.FuncLit:
-				// its body: the closure rule above (or the next test's)
+				// its body: the closure rule above (or closureRule)
 			case *ast.SelectorExpr:
 				sel := tp.info.Selections[fun]
 				if tp.boundToIdentity(sel) {
-					bad = append(bad, fmt.Sprintf("%s: go %s — binds a method of the identity; its body runs on the goroutine (in %s)", tp.at(fun.Pos()), types.ExprString(fun), name))
+					bad = append(bad, fmt.Sprintf("%s: go %s — binds a method to a %s, which holds the identity; its body runs on the goroutine (in %s)", tp.at(fun.Pos()), types.ExprString(fun), tp.typeString(sel.Recv()), name))
 				} else if sel != nil && sel.Kind() == types.MethodVal {
-					if decl := tp.decls[sel.Obj()]; decl != nil {
+					if decl := tp.declOf(sel.Obj()); decl != nil {
 						for _, u := range tp.identityUses(decl.Body) {
 							bad = append(bad, u+" — in "+types.ExprString(fun)+", which `go` runs on a goroutine (in "+name+")")
 						}
 					}
 				}
 			case *ast.Ident:
-				if obj, ok := tp.info.Uses[fun].(*types.Func); ok {
-					if decl := tp.decls[obj]; decl != nil {
-						for _, u := range tp.identityUses(decl.Body) {
-							bad = append(bad, u+" — in "+fun.Name+", which `go` runs on a goroutine (in "+name+")")
-						}
+				if decl := tp.declOf(tp.info.Uses[fun]); decl != nil {
+					for _, u := range tp.identityUses(decl.Body) {
+						bad = append(bad, u+" — in "+fun.Name+", which `go` runs on a goroutine (in "+name+")")
 					}
 				}
 			}
 			// Arguments are evaluated on the main loop (Go spec): a field
 			// read THERE is the capture. A value that still HOLDS the
-			// identity hands the goroutine the fields refresh rewrites.
+			// identity hands the goroutine the fields refresh rewrites (a
+			// pointer INTO it: escapeRule, wherever it is formed).
 			for _, a := range g.Call.Args {
 				if T := tp.valueType(a); tp.holdsIdentity(T) {
 					bad = append(bad, fmt.Sprintf("%s: %s — a %s handed to a goroutine (in %s)", tp.at(a.Pos()), types.ExprString(a), tp.typeString(T), name))
@@ -449,75 +594,24 @@ func TestRunBotGoroutinesReadNoBotIdentityField(t *testing.T) {
 			return true
 		})
 	})
-
-	// Vacuity: runBot, its identity variable, and the AI goroutine are where
-	// the pin says they are.
-	if runBot == nil {
-		t.Fatal("package telegram declares no runBot — the loop the pin guards is gone (re-anchor it)")
-	}
-	idents := map[string]bool{}
-	for id, obj := range tp.info.Defs {
-		if v, ok := obj.(*types.Var); ok && !v.IsField() && id.Pos() >= runBot.Body.Pos() && id.Pos() < runBot.Body.End() && tp.isIdentity(v.Type()) {
-			idents[id.Name] = true
-		}
-	}
-	aiGoroutines := 0
-	ast.Inspect(runBot.Body, func(n ast.Node) bool {
-		g, ok := n.(*ast.GoStmt)
-		if !ok {
-			return true
-		}
-		ast.Inspect(g.Call.Fun, func(m ast.Node) bool {
-			if se, ok := m.(*ast.SelectorExpr); ok {
-				if fn, ok := tp.info.Uses[se.Sel].(*types.Func); ok && fn.Name() == "Run" && fn.Pkg() != nil && fn.Pkg().Path() == "nofx/telegram/agent" {
-					aiGoroutines++
-				}
-			}
-			return true
-		})
-		return true
-	})
-
-	if len(bad) > 0 {
-		sort.Strings(bad)
-		t.Errorf("runBot's per-message goroutine can reach the bot identity, which refresh() on the main loop reassigns (data race; M3 made the re-mint routine) — capture what it needs on the main loop and pass THAT in:\n  %s", strings.Join(bad, "\n  "))
-	}
-	if len(idents) == 0 {
-		t.Errorf("runBot declares no variable of type %s — the identity the pin guards is gone (re-anchor it)", tp.typeString(tp.identNamed))
-	}
-	if aiGoroutines == 0 {
-		t.Errorf("runBot has no go statement calling (*agent.Manager).Run — the AI goroutine the pin guards is gone (re-anchor it)")
-	}
+	return bad
 }
 
-// The closures botIdentity's methods build — and every method value bound to
-// the identity, anywhere — read no field of it: refresh hands its LLM factory
-// to agent.NewManager, and the manager calls it on the per-message goroutine
-// while the next refresh rewrites b.userID.
-func TestBotIdentityClosuresReadNoReceiverField(t *testing.T) {
-	tp := loadTypedTelegram(t)
+// closureRule is TestBotIdentityClosuresReadNoReceiverField's rule: the
+// closures botIdentity's methods build neither use nor capture the identity,
+// and no method value anywhere is bound to a receiver that holds it.
+func (tp *typedTelegram) closureRule() []string {
 	var bad []string
-	methods, handoffs := 0, 0
 	tp.eachFunc(func(name string, fd *ast.FuncDecl, body ast.Node) {
 		if tp.isIdentityMethod(fd) {
-			methods++
 			for _, u := range tp.closureUses(body) {
 				bad = append(bad, u+" — in a closure built by "+name)
 			}
-			ast.Inspect(body, func(n ast.Node) bool {
-				if call, ok := n.(*ast.CallExpr); ok {
-					if se, ok := ast.Unparen(call.Fun).(*ast.SelectorExpr); ok {
-						if fn, ok := tp.info.Uses[se.Sel].(*types.Func); ok && fn.Name() == "NewManager" && fn.Pkg() != nil && fn.Pkg().Path() == "nofx/telegram/agent" {
-							handoffs++
-						}
-					}
-				}
-				return true
-			})
 		}
 		// A method value is a closure over its receiver. Called on the spot
-		// it runs here; anywhere else it carries the identity with it. (A
-		// `go` statement's call runs elsewhere: the previous test.)
+		// it runs here; anywhere else it carries its receiver — and what
+		// that holds — with it. (A `go` statement's call runs elsewhere:
+		// goroutineRule.)
 		called := map[*ast.SelectorExpr]bool{}
 		ast.Inspect(body, func(n ast.Node) bool {
 			if call, ok := n.(*ast.CallExpr); ok {
@@ -528,32 +622,40 @@ func TestBotIdentityClosuresReadNoReceiverField(t *testing.T) {
 			return true
 		})
 		ast.Inspect(body, func(n ast.Node) bool {
-			if se, ok := n.(*ast.SelectorExpr); ok && !called[se] && tp.boundToIdentity(tp.info.Selections[se]) {
-				bad = append(bad, fmt.Sprintf("%s: %s — a method value bound to the identity (a closure over it) in %s", tp.at(se.Pos()), types.ExprString(se), name))
+			if se, ok := n.(*ast.SelectorExpr); ok && !called[se] {
+				if sel := tp.info.Selections[se]; tp.boundToIdentity(sel) {
+					bad = append(bad, fmt.Sprintf("%s: %s — a method value bound to a %s, which holds the identity (a closure over it) in %s", tp.at(se.Pos()), types.ExprString(se), tp.typeString(sel.Recv()), name))
+				}
 			}
 			return true
 		})
 	})
-	if len(bad) > 0 {
-		sort.Strings(bad)
-		t.Errorf("a closure the bot hands out reads the identity, which the next refresh() rewrites on the main loop while the per-message goroutine runs the closure (data race) — close over locals:\n  %s", strings.Join(bad, "\n  "))
-	}
-	if methods == 0 || handoffs == 0 {
-		t.Errorf("botIdentity has %d methods, %d calls to agent.NewManager among them — the LLM-factory hand-off the pin guards is gone (re-anchor it)", methods, handoffs)
-	}
+	return bad
 }
 
-// No package-level variable holds the identity, and no value holding it is
-// converted to an interface or unsafe.Pointer: either is a road to its
-// fields from any goroutine that the two tests above cannot see.
-func TestBotIdentityEscapesNoOtherWay(t *testing.T) {
-	tp := loadTypedTelegram(t)
-	var bad []string
+// escapeRule is TestBotIdentityEscapesNoOtherWay's rule: no package-level
+// variable holds the identity, nothing holding it is converted to an
+// interface or unsafe.Pointer, no pointer into it is formed, and no generic
+// is instantiated with it. slots counts the interface slots checked.
+func (tp *typedTelegram) escapeRule() (bad []string, slots int) {
 	for _, n := range tp.pkg.Scope().Names() {
 		if v, ok := tp.pkg.Scope().Lookup(n).(*types.Var); ok && tp.holdsIdentity(v.Type()) {
 			bad = append(bad, fmt.Sprintf("%s: var %s %s — a package-level variable holding the identity", tp.at(v.Pos()), n, tp.typeString(v.Type())))
 		}
 	}
+	// A generic instantiated with a type that holds the identity: inside it
+	// the identity is a type parameter, and every rule here asks a type.
+	var inst []string
+	for id, in := range tp.info.Instances {
+		for i := 0; i < in.TypeArgs.Len(); i++ {
+			if a := in.TypeArgs.At(i); tp.holdsIdentity(a) {
+				inst = append(inst, fmt.Sprintf("%s: %s[…%s…] — a generic instantiated with a type that holds the identity; inside it the identity is a type parameter no rule can see", tp.at(id.Pos()), id.Name, tp.typeString(a)))
+			}
+		}
+	}
+	sort.Strings(inst)
+	bad = append(bad, inst...)
+
 	opaque := func(T types.Type) bool {
 		if T == nil {
 			return false
@@ -567,7 +669,6 @@ func TestBotIdentityEscapesNoOtherWay(t *testing.T) {
 		}
 		return types.IsInterface(T)
 	}
-	slots := 0
 	check := func(val ast.Expr, slot types.Type, what, where string) {
 		if val == nil || !opaque(slot) {
 			return
@@ -585,6 +686,32 @@ func TestBotIdentityEscapesNoOtherWay(t *testing.T) {
 				s, _ := tp.valueType(v).(*types.Signature)
 				walk(v.Body, s, where)
 				return false
+			// A pointer INTO the identity: whoever holds it reads or writes
+			// the field refresh replaces, and its type no longer says so.
+			case *ast.UnaryExpr:
+				if v.Op == token.AND && tp.inIdentity(v.X) {
+					bad = append(bad, fmt.Sprintf("%s: %s — a pointer into the identity (in %s)", tp.at(v.Pos()), types.ExprString(v), where))
+				}
+			case *ast.SliceExpr:
+				if T := tp.valueType(v.X); T != nil {
+					if _, ok := types.Unalias(T).Underlying().(*types.Array); ok && tp.inIdentity(v.X) {
+						bad = append(bad, fmt.Sprintf("%s: %s — a slice of an array inside the identity: a pointer into it (in %s)", tp.at(v.Pos()), types.ExprString(v), where))
+					}
+				}
+			case *ast.SelectorExpr:
+				// x.m with a pointer receiver on an addressable x takes &x
+				// with no & in the source.
+				if sel := tp.info.Selections[v]; sel != nil && sel.Kind() == types.MethodVal {
+					if fn, ok := sel.Obj().(*types.Func); ok {
+						if r := fn.Type().(*types.Signature).Recv(); r != nil {
+							if _, ptr := types.Unalias(r.Type()).Underlying().(*types.Pointer); ptr {
+								if in, viaPtr := tp.selWalk(v.X, sel); in && !viaPtr {
+									bad = append(bad, fmt.Sprintf("%s: %s — %s has a pointer receiver: a pointer into the identity, taken implicitly (in %s)", tp.at(v.Pos()), types.ExprString(v), fn.FullName(), where))
+								}
+							}
+						}
+					}
+				}
 			case *ast.CallExpr:
 				tv := tp.info.Types[v.Fun]
 				switch {
@@ -703,11 +830,293 @@ func TestBotIdentityEscapesNoOtherWay(t *testing.T) {
 		}
 		walk(body, sig, name)
 	})
+	return bad, slots
+}
+
+// runBot's per-message goroutine uses no part of the bot identity: refresh on
+// the main loop may replace every field of it while a message is answered.
+func TestRunBotGoroutinesReadNoBotIdentityField(t *testing.T) {
+	tp := loadTypedTelegram(t)
+	bad := tp.goroutineRule()
+
+	// Vacuity: runBot, its identity variable, and the AI goroutine are where
+	// the pin says they are.
+	var runBot *ast.FuncDecl
+	for obj, fd := range tp.decls {
+		if _, ok := obj.(*types.Func); ok && fd.Recv == nil && fd.Name.Name == "runBot" {
+			runBot = fd
+		}
+	}
+	if runBot == nil || runBot.Body == nil {
+		t.Fatal("package telegram declares no runBot — the loop the pin guards is gone (re-anchor it)")
+	}
+	idents := map[string]bool{}
+	for id, obj := range tp.info.Defs {
+		if v, ok := obj.(*types.Var); ok && !v.IsField() && id.Pos() >= runBot.Body.Pos() && id.Pos() < runBot.Body.End() && tp.isIdentity(v.Type()) {
+			idents[id.Name] = true
+		}
+	}
+	aiGoroutines := 0
+	ast.Inspect(runBot.Body, func(n ast.Node) bool {
+		g, ok := n.(*ast.GoStmt)
+		if !ok {
+			return true
+		}
+		ast.Inspect(g.Call.Fun, func(m ast.Node) bool {
+			if se, ok := m.(*ast.SelectorExpr); ok {
+				if fn, ok := tp.info.Uses[se.Sel].(*types.Func); ok && fn.Name() == "Run" && fn.Pkg() != nil && fn.Pkg().Path() == "nofx/telegram/agent" {
+					aiGoroutines++
+				}
+			}
+			return true
+		})
+		return true
+	})
+
+	if len(bad) > 0 {
+		sort.Strings(bad)
+		t.Errorf("runBot's per-message goroutine can reach the bot identity, which refresh() on the main loop reassigns (data race; M3 made the re-mint routine) — capture what it needs on the main loop and pass THAT in:\n  %s", strings.Join(bad, "\n  "))
+	}
+	if len(idents) == 0 {
+		t.Errorf("runBot declares no variable of type %s — the identity the pin guards is gone (re-anchor it)", tp.typeString(tp.identNamed))
+	}
+	if aiGoroutines == 0 {
+		t.Errorf("runBot has no go statement calling (*agent.Manager).Run — the AI goroutine the pin guards is gone (re-anchor it)")
+	}
+}
+
+// The closures botIdentity's methods build — and every method value bound to
+// a receiver that holds the identity, anywhere — read no field of it: refresh
+// hands its LLM factory to agent.NewManager, and the manager calls it on the
+// per-message goroutine while the next refresh rewrites b.userID.
+func TestBotIdentityClosuresReadNoReceiverField(t *testing.T) {
+	tp := loadTypedTelegram(t)
+	bad := tp.closureRule()
+	methods, handoffs := 0, 0
+	tp.eachFunc(func(name string, fd *ast.FuncDecl, body ast.Node) {
+		if !tp.isIdentityMethod(fd) {
+			return
+		}
+		methods++
+		ast.Inspect(body, func(n ast.Node) bool {
+			if call, ok := n.(*ast.CallExpr); ok {
+				if se, ok := ast.Unparen(call.Fun).(*ast.SelectorExpr); ok {
+					if fn, ok := tp.info.Uses[se.Sel].(*types.Func); ok && fn.Name() == "NewManager" && fn.Pkg() != nil && fn.Pkg().Path() == "nofx/telegram/agent" {
+						handoffs++
+					}
+				}
+			}
+			return true
+		})
+	})
+	if len(bad) > 0 {
+		sort.Strings(bad)
+		t.Errorf("a closure the bot hands out reads the identity, which the next refresh() rewrites on the main loop while the per-message goroutine runs the closure (data race) — close over locals:\n  %s", strings.Join(bad, "\n  "))
+	}
+	if methods == 0 || handoffs == 0 {
+		t.Errorf("botIdentity has %d methods, %d calls to agent.NewManager among them — the LLM-factory hand-off the pin guards is gone (re-anchor it)", methods, handoffs)
+	}
+}
+
+// No package-level variable holds the identity, no value holding it is
+// converted to an interface or unsafe.Pointer, no pointer into it is formed,
+// and no generic is instantiated with it: each is a road to its fields from
+// any goroutine that the two tests above cannot see.
+func TestBotIdentityEscapesNoOtherWay(t *testing.T) {
+	tp := loadTypedTelegram(t)
+	bad, slots := tp.escapeRule()
 	if len(bad) > 0 {
 		sort.Strings(bad)
 		t.Errorf("the bot identity escapes to where any goroutine can reach its fields (refresh() rewrites them on the main loop):\n  %s", strings.Join(bad, "\n  "))
 	}
 	if slots == 0 {
 		t.Errorf("the interface-conversion walk checked 0 interface slots in package telegram — it walked nothing (re-anchor it)")
+	}
+}
+
+// synthPrelude is the synthetic proof's package: a botIdentity shaped like
+// the real one (plus the value, array and slice fields the pointer rules
+// need), holders of it, and helpers — all of it GREEN on its own. Each case
+// adds one file.
+const synthPrelude = `package synth
+
+type manager struct{ n int }
+
+func (m *manager) Run() int { return m.n }
+
+type vfVal struct{ n int }
+
+func (v *vfVal) bump()   { v.n++ }
+func (v *vfVal) leak()   { vfLeak = v }
+func (v vfVal) get() int { return v.n }
+
+var vfLeak *vfVal
+
+type vfBox2 struct{ n int }
+
+type botIdentity struct {
+	userID string
+	agents *manager
+	arr    [2]*manager
+	sl     []*manager
+	val    vfVal
+	bx     *vfBox2
+	vfVal
+}
+
+func (b *botIdentity) refresh() bool {
+	st, userID := b.agents, b.userID
+	b.agents = &manager{}
+	f := func() string { _ = st; return userID }
+	return f() != ""
+}
+
+type vfHolder struct{ p *botIdentity }
+
+func (h vfHolder) cur() *manager { return h.p.agents }
+func (h vfHolder) outer()        { _ = h.cur() }
+func (h vfHolder) touch()        { _ = h.p.agents }
+
+type vfW struct{ vfHolder }
+type vfW2 struct{ *vfHolder }
+type vfPtrs struct{ a **manager }
+
+func vfGet(h vfHolder) *botIdentity             { return h.p }
+func vfAgentsOf(h vfHolder) *manager            { return h.p.agents }
+func vfFirstAgents(ids []*botIdentity) *manager { return ids[0].agents }
+func vfGo[T any](v T, f func(T))                { go f(v) }
+func vfUse(id *botIdentity)                     { _ = id.agents }
+
+type vfBox[T any] struct{ v T }
+
+func (b vfBox[T]) spawn(f func(T)) { go f(b.v) }
+
+func runBot() {
+	ident := &botIdentity{}
+	ident.refresh()
+	agents := ident.agents
+	go func(agents *manager, userID string) { _ = agents.Run(); _ = userID }(agents, ident.userID)
+}
+`
+
+// The rules above, run over a synthetic package: every road the verifiers
+// found (and the ones this repair added) is RED — by the rule that names it —
+// and every shape the pins allow is GREEN. The production tests run the same
+// rule functions; this proves the functions, not a copy of them.
+func TestBotIdentityPinRulesCatchEveryRoad(t *testing.T) {
+	loadTypedTelegram(t) // the go command's export data, for the imports below
+	run := func(src string) ([]string, error) {
+		fset := token.NewFileSet()
+		pre, err := parser.ParseFile(fset, "prelude.go", synthPrelude, parser.SkipObjectResolution)
+		if err != nil {
+			return nil, err
+		}
+		files := []*ast.File{pre}
+		if src != "" {
+			f, err := parser.ParseFile(fset, "case.go", "package synth\n\n"+src+"\n", parser.SkipObjectResolution)
+			if err != nil {
+				return nil, err
+			}
+			files = append(files, f)
+		}
+		tp, err := checkTyped(fset, files, "nofx/telegram/synth", exportImporter(fset, telegramExports))
+		if err != nil {
+			return nil, err
+		}
+		bad := tp.goroutineRule()
+		bad = append(bad, tp.closureRule()...)
+		esc, _ := tp.escapeRule()
+		return append(bad, esc...), nil
+	}
+
+	roads := []struct{ name, src, want string }{
+		// The dispatch's shapes (verifier ha2 defect 2).
+		{"ME1 a closure reads a field", `func c(ident *botIdentity) { go func() { _ = ident.agents.Run() }() }`, "ident.agents — through"},
+		{"ME2 an alias", `func c(ident *botIdentity) { id := ident; go func() { _ = id.agents }() }`, "id.agents — through"},
+		{"ME3 an identity method's closure reads the receiver", `func (b *botIdentity) f() func() string { return func() string { return b.userID } }`, "b.userID — through"},
+		{"ME4 a method value bound to the identity", `func (b *botIdentity) f() func() bool { return b.refresh }`, "b.refresh — a method value bound to"},
+		{"V2 a holder's field", `func c(ident *botIdentity) { h := vfHolder{ident}; go func() { _ = h.p.agents }() }`, "h.p.agents — through"},
+		{"V3 a slice element", `func c(ident *botIdentity) { ids := []*botIdentity{ident}; go func() { _ = ids[0].agents }() }`, "ids[0].agents — through"},
+		{"V4 a map element", `func c(ident *botIdentity) { m := map[int]*botIdentity{0: ident}; go func() { _ = m[0].agents }() }`, "m[0].agents — through"},
+		{"V5a a package func returns it", `func c(ident *botIdentity) { h := vfHolder{ident}; go func() { _ = vfGet(h).agents }() }`, "vfGet(h).agents — through"},
+		{"V5b a closure returns it", `func c(ident *botIdentity) { get := func() *botIdentity { return ident }; go func() { _ = get().agents }() }`, "get().agents — through"},
+		{"V6a a method value as a go argument", `func c(ident *botIdentity) { go func(f func() bool) { f() }(ident.refresh) }`, "ident.refresh — a method value bound to"},
+		{"V7 an identity method's closure through a local copy", `func (b *botIdentity) f() func() string { bb := b; return func() string { return bb.userID } }`, "bb.userID — through"},
+		{"go on an identity method", `func c(ident *botIdentity) { go ident.refresh() }`, "go ident.refresh — binds a method to a *botIdentity"},
+		{"the identity handed to a goroutine", `func c(ident *botIdentity) { go vfUse(ident) }`, "ident — a *botIdentity handed to a goroutine"},
+		{"the identity converted to an interface", `func c(ident *botIdentity) { var x any = ident; _ = x }`, "converted to any"},
+		{"the identity converted to unsafe.Pointer", "import \"unsafe\"\n\nfunc c(ident *botIdentity) unsafe.Pointer { return unsafe.Pointer(ident) }", "converted to unsafe.Pointer"},
+		{"a package-level variable holding it", `var vfKept []*botIdentity`, "var vfKept []*botIdentity — a package-level variable"},
+		// Verifier vf-hc defect 1, P1: a pointer into the identity.
+		{"E1a a field pointer, captured", `func c(ident *botIdentity) { ap := &ident.agents; go func() { _ = *ap }() }`, "&ident.agents — a pointer into the identity"},
+		{"E1b a field pointer as a go argument", `func c(ident *botIdentity) { go func(ap **manager) { _ = *ap }(&ident.agents) }`, "&ident.agents — a pointer into the identity"},
+		{"E1c an identity method's closure through a field pointer", `func (b *botIdentity) f() func() string { up := &b.userID; return func() string { return *up } }`, "&b.userID — a pointer into the identity"},
+		{"a method returns a field pointer", `func (b *botIdentity) agentsPtr() **manager { return &b.agents }`, "&b.agents — a pointer into the identity"},
+		{"a struct of field pointers", `func c(ident *botIdentity) { ps := vfPtrs{&ident.agents}; go func() { _ = *ps.a }() }`, "&ident.agents — a pointer into the identity"},
+		{"an array element's address", `func c(ident *botIdentity) { p := &ident.arr[1]; go func() { _ = *p }() }`, "&ident.arr[1] — a pointer into the identity"},
+		{"a field address through the dereferenced identity", `func c(ident *botIdentity) { p := &(*ident).userID; go func() { _ = *p }() }`, "&(*ident).userID — a pointer into the identity"},
+		{"a slice of an array field", `func c(ident *botIdentity) { s := ident.arr[:]; go func() { _ = s[0] }() }`, "ident.arr[:] — a slice of an array inside the identity"},
+		{"implicit &: a method value on a value field", `func c(ident *botIdentity) { f := ident.val.bump; go f() }`, "ident.val.bump — (*nofx/telegram/synth.vfVal).bump has a pointer receiver"},
+		{"implicit &: go on a value field's pointer method", `func c(ident *botIdentity) { go ident.val.bump() }`, "ident.val.bump — (*nofx/telegram/synth.vfVal).bump has a pointer receiver"},
+		{"implicit &: a synchronous call that keeps it", `func c(ident *botIdentity) { ident.val.leak(); go func() { _ = vfLeak.n }() }`, "ident.val.leak — (*nofx/telegram/synth.vfVal).leak has a pointer receiver"},
+		{"implicit &: promoted through an embedded value", `func c(ident *botIdentity) { ident.leak(); go func() { _ = vfLeak.n }() }`, "ident.leak — (*nofx/telegram/synth.vfVal).leak has a pointer receiver"},
+		// P2: a closure captures a holder.
+		{"E2a a holder's method in a closure", `func c(ident *botIdentity) { h := vfHolder{ident}; go func() { _ = h.cur() }() }`, "h — a closure captures a vfHolder"},
+		{"E2b a holder to a helper in a closure", `func c(ident *botIdentity) { h := vfHolder{ident}; go func() { _ = vfAgentsOf(h) }() }`, "h — a closure captures a vfHolder"},
+		{"E2d a slice to a helper in a closure", `func c(ident *botIdentity) { ids := []*botIdentity{ident}; go func() { _ = vfFirstAgents(ids) }() }`, "ids — a closure captures a []*botIdentity"},
+		{"a pointer to a holder, captured", `func c(ident *botIdentity) { h := vfHolder{ident}; hp := &h; go func() { _ = hp.cur() }() }`, "hp — a closure captures a *vfHolder"},
+		{"a channel of holders, captured", `func c(ident *botIdentity) { hc := make(chan vfHolder, 1); hc <- vfHolder{ident}; go func() { _ = (<-hc).cur() }() }`, "hc — a closure captures a chan vfHolder"},
+		{"an embedded pointer holder, captured", `func c(ident *botIdentity) { w := vfW2{&vfHolder{ident}}; go func() { _ = w.cur() }() }`, "w — a closure captures a vfW2"},
+		{"an identity method's closure captures a holder", `func (b *botIdentity) f() func() *manager { h := vfHolder{b}; return func() *manager { return h.cur() } }`, "h — a closure captures a vfHolder"},
+		// P3: a method value, or go, on a holder.
+		{"E2c an identity method hands out a holder's method value", `func (b *botIdentity) f() func() *manager { h := vfHolder{b}; return h.cur }`, "h.cur — a method value bound to a vfHolder"},
+		{"E3 go on a holder's method, two levels down", `func c(ident *botIdentity) { h := vfHolder{ident}; go h.outer() }`, "go h.outer — binds a method to a vfHolder"},
+		{"E4a a holder's method value, then go", `func c(ident *botIdentity) { h := vfHolder{ident}; f := h.touch; go f() }`, "h.touch — a method value bound to a vfHolder"},
+		{"E4b a holder's method value to time.AfterFunc", "import \"time\"\n\nfunc c(ident *botIdentity) { time.AfterFunc(0, vfHolder{ident}.touch) }", "vfHolder{…}.touch — a method value bound to a vfHolder"},
+		{"go on a call that returns a holder's method value", "func c(ident *botIdentity) { go vfMk(vfHolder{ident})() }\n\nfunc vfMk(h vfHolder) func() { return h.touch }", "h.touch — a method value bound to a vfHolder"},
+		{"go on a method promoted through an embedded holder", `func c(ident *botIdentity) { go vfW{vfHolder{ident}}.outer() }`, "binds a method to a vfW"},
+		// P4: a generic instantiated with it.
+		{"E5 a generic spawner, inferred", `func c(ident *botIdentity) { vfGo(ident, vfUse) }`, "vfGo[…*botIdentity…] — a generic instantiated"},
+		{"a generic spawner, explicit", `func c(ident *botIdentity) { vfGo[*botIdentity](ident, vfUse) }`, "vfGo[…*botIdentity…] — a generic instantiated"},
+		{"a generic type's method spawns", `func c(ident *botIdentity) { vfBox[*botIdentity]{v: ident}.spawn(vfUse) }`, "vfBox[…*botIdentity…] — a generic instantiated"},
+		{"an atomic.Pointer of the identity", "import \"sync/atomic\"\n\nfunc c(ident *botIdentity) *atomic.Pointer[botIdentity] {\n\tvar ap atomic.Pointer[botIdentity]\n\tap.Store(ident)\n\treturn &ap\n}", "Pointer[…botIdentity…] — a generic instantiated"},
+	}
+	allowed := []struct{ name, src string }{
+		{"the prelude alone: holders and helpers declared, a capture on the main loop", ``},
+		{"a field read into a local, then handed in", `func c(ident *botIdentity) { agents := ident.agents; go func(a *manager) { _ = a.Run() }(agents) }`},
+		{"a field read as a go argument", `func c(ident *botIdentity) { go func(a *manager, u string) { _, _ = a, u }(ident.agents, ident.userID) }`},
+		{"go on a field's own method", `func c(ident *botIdentity) { go ident.agents.Run() }`},
+		{"a synchronous identity method call", `func c(ident *botIdentity) bool { return ident.refresh() }`},
+		{"a pointer into a field's POINTEE", `func c(ident *botIdentity) { p := &ident.bx.n; go func() { _ = *p }() }`},
+		{"a slice field's backing array", `func c(ident *botIdentity) { s := ident.sl[:]; q := &ident.sl[0]; go func() { _, _ = s, q }() }`},
+		{"a value-receiver method value on a value field (a copy)", `func c(ident *botIdentity) { g := ident.val.get; go func() { _ = g() }() }`},
+		{"a generic over a non-identity", `func c(ident *botIdentity) { vfGo(ident.userID, func(string) {}) }`},
+	}
+
+	for _, r := range roads {
+		bad, err := run(r.src)
+		if err != nil {
+			t.Errorf("road %q does not type-check — the proof proves nothing for it: %v", r.name, err)
+			continue
+		}
+		hit := false
+		for _, b := range bad {
+			if strings.Contains(b, r.want) {
+				hit = true
+			}
+		}
+		if !hit {
+			t.Errorf("road %q is not caught by the rule that names %q — the pins would pass it:\n  got: %s", r.name, r.want, strings.Join(bad, "\n       "))
+		}
+	}
+	for _, a := range allowed {
+		bad, err := run(a.src)
+		if err != nil {
+			t.Errorf("allowed shape %q does not type-check: %v", a.name, err)
+			continue
+		}
+		if len(bad) > 0 {
+			t.Errorf("allowed shape %q is flagged — the rules over-reach:\n  %s", a.name, strings.Join(bad, "\n  "))
+		}
 	}
 }
