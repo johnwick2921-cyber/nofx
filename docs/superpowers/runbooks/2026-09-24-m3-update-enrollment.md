@@ -96,6 +96,10 @@ In M3 this path is deliberately inert: the stub verifier refuses every release (
 
 ## A refusal, and where its cause is
 
+Every audit line names the **socket peer**. The `🔒 [updates]`, `🔒 [credentials]`, `🔒 [auth]` and `blocked …` lines, and gin's access log, ignore `X-Forwarded-For` and `X-Real-IP`: the router trusts no proxy. Behind a reverse proxy every line would name the proxy; this box has none.
+
+**Signed in but refused right after a password change?** If the `🔒 [auth]` line says `credential epoch is Ns in the future — clock stepped back; sign-in refused until then`, the box's clock moved backwards after the change. Sign-in works again once the clock passes that moment. The bound is the size of the step, so fix the clock or wait N seconds.
+
 Every gate refusal is the **same** response: `403 {"error":"forbidden"}`. The cause is logged server-side as a category only, never the token, the MAC or the key:
 
 ```
