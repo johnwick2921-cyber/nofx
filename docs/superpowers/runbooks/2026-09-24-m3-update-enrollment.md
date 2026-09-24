@@ -38,7 +38,8 @@ The loaders refuse a symlink, a mode looser than 0600, a file owned by another u
 
 - You are the bot's user, not root. A root-owned `data/updater` locks the bot out.
 - You are in a real terminal. It is attended, so piped stdin is refused.
-- `--install-dir` (default: the current directory) is the installation the bot runs from, and its database exists.
+- `--install-dir` (default: the current directory) is the installation the bot runs from, and its database exists. A relative path is made absolute first.
+- **Your shell's `DB_PATH` must not divert it.** If your shell exports `DB_PATH` and it resolves to a different database file than the installation's own `.env` (or the default `data/data.db` when the `.env` sets none), the CLI refuses before any prompt and names both values and both files. `unset DB_PATH` and re-run. Any spelling of the same file proceeds.
 - `<email>` is **exactly** the app account's email: the same predicate login uses.
 
 **Steps:**
@@ -47,7 +48,7 @@ The loaders refuse a symlink, a mode looser than 0600, a file owned by another u
    ```
    go run ./cmd/updater-bootstrap --install-dir <the bot's WorkingDirectory> enroll <email>
    ```
-2. At the prompt, type exactly `ENROLL <email>`. Anything else writes nothing.
+2. Before the prompt, the CLI prints what it will act on: `installation:`, `bot database:`, `data dir:` and `DB_PATH from:` (which file or default the path came from). Check them. Then type exactly `ENROLL <email>`. Anything else writes nothing.
 3. Expect `enrolled: user_id=<first 8>… dir=<data>/updater (both enrollment files 0600; the key is never printed)`.
 4. Check the modes. **Never** `cat`, copy or paste `device.key`.
    ```
@@ -121,7 +122,7 @@ It is WARN, so it appears in journald, `data/nofx_<boot date>.log` **and** `log_
 
 ## Un-enroll
 
-As the bot's user, remove **only** the two enrollment files. Every route returns to `403` "not enrolled". No restart is needed.
+As the bot's user, remove **only** the two enrollment files. To see the exact `<data>` directory without writing anything, run `go run ./cmd/updater-bootstrap --install-dir <the bot's WorkingDirectory> authorize x`, read its `data dir:` line, and answer the prompt with anything other than the confirmation ("confirmation did not match — nothing written"). Every route returns to `403` "not enrolled". No restart is needed.
 
 ```
 rm <data>/updater/admin.json <data>/updater/device.key
