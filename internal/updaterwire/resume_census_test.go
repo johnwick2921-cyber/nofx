@@ -164,7 +164,12 @@ func resumeBuilderCensus(root string) (resumeCensus, error) {
 // package and cmd/nofx-updater names a resume builder or spells a resume
 // frame. At this head cmd/nofx-updater does not exist yet, so this proves no
 // OTHER package references them; the admitted set is that exact directory.
-func TestOnlyTheUpdaterCLIBuildsAResume(t *testing.T) {
+//
+// The name carries "Census" so the standard gate
+// (go test -run 'Census|Guard|Walk|Link') runs this real-tree scan; it keeps
+// the brief's name as its prefix, so -run TestOnlyTheUpdaterCLIBuildsAResume
+// (the name wire.go cites) still selects it.
+func TestOnlyTheUpdaterCLIBuildsAResumeCensus(t *testing.T) {
 	root, err := filepath.Abs("../..")
 	if err != nil {
 		t.Fatal(err)
