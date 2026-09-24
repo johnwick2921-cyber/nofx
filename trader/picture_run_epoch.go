@@ -71,10 +71,17 @@ func (at *AutoTrader) clearPictureRunEpoch() {
 	pictureRunEpochs.CompareAndDelete(at.id, v)
 }
 
-// pictureSuccessorEpoch is the live run epoch under this trader id when it is
-// owned by ANOTHER instance (a reload's successor); ok=false when no run is
-// live or the live run is this instance's own.
-func (at *AutoTrader) pictureSuccessorEpoch() (int64, bool) {
+// pictureOtherInstanceEpoch is the live run epoch under this trader id when
+// it is owned by ANOTHER AutoTrader instance; ok=false when no run is live or
+// the live run is this instance's own. It says nothing about which instance
+// is newer. Its one caller, Stop's invalidatePictureRows("stopped"), in
+// practice meets only a SUCCESSOR's run: AutoTrader.Stop returns early unless
+// the instance isRunning, and Run marks this instance's epoch right after
+// setting isRunning, so another owner found at Stop time Ran after it (the
+// last Run wins). The one exception is a Stop landing between Run's
+// isRunning=true and its epoch mark: it would find a still-live predecessor's
+// run and leave that run's rows to the predecessor's own Stop.
+func (at *AutoTrader) pictureOtherInstanceEpoch() (int64, bool) {
 	if at == nil {
 		return 0, false
 	}

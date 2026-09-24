@@ -444,7 +444,7 @@ func (at *AutoTrader) invalidatePictureRows(reason, event string, now time.Time,
 	// Stops, the rows recorded under the new run's epoch are the new run's to
 	// keep. With no successor this is the old rule, byte for byte; Day Plan
 	// OFF is never scoped this way (its sweep is event "day_plan_off").
-	succ, hasSucc := at.pictureSuccessorEpoch()
+	succ, hasSucc := at.pictureOtherInstanceEpoch() // at Stop, only a successor's (see its doc)
 	for _, r := range rows {
 		if r.TraderID != at.id || r.Source == "" || r.State == store.StateCancelPending {
 			continue

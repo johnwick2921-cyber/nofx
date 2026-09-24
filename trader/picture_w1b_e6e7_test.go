@@ -110,6 +110,47 @@ func TestPictureOldInstanceStopNeverRetiresTheNewRunsRow(t *testing.T) {
 	limitOnly(t, sigs)
 }
 
+// The successor skip is Stop's alone (event "stopped"). Day Plan OFF is the
+// strategy's master switch, not a run boundary: while the old instance is
+// still alive beside its successor, the OLD instance's own pass-head sweep
+// (production maybeManageArmedOrdersAt → dayPlanOffPassHead →
+// pictureDayPlanOffSweep) must retire every Picture row of the trader —
+// including the one the successor recorded under its own epoch.
+func TestPictureDayPlanOffOnTheOldInstanceStillRetiresTheNewRunsRow(t *testing.T) {
+	r, _ := newPicRig(t, "w1b-e6-dpoff", nil)
+	old := e6OldInstance(r.at)
+	old.startPictureRunWith(func() {}) // old.Run
+	t.Cleanup(old.stopArmedEventLoop)
+	eOld, _ := old.pictureRunEpoch()
+	time.Sleep(2 * time.Millisecond)
+	r.at.startPictureRunWith(func() {}) // new.Run (the reload), old still alive
+	t.Cleanup(r.at.stopArmedEventLoop)
+	eNew, ok := r.at.pictureRunEpoch()
+	if !ok || eNew == eOld {
+		t.Fatalf("fixture: new epoch %d ok=%v (old %d)", eNew, ok, eOld)
+	}
+	if succ, ok := old.pictureOtherInstanceEpoch(); !ok || succ != eNew {
+		t.Fatalf("fixture: the old instance sees the new run as another instance's live run: %d ok=%v", succ, ok)
+	}
+	picPlan(r, picScenario("P1", "opp-e6-dpoff", r.now, eNew, picDefault))
+	picPass(r, 0, 99.6) // short of the zone: armed, unplaced
+	if row := r.row("P1"); row.State != store.StateArmed || row.SourceRunEpoch == nil || *row.SourceRunEpoch != eNew {
+		t.Fatalf("fixture: P1 armed under the new run's epoch: %+v", row)
+	}
+
+	r.at.config.StrategyConfig.DayPlan.PlanEnabled = false // shared strategy config: OFF for both instances
+	if old.dayPlanEnabled() {
+		t.Fatal("fixture: the old instance reads the same Day Plan master")
+	}
+	at := r.now.Add(time.Second)
+	r.setTape(zoneTape(99.6, at, 0))
+	old.maybeManageArmedOrdersAt(nil, at) // the OLD instance's pass head, only
+
+	if row := r.row("P1"); row.State != store.StateCancelled || row.StateReason != "picture: "+pictureDayPlanOffReason+" — never placed" {
+		t.Fatalf("Day Plan OFF on the old instance must retire the new run's row too (the successor skip is Stop's only): %s %q", row.State, row.StateReason)
+	}
+}
+
 // ── WAVE 1b E7 — one refusal, one WARN ──────────────────────────────────────
 //
 // UpsertArm's W5 R13(a) refusal (ErrArmSourceMismatch) is re-hit on every
