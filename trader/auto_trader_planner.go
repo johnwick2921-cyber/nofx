@@ -2083,8 +2083,11 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 			// — a guard, not a fix for a measured failure.
 			lastErr = fmt.Errorf("%s", kernel.FragmentReason)
 			forceReauthor = true
-			at.recordRepairOutcome(raw, lastErr, prevReason)
+			// P9 (WAVE 1a-plan, #190) — record AFTER bookkeeping: bookkeeping
+			// rewrites prevReason to THIS attempt's defect, so recording first
+			// logged the PREVIOUS attempt's reason ("was repairing" lied).
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
+			at.recordRepairOutcome(raw, lastErr, prevReason)
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			continue
@@ -2098,9 +2101,13 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 			at.logWarnf("📐 planner attempt %d/3 parse/schema rejected: %v", attempt, perr)
 			if modeLabel == "repair" {
 				forceReauthor = true // 3.6 — a malformed repair falls back to one full re-author
-				at.recordRepairOutcome(raw, perr, prevReason)
 			}
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
+			if modeLabel == "repair" {
+				// P9 — same as the fragment site: record after bookkeeping
+				// rewrote prevReason to this attempt's defect.
+				at.recordRepairOutcome(raw, perr, prevReason)
+			}
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			continue
