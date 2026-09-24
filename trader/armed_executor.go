@@ -372,9 +372,9 @@ func (at *AutoTrader) maybeManageArmedOrdersAtOpts(snap map[string]kernel.Struct
 		// placed: an arm whose fill would land inside the band is not an arm we
 		// are willing to own, whether it was placed a second ago or an hour ago.
 		// Cancelled through the same seam the close uses, so each cancel is a
-		// wire cancel the book can confirm — never a ledger assumption.
+		// wire cancel the book can confirm — never a ledger assumption. PACED per row (W1b FOLD-12, window_sweep_pace.go).
 		if name, noun, window := sessionRiskWindowWords(risk.Class); window {
-			if n, unacked := at.cancelArmedOrdersSync(name + " opened — " + risk.Reason); n > 0 || unacked > 0 {
+			if n, unacked := at.cancelArmedOrdersSync(name+" opened — "+risk.Reason, at.windowSweepPace(now)); n > 0 || unacked > 0 {
 				at.logWarnf("🔒 %s: %d resting arm(s) cancelled, %d unacked — an arm resting into the %s is cancelled, not grandfathered", name, n, unacked, noun)
 			}
 		}
@@ -2468,12 +2468,18 @@ func (at *AutoTrader) armGateVerdictFor(sc kernel.PlanScenario, leg kernel.PlanA
 // It returns the two counts SEPARATELY — retired (never placed, so truthfully
 // terminal) and unsettled (held cancel_pending) — because a number that means
 // "we asked" must never be printed as "we did".
-func (at *AutoTrader) cancelArmedOrders(reason string) (retired, unsettled int) {
+//
+// pace (W1b FOLD-12, window_sweep_pace.go) is the window sweep's: a
+// cancel_pending row whose cancel was requested < 30 s ago is skipped — its
+// intent is already on record. Absent = every row, every call (unchanged).
+func (at *AutoTrader) cancelArmedOrders(reason string, pace ...*armedCancelPace) (retired, unsettled int) {
 	rows, err := at.store.ArmedOrders().ListNonTerminal(at.id)
 	if err != nil {
 		return 0, 0
 	}
-	now := time.Now().UnixMilli()
+	p := firstPace(pace)
+	p.prune(rows)
+	now := p.nowMs()
 	for _, r := range rows {
 		if r.TraderID != at.id {
 			continue
@@ -2488,7 +2494,11 @@ func (at *AutoTrader) cancelArmedOrders(reason string) (retired, unsettled int) 
 			}
 			continue
 		}
+		if p.paced(r) {
+			continue
+		}
 		if err := at.store.ArmedOrders().RequestCancel(r.ID, reason+" (no broker link — intent recorded, never settled)", now); err == nil {
+			p.sent(r.ID)
 			unsettled++
 			at.logWarnf("✕ armed cancel UNSETTLED %s %s signal=%s — no broker link; held cancel_pending, NOT cancelled: %s",
 				r.Scenario, r.PlanID, shortID(r.SignalID), reason)
@@ -2556,7 +2566,11 @@ func (at *AutoTrader) armedUpdateStream(nt *ntTrader.TCPTrader) <-chan ntwire.Or
 // cancelArmedOrdersSync cancels every non-terminal armed row for THIS trader
 // with ack-waited wire cancels (one retry per order). Returns the rows
 // cancelled and the rows whose ack never arrived (ledger flipped anyway).
-func (at *AutoTrader) cancelArmedOrdersSync(reason string) (n, unacked int) {
+//
+// pace (at most one) is the window sweep's alone (W1b FOLD-12,
+// window_sweep_pace.go) and is honoured on every branch below; the EOD flat,
+// session end, news and T1 enforce callers pass none and are unchanged.
+func (at *AutoTrader) cancelArmedOrdersSync(reason string, pace ...*armedCancelPace) (n, unacked int) {
 	if at.store == nil {
 		return 0, 0
 	}
@@ -2565,24 +2579,25 @@ func (at *AutoTrader) cancelArmedOrdersSync(reason string) (n, unacked int) {
 		if timeout <= 0 {
 			timeout = armedCancelAckTimeout()
 		}
-		return at.cancelArmedOrdersSyncWith(reason, timeout, s.Cancel, s.Stream)
+		return at.cancelArmedOrdersSyncWith(reason, timeout, s.Cancel, s.Stream, pace...)
 	}
 	nt := at.armedTrader()
 	if nt == nil {
 		// The unsettled rows are UNACKED, not cancelled — this used to return
 		// them in `n`, so the operator-facing flat line reported rows nothing
 		// had confirmed as "armed order(s) cancelled".
-		return at.cancelArmedOrders(reason)
+		return at.cancelArmedOrders(reason, pace...)
 	}
 	return at.cancelArmedOrdersSyncWith(reason, armedCancelAckTimeout(), nt.CancelOrder,
-		func() <-chan ntwire.OrderUpdatePayload { return at.armedUpdateStream(nt) })
+		func() <-chan ntwire.OrderUpdatePayload { return at.armedUpdateStream(nt) }, pace...)
 }
 
 // cancelArmedOrdersSyncWith is the pure body: per-row cancel + ack drain. Every
 // frame drained is applied through the SAME onArmedOrderUpdate the cycle
 // consumer uses, so no ledger state is lost and no second subscription is ever
-// made (a second subscribe would close the consumer's channel).
-func (at *AutoTrader) cancelArmedOrdersSyncWith(reason string, timeout time.Duration, cancelFn func(string) error, src func() <-chan ntwire.OrderUpdatePayload) (n, unacked int) {
+// made (a second subscribe would close the consumer's channel). pace: see
+// cancelArmedOrdersSync.
+func (at *AutoTrader) cancelArmedOrdersSyncWith(reason string, timeout time.Duration, cancelFn func(string) error, src func() <-chan ntwire.OrderUpdatePayload, pace ...*armedCancelPace) (n, unacked int) {
 	ledger := at.store.ArmedOrders()
 	if ledger == nil {
 		return 0, 0
@@ -2591,6 +2606,8 @@ func (at *AutoTrader) cancelArmedOrdersSyncWith(reason string, timeout time.Dura
 	if err != nil {
 		return 0, 0
 	}
+	p := firstPace(pace)
+	p.prune(rows)
 	// Rows that FILLED during the drain. Counted separately from `n` because a
 	// fill is not a cancel, and separately from `unacked` because the row is
 	// settled — just not the way the flatten wanted.
@@ -2624,6 +2641,11 @@ func (at *AutoTrader) cancelArmedOrdersSyncWith(reason string, timeout time.Dura
 			n++
 			continue
 		}
+		if p.paced(r) {
+			// W1b FOLD-12: the window sweep's cancel_pending row, requested
+			// < 30 s ago — no re-send, no block under armedPassMu, no count.
+			continue
+		}
 		if cancelFn == nil || src == nil {
 			// THE WIRE IS GONE, AND THE ROW IS AT THE BROKER.
 			//
@@ -2642,7 +2664,8 @@ func (at *AutoTrader) cancelArmedOrdersSyncWith(reason string, timeout time.Dura
 			// to declare the outcome. The row goes cancel_pending (non-terminal,
 			// so the slot stays taken and the settlement pass reconciles it) and
 			// is counted as UNACKED, which is what it is.
-			_ = ledger.RequestCancel(r.ID, reason+" (no broker link — intent recorded, never settled)", time.Now().UnixMilli())
+			_ = ledger.RequestCancel(r.ID, reason+" (no broker link — intent recorded, never settled)", p.nowMs())
+			p.sent(r.ID)
 			at.logWarnf("✕ armed cancel UNSENDABLE (%s): signal=%s — no broker link; row held cancel_pending, never promoted", reason, shortID(r.SignalID))
 			unacked++
 			continue
@@ -2676,6 +2699,7 @@ func (at *AutoTrader) cancelArmedOrdersSyncWith(reason string, timeout time.Dura
 				}
 			}
 		}
+		p.sent(r.ID) // the cancel went out (acked or not): the pace runs from here
 		// WHAT ACTUALLY HAPPENED TO THIS ROW — read, not inferred from a boolean.
 		//
 		// `acked` above means only "the row left the non-terminal set". EVERY
@@ -2715,7 +2739,7 @@ func (at *AutoTrader) cancelArmedOrdersSyncWith(reason string, timeout time.Dura
 			//
 			// This is the same ruling the no-broker-link branch above already
 			// follows — a missing answer records the INTENT, never the outcome.
-			_ = ledger.RequestCancel(r.ID, reason+" (ack timeout — unconfirmed, settlement pass owns it)", time.Now().UnixMilli())
+			_ = ledger.RequestCancel(r.ID, reason+" (ack timeout — unconfirmed, settlement pass owns it)", p.nowMs())
 			unacked++
 			at.logWarnf("⚠️ armed sync cancel UNACKED %s signal=%s after retry — held cancel_pending, NOT promoted; the flatten proceeds and the settlement pass will confirm or re-request",
 				r.Scenario, shortID(r.SignalID))

@@ -494,6 +494,10 @@ type AutoTrader struct {
 	// placement beat because the ledger row already existed. Log once per
 	// (plan:version:scenario) spec, again only when the prices change.
 	armAuthoredLast map[string]string
+	// windowSweepSentMs (W1b FOLD-12) — row id → pass-clock ms of the window
+	// sweep's last cancel request for that row; the sweep's pace
+	// (window_sweep_pace.go). Pass state: armedPassMu, like the maps above.
+	windowSweepSentMs map[int64]int64
 
 	// W-EXEC-TRUTH W3 D14 — ONE armed pass at a time per trader. The scan
 	// (runCycle → maybeManageArmedOrdersAt), the live-bar event pass and the
