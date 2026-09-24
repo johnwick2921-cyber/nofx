@@ -213,7 +213,7 @@ func (s *Server) updatesRefusal(c *gin.Context) string {
 	}
 	// Q8: a token issued before the user row last changed (password change)
 	// is stale for updates. Whole seconds: the JWT iat is second-precision.
-	if claims.IssuedAt == nil || u.UpdatedAt.IsZero() || claims.IssuedAt.Time.Unix() < u.UpdatedAt.Unix() {
+	if u.UpdatedAt.IsZero() || issuedBefore(claims.IssuedAt, u.UpdatedAt) {
 		return "token older than the user row"
 	}
 	return ""
