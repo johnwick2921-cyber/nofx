@@ -76,6 +76,14 @@ import (
 // closed: the walk is internal/censuswalk (root-only skips), pinned by
 // TestUsersWriterCensusSeesNestedSkipNamedDirs.
 var reviewedUsersTableWriters = []string{
+	// PR #200 F5 (reviewed 2026-09-24): resetPasswordLockedOutAdvice, the 410
+	// body of POST /api/reset-password. The app never executes it: it is the
+	// statement a locked-out OWNER runs by hand, and it DOES move updated_at
+	// — deliberately, so every pre-reset session retires
+	// (TestResetPasswordAdviceRetiresPreResetSessionsOnSQLite runs it as
+	// served). Listed because the census's question is "what can move the
+	// credential epoch", and this can.
+	"api/handler_user.go · (package level) · raw SQL UPDATE users",
 	"api/handler_user.go · (*Server).handleChangePassword · calls UserStore.UpdatePassword",
 	"api/handler_user.go · (*Server).handleRegister · calls UserStore.Create",
 	"api/handler_user.go · (*Server).handleResetAccount · gorm Delete",
