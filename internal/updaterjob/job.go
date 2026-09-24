@@ -380,6 +380,9 @@ func (j Job) Validate() error {
 		if c.At.IsZero() {
 			return bad("transition %d has no time", i)
 		}
+		if c.At.Before(p.At) {
+			return bad("transition %d is earlier than transition %d", i, i-1)
+		}
 		// receipt counts are recorded, so they never run backwards: two
 		// finished steps can never share one receipt
 		if c.Receipts < p.Receipts {
@@ -416,6 +419,11 @@ func (j Job) Validate() error {
 	last := j.Transitions[len(j.Transitions)-1]
 	if last.State != j.State || last.Phase != j.Phase {
 		return bad("history ends at %s/%s, the job says %s/%s", last.State, last.Phase, j.State, j.Phase)
+	}
+	// updated_at is never before the last transition — so never before
+	// created_at, the first transition's time (times only run forward)
+	if j.UpdatedAt.Before(last.At) {
+		return bad("updated_at is earlier than the last transition")
 	}
 	if last.Receipts > len(j.Receipts) {
 		return bad("the history records %d receipts, the file holds %d", last.Receipts, len(j.Receipts))
