@@ -895,7 +895,7 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 	// WAVE 1a-plan N5 — the CSV transport takes the same maintenance
 	// permit (only entry sends); wired at construction like the TCP path.
 	if csv, ok := at.trader.(*ntTrader.Trader); ok {
-		csv.SetEntryPermit(MaintenanceEntryPermit)
+		wireNT8MaintenanceCSV(csv)
 	}
 	if nt, ok := at.trader.(*ntTrader.TCPTrader); ok {
 		nt.SetOpenOrdersSource(at.ledgerOpenOrders)
