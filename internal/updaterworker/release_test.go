@@ -222,14 +222,16 @@ func (e fetchEnv) assertNothingLanded(t *testing.T) {
 	}
 }
 
-func fileSHA256(t *testing.T, p string) string {
+// releaseDirOf returns the verdict's release dir, refusing anything but an
+// absolute dir inside this env's release root — a broken FetchRelease (an
+// empty ReleaseDir) must never make a tamper helper write relative to the
+// test's cwd, which is the package's SOURCE directory.
+func (e fetchEnv) releaseDirOf(t *testing.T, v ReleaseVerdict) string {
 	t.Helper()
-	b, err := os.ReadFile(p)
-	if err != nil {
-		t.Fatal(err)
+	if !filepath.IsAbs(v.ReleaseDir) || filepath.Dir(v.ReleaseDir) != e.releaseRoot {
+		t.Fatalf("verdict release_dir %q is not a dir inside the test's release root %s — refusing to tamper", v.ReleaseDir, e.releaseRoot)
 	}
-	s := sha256.Sum256(b)
-	return hex.EncodeToString(s[:])
+	return v.ReleaseDir
 }
 
 // ── the success path: the layout activation.Resolve reads ────────────────────
@@ -561,7 +563,7 @@ func TestRehashRefusesExtraMissingOrChangedArtifact(t *testing.T) {
 			if n, err := RehashRelease(v.ReleaseDir, v.ManifestSHA256); err != nil || n != v.Artifacts {
 				t.Fatalf("control: RehashRelease on the fresh release = %d, %v", n, err)
 			}
-			c.tamper(t, v.ReleaseDir)
+			c.tamper(t, e.releaseDirOf(t, v))
 			n, err := RehashRelease(v.ReleaseDir, v.ManifestSHA256)
 			if err == nil {
 				t.Fatalf("RehashRelease ACCEPTED a release with %s (%d artifacts)", name, n)
@@ -922,7 +924,7 @@ func TestReverifyRefusesAVerdictItDidNotProve(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			signers, id := c.tamper(t, v.ReleaseDir)
+			signers, id := c.tamper(t, e.releaseDirOf(t, v))
 			m, sv, err := ReverifyRelease(v.ReleaseDir, signers, id)
 			if c.want == nil {
 				if err != nil || m.SourceSHA != testSHA || sv.String() != "sshsig:release:"+r.fp {
