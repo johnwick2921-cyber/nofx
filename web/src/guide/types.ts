@@ -12,21 +12,24 @@ import type { ReactNode } from 'react'
 // a deploy procedure, and a step in a procedure is a step someone skips under
 // pressure — which is exactly when the guide matters most.
 //
-// A PRODUCTION build with the variable missing, or not a 40-hex sha, FAILS
-// here rather than shipping a guide that cannot be checked. A dev build shows
-// 'dev', which the banner renders as "not a release build" and never as a
-// matching revision.
+// A PRODUCTION build with the variable missing, or not a 40-hex sha, is
+// refused IN THE BUILD by the `guide-built-rev-is-a-build-input` plugin in
+// vite.config.ts. It cannot be refused here: this file's guard runs at module
+// scope, and Vite does not execute the module while building — an earlier
+// version threw here, the build exited 0, and the throw shipped into the
+// bundle to fire on page load. A guide revision must never take the trading
+// UI down, so at RUNTIME an unusable value degrades to 'unknown' and the
+// banner says it cannot verify the build. A dev build shows 'dev', which the
+// banner renders as "not a release build" and never as a matching revision.
 function resolveGuideBuiltRev(): string {
   const raw = import.meta.env?.VITE_GUIDE_BUILT_REV
   if (import.meta.env?.PROD) {
-    if (typeof raw !== 'string' || !/^[0-9a-f]{40}$/.test(raw)) {
-      throw new Error(
-        'VITE_GUIDE_BUILT_REV must be a 40-hex commit sha for a production build ' +
-          `(got ${raw === undefined ? 'nothing' : JSON.stringify(raw)}). ` +
-          'The release workflow sets it from the tag; see deploy/release/README.md.'
-      )
-    }
-    return raw
+    // Never throw: the build gate is the enforcement point, and a crash here
+    // would blank the whole UI over a documentation revision. 'unknown' is an
+    // honest unknowable value (A24) — it is never a real-looking sha.
+    return typeof raw === 'string' && /^[0-9a-f]{40}$/.test(raw)
+      ? raw
+      : 'unknown'
   }
   return typeof raw === 'string' && /^[0-9a-f]{40}$/.test(raw) ? raw : 'dev'
 }
