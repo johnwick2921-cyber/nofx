@@ -1018,6 +1018,8 @@ func TestResumeCensusSeesEveryRequestShape(t *testing.T) {
 		// each rule alone
 		{"any conversion to Request", file("func f(r updaterwire.Request) updaterwire.Request { return (updaterwire.Request)(r) }"), []string{convert}},
 		{"an elided unkeyed Request in a map", file("func f(r updaterwire.Request) map[int]updaterwire.Request {\n\treturn map[int]updaterwire.Request{0: {r.Verb, nil, nil, nil, r.Resume}}\n}"), []string{write}},
+		{"an elided unkeyed Request as a map key", file("func f(r updaterwire.Request) map[updaterwire.Request]bool {\n\treturn map[updaterwire.Request]bool{{r.Verb, nil, nil, nil, r.Resume}: true}\n}"), []string{write}},
+		{"an elided unkeyed Request inside an elided KEYED map", file("func f(r updaterwire.Request) []map[string]updaterwire.Request {\n\treturn []map[string]updaterwire.Request{{\"a\": {r.Verb, nil, nil, nil, r.Resume}}}\n}"), []string{write}},
 		{"an elided unkeyed Request two levels down", file("func f(r updaterwire.Request) [][]updaterwire.Request {\n\treturn [][]updaterwire.Request{{{r.Verb, nil, nil, nil, r.Resume}}}\n}"), []string{write}},
 		{"an embedded Resume field", "package agent\n\ntype Resume struct{}\n\ntype shape struct {\n\tVerb string\n\t*Resume\n}\n", []string{shape}},
 		{"an unrelated Resume field (fail closed)", "package agent\n\ntype state struct{ Resume bool }\n", []string{shape}},
