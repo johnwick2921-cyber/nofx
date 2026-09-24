@@ -848,3 +848,24 @@ func sortedKeys(m map[string]bool) []string {
 	sort.Strings(out)
 	return out
 }
+
+// PIN (U2 verifier note 6, kept STRICT): the U4 worker socket dispatches a
+// resume on the payload pointer (req.Resume != nil, then req.Resume.JobID) —
+// admitted; a `case updaterwire.VerbResume:` outside the admitted set names a
+// builder and is an offender. Validate makes the two dispatches equivalent,
+// so the strict form costs the worker nothing.
+func TestResumeCensusU4SocketDispatchesOnThePayloadPointer(t *testing.T) {
+	const rel = "internal/updaterworker/socket.go"
+	handler := func(dispatch string) string {
+		return resumeCensusImp("updaterworker", "", "type Worker struct{}\n\nfunc (w *Worker) resume(job string) updaterwire.Response { return updaterwire.Response{OK: true, State: \"resuming\"} }\n\n"+
+			"func (w *Worker) Handle(req updaterwire.Request) updaterwire.Response {\n"+dispatch+"\treturn updaterwire.RejectedResponse\n}")
+	}
+	t.Run("admitted: on the payload pointer", func(t *testing.T) {
+		c := resumeCensusOf(t, map[string]string{rel: handler("\tswitch {\n\tcase req.Status != nil:\n\t\treturn updaterwire.Response{OK: true, State: \"idle\"}\n\tcase req.Resume != nil:\n\t\treturn w.resume(req.Resume.JobID)\n\t}\n")})
+		wantResumeOffenders(t, c, rel)
+	})
+	t.Run("offender: case VerbResume", func(t *testing.T) {
+		c := resumeCensusOf(t, map[string]string{rel: handler("\tswitch req.Verb {\n\tcase updaterwire.VerbResume:\n\t\treturn w.resume(req.Resume.JobID)\n\t}\n")})
+		wantResumeOffenders(t, c, rel, "names updaterwire.VerbResume")
+	})
+}
