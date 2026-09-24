@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -576,5 +577,64 @@ func TestCutoverDistinguishesAnUnstampedBinaryFromAWrongOne(t *testing.T) {
 	}
 	if !strings.Contains(sh, "nofx-activate") {
 		t.Fatalf("cutover.sh must reach those refusals by delegating, not by reimplementing them")
+	}
+}
+
+// F2: the manifest's protocol_version must come from the CODE.
+//
+// It used to grep the first `protocol_version` out of the protocol MARKDOWN,
+// and the first match in that file is a JSON EXAMPLE showing 2 — while the
+// shipped wire has been 3 since the symbol-tagged-fills generation. The
+// manifest reported a protocol version the release does not speak, to an
+// updater that trusts the manifest for compatibility. The line directly above
+// it in the same script reads the AddOn build id "from the AddOn source rather
+// than restated here (L7: READ, never literal)"; this one read prose.
+func TestManifestReadsTheProtocolVersionFromCodeNotDocumentation(t *testing.T) {
+	m := repoFile(t, "deploy/release/manifest.sh")
+	if strings.Contains(m, "vltrader_tcp_PROTOCOL.md 2>/dev/null | head -1") {
+		t.Fatal("protocol_version is still scraped from the markdown, whose first match is an example")
+	}
+	if !strings.Contains(m, "PROTOCOL_VERSION") || !strings.Contains(m, "tcp_framing.go") {
+		t.Fatal("protocol_version must be read from the C# constant and the Go constant")
+	}
+	if !strings.Contains(m, "disagree; they ship in lockstep or not at all") {
+		t.Fatal("a disagreement between the two constants must be a REFUSAL, not a preference")
+	}
+	// And the two constants must actually agree right now.
+	cs := repoFile(t, "ninjascript/VLTraderTCPClient.cs")
+	gofile := repoFile(t, "provider/ninjatrader/tcp_framing.go")
+	csV := regexp.MustCompile(`PROTOCOL_VERSION[^=]*=\s*(\d+)`).FindStringSubmatch(cs)
+	goV := regexp.MustCompile(`const ProtocolVersion\s*=\s*(\d+)`).FindStringSubmatch(gofile)
+	if csV == nil || goV == nil {
+		t.Fatalf("cannot read the constants: cs=%v go=%v", csV, goV)
+	}
+	if csV[1] != goV[1] {
+		t.Fatalf("PROTOCOL_VERSION %s != ProtocolVersion %s — they ship in lockstep", csV[1], goV[1])
+	}
+}
+
+// F2: a manifest that lists ITSELF at 0 bytes is describing a placeholder. The
+// entry would carry the sha256 of the empty string, which matches nothing that
+// ships.
+func TestManifestRefusesAZeroByteSelfEntry(t *testing.T) {
+	m := repoFile(t, "deploy/release/manifest.sh")
+	if !strings.Contains(m, "the staged manifest.json is 0 bytes") {
+		t.Fatal("a 0-byte manifest self-entry must be REFUSED, not emitted")
+	}
+}
+
+// F3: owner-editable data is not a program artifact. Activation installs the
+// binary, the bundle and the marker — and must NOT install this, or every
+// update silently discards the owner's edits.
+func TestManifestSeparatesOwnerDataFromProgramArtifacts(t *testing.T) {
+	m := repoFile(t, "deploy/release/manifest.sh")
+	if !strings.Contains(m, `"owner_data"`) {
+		t.Fatal("the manifest must distinguish owner-editable data from program artifacts")
+	}
+	if !strings.Contains(m, "calendar_static_t1.json") {
+		t.Fatal("calendar_static_t1.json must be classified, not left implicit")
+	}
+	if !strings.Contains(m, "template-only") {
+		t.Fatal("owner data must be marked as shipped-as-template, never installed over an existing file")
 	}
 }

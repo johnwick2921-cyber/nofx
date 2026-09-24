@@ -225,7 +225,7 @@ func TestWatchIsRedOnAPreKillBootLineAndGreenOnAPostKillOne(t *testing.T) {
 	})
 
 	// RED: health agrees, but the only boot line predates the kill.
-	if _, err := Watch(Release{SHA: sha}, Identity{PID: 1}, logPath, srv.URL, 50*time.Millisecond); err == nil {
+	if _, err := Watch(Release{SHA: sha}, Identity{PID: 1}, WatchOpts{LogPath: logPath, HealthURL: srv.URL, Within: 50 * time.Millisecond}); err == nil {
 		t.Fatal("Watch accepted a boot line that predates the restart")
 	} else if !strings.Contains(err.Error(), "no boot line") {
 		t.Fatalf("refusal must name the failing leg, got: %v", err)
@@ -239,7 +239,7 @@ func TestWatchIsRedOnAPreKillBootLineAndGreenOnAPostKillOne(t *testing.T) {
 	fmt.Fprintf(f, "%s [INFO] booted %s\n", time.Now().Add(time.Second).Format("01-02 15:04:05"), sha)
 	f.Close()
 
-	rc, err := Watch(Release{SHA: sha}, Identity{PID: 1}, logPath, srv.URL, 3*time.Second)
+	rc, err := Watch(Release{SHA: sha}, Identity{PID: 1}, WatchOpts{LogPath: logPath, HealthURL: srv.URL, Within: 3 * time.Second})
 	if err != nil {
 		t.Fatalf("Watch refused a genuine post-restart boot: %v", err)
 	}
@@ -260,7 +260,7 @@ func TestWatchRefusesWhenHealthAgreesButTheLogNeverShowsARestart(t *testing.T) {
 	}))
 	defer srv.Close()
 	withSystem(t, &system{Now: time.Now, Sleep: func(time.Duration) {}})
-	if _, err := Watch(Release{SHA: sha}, Identity{PID: 1}, logPath, srv.URL, 30*time.Millisecond); err == nil {
+	if _, err := Watch(Release{SHA: sha}, Identity{PID: 1}, WatchOpts{LogPath: logPath, HealthURL: srv.URL, Within: 30 * time.Millisecond}); err == nil {
 		t.Fatal("Watch was satisfied by /api/health alone")
 	}
 }
@@ -323,7 +323,7 @@ func TestWatchAcceptsTheShortRevBootLineTheBotWrites(t *testing.T) {
 	}))
 	defer srv.Close()
 	withSystem(t, &system{Now: time.Now, Sleep: func(time.Duration) {}})
-	rc, err := Watch(Release{SHA: full}, Identity{PID: 1}, logPath, srv.URL, 2*time.Second)
+	rc, err := Watch(Release{SHA: full}, Identity{PID: 1}, WatchOpts{LogPath: logPath, HealthURL: srv.URL, Within: 2 * time.Second})
 	if err != nil {
 		t.Fatalf("Watch refused a genuine boot proven by the forms the bot actually emits: %v", err)
 	}
@@ -353,5 +353,121 @@ func TestNewestLogPathIgnoresTheCalendarAndPicksTheActiveFile(t *testing.T) {
 	}
 	if got != active {
 		t.Fatalf("picked %s, want the file actually being written (%s) — a date-built path points at the wrong log", got, active)
+	}
+}
+
+// THE RESUMED-WORKER CASE. A worker persists its receipt before the side
+// effect and may crash between the restart and the proof; on resume it calls
+// Watch again, minutes later. Anchoring on "now" would reject the boot line
+// the restart actually wrote — failing because the worker was slow, not
+// because the boot failed, and rolling back a release that came up correctly.
+func TestWatchProvesABootAgainstThePersistedKillInstantNotNow(t *testing.T) {
+	full := "112233445566778899aabbccddeeff0011223344"
+	short := full[:12]
+	logPath := filepath.Join(t.TempDir(), "nofx_2026-09-24.log")
+
+	// The restart happened 10 minutes ago and wrote its boot line then.
+	killedAt := time.Now().Add(-10 * time.Minute)
+	line := fmt.Sprintf("%s [INFO] 🔐 BOOT INTEGRITY OK — rev %s · built x\n",
+		killedAt.Add(2*time.Second).Format("01-02 15:04:05"), short)
+	if err := os.WriteFile(logPath, []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"revision":%q}`, short)
+	}))
+	defer srv.Close()
+	withSystem(t, &system{Now: time.Now, Sleep: func(time.Duration) {}})
+
+	// Without the kill instant, "now" is the anchor and the genuine boot line
+	// is rejected for being older than the resumed call.
+	if _, err := Watch(Release{SHA: full}, Identity{PID: 1}, WatchOpts{
+		LogPath: logPath, HealthURL: srv.URL, Within: 30 * time.Millisecond,
+	}); err == nil {
+		t.Fatal("anchoring on now accepted a boot line older than the call — the fixture is wrong")
+	}
+
+	// With it, the same log proves the same boot.
+	rc, err := Watch(Release{SHA: full}, Identity{PID: 1}, WatchOpts{
+		LogPath: logPath, HealthURL: srv.URL, Since: killedAt, Within: 2 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("a resumed worker could not prove a boot that really happened: %v", err)
+	}
+	if rc.Evidence["since"] == "" {
+		t.Fatal("the receipt must record WHICH instant the proof was anchored to")
+	}
+}
+
+// A boot line from BEFORE the kill is still refused — the kill instant makes
+// the anchor accurate, it does not make it lax.
+func TestWatchStillRefusesABootLineOlderThanTheKillInstant(t *testing.T) {
+	full := "99887766554433221100ffeeddccbbaa99887766"
+	short := full[:12]
+	logPath := filepath.Join(t.TempDir(), "nofx_2026-09-24.log")
+	killedAt := time.Now().Add(-5 * time.Minute)
+	// Written BEFORE the kill: the previous boot's line.
+	line := fmt.Sprintf("%s [INFO] 🔐 BOOT INTEGRITY OK — rev %s · built x\n",
+		killedAt.Add(-time.Hour).Format("01-02 15:04:05"), short)
+	if err := os.WriteFile(logPath, []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"revision":%q}`, short)
+	}))
+	defer srv.Close()
+	withSystem(t, &system{Now: time.Now, Sleep: func(time.Duration) {}})
+	if _, err := Watch(Release{SHA: full}, Identity{PID: 1}, WatchOpts{
+		LogPath: logPath, HealthURL: srv.URL, Since: killedAt, Within: 30 * time.Millisecond,
+	}); err == nil {
+		t.Fatal("a boot line older than the kill was accepted as proof of the restart")
+	}
+}
+
+// Snapshot is what makes RollbackTo possible when the install is overwritten
+// in place: without it the previous three halves exist only wherever someone
+// happened to put them.
+func TestSnapshotCapturesAllThreeHalvesAndRollbackToCanUseThem(t *testing.T) {
+	_, install := twoReleases(t)
+	dest := filepath.Join(t.TempDir(), "prev")
+	rc, err := Snapshot(install, dest)
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
+	if rc.Evidence["captured"] != "binary,dist,RELEASE" {
+		t.Fatalf("receipt must name what it captured, got %+v", rc.Evidence)
+	}
+	for _, p := range []string{
+		filepath.Join(dest, "nofx-bin"),
+		filepath.Join(dest, "RELEASE"),
+		filepath.Join(dest, "web", "dist", "index.html"),
+	} {
+		if _, err := os.Stat(p); err != nil {
+			t.Fatalf("half missing from the snapshot: %s", p)
+		}
+	}
+	// And the snapshot is usable as prev.
+	prev := Release{
+		Dir: dest, SHA: rc.Evidence["release_marker"],
+		Binary:      filepath.Join(dest, "nofx-bin"),
+		Dist:        filepath.Join(dest, "web", "dist"),
+		ReleaseFile: filepath.Join(dest, "RELEASE"),
+	}
+	withSystem(t, &system{
+		ReadStat: func(pid int) (string, error) { return statLine(pid, 9), nil },
+		Kill:     func(int) error { return nil },
+		MainPID:  func() (int, error) { return 5, nil },
+		Now:      time.Now,
+		Sleep:    func(time.Duration) {},
+	})
+	if _, _, err := RollbackTo(prev, install, Identity{PID: 4, StartTicks: 9}); err != nil {
+		t.Fatalf("a snapshot must be usable as the rollback source: %v", err)
+	}
+}
+
+func TestSnapshotRefusesWithoutADestination(t *testing.T) {
+	_, install := twoReleases(t)
+	if _, err := Snapshot(install, ""); err == nil {
+		t.Fatal("Snapshot accepted an empty destination")
 	}
 }

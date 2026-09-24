@@ -106,7 +106,12 @@ func run(cmd string, o opts) (activation.Receipt, error) {
 			}
 			logPath = p
 		}
-		return activation.Watch(rel, id, logPath, o.healthURL, o.within)
+		// Since is left zero here: the attended CLI watches a restart it just
+		// performed, so "now" is the correct anchor. A worker resuming from
+		// persisted state passes its recorded kill instant instead.
+		return activation.Watch(rel, id, activation.WatchOpts{
+			LogPath: logPath, HealthURL: o.healthURL, Within: o.within,
+		})
 
 	case "activate":
 		rel, err := activation.Resolve(o.relDir)
