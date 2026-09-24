@@ -71,6 +71,18 @@ To restore: first confirm you can sign in with the new password, then run the sa
 
 **If `--replace` dies halfway**, the new key is left beside the old `admin.json`. That pair is **not** a working enrollment: every route answers 403 until a `--replace` completes. Re-run it. This is pinned by `TestEnrollCommentTruthACrashBetweenTheTwoRenames`.
 
+## Locked out of the app account
+
+Password reset by email is disabled (`POST /api/reset-password` answers 410), so the fix is one statement on the box. Back up `data/data.db` first; it is the live database.
+
+```sql
+UPDATE users SET password_hash='<bcrypt hash of the new password>', updated_at=CURRENT_TIMESTAMP WHERE email='<your account email>';
+```
+
+- **Set both columns in ONE statement.** `users.updated_at` is the credential epoch (`auth.CredentialEpoch`). Moving it is what signs out every session issued before the reset, including a stolen one. A hash-only UPDATE leaves every one of those sessions valid until it expires. This is pinned by executing the served advice against a temp SQLite store (`TestResetPasswordAdviceRetiresPreResetSessionsOnSQLite`).
+- **No restart.** The bot reads the users row on each request.
+- **Afterwards**, sign in with the new password. Updates is now un-enrolled (the password binding changed), so run `enroll --replace` as above. If the row is the FIRST account (the one the Telegram bot acts for), the bot re-mints its own token on its next message.
+
 ## Authorize one install (M4 onwards; inert in M3)
 
 ```
