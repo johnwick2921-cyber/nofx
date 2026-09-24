@@ -15,8 +15,9 @@ import (
 // users.updated_at carries whatever precision its writer stored: the rule
 // correct at every precision is iat STRICTLY after the epoch truncated to the
 // second (red-team red-1 #5) — a token from the change's own second, either
-// side of it, is retired. The cost: a login in that same second is refused
-// once.
+// side of it, is retired. The cost: a login in that same second SUCCEEDS
+// (200), but its new session is refused on first use (401) and has to sign in
+// again (the guide's wording, web/src/guide/content/updates.ts).
 
 // IssuedNotAfter reports whether a token with this iat is retired by epoch:
 // true unless iat is STRICTLY after epoch truncated to the second. A nil iat

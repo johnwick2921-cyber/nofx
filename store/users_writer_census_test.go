@@ -54,6 +54,27 @@ import (
 // gives it — the legacy phantom epoch, pinned by FOLD-M3-B in api/). The
 // deletes (DeleteAll, handleResetAccount) remove rows; a token whose row is
 // gone is refused everywhere (api tokenRetirement).
+//
+// WHAT THIS CANNOT SEE (named, not chased — M3 ha2 verify defect 1; the
+// census is a syntactic BELT, and a writer it misses can only move the epoch
+// FORWARD, which retires sessions early: fail closed, never a bypass). Each
+// compiles and plants clean [A, planted 2026-09-24 by the ha2 verifier; a
+// type-aware go/packages cross-check found exactly this census's sites at
+// HEAD, and the 23 sites it could not decide statically touch no users row]:
+//   - a User-typed STRUCT FIELD written through (db.Save(&b.u));
+//   - SQL built at run time (Exec(fmt.Sprintf("UPDATE %s …", tbl))), a
+//     schema-qualified table (UPDATE main.users) or UPDATE OR IGNORE users;
+//   - Table(constIdent) — a table named through a constant, not a literal;
+//   - a generic or `any` wrapper (save(db, v any)) called with a User;
+//   - another model whose TableName() returns "users", or a type alias
+//     (type Account = User);
+//   - a method value (save := db.Save; save(&u));
+//   - a UserStore built directly (store.NewUserStore(db).UpdatePassword) or
+//     held in a struct field, not reached through Store.User().
+//
+// The directory-skip gap (a writer under api/.hidden, _x, x/testdata/y) WAS
+// closed: the walk is internal/censuswalk (root-only skips), pinned by
+// TestUsersWriterCensusSeesNestedSkipNamedDirs.
 var reviewedUsersTableWriters = []string{
 	"api/handler_user.go · (*Server).handleChangePassword · calls UserStore.UpdatePassword",
 	"api/handler_user.go · (*Server).handleRegister · calls UserStore.Create",
