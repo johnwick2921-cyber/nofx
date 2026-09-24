@@ -83,8 +83,9 @@ import (
 // WHAT THIS CANNOT PROVE (M3 fold M4 — stated, not implied): it is a
 // syntactic census over identifiers, imports, comments and constant
 // strings. A file that builds the key's path at run time (fmt.Sprintf with a
-// non-literal, byte arithmetic, a directory listing) and reads the file
-// itself, receives the key bytes or a path through an interface or a
+// non-literal, byte arithmetic, a directory listing) or from a name it
+// re-binds to a second constant (constantStrings folds a name to one value),
+// and reads the file itself, receives the key bytes or a path through an interface or a
 // function value handed to it by an admitted file, or reaches the updater
 // dir through a package the census does not relate to it, passes — rule 6
 // binds only the key LoadDeviceKey returns. The app process runs as the same
@@ -712,8 +713,14 @@ func receiverTypeParams(fd *ast.FuncDecl) []*ast.Ident {
 // string literal, and each run of adjacent constant operands in every
 // maximal `+` chain (so "device"+".key", a file-local const + "_ids.json" and
 // the "/ad"+"min.json" inside dir+"/ad"+"min.json" all fold). Names bound in
-// the file to a foldable string (const, var, :=, =) fold too — by name, not
-// by scope, which can only over-report.
+// the file to a foldable string (const, var, :=, =) fold too — by NAME, not
+// by scope, and each name to ONE value: the last binding the fold passes
+// saw. That is NOT "can only over-report" (the earlier claim, false like
+// rule 6's — census-repair verify #3): `a := "ad"`, then `{ a := "zz" }`,
+// then dir + "/" + a + "min.json" folds to "/zzmin.json" and the admin.json
+// spelling is missed [A, probed 2026-09-24: the same file with one binding
+// of a IS reported]. A name re-bound to a second constant is therefore in
+// WHAT THIS CANNOT PROVE, beside run-time construction.
 func constantStrings(f *ast.File) []string {
 	env := map[string]string{}
 	bind := func(names []*ast.Ident, values []ast.Expr) bool {
