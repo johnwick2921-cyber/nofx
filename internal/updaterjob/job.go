@@ -479,6 +479,9 @@ func (j Job) Validate() error {
 	if j.LastGoodReceipt != nil && (*j.LastGoodReceipt < 0 || *j.LastGoodReceipt >= len(j.Receipts)) {
 		return bad("last_good_receipt %d out of range", *j.LastGoodReceipt)
 	}
+	if j.LastGoodReceipt != nil && !j.Receipts[*j.LastGoodReceipt].OK {
+		return bad("last_good_receipt %d names a failed receipt", *j.LastGoodReceipt)
+	}
 	// The kill is never persisted without what a rollback needs: the release
 	// being installed, the install it replaces, the job-scoped snapshot to
 	// restore, the DB backup, and the identity it was aimed at.
