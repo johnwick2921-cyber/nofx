@@ -24,26 +24,41 @@ import (
 // materialized release dir that no verdict names. Such a dir is never
 // activated — every path to activation starts from a verdict (the install
 // verb refuses "release not verified"; downloaded/verified re-read it) — but
-// it blocks every later fetch of that sha at "the release directory already
+// it blocked every later fetch of that sha at "the release directory already
 // exists (it may be the running release)".
 //
-// QuarantineInterruptedFetches is the recovery the fetch path runs FIRST: every
-// <release_root>/<40-hex> dir that no verdict names is renamed (never
-// deleted: the bytes stay for the operator) to
-// <release_root>/.orphan-<sha>-<unix>, freeing the name for a clean re-fetch.
-// It holds an exclusive flock on the release root DIRECTORY itself (no lock
-// file: a refused fetch must leave the release root empty; non-blocking: a
-// fetch in flight makes it refuse — that fetch may be exactly between rename
-// and link), and it refuses outright when any verdict cannot be read (it
-// cannot then prove a dir is unreferenced).
+// PROVENANCE, not absence. A <sha> dir no verdict names is not proof of an
+// interrupted fetch: U3's accepted rule is that an existing release dir is
+// NEVER overwritten (it may be the running release, placed by other means),
+// and TestVerdictWrittenOnlyAfterEveryCheck pins that refusal. So the fetch
+// leaves its own mark: MarkFetchPending writes <release_root>/.pending-<sha>
+// (fsynced) immediately BEFORE its rename, and ClearFetchPending removes it
+// after the verdict link (or after the fetch removed its own dir on a failed
+// link). The recovery (quarantineLocked, which the fetch runs FIRST under the
+// release-root lock) acts ONLY on a marker:
+//
+//	marker + <sha> dir + no verdict names it → the interrupted fetch's: the dir
+//	                                           is quarantined (renamed to
+//	                                           .orphan-<sha>-<unix>, bytes kept,
+//	                                           never deleted), marker removed
+//	marker + <sha> dir + a verdict names it  → the fetch finished; marker removed
+//	marker, no <sha> dir                     → killed before its rename; marker removed
+//	<sha> dir, no marker                     → not the fetch's: untouched (the
+//	                                           fetch then refuses "never overwritten")
+//
+// The lock is an exclusive flock on the release root DIRECTORY (no lock file:
+// a refused fetch leaves the release root empty); non-blocking — a fetch in
+// flight makes the recovery refuse. Any verdict that cannot be read refuses
+// the whole recovery (it cannot then prove a dir is unreferenced).
 
 // ErrFetchInFlight: another fetch holds the release root's lock.
 var ErrFetchInFlight = errors.New("updaterworker: a fetch is in flight (the release root lock is held)")
 
 const (
-	orphanPrefix   = ".orphan-"
-	verdictsSubdir = "verdicts"
-	maxVerdictRead = 64 << 10
+	orphanPrefix       = ".orphan-"
+	fetchPendingPrefix = ".pending-"
+	verdictsSubdir     = "verdicts"
+	maxVerdictRead     = 64 << 10
 )
 
 // LockReleaseRoot flocks the release root directory exclusively without
@@ -70,8 +85,51 @@ func LockReleaseRoot(releaseRoot string) (func(), error) {
 	}, nil
 }
 
-// QuarantineInterruptedFetches moves every release dir no verdict names out
-// of the way (see above) and returns the new names.
+func pendingMarker(releaseRoot, sha string) (string, error) {
+	if !isSHA40(sha) {
+		return "", fmt.Errorf("updaterworker: %q is not a release sha", sha)
+	}
+	return filepath.Join(releaseRoot, fetchPendingPrefix+sha), nil
+}
+
+// MarkFetchPending records, durably, that a fetch is about to rename its
+// staging dir to <release_root>/<sha>. The fetch calls it (holding the lock)
+// immediately before the rename.
+func MarkFetchPending(releaseRoot, sha string) error {
+	p, err := pendingMarker(releaseRoot, sha)
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(p, os.O_CREATE|os.O_TRUNC|os.O_WRONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0o600)
+	if err != nil {
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return syncDirPath(releaseRoot)
+}
+
+// ClearFetchPending removes the marker (idempotent when absent). The fetch
+// calls it after its verdict link, or after removing its own dir on a failed
+// link.
+func ClearFetchPending(releaseRoot, sha string) error {
+	p, err := pendingMarker(releaseRoot, sha)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return syncDirPath(releaseRoot)
+}
+
+// QuarantineInterruptedFetches takes the lock and runs the recovery; it
+// returns the quarantined dirs' new names.
 func QuarantineInterruptedFetches(releaseRoot, dataDir string, now time.Time) ([]string, error) {
 	unlock, err := LockReleaseRoot(releaseRoot)
 	if err != nil {
@@ -96,24 +154,27 @@ func quarantineLocked(releaseRoot, dataDir string, now time.Time) ([]string, err
 	}
 	var moved []string
 	for _, e := range ents {
-		name := e.Name()
-		if !isSHA40(name) || e.Type()&os.ModeSymlink != 0 || !e.IsDir() {
+		sha, ok := strings.CutPrefix(e.Name(), fetchPendingPrefix)
+		if !ok || !isSHA40(sha) || !e.Type().IsRegular() {
 			continue
 		}
-		dir := filepath.Join(releaseRoot, name)
-		if named[dir] {
-			continue
+		dir := filepath.Join(releaseRoot, sha)
+		fi, err := os.Lstat(dir)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			// killed before its rename: nothing landed
+		case err != nil:
+			return moved, err
+		case fi.IsDir() && !named[dir]:
+			to := filepath.Join(releaseRoot, orphanPrefix+sha+"-"+strconv.FormatInt(now.Unix(), 10))
+			if err := os.Rename(dir, to); err != nil {
+				return moved, fmt.Errorf("updaterworker: quarantine %s: %w", dir, err)
+			}
+			moved = append(moved, to)
 		}
-		to := filepath.Join(releaseRoot, orphanPrefix+name+"-"+strconv.FormatInt(now.Unix(), 10))
-		if err := os.Rename(dir, to); err != nil {
-			return moved, fmt.Errorf("updaterworker: quarantine %s: %w", dir, err)
-		}
-		moved = append(moved, to)
-	}
-	if len(moved) > 0 {
-		if d, err := os.Open(releaseRoot); err == nil {
-			_ = d.Sync()
-			d.Close()
+		// named by a verdict (the fetch finished), or not a dir: leave it
+		if err := ClearFetchPending(releaseRoot, sha); err != nil {
+			return moved, err
 		}
 	}
 	return moved, nil
@@ -161,4 +222,13 @@ func verdictReleaseDirs(dataDir string) (map[string]bool, error) {
 		out[filepath.Clean(*v.ReleaseDir)] = true
 	}
 	return out, nil
+}
+
+func syncDirPath(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	return d.Sync()
 }
