@@ -33,6 +33,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
+
 	"nofx/auth"
 )
 
@@ -88,6 +90,25 @@ func btWaitReachesPast(t *testing.T, w *btWaits, sec int64) {
 
 const btSameSecondAttempts = 5
 
+// btEarlierSecondBotToken is a bot token for the owner stamped 5 s ago
+// (iat = nbf), signed with the test's secret — so the token refresh holds
+// BEFORE a same-second re-mint can never be byte-identical to that re-mint,
+// and the pin's "nothing installed" token check can fire (F7 verify note 1:
+// with a starting token from the same second, a mutant installing the
+// refused re-mint passed every pin).
+func btEarlierSecondBotToken(t *testing.T) string {
+	t.Helper()
+	at := jwt.NewNumericDate(time.Now().Add(-5 * time.Second))
+	tok, err := jwt.NewWithClaims(jwt.SigningMethodHS256, auth.Claims{
+		UserID: btOwnerID, Email: auth.BotInternalEmail, Scope: auth.ScopeTelegram,
+		RegisteredClaims: jwt.RegisteredClaims{IssuedAt: at, NotBefore: at, ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)), Issuer: "nofxAI"},
+	}).SignedString(auth.JWTSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tok
+}
+
 // No real sleep: the second mint lands in the same second, so it is refused
 // too — refresh must stop after ONE wait and report false, installing nothing.
 func TestBotRefreshSameSecondReMintIsBoundedAndFailsClosedAtItsCallSite(t *testing.T) {
@@ -106,6 +127,7 @@ func TestBotRefreshSameSecondReMintIsBoundedAndFailsClosedAtItsCallSite(t *testi
 		if attempt > btSameSecondAttempts {
 			t.Fatalf("the same-second path was never reached in %d attempts (the wall clock crossed a second between the stamp and a mint every time)", btSameSecondAttempts)
 		}
+		ident.token = btEarlierSecondBotToken(t) // never byte-identical to a re-mint in the epoch's second
 		before, beforeAgents := ident.token, ident.agents
 		// The owner's password change, in the CURRENT second.
 		if err := st.User().UpdatePassword(btOwnerID, hash); err != nil {
@@ -117,6 +139,9 @@ func TestBotRefreshSameSecondReMintIsBoundedAndFailsClosedAtItsCallSite(t *testi
 		btNeverSucceedsRefused(t, base, ok, ident)
 		if len(w.d) > 1 {
 			t.Fatalf("refresh waited %d times — the re-mint must be bounded to ONE extra mint", len(w.d))
+		}
+		if len(w.d) == 0 && !ok {
+			t.Fatal("refresh failed closed without its one wait to the next second")
 		}
 		if len(w.d) == 0 || ok {
 			continue // a mint landed past the epoch's second on its own: admitted (checked above); retry
@@ -203,10 +228,16 @@ func TestBotRefreshSameSecondReMintAfterABlacklistIsBoundedAtItsCallSite(t *test
 		if len(w.d) > 1 {
 			t.Fatalf("refresh waited %d times — the re-mint must be bounded to ONE extra mint", len(w.d))
 		}
+		if len(w.d) == 0 && !ok {
+			t.Fatal("refresh failed closed without its one wait to the next second")
+		}
 		if len(w.d) == 0 || ok {
 			continue // a re-mint landed past the blacklisted token's second (a new string): admitted; retry on it
 		}
 		btWaitReachesPast(t, w, cl.IssuedAt.Unix())
+		// By construction the token half cannot fire here: this path is only
+		// reached when the re-mint IS `before`, byte for byte. The manager
+		// half (agents != beforeAgents) is the check that can catch a mutant.
 		if ident.token != before || ident.agents != beforeAgents {
 			t.Fatal("refresh failed but installed a new token / manager — a token the API refuses must never be installed")
 		}
