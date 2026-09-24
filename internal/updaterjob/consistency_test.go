@@ -389,3 +389,67 @@ func TestReleaseInstallAndSnapshotSHAsAgree(t *testing.T) {
 		t.Fatalf("positive control: %+v %v", got, err)
 	}
 }
+
+// TestHistoryTimesNeverRunBackwards (U1 verifier defect 7, probes H1 and
+// H5): every transition is at or after the one before it, and updated_at is
+// at or after the last transition — hence at or after created_at, which is
+// the first transition's time. Equal instants are allowed.
+func TestHistoryTimesNeverRunBackwards(t *testing.T) {
+	restoreSeams(t)
+	// H1: a transition before the previous one, through Enter and through Finish
+	for name, back := range map[string]func(j *Job, now time.Time) error{
+		"H1: entered before the last transition": func(j *Job, now time.Time) error { return j.Enter(StateVerified, now.Add(-time.Hour)) },
+		"finished before it started": func(j *Job, now time.Time) error {
+			if err := j.Enter(StateVerified, now.Add(time.Second)); err != nil {
+				return err
+			}
+			if err := j.AddReceipt(Receipt{Step: "verify", StartedAt: now, EndedAt: now, OK: true}, now.Add(time.Second)); err != nil {
+				return err
+			}
+			return j.Finish(now.Add(-time.Second))
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dd := t.TempDir()
+			j, now := walkTo(t, dd, "job-0150", StateDownloaded)
+			if err := back(&j, now); err != nil {
+				t.Fatal(err)
+			}
+			j.UpdatedAt = now.Add(time.Hour) // not the rule under test
+			if err := Write(dd, j); !errors.Is(err, ErrCorrupt) {
+				t.Errorf("Write(%s) = %v, want ErrCorrupt", name, err)
+			}
+			refusedAtBothCallSites(t, name, j)
+		})
+	}
+	// H5 and its neighbour: updated_at before created_at, and before the
+	// last transition (but after created_at)
+	for name, at := range map[string]time.Duration{
+		"H5: updated_at before created_at":      -time.Hour,
+		"updated_at before the last transition": time.Second,
+	} {
+		t.Run(name, func(t *testing.T) {
+			dd := t.TempDir()
+			j, _ := walkTo(t, dd, "job-0151", StateDownloaded, StateVerified)
+			j.UpdatedAt = t0.Add(at)
+			if err := Write(dd, j); !errors.Is(err, ErrCorrupt) {
+				t.Errorf("Write(%s) = %v, want ErrCorrupt", name, err)
+			}
+			refusedAtBothCallSites(t, name, j)
+		})
+	}
+	// positive control: equal instants throughout
+	dd := t.TempDir()
+	j := mustNew(t, "job-0152", "v1.2.0", t0)
+	mustWrite(t, dd, j)
+	if err := j.Enter(StateDownloaded, t0); err != nil {
+		t.Fatal(err)
+	}
+	if err := j.AddReceipt(Receipt{Step: "download", StartedAt: t0, EndedAt: t0, OK: true}, t0); err != nil {
+		t.Fatal(err)
+	}
+	if err := j.Finish(t0); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, dd, j)
+}

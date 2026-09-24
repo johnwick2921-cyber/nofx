@@ -590,10 +590,15 @@ func TestWriteRefusesAForbiddenEdgeOrARewrite(t *testing.T) {
 			k.State, k.Phase = StateDownloaded, PhaseDone
 			k.Receipts = k.Receipts[:1]
 		},
-		"release id changed":   func(k *Job) { k.ReleaseID = "v9.9.9" },
-		"created_at changed":   func(k *Job) { k.CreatedAt = k.CreatedAt.Add(-time.Hour) },
-		"receipt rewritten":    func(k *Job) { k.Receipts = append([]Receipt(nil), k.Receipts...); k.Receipts[0].OK = false },
-		"transition rewritten": func(k *Job) { k.Transitions = append([]Transition(nil), k.Transitions...); k.Transitions[1].At = now },
+		"release id changed": func(k *Job) { k.ReleaseID = "v9.9.9" },
+		"created_at changed": func(k *Job) { k.CreatedAt = k.CreatedAt.Add(-time.Hour) },
+		"receipt rewritten":  func(k *Job) { k.Receipts = append([]Receipt(nil), k.Receipts...); k.Receipts[0].OK = false },
+		// (the rewritten time stays between its neighbours, so only the
+		// append-only rule — not the time order — can refuse it)
+		"transition rewritten": func(k *Job) {
+			k.Transitions = append([]Transition(nil), k.Transitions...)
+			k.Transitions[1].At = k.Transitions[1].At.Add(-time.Millisecond)
+		},
 	}
 	for name, edit := range cases {
 		k := j
