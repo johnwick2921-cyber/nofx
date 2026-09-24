@@ -6660,3 +6660,19 @@ took my place". Ask who else Ranges the map before changing what is in it.
 **Fixed in W5:** (a) `UpsertArm` refuses any write whose existing row carries a non-empty `source_ref` different from the write's — typed `store.ErrArmSourceMismatch` + WARN (keys redacted); the authoring loop turns it into a named refusal (`arm_source_mismatch`: scope note, one WARN + counter per change, the leg's G1 admit withdrawn). (b) P ids are minted past every scenario id any EARLIER version of the plan used (`pictureIDsOfEarlierVersions`: resolved doc + every machine overlay; a read error refuses the hand-off). Pinned: `TestArmedRowNeverChangesOpportunity` (store; armed / cancelled-unplaced / filled), `TestPictureIDsNeverCollideAcrossVersions`, `TestAReusedPIDNeverRewritesAnotherOpportunitysRow`.
 
 **Probe:** for every id a writer mints, find every table keyed on it and ask whether the key's scope (per version, per plan, per chain) is the mint's scope. A key wider than its mint lets two things share one row.
+
+## CLASS NN (assigned at merge) — a repair outcome recorded before the bookkeeping that rewrites its reason
+
+**Found:** 2026-09-24, WAVE 1a-plan P9 (issue #190 A1/A2 sites) [A]. Both born-dead repair sites called `recordRepairOutcome(raw, err, prevReason)` BEFORE `plannerRejectBookkeeping(..., &prevReason, ...)`, which unconditionally rewrites `*prevReason` to THIS attempt's defect. The "was repairing: %s" field therefore named the PREVIOUS attempt's reason at the A1/A2 sites while every sibling site logged the current one — the one place a reader goes to see what a repair was repairing.
+
+**Fixed:** both sites call bookkeeping first, then record (the parse-site record stays inside its `modeLabel == "repair"` guard, hoisted after the shared bookkeeping line). Pinned: `TestPlannerRejectBookkeepingRewritesPrevReason` (RED with the rewrite neutered: "bookkeeping must rewrite prevReason to this attempt's defect"). The call-order invariant itself is line-read in the diff.
+
+**Probe:** when a function takes a pointer it rewrites (`*prevReason`), grep its call sites for consumers of the same variable on either side of the call. A consumer upstream of the writer reads the OLD value; one downstream reads the NEW — the order is part of the contract, not an implementation detail.
+
+## CLASS NN (assigned at merge) — a pin that asserts a recorded event which the fixture never produces
+
+**Found:** 2026-09-24, WAVE 1a-plan P7 [A]. The first `TestZoneAcceptedIdentitySkipsHeuristicDisagreement` fixture built a scenario whose `ReferenceLevelID` never resolved against `IdentityLevels` (the derived reference id needs the identity fields the fixture's `PlanLevel` did not carry). `observeScenarioIdentity` therefore recorded NOTHING, the pin asserted "count == 0", and neutering BOTH predicate branches of `zoneAcceptedIdentity` still left it green — RED could not fire. The pin certified an empty path, not the fix.
+
+**Fixed:** the pin was rebuilt on the E1 fixture (real map candidates → `IdentityLevelsFromCandidates` → a control row that MUST record 1 disagreement with the same levels and anchor, then FVG + seated-Demand rows that MUST record 0). RED: neutering the predicate fails the two zone rows while the control keeps passing.
+
+**Probe:** for every pin that asserts a zero or absence, run a control row that asserts the SAME path produces a nonzero (or a presence) with the fix removed. A pin whose RED is not demonstrated at least once is a comment, not a test.
