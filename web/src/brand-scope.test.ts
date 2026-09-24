@@ -3,6 +3,11 @@
 // deploy/nofx-lock.sh @ ace51598 (fix/lock-defects-release-meta-halfbuilt),
 // following keeper @ 97a6525cb6d10d6c8898b2d277c0fe7581872c24.
 // Only its recorded hash changes; protected-file mutation checks remain enforced.
+// Bar-feed baseline advanced 2026-09-24 for DS-102 U6 (fix/owed-ui-ci-1):
+//   provider/ninjatrader/tcp_server.go — the hello handshake log now renders an
+//     absent NT8 identity as n/a via helloProcessPair (nt8_pid/assembly_mvid;
+//     runbook 2026-09-23-addon-m21-f5.md C5, L7). Additive; no identifier
+//     renamed.
 // Bar-feed baselines advanced 2026-09-10 for two owner-dispatched waves that
 // touched the protected files without renaming an identifier:
 //   provider/ninjatrader/tcp_server.go  @ a53359ce (fix/contract-roll: the
@@ -57,6 +62,11 @@
 // bar" comments corrected to the real re-emit behaviour
 // (VLBarsSubscriptionManager.cs:539-551, cache finalises the re-emitted bar).
 // Zero code change, no identifier renamed, no guard removed.
+// tcp_server.go baseline advanced again 2026-09-24 by the origin/dev merge of
+// PR #199 (one-button M5): helloProcessPair renders nt8_pid/assembly_mvid as
+// "n/a" when absent (L7 — an unread value must not read as a datum, runbook
+// 2026-09-23-addon-m21-f5.md C5). ADDITIVE helper + one log line; the bar-feed
+// guards this pin protects are byte-untouched by that delta.
 // Wire baselines advanced 2026-09-22 for W-ONE-BUTTON M2 site 7 (CTO-dispatched,
 // feat/one-button-m2-maintenance-hold; the TCP schema must change in lockstep):
 //   provider/ninjatrader/tcp_framing.go — +59 −0: HelloPayload's five omitempty

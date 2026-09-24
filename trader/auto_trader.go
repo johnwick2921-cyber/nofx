@@ -405,6 +405,13 @@ type AutoTrader struct {
 	cancelConfirmMu    sync.Mutex
 	lastHalfDaySeedDay string // P4 half-days producer: once-per-CME-session-day throttle
 	lastCycleBarSig    string // P10.4 no-new-data dedup: newest primary-TF bar signature at last cycle
+	// entrySendMu is the ONE entry-send section (W1b FOLD-10): it spans an
+	// entry's bracket set → its open (and, separately, the post-open set), on
+	// the AI decision's cycle goroutine and the chat door's HTTP goroutine
+	// alike — the broker's (symbol, side) SL/TP maps are set-then-read, and a
+	// foreign set between them sent one entry on another's bracket. Taken only
+	// in openEntryWithRecord, via lockEntrySend.
+	entrySendMu sync.Mutex
 
 	// Two-picture mode (W-PICTURE-HTF): the deterministic evaluator, lazily
 	// built from the strategy knobs and rebuilt when they change.
@@ -494,6 +501,10 @@ type AutoTrader struct {
 	// placement beat because the ledger row already existed. Log once per
 	// (plan:version:scenario) spec, again only when the prices change.
 	armAuthoredLast map[string]string
+	// windowSweepSentMs (W1b FOLD-12) — row id → pass-clock ms of the window
+	// sweep's last cancel request for that row; the sweep's pace
+	// (window_sweep_pace.go). Pass state: armedPassMu, like the maps above.
+	windowSweepSentMs map[int64]int64
 
 	// W-EXEC-TRUTH W3 D14 — ONE armed pass at a time per trader. The scan
 	// (runCycle → maybeManageArmedOrdersAt), the live-bar event pass and the
@@ -1377,4 +1388,14 @@ func nonCMESymbolsForNT8(config AutoTraderConfig) []string {
 		}
 	}
 	return bad
+}
+
+// lockEntrySend takes the AutoTrader's ONE entry-send section (W1b FOLD-10)
+// and returns its release, which is idempotent: a caller defers it (every
+// early return and a panic release the section) AND calls it where the
+// section ends, so the section never outlives the send it guards.
+func (at *AutoTrader) lockEntrySend() (release func()) {
+	at.entrySendMu.Lock()
+	var once sync.Once
+	return func() { once.Do(at.entrySendMu.Unlock) }
 }

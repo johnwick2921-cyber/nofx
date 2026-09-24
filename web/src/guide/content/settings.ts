@@ -281,7 +281,7 @@ const dayPlan: KnobSpec[] = [
   {
     label: 'Zone rest cap (W3)',
     where: 'Strategy → Day Plan → zone_rest_max_min (API/config field)',
-    what: 'A market_in_zone limit that has rested longer than this many minutes (measured from its placement) is cancelled "zone rest expired" by the executor — a zone the market walked away from is not left working forever.',
+    what: 'A market_in_zone limit that has rested longer than this many minutes (measured from its placement) is cancelled "zone rest expired" by the executor — a zone the market walked away from is not left working forever. The rest cap is no longer the only exit: a new plan version or overlay that moves the zone off the resting limit cancels it sooner ("zone moved by vN").',
     trader:
       'The limit sits at the far edge of the zone; if price never comes back within the cap the order goes away rather than filling hours later in a different market.',
     consumer:
@@ -431,7 +431,7 @@ const risk: KnobSpec[] = [
     trader: '1 = single position; 3 = diversified.',
     consumer: 'kernel/engine_analysis.go:125 (max_positions)',
     range: '1 – 3',
-    systemDefault: '3 (owner)',
+    systemDefault: 'blank → 1 [I] (ClampLimits floor); 3 [O] (owner)',
     recommended: '⭐ 3 — matches config; MNQ SIM never needs the extra legs.',
     whenToTouch: 'Set 1 for single-position discipline.',
     perSession: 'No.',
