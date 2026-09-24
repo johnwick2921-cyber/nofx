@@ -26,12 +26,14 @@ func IssuedNotAfter(iat *jwt.NumericDate, epoch time.Time) bool {
 }
 
 // CredentialEpoch is the account's retire epoch: the instant of its last
-// credential change. users.updated_at is written only by the password change
-// (store.UserStore.UpdatePassword); creating the row stamps updated_at ==
-// created_at, which is NOT a credential change — so a row that never changed
-// (or a legacy row with a NULL/zero updated_at) has no epoch and retires
-// nothing (the registration token, minted in the row's creation second,
-// works at once).
+// credential change. users.updated_at is moved only by the password change
+// (store.UserStore.UpdatePassword) — pinned by the users-table writer census,
+// store/users_writer_census_test.go TestUsersTableWriterCensus: every other
+// reviewed writer creates the row, deletes it or migrates the schema.
+// Creating the row stamps updated_at == created_at, which is NOT a credential
+// change — so a row that never changed (or a legacy row with a NULL/zero
+// updated_at) has no epoch and retires nothing (the registration token,
+// minted in the row's creation second, works at once).
 func CredentialEpoch(createdAt, updatedAt time.Time) time.Time {
 	if updatedAt.IsZero() || updatedAt.Equal(createdAt) {
 		return time.Time{}
