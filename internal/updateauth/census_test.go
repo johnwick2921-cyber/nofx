@@ -174,9 +174,10 @@ var (
 		"ComputeMAC":    {},
 		"Message":       {},
 		"LoadDeviceKey": {"api/handler_updates.go": true},
-		"LoadAdmin":     {"api/handler_updates.go": true},
+		"LoadAdmin":     {"api/handler_updates.go": true, "internal/updaterbootstrap/bootstrap.go": true}, // red-4 #6: the attended CLI reads the incumbent for the REPLACE line
 		"VerifyMAC":     {"api/handler_updates.go": true},
 		"Consume":       {"api/handler_updates.go": true},
+		"NoteExpired":   {"api/handler_updates.go": true}, // red-3 #2: the handler raises the clock floor after VerifyMAC
 		"Dir":           {"internal/updaterbootstrap/bootstrap.go": true},
 		"AdminPath":     {"internal/updaterbootstrap/bootstrap.go": true},
 		"DeviceKeyPath": {"internal/updaterbootstrap/bootstrap.go": true},
@@ -254,8 +255,8 @@ func TestUpdateAuthCensusTablesArePinned(t *testing.T) {
 	sort.Strings(restricted)
 	want := "AdminPath=internal/updaterbootstrap/bootstrap.go;Authorize=internal/updaterbootstrap/bootstrap.go;ComputeMAC=;" +
 		"Consume=api/handler_updates.go;DeviceKeyPath=internal/updaterbootstrap/bootstrap.go;Dir=internal/updaterbootstrap/bootstrap.go;" +
-		"Enroll=internal/updaterbootstrap/bootstrap.go;LoadAdmin=api/handler_updates.go;LoadDeviceKey=api/handler_updates.go;" +
-		"Message=;SeenPath=;VerifyMAC=api/handler_updates.go"
+		"Enroll=internal/updaterbootstrap/bootstrap.go;LoadAdmin=api/handler_updates.go,internal/updaterbootstrap/bootstrap.go;LoadDeviceKey=api/handler_updates.go;" +
+		"Message=;NoteExpired=api/handler_updates.go;SeenPath=;VerifyMAC=api/handler_updates.go"
 	if got := strings.Join(restricted, ";"); got != want {
 		t.Fatalf("restricted identifiers =\n%s\nwant exactly\n%s", got, want)
 	}

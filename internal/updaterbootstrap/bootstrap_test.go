@@ -82,6 +82,11 @@ func run(inst string, stdin string, args ...string) (int, string, string) {
 
 func enrollLine(email string) string { return "ENROLL " + email + "\n" }
 
+// replaceLine types the red-4 #6 REPLACE confirmation: "REPLACE <old> WITH <new>".
+func replaceLine(oldEmail, newEmail string) string {
+	return "REPLACE " + oldEmail + " WITH " + newEmail + "\n"
+}
+
 func fileSig(t *testing.T, p string) string {
 	t.Helper()
 	fi, err := os.Lstat(p)
@@ -193,7 +198,8 @@ func TestEnrollBindsTheRowsPasswordHash(t *testing.T) {
 		t.Fatal("the stored binding must name the OLD hash only")
 	}
 	// … and re-enrolls with --replace: the new binding names the new hash.
-	if rc, _, errb := run(inst, enrollLine(bEmail), "enroll", "--replace", bEmail); rc != 0 {
+	// Red-4 #6: replace takes its OWN typed line — REPLACE <old> WITH <new>.
+	if rc, _, errb := run(inst, replaceLine(bEmail, bEmail), "enroll", "--replace", bEmail); rc != 0 {
 		t.Fatalf("replace rc=%d %s", rc, errb)
 	}
 	a2, _ := updateauth.LoadAdmin(d)
@@ -395,7 +401,8 @@ func TestReEnrollRequiresReplaceAndRotatesTheKey(t *testing.T) {
 		t.Fatal("a refused re-enroll changed the enrollment")
 	}
 	for _, args := range [][]string{{"enroll", "--replace", bEmail}, {"enroll", bEmail, "--replace"}} {
-		if rc, _, errb := run(inst, enrollLine(bEmail), args...); rc != 0 {
+		// a replace takes its own confirmation (red-4 #6), naming the incumbent
+		if rc, _, errb := run(inst, "REPLACE "+bEmail+" WITH "+bEmail+"\n", args...); rc != 0 {
 			t.Fatalf("%v rc=%d %s", args, rc, errb)
 		}
 		key1, _ := updateauth.LoadDeviceKey(d)
@@ -470,7 +477,7 @@ func TestAuthorizePrintsAGrantAndNeverTheKey(t *testing.T) {
 	}
 	d := DataDirFor(inst)
 	key, _ := updateauth.LoadDeviceKey(d)
-	if !updateauth.VerifyMAC(key, g.ReleaseID, g.JobID, g.ExpiresAt, g.HMAC) {
+	if !updateauth.VerifyMAC(key, bUser, g.ReleaseID, g.JobID, g.ExpiresAt, g.HMAC) {
 		t.Fatal("the printed MAC does not verify under device.key")
 	}
 	for _, s := range []string{out, errb} {

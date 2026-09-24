@@ -19,6 +19,13 @@ const MaxAuthorizationWindow = 5 * time.Minute
 // ErrExpired: expires_at is not in (now, now+MaxAuthorizationWindow].
 var ErrExpired = errors.New("updateauth: authorization outside its validity window")
 
+// ErrClockBehindSeenStore: Authorize refused to mint because the code it
+// would mint expires at or below the seen store's pruned-through watermark
+// (the server would answer 409 for a job never used) or its clock floor (the
+// server would answer 403) — this box's clock is behind a reading the store
+// already recorded (red-team red-3 #5).
+var ErrClockBehindSeenStore = errors.New("updateauth: refusing to mint: the clock is behind the seen-job store (a code minted now would be refused) — fix the clock, or wait until it passes the store's floor")
+
 var macHexRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 // MACPurpose is the purpose/version tag every install-authorization MAC
@@ -30,10 +37,15 @@ var macHexRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
 const MACPurpose = "nofx-update-install/v1"
 
 // Message is the canonical MAC input:
-// MACPurpose|release_id|job_id|expires_at, with expires_at in unix seconds as
-// a canonical decimal. Both ids are validated first — the allow-lists exclude
-// '|', so no two field triples share a message.
-func Message(releaseID, jobID string, expiresAt int64) ([]byte, error) {
+// MACPurpose|user_id|release_id|job_id|expires_at, with user_id the ENROLLED
+// administrator's id (admin.json — red-team red-4 #4: a code is bound to the
+// administrator it was minted for) and expires_at in unix seconds as a
+// canonical decimal. Every field is validated first — the allow-lists
+// exclude '|', so no two field tuples share a message.
+func Message(userID, releaseID, jobID string, expiresAt int64) ([]byte, error) {
+	if !validUserID(userID) {
+		return nil, malformed("user_id")
+	}
 	if !ValidReleaseID(releaseID) {
 		return nil, malformed("release_id")
 	}
@@ -43,17 +55,17 @@ func Message(releaseID, jobID string, expiresAt int64) ([]byte, error) {
 	if expiresAt <= 0 {
 		return nil, malformed("expires_at")
 	}
-	return []byte(MACPurpose + "|" + releaseID + "|" + jobID + "|" + strconv.FormatInt(expiresAt, 10)), nil
+	return []byte(MACPurpose + "|" + userID + "|" + releaseID + "|" + jobID + "|" + strconv.FormatInt(expiresAt, 10)), nil
 }
 
 // ComputeMAC returns the lowercase-hex HMAC-SHA256 of Message under key.
 // Callers: the attended `updater-bootstrap authorize` ONLY (CTO ruling Q1(a):
 // nothing on the API side mints a MAC). A census test pins it.
-func ComputeMAC(key []byte, releaseID, jobID string, expiresAt int64) (string, error) {
+func ComputeMAC(key []byte, userID, releaseID, jobID string, expiresAt int64) (string, error) {
 	if len(key) != DeviceKeyLen || degenerateKey(key) {
 		return "", errors.New("updateauth: bad key (wrong length or degenerate)")
 	}
-	msg, err := Message(releaseID, jobID, expiresAt)
+	msg, err := Message(userID, releaseID, jobID, expiresAt)
 	if err != nil {
 		return "", err
 	}
@@ -65,11 +77,11 @@ func ComputeMAC(key []byte, releaseID, jobID string, expiresAt int64) (string, e
 // VerifyMAC reports whether macHex (exactly 64 lowercase hex chars) is the
 // HMAC-SHA256 of Message under key. The comparison is hmac.Equal (constant
 // time). A degenerate key (every byte equal) verifies nothing (M3-RT-F2).
-func VerifyMAC(key []byte, releaseID, jobID string, expiresAt int64, macHex string) bool {
+func VerifyMAC(key []byte, userID, releaseID, jobID string, expiresAt int64, macHex string) bool {
 	if len(key) != DeviceKeyLen || degenerateKey(key) || !macHexRe.MatchString(macHex) {
 		return false
 	}
-	msg, err := Message(releaseID, jobID, expiresAt)
+	msg, err := Message(userID, releaseID, jobID, expiresAt)
 	if err != nil {
 		return false
 	}
@@ -165,14 +177,18 @@ func ParseInstallRequest(r io.Reader) (Grant, error) {
 // Authorize mints one Grant for releaseID from the enrolled device key:
 // a fresh random job id, expires_at = now+MaxAuthorizationWindow. It refuses
 // unless the installation is enrolled (admin.json AND device.key load under
-// the same rules the API gate applies). The key itself is never returned.
+// the same rules the API gate applies) and unless the server could accept
+// the code (the seen-job store is readable and the code expires above its
+// watermark and clock floor — ErrClockBehindSeenStore otherwise). The key
+// itself is never returned.
 //
 // Callers: the attended CLI ONLY (census-pinned).
 func Authorize(dataDir, releaseID string, now time.Time) (Grant, error) {
 	if !ValidReleaseID(releaseID) {
 		return Grant{}, malformed("release_id")
 	}
-	if _, err := LoadAdmin(dataDir); err != nil {
+	admin, err := LoadAdmin(dataDir)
+	if err != nil {
 		return Grant{}, err
 	}
 	key, err := LoadDeviceKey(dataDir)
@@ -184,7 +200,25 @@ func Authorize(dataDir, releaseID string, now time.Time) (Grant, error) {
 		return Grant{}, err
 	}
 	exp := now.Add(MaxAuthorizationWindow).Unix()
-	mac, err := ComputeMAC(key, releaseID, job, exp)
+	// Red-team red-3 #5: never hand out a code the server can only refuse.
+	// Read the seen store (read-only: no lock — writers replace it by rename)
+	// under the same rules Consume reads it: unreadable, or missing once
+	// enrolled, refuses; a code expiring at or below the pruned-through
+	// watermark (server: 409 for a job never used) or the clock floor
+	// (server: 403) refuses; a job id already present refuses.
+	st, err := readSeen(dataDir)
+	if err != nil {
+		return Grant{}, err
+	}
+	if exp <= st.PrunedThrough || exp <= st.ClockFloor {
+		return Grant{}, ErrClockBehindSeenStore
+	}
+	for _, e := range st.IDs {
+		if e.JobID == job {
+			return Grant{}, errors.New("updateauth: refusing to mint: the fresh job id is already in the seen-job store")
+		}
+	}
+	mac, err := ComputeMAC(key, admin.UserID, releaseID, job, exp)
 	if err != nil {
 		return Grant{}, err
 	}

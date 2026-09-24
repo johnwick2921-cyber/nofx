@@ -43,13 +43,13 @@ func TestMessageSplitsBackIntoItsExactTriple(t *testing.T) {
 	for i := 0; i < 300000; i++ {
 		rel, job := gen(), gen()
 		exp := r.Int63n(1 << 40)
-		m, err := Message(rel, job, exp)
+		m, err := Message(tUser, rel, job, exp)
 		if err != nil {
 			continue
 		}
 		accepted++
 		parts := strings.Split(string(m), "|")
-		if len(parts) != 4 || parts[0] != MACPurpose || parts[1] != rel || parts[2] != job || parts[3] != strconv.FormatInt(exp, 10) {
+		if len(parts) != 5 || parts[0] != MACPurpose || parts[1] != tUser || parts[2] != rel || parts[3] != job || parts[4] != strconv.FormatInt(exp, 10) {
 			t.Fatalf("ambiguous message %q from (%q,%q,%d)", m, rel, job, exp)
 		}
 	}
@@ -105,15 +105,15 @@ func TestParseInstallRequestRefusesEscapedAliasesBOMAndInvalidUTF8(t *testing.T)
 	for i := range key {
 		key[i] = byte(i + 1)
 	}
-	good, err := ComputeMAC(key, "v1", "0123456789abcdef", 1800000300)
+	good, err := ComputeMAC(key, tUser, "v1", "0123456789abcdef", 1800000300)
 	if err != nil {
 		t.Fatal(err)
 	}
 	g, err := ParseInstallRequest(strings.NewReader(body("v1", good+`\n`)))
-	if err == nil && VerifyMAC(key, g.ReleaseID, g.JobID, g.ExpiresAt, g.HMAC) {
+	if err == nil && VerifyMAC(key, tUser, g.ReleaseID, g.JobID, g.ExpiresAt, g.HMAC) {
 		t.Error("an hmac with a JSON-escaped trailing newline verified")
 	}
-	if g2, err := ParseInstallRequest(strings.NewReader(body("v1", good))); err != nil || !VerifyMAC(key, g2.ReleaseID, g2.JobID, g2.ExpiresAt, g2.HMAC) {
+	if g2, err := ParseInstallRequest(strings.NewReader(body("v1", good))); err != nil || !VerifyMAC(key, tUser, g2.ReleaseID, g2.JobID, g2.ExpiresAt, g2.HMAC) {
 		t.Fatalf("positive control: the real MAC did not verify (%v)", err)
 	}
 }
@@ -146,7 +146,7 @@ func TestSeenStoreEntryCapBindsBeforeTheByteCapAndMalformedShapesFailClosed(t *t
 		t.Fatal(err)
 	}
 	var b strings.Builder
-	b.WriteString(`{"v":2,"pruned_through":0,"ids":[`)
+	b.WriteString(`{"v":3,"pruned_through":0,"clock_floor":0,"ids":[`)
 	exp := tNow.Unix() + 300
 	for i := 0; i < MaxSeenEntries-1; i++ {
 		if i > 0 {
@@ -158,48 +158,55 @@ func TestSeenStoreEntryCapBindsBeforeTheByteCapAndMalformedShapesFailClosed(t *t
 	if err := os.WriteFile(SeenPath(d), []byte(b.String()), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := Consume(d, strings.Repeat("f", 64), exp, tNow); err != nil {
+	if err := Consume(d, strings.Repeat("f", 64), exp, clockAt(tNow)); err != nil {
 		t.Errorf("entry %d (the last under the cap): %v", MaxSeenEntries, err)
 	}
-	if err := Consume(d, strings.Repeat("e", 64), exp, tNow); !errors.Is(err, ErrSeenFull) {
+	if err := Consume(d, strings.Repeat("e", 64), exp, clockAt(tNow)); !errors.Is(err, ErrSeenFull) {
 		t.Errorf("entry %d: %v, want ErrSeenFull", MaxSeenEntries+1, err)
 	}
 	big := make([]byte, maxSeenFileBytes+1)
 	for i := range big {
 		big[i] = ' '
 	}
-	copy(big, []byte(`{"v":2,"pruned_through":0,"ids":[]}`))
+	copy(big, []byte(`{"v":3,"pruned_through":0,"clock_floor":0,"ids":[]}`))
 	if err := os.WriteFile(SeenPath(d), big, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := Consume(d, strings.Repeat("d", 64), exp, tNow); !errors.Is(err, ErrSeenCorrupt) {
+	if err := Consume(d, strings.Repeat("d", 64), exp, clockAt(tNow)); !errors.Is(err, ErrSeenCorrupt) {
 		t.Errorf("oversize store: %v, want ErrSeenCorrupt", err)
 	}
 	for name, body := range map[string]string{
-		"v float":             `{"v":2.0,"pruned_through":0,"ids":[]}`,
-		"ids null":            `{"v":2,"pruned_through":0,"ids":null}`,
-		"dup v":               `{"v":2,"v":2,"pruned_through":0,"ids":[]}`,
-		"entry extra":         `{"v":2,"pruned_through":0,"ids":[{"job_id":"0123456789abcdef","expires_at":1,"consumed_at":1,"x":1}]}`,
-		"entry badid":         `{"v":2,"pruned_through":0,"ids":[{"job_id":"../x","expires_at":1,"consumed_at":1}]}`,
-		"entry exp0":          `{"v":2,"pruned_through":0,"ids":[{"job_id":"0123456789abcdef","expires_at":0,"consumed_at":1}]}`,
-		"entry consumed0":     `{"v":2,"pruned_through":0,"ids":[{"job_id":"0123456789abcdef","expires_at":1,"consumed_at":0}]}`,
-		"ids object":          `{"v":2,"pruned_through":0,"ids":{}}`,
-		"two objs":            `{"v":2,"pruned_through":0,"ids":[]}{"v":2,"pruned_through":0,"ids":[]}`,
-		"v string":            `{"v":"2","pruned_through":0,"ids":[]}`,
-		"ids trailing":        `{"v":2,"pruned_through":0,"ids":[] }garbage`,
+		"v float":             `{"v":3.0,"pruned_through":0,"clock_floor":0,"ids":[]}`,
+		"ids null":            `{"v":3,"pruned_through":0,"clock_floor":0,"ids":null}`,
+		"dup v":               `{"v":3,"v":3,"pruned_through":0,"clock_floor":0,"ids":[]}`,
+		"entry extra":         `{"v":3,"pruned_through":0,"clock_floor":0,"ids":[{"job_id":"0123456789abcdef","expires_at":1,"consumed_at":1,"x":1}]}`,
+		"entry badid":         `{"v":3,"pruned_through":0,"clock_floor":0,"ids":[{"job_id":"../x","expires_at":1,"consumed_at":1}]}`,
+		"entry exp0":          `{"v":3,"pruned_through":0,"clock_floor":0,"ids":[{"job_id":"0123456789abcdef","expires_at":0,"consumed_at":1}]}`,
+		"entry consumed0":     `{"v":3,"pruned_through":0,"clock_floor":0,"ids":[{"job_id":"0123456789abcdef","expires_at":1,"consumed_at":0}]}`,
+		"ids object":          `{"v":3,"pruned_through":0,"clock_floor":0,"ids":{}}`,
+		"two objs":            `{"v":3,"pruned_through":0,"clock_floor":0,"ids":[]}{"v":3,"pruned_through":0,"clock_floor":0,"ids":[]}`,
+		"v string":            `{"v":"3","pruned_through":0,"clock_floor":0,"ids":[]}`,
+		"ids trailing":        `{"v":3,"pruned_through":0,"clock_floor":0,"ids":[] }garbage`,
 		"v1 (no watermark)":   `{"v":1,"ids":[]}`,
-		"watermark missing":   `{"v":2,"ids":[]}`,
-		"watermark negative":  `{"v":2,"pruned_through":-1,"ids":[]}`,
-		"watermark float":     `{"v":2,"pruned_through":1.5,"ids":[]}`,
-		"watermark string":    `{"v":2,"pruned_through":"0","ids":[]}`,
-		"watermark leading 0": `{"v":2,"pruned_through":01,"ids":[]}`,
-		"watermark null":      `{"v":2,"pruned_through":null,"ids":[]}`,
-		"watermark dup":       `{"v":2,"pruned_through":0,"pruned_through":0,"ids":[]}`,
+		"watermark missing":   `{"v":3,"clock_floor":0,"ids":[]}`,
+		"watermark negative":  `{"v":3,"pruned_through":-1,"clock_floor":0,"ids":[]}`,
+		"watermark float":     `{"v":3,"pruned_through":1.5,"clock_floor":0,"ids":[]}`,
+		"watermark string":    `{"v":3,"pruned_through":"0","clock_floor":0,"ids":[]}`,
+		"watermark leading 0": `{"v":3,"pruned_through":01,"clock_floor":0,"ids":[]}`,
+		"watermark null":      `{"v":3,"pruned_through":null,"clock_floor":0,"ids":[]}`,
+		"watermark dup":       `{"v":3,"pruned_through":0,"pruned_through":0,"clock_floor":0,"ids":[]}`,
+		"v2 (no clock floor)": `{"v":2,"pruned_through":0,"ids":[]}`,
+		"floor missing":       `{"v":3,"pruned_through":0,"ids":[]}`,
+		"floor negative":      `{"v":3,"pruned_through":0,"clock_floor":-1,"ids":[]}`,
+		"floor float":         `{"v":3,"pruned_through":0,"clock_floor":1.5,"ids":[]}`,
+		"floor string":        `{"v":3,"pruned_through":0,"clock_floor":"0","ids":[]}`,
+		"floor null":          `{"v":3,"pruned_through":0,"clock_floor":null,"ids":[]}`,
+		"floor dup":           `{"v":3,"pruned_through":0,"clock_floor":0,"clock_floor":0,"ids":[]}`,
 	} {
 		if err := os.WriteFile(SeenPath(d), []byte(body), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if err := Consume(d, strings.Repeat("c", 64), exp, tNow); !errors.Is(err, ErrSeenCorrupt) {
+		if err := Consume(d, strings.Repeat("c", 64), exp, clockAt(tNow)); !errors.Is(err, ErrSeenCorrupt) {
 			t.Errorf("%s: %v, want ErrSeenCorrupt", name, err)
 		}
 		if got, _ := os.ReadFile(SeenPath(d)); string(got) != body {
@@ -207,10 +214,10 @@ func TestSeenStoreEntryCapBindsBeforeTheByteCapAndMalformedShapesFailClosed(t *t
 		}
 	}
 	// positive control: a valid empty store accepts
-	if err := os.WriteFile(SeenPath(d), []byte(`{"v":2,"pruned_through":0,"ids":[]}`), 0o600); err != nil {
+	if err := os.WriteFile(SeenPath(d), []byte(`{"v":3,"pruned_through":0,"clock_floor":0,"ids":[]}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := Consume(d, strings.Repeat("c", 64), exp, tNow); err != nil {
+	if err := Consume(d, strings.Repeat("c", 64), exp, clockAt(tNow)); err != nil {
 		t.Fatalf("positive control: %v", err)
 	}
 }
@@ -228,15 +235,15 @@ func TestConsumeRefusesAReplayAfterAClockRollbackPastRetention(t *testing.T) {
 	T := time.Unix(1_800_000_000, 0)
 	jobA := "aaaaaaaaaaaaaaaa"
 	expA := T.Unix() + 300
-	if err := Consume(d, jobA, expA, T); err != nil {
+	if err := Consume(d, jobA, expA, clockAt(T)); err != nil {
 		t.Fatal(err)
 	}
-	if err := Consume(d, jobA, expA, T); !errors.Is(err, ErrReplay) {
+	if err := Consume(d, jobA, expA, clockAt(T)); !errors.Is(err, ErrReplay) {
 		t.Fatalf("positive control: immediate replay not refused: %v", err)
 	}
 	// the clock runs forward; a later install prunes A
 	T2 := time.Unix(expA+601, 0)
-	if err := Consume(d, "bbbbbbbbbbbbbbbb", T2.Unix()+300, T2); err != nil {
+	if err := Consume(d, "bbbbbbbbbbbbbbbb", T2.Unix()+300, clockAt(T2)); err != nil {
 		t.Fatal(err)
 	}
 	// the clock is stepped back to before A's expiry: A's MAC is in-window again
@@ -244,16 +251,24 @@ func TestConsumeRefusesAReplayAfterAClockRollbackPastRetention(t *testing.T) {
 	if CheckExpiry(expA, T3) != nil {
 		t.Fatal("precondition: A is not inside its window at T3")
 	}
-	if err := Consume(d, jobA, expA, T3); !errors.Is(err, ErrReplay) || !errors.Is(err, ErrPrunedReplay) {
+	if err := Consume(d, jobA, expA, clockAt(T3)); !errors.Is(err, ErrReplay) || !errors.Is(err, ErrPrunedReplay) {
 		t.Errorf("job %s after a prune + %ds clock step-back: err = %v, want ErrPrunedReplay (a replay)", jobA, T2.Unix()-T3.Unix(), err)
 	}
-	// positive control: a grant minted at the stepped-back clock carries
-	// expires_at = T3+300 > the watermark (expA) and is admitted once
+	// a grant minted at the stepped-back clock carries expires_at = T3+300,
+	// above the watermark (expA) — not a replay — but at or below the clock
+	// floor T2 the store recorded when it consumed B: expired (red-3 #2, the
+	// server's expiry verdict is sticky across a step-back)
 	fresh := "cccccccccccccccc"
-	if err := Consume(d, fresh, T3.Unix()+300, T3); err != nil {
-		t.Fatalf("positive control: a fresh grant at the stepped-back clock: %v", err)
+	if err := Consume(d, fresh, T3.Unix()+300, clockAt(T3)); !errors.Is(err, ErrExpiredAtFloor) || errors.Is(err, ErrReplay) {
+		t.Fatalf("a fresh grant at the stepped-back clock: err = %v, want ErrExpiredAtFloor (not a replay)", err)
 	}
-	if err := Consume(d, fresh, T3.Unix()+300, T3); !errors.Is(err, ErrReplay) || errors.Is(err, ErrPrunedReplay) {
+	// positive control: once the clock passes the floor a fresh grant is
+	// admitted once, and its replay is the plain ErrReplay
+	T4 := time.Unix(T2.Unix()+1, 0)
+	if err := Consume(d, fresh, T4.Unix()+300, clockAt(T4)); err != nil {
+		t.Fatalf("positive control: a fresh grant past the floor: %v", err)
+	}
+	if err := Consume(d, fresh, T4.Unix()+300, clockAt(T4)); !errors.Is(err, ErrReplay) || errors.Is(err, ErrPrunedReplay) {
 		t.Fatalf("fresh id replay: err = %v, want the plain ErrReplay", err)
 	}
 }
@@ -265,8 +280,8 @@ func TestConsumeRefusesAReplayAfterAClockRollbackPastRetention(t *testing.T) {
 func TestConsumeNeverWritesARecordItsReaderRefuses(t *testing.T) {
 	for _, clock := range []time.Time{time.Unix(0, 0), time.Unix(-100, 0), time.Unix(0, 999_999_999)} {
 		d := t.TempDir()
-		_ = Consume(d, "0123456789abcdef", clock.Unix()+150, clock) // admitted or refused: either is fine (exp > 0 for all clocks)
-		if err := Consume(d, "0123456789abcdee", tNow.Unix()+60, tNow); err != nil {
+		_ = Consume(d, "0123456789abcdef", clock.Unix()+150, clockAt(clock)) // admitted or refused: either is fine (exp > 0 for all clocks)
+		if err := Consume(d, "0123456789abcdee", tNow.Unix()+60, clockAt(tNow)); err != nil {
 			t.Errorf("clock %d: the store no longer accepts a fresh id at a sane clock: %v", clock.Unix(), err)
 		}
 	}
