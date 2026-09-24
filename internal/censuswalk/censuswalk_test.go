@@ -115,3 +115,82 @@ func TestToolchainUncoveredControls(t *testing.T) {
 		t.Fatalf("a linked package under the root-level web/ must be reported, got %v", uncovered)
 	}
 }
+
+// nonTestImporters asks the toolchain which packages matched by ./... import
+// target from a NON-test file (.Imports never carries TestImports or
+// XTestImports). A failing go command is an error (fail closed).
+func nonTestImporters(root, target string) (importers []string, matched int, err error) {
+	cmd := goCommand(root, "list", "-e", "-f", "{{.ImportPath}}{{range .Imports}} {{.}}{{end}}", "./...")
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, 0, err
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		f := strings.Fields(line)
+		if len(f) == 0 {
+			continue
+		}
+		matched++
+		for _, ip := range f[1:] {
+			if ip == target {
+				importers = append(importers, f[0])
+			}
+		}
+	}
+	sort.Strings(importers)
+	return importers, matched, nil
+}
+
+// PIN (M3 census repair, verifier N1): the package doc says "Test tooling
+// only: nothing but _test.go files may import this package" — asked of the
+// toolchain, not asserted: no non-test file of the module imports censuswalk,
+// and neither the app nor any cmd/ binary links it.
+func TestCensusWalkIsTestToolingOnly(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	module, err := ModulePath(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := module + "/internal/censuswalk"
+	importers, matched, err := nonTestImporters(root, target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if matched < 50 {
+		t.Fatalf("go list ./... matched only %d packages — the toolchain is not seeing the module", matched)
+	}
+	if len(importers) > 0 {
+		t.Fatalf("non-test code imports %s (test tooling only):\n%s", target, strings.Join(importers, "\n"))
+	}
+	linked, err := ListPackages(root, true, ".", "./cmd/...")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range linked {
+		if p.ImportPath == target {
+			t.Fatalf("the app or a cmd/ binary links %s (go list -deps . ./cmd/...)", target)
+		}
+	}
+}
+
+// nonTestImporters has teeth: a non-test importer is reported, a _test.go
+// importer is not.
+func TestNonTestImportersControls(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "go.mod", "module nofx\n\ngo 1.25\n")
+	write(t, root, "internal/censuswalk/w.go", "package censuswalk\n")
+	write(t, root, "api/api.go", "package api\n")
+	write(t, root, "api/api_test.go", "package api\n\nimport _ \"nofx/internal/censuswalk\"\n")
+	got, _, err := nonTestImporters(root, "nofx/internal/censuswalk")
+	if err != nil || len(got) != 0 {
+		t.Fatalf("a _test.go importer is test tooling: got %v err %v", got, err)
+	}
+	write(t, root, "api/uses.go", "package api\n\nimport _ \"nofx/internal/censuswalk\"\n")
+	got, _, err = nonTestImporters(root, "nofx/internal/censuswalk")
+	if err != nil || len(got) != 1 || got[0] != "nofx/api" {
+		t.Fatalf("a non-test importer must be reported: got %v err %v", got, err)
+	}
+}
