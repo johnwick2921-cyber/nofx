@@ -371,10 +371,13 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 		// below writes onto (or mints the next placement of) this key; when the
 		// row already carries a DIFFERENT opportunity, none of them may run —
 		// the armed branch would rewrite A's unplaced row to B's source_ref,
-		// deadline, epoch and prices. Refused by type, loudly.
+		// deadline, epoch and prices. Refused by type, and SILENTLY here
+		// (WAVE 1b E7): every pass re-authors the same leg and re-hits this
+		// refusal, and the store has no identity to dedupe on. The typed error
+		// carries every field (row, scenario, leg, state, both redacted keys);
+		// the caller logs it — the authoring loop's armSourceRefused WARNs and
+		// counts once per change, the shadow path and the API seams log/return it.
 		if ex := strings.TrimSpace(existing.SourceRef); ex != "" && ex != strings.TrimSpace(row.SourceRef) {
-			logger.Warnf("⛔ arm write refused: %s leg %d row #%d (%s) holds opportunity %s — the write carries %s; a ledger row never changes opportunity",
-				row.Scenario, row.LegIndex+1, existing.ID, existing.State, RedactPictureOppKey(ex), RedactPictureOppKey(strings.TrimSpace(row.SourceRef)))
 			return fmt.Errorf("%w: row #%d (%s leg %d, %s) holds %s, the write carries %s",
 				ErrArmSourceMismatch, existing.ID, row.Scenario, row.LegIndex+1, existing.State,
 				RedactPictureOppKey(ex), RedactPictureOppKey(strings.TrimSpace(row.SourceRef)))
@@ -870,6 +873,40 @@ func (s *ArmedOrderStore) ListFilled(traderID string, limit int) ([]ArmedOrderDB
 	var out []ArmedOrderDB
 	err := s.db.Where("trader_id = ? AND state = 'filled'", traderID).
 		Order("updated_at DESC").Limit(limit).Find(&out).Error
+	return out, err
+}
+
+// LedgerClockSlack widens a SQL bound on a time column stored as zone-bearing
+// text: the lexical compare is exact only when every writer used one zone, so
+// a "since" read fetches this much extra and its caller re-checks the exact
+// window on the parsed time. Over-fetching only costs rows; under-fetching
+// would hide a fresh fill.
+const LedgerClockSlack = 24 * time.Hour
+
+// ListFilledSinceAllTraders returns FILLED rows of EVERY trader — loaded,
+// running, stopped or deleted — whose updated_at may fall at or after since
+// (W1b E10: "did any producer fill on this account just now?" is a ledger
+// question; a trader that stopped between its fill and the read still owns
+// that fill). The SQL bound is widened by LedgerClockSlack; callers MUST
+// re-check the exact window on UpdatedAt. Single-state filter on the canonical
+// StateFilled constant. Newest first.
+func (s *ArmedOrderStore) ListFilledSinceAllTraders(since time.Time) ([]ArmedOrderDB, error) {
+	var out []ArmedOrderDB
+	err := s.db.Where("state = ? AND updated_at >= ?", StateFilled, since.Add(-LedgerClockSlack)).
+		Order("updated_at DESC").Find(&out).Error
+	return out, err
+}
+
+// ListFilledSince returns ONE trader's FILLED rows whose updated_at may fall at
+// or after since (W1b FOLD-4: the untracked materialization's price-match
+// fallback reads only arms filled inside the fill ring's own window — an older
+// arm never matches). The SQL bound is widened by LedgerClockSlack; callers
+// MUST re-check the exact window on the parsed UpdatedAt. Newest first by text
+// (the caller orders by instant).
+func (s *ArmedOrderStore) ListFilledSince(traderID string, since time.Time) ([]ArmedOrderDB, error) {
+	var out []ArmedOrderDB
+	err := s.db.Where("trader_id = ? AND state = ? AND updated_at >= ?", traderID, StateFilled, since.Add(-LedgerClockSlack)).
+		Order("updated_at DESC").Find(&out).Error
 	return out, err
 }
 
