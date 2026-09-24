@@ -40,11 +40,16 @@ import (
 // OFF state) every route refuses and nothing else in the app changes.
 //
 // Install = the gate (identity factor: JWT of the enrolled admin) AND an
-// HMAC-SHA256 over nofx-update-install/v1|release_id|job_id|expires_at under
-// device.key (possession factor; updateauth.Message is the one layout).
+// HMAC-SHA256 over nofx-update-install/v1|admin_user_id|release_id|job_id|
+// expires_at under device.key (possession factor; updateauth.Message is the
+// one layout).
 // Nothing on the API side can mint a MAC (CTO ruling Q1(a)): the
 // owner runs the attended `updater-bootstrap authorize <release_id>` on the
 // box and pastes its {job_id, expires_at, hmac}.
+
+// updatesAdminIDKey carries the enrolled admin's user_id from the gate to the
+// install handler: the MAC is verified over THAT identity (red-4 #4).
+const updatesAdminIDKey = "updates_admin_user_id"
 
 // UpdateHeader is the custom header every /api/updates request must carry
 // with the exact value "1". It is NOT in the CORS Access-Control-Allow-Headers
@@ -274,6 +279,7 @@ func (s *Server) updatesRefusal(c *gin.Context) string {
 	if u.UpdatedAt.IsZero() || auth.IssuedNotAfter(claims.IssuedAt, u.UpdatedAt) {
 		return "token older than the user row"
 	}
+	c.Set(updatesAdminIDKey, admin.UserID)
 	return ""
 }
 
@@ -302,7 +308,8 @@ func (s *Server) handleUpdatesCheck(c *gin.Context) {
 // handleUpdatesInstall — POST /api/updates/install
 // {release_id, job_id, expires_at, hmac}. Order (each refusal final):
 // strict parse 400 → expiry window 403 → HMAC 403 → consume job id (replay
-// 409) → verified manifest (M3 stub: 422 "release not verified").
+// 409; at/below the seen store's clock floor 403) → verified manifest (M3
+// stub: 422 "release not verified").
 func (s *Server) handleUpdatesInstall(c *gin.Context) {
 	dataDir := trader.MaintenanceDataDir()
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUpdateInstallBody)
@@ -312,8 +319,26 @@ func (s *Server) handleUpdatesInstall(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "bad request"})
 		return
 	}
+	// the enrolled admin the gate admitted (fail closed when absent: the MAC
+	// is bound to that identity and cannot verify without it)
+	adminID := c.GetString(updatesAdminIDKey)
 	now := s.updatesClock()
 	if err := updateauth.CheckExpiry(g.ExpiresAt, now); err != nil {
+		// Red-team red-3 #2: a GENUINE code refused as expired raises the
+		// seen store's clock floor, so it stays expired after a clock
+		// step-back. Only a key holder moves the floor (MAC first); a code
+		// from the future (clock behind) is not "expired" and writes nothing.
+		if g.ExpiresAt <= now.Unix() {
+			if key, kerr := updateauth.LoadDeviceKey(dataDir); kerr == nil {
+				genuine := adminID != "" && updateauth.VerifyMAC(key, adminID, g.ReleaseID, g.JobID, g.ExpiresAt, g.HMAC)
+				clear(key)
+				if genuine {
+					if nerr := updateauth.NoteExpired(dataDir, now); nerr != nil {
+						logger.Errorf("🔒 [updates] install: could not record the expiry clock floor: %v", nerr)
+					}
+				}
+			}
+		}
 		updatesForbid(c, "install: outside the validity window")
 		return
 	}
@@ -322,14 +347,17 @@ func (s *Server) handleUpdatesInstall(c *gin.Context) {
 		updatesForbid(c, "install: device key unreadable")
 		return
 	}
-	ok := updateauth.VerifyMAC(key, g.ReleaseID, g.JobID, g.ExpiresAt, g.HMAC)
+	ok := adminID != "" && updateauth.VerifyMAC(key, adminID, g.ReleaseID, g.JobID, g.ExpiresAt, g.HMAC)
 	clear(key)
 	if !ok {
 		updatesForbid(c, "install: MAC mismatch")
 		return
 	}
 	// The job id is spent from here on, whatever follows.
-	if err := updateauth.Consume(dataDir, g.JobID, g.ExpiresAt, now); err != nil {
+	// Expiry is judged again by Consume on a clock reading taken UNDER the
+	// seen-store lock (red-team red-3 #3); the check above is only the early,
+	// lock-free refusal.
+	if err := updateauth.Consume(dataDir, g.JobID, g.ExpiresAt, s.updatesClock); err != nil {
 		if errors.Is(err, updateauth.ErrReplay) {
 			if errors.Is(err, updateauth.ErrPrunedReplay) {
 				// M3-RT-F1: expires_at at or below the store's pruned-through
@@ -341,6 +369,10 @@ func (s *Server) handleUpdatesInstall(c *gin.Context) {
 				logger.Warnf("🔒 [updates] install: job id replay")
 			}
 			c.AbortWithStatusJSON(http.StatusConflict, gin.H{"error": "job already used"})
+			return
+		}
+		if errors.Is(err, updateauth.ErrExpired) {
+			updatesForbid(c, "install: expired under the seen-store lock, or at/below its clock floor (clock stepped back?)")
 			return
 		}
 		logger.Errorf("🔒 [updates] install: job-id store refused: %v", err)

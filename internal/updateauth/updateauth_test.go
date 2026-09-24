@@ -27,6 +27,10 @@ const (
 
 var tNow = time.Unix(1_800_000_000, 0)
 
+// clockAt is a clock that always reads t (Consume takes a clock, read under
+// its lock — red-team red-3 #3).
+func clockAt(t time.Time) func() time.Time { return func() time.Time { return t } }
+
 func enrolled(t *testing.T) string {
 	t.Helper()
 	d := t.TempDir()
@@ -265,15 +269,15 @@ func rawMAC(key []byte, msg string) string {
 
 func TestMACIsHMACSHA256OverTheCanonicalMessage(t *testing.T) {
 	key := seqKey(7)
-	msg, err := Message("v1.2.3", "0123456789abcdef", 1800000300)
-	if err != nil || string(msg) != "nofx-update-install/v1|v1.2.3|0123456789abcdef|1800000300" {
+	msg, err := Message(tUser, "v1.2.3", "0123456789abcdef", 1800000300)
+	if err != nil || string(msg) != "nofx-update-install/v1|"+tUser+"|v1.2.3|0123456789abcdef|1800000300" {
 		t.Fatalf("message %q err %v", msg, err)
 	}
-	mac, err := ComputeMAC(key, "v1.2.3", "0123456789abcdef", 1800000300)
-	if err != nil || mac != rawMAC(key, "nofx-update-install/v1|v1.2.3|0123456789abcdef|1800000300") {
+	mac, err := ComputeMAC(key, tUser, "v1.2.3", "0123456789abcdef", 1800000300)
+	if err != nil || mac != rawMAC(key, "nofx-update-install/v1|"+tUser+"|v1.2.3|0123456789abcdef|1800000300") {
 		t.Fatalf("mac mismatch: %s", mac)
 	}
-	if !VerifyMAC(key, "v1.2.3", "0123456789abcdef", 1800000300, mac) {
+	if !VerifyMAC(key, tUser, "v1.2.3", "0123456789abcdef", 1800000300, mac) {
 		t.Fatal("positive control: valid MAC refused")
 	}
 	flip := []byte(mac)
@@ -284,19 +288,21 @@ func TestMACIsHMACSHA256OverTheCanonicalMessage(t *testing.T) {
 	}
 	other := seqKey(8)
 	bad := map[string]func() bool{
-		"wrong key":     func() bool { return VerifyMAC(other, "v1.2.3", "0123456789abcdef", 1800000300, mac) },
-		"flipped":       func() bool { return VerifyMAC(key, "v1.2.3", "0123456789abcdef", 1800000300, string(flip)) },
-		"uppercase":     func() bool { return VerifyMAC(key, "v1.2.3", "0123456789abcdef", 1800000300, strings.ToUpper(mac)) },
-		"truncated":     func() bool { return VerifyMAC(key, "v1.2.3", "0123456789abcdef", 1800000300, mac[:63]) },
-		"empty":         func() bool { return VerifyMAC(key, "v1.2.3", "0123456789abcdef", 1800000300, "") },
-		"other release": func() bool { return VerifyMAC(key, "v1.2.4", "0123456789abcdef", 1800000300, mac) },
-		"other job":     func() bool { return VerifyMAC(key, "v1.2.3", "0123456789abcdee", 1800000300, mac) },
-		"other expiry":  func() bool { return VerifyMAC(key, "v1.2.3", "0123456789abcdef", 1800000301, mac) },
-		"short key":     func() bool { return VerifyMAC(key[:31], "v1.2.3", "0123456789abcdef", 1800000300, mac) },
-		"reordered msg": func() bool {
-			return VerifyMAC(key, "v1.2.3", "0123456789abcdef", 1800000300, rawMAC(key, "nofx-update-install/v1|0123456789abcdef|v1.2.3|1800000300"))
+		"wrong key": func() bool { return VerifyMAC(other, tUser, "v1.2.3", "0123456789abcdef", 1800000300, mac) },
+		"flipped":   func() bool { return VerifyMAC(key, tUser, "v1.2.3", "0123456789abcdef", 1800000300, string(flip)) },
+		"uppercase": func() bool {
+			return VerifyMAC(key, tUser, "v1.2.3", "0123456789abcdef", 1800000300, strings.ToUpper(mac))
 		},
-		"trailing space": func() bool { return VerifyMAC(key, "v1.2.3", "0123456789abcdef", 1800000300, mac+" ") },
+		"truncated":     func() bool { return VerifyMAC(key, tUser, "v1.2.3", "0123456789abcdef", 1800000300, mac[:63]) },
+		"empty":         func() bool { return VerifyMAC(key, tUser, "v1.2.3", "0123456789abcdef", 1800000300, "") },
+		"other release": func() bool { return VerifyMAC(key, tUser, "v1.2.4", "0123456789abcdef", 1800000300, mac) },
+		"other job":     func() bool { return VerifyMAC(key, tUser, "v1.2.3", "0123456789abcdee", 1800000300, mac) },
+		"other expiry":  func() bool { return VerifyMAC(key, tUser, "v1.2.3", "0123456789abcdef", 1800000301, mac) },
+		"short key":     func() bool { return VerifyMAC(key[:31], tUser, "v1.2.3", "0123456789abcdef", 1800000300, mac) },
+		"reordered msg": func() bool {
+			return VerifyMAC(key, tUser, "v1.2.3", "0123456789abcdef", 1800000300, rawMAC(key, "nofx-update-install/v1|"+tUser+"|0123456789abcdef|v1.2.3|1800000300"))
+		},
+		"trailing space": func() bool { return VerifyMAC(key, tUser, "v1.2.3", "0123456789abcdef", 1800000300, mac+" ") },
 	}
 	for name, f := range bad {
 		if f() {
@@ -307,16 +313,19 @@ func TestMACIsHMACSHA256OverTheCanonicalMessage(t *testing.T) {
 
 func TestMACFieldsCannotBeReframed(t *testing.T) {
 	// "a|b" + "|" + "c-job-0001" == "a" + "|" + "b|c-job-0001": both must be refused.
-	if _, err := Message("a|b", "c-job-0001", 1); err == nil {
+	if _, err := Message(tUser, "a|b", "c-job-0001", 1); err == nil {
 		t.Error("'|' in release_id accepted")
 	}
-	if _, err := Message("a", "b|c-job-0001", 1); err == nil {
+	if _, err := Message(tUser, "a", "b|c-job-0001", 1); err == nil {
 		t.Error("'|' in job_id accepted")
 	}
-	if _, err := Message("a", "c-job-0001", 0); err == nil {
+	if _, err := Message(tUser, "a", "c-job-0001", 0); err == nil {
 		t.Error("expires_at 0 accepted")
 	}
-	if _, err := Message("a", "c-job-0001", 1); err != nil { // positive control
+	if _, err := Message("u|x", "a", "c-job-0001", 1); err == nil {
+		t.Error("'|' in user_id accepted")
+	}
+	if _, err := Message(tUser, "a", "c-job-0001", 1); err != nil { // positive control
 		t.Errorf("positive control: %v", err)
 	}
 }
@@ -404,13 +413,13 @@ func TestParseInstallRequestIsStrict(t *testing.T) {
 func TestConsumeIsSingleUseAcrossCalls(t *testing.T) {
 	d := t.TempDir()
 	exp := tNow.Unix() + 60
-	if err := Consume(d, "0123456789abcdef", exp, tNow); err != nil {
+	if err := Consume(d, "0123456789abcdef", exp, clockAt(tNow)); err != nil {
 		t.Fatal(err)
 	}
-	if err := Consume(d, "0123456789abcdef", exp, tNow); !errors.Is(err, ErrReplay) {
+	if err := Consume(d, "0123456789abcdef", exp, clockAt(tNow)); !errors.Is(err, ErrReplay) {
 		t.Fatalf("replay: %v", err)
 	}
-	if err := Consume(d, "0123456789abcdee", exp, tNow); err != nil { // positive control
+	if err := Consume(d, "0123456789abcdee", exp, clockAt(tNow)); err != nil { // positive control
 		t.Fatalf("different id: %v", err)
 	}
 	if m := mode(t, SeenPath(d)).Perm(); m != 0o600 {
@@ -422,17 +431,19 @@ func TestConsumeCorruptStoreFailsClosedAndIsNeverReset(t *testing.T) {
 	for name, body := range map[string]string{
 		"garbage":       "not json",
 		"empty":         "",
-		"null ids":      `{"v":2,"pruned_through":0,"ids":null}`,
-		"wrong version": `{"v":3,"pruned_through":0,"ids":[]}`,
+		"null ids":      `{"v":3,"pruned_through":0,"clock_floor":0,"ids":null}`,
+		"wrong version": `{"v":4,"pruned_through":0,"clock_floor":0,"ids":[]}`,
 		// v1 refused; no v1 store was ever written by a shipped binary (M3 never shipped).
-		"v1 store":      `{"v":1,"ids":[{"job_id":"0123456789abcdee","expires_at":1,"consumed_at":1}]}`,
-		"unknown field": `{"v":2,"pruned_through":0,"ids":[],"x":1}`,
-		"bad entry":     `{"v":2,"pruned_through":0,"ids":[{"job_id":"../x","expires_at":1,"consumed_at":1}]}`,
+		"v1 store": `{"v":1,"ids":[{"job_id":"0123456789abcdee","expires_at":1,"consumed_at":1}]}`,
+		// v2 refused likewise (no clock_floor); no v2 store was ever written by a shipped binary.
+		"v2 store":      `{"v":2,"pruned_through":0,"ids":[{"job_id":"0123456789abcdee","expires_at":1,"consumed_at":1}]}`,
+		"unknown field": `{"v":3,"pruned_through":0,"clock_floor":0,"ids":[],"x":1}`,
+		"bad entry":     `{"v":3,"pruned_through":0,"clock_floor":0,"ids":[{"job_id":"../x","expires_at":1,"consumed_at":1}]}`,
 	} {
 		d := t.TempDir()
 		_ = os.MkdirAll(Dir(d), 0o700)
 		_ = os.WriteFile(SeenPath(d), []byte(body), 0o600)
-		if err := Consume(d, "0123456789abcdef", tNow.Unix()+60, tNow); !errors.Is(err, ErrSeenCorrupt) {
+		if err := Consume(d, "0123456789abcdef", tNow.Unix()+60, clockAt(tNow)); !errors.Is(err, ErrSeenCorrupt) {
 			t.Errorf("%s: err = %v, want ErrSeenCorrupt", name, err)
 		}
 		if b, _ := os.ReadFile(SeenPath(d)); string(b) != body {
@@ -442,13 +453,13 @@ func TestConsumeCorruptStoreFailsClosedAndIsNeverReset(t *testing.T) {
 	// positive control: an empty-but-valid store accepts
 	d := t.TempDir()
 	_ = os.MkdirAll(Dir(d), 0o700)
-	_ = os.WriteFile(SeenPath(d), []byte(`{"v":2,"pruned_through":0,"ids":[]}`), 0o600)
-	if err := Consume(d, "0123456789abcdef", tNow.Unix()+60, tNow); err != nil {
+	_ = os.WriteFile(SeenPath(d), []byte(`{"v":3,"pruned_through":0,"clock_floor":0,"ids":[]}`), 0o600)
+	if err := Consume(d, "0123456789abcdef", tNow.Unix()+60, clockAt(tNow)); err != nil {
 		t.Fatalf("positive control: %v", err)
 	}
 	// a loose-mode store is unreadable → corrupt, not empty
 	_ = os.Chmod(SeenPath(d), 0o644)
-	if err := Consume(d, "0123456789abcdee", tNow.Unix()+60, tNow); !errors.Is(err, ErrSeenCorrupt) {
+	if err := Consume(d, "0123456789abcdee", tNow.Unix()+60, clockAt(tNow)); !errors.Is(err, ErrSeenCorrupt) {
 		t.Fatalf("0644 store: %v", err)
 	}
 }
@@ -457,13 +468,13 @@ func TestConsumePrunesOnlyLongExpiredIDs(t *testing.T) {
 	d := t.TempDir()
 	old := "0000000000000001"
 	recent := "0000000000000002"
-	if err := Consume(d, old, tNow.Unix()-11*60, tNow.Add(-15*time.Minute)); err != nil {
+	if err := Consume(d, old, tNow.Unix()-11*60, clockAt(tNow.Add(-15*time.Minute))); err != nil {
 		t.Fatal(err)
 	}
-	if err := Consume(d, recent, tNow.Unix()-9*60, tNow.Add(-14*time.Minute)); err != nil {
+	if err := Consume(d, recent, tNow.Unix()-9*60, clockAt(tNow.Add(-14*time.Minute))); err != nil {
 		t.Fatal(err)
 	}
-	if err := Consume(d, "0000000000000003", tNow.Unix()+60, tNow); err != nil {
+	if err := Consume(d, "0000000000000003", tNow.Unix()+60, clockAt(tNow)); err != nil {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(SeenPath(d))
@@ -473,7 +484,7 @@ func TestConsumePrunesOnlyLongExpiredIDs(t *testing.T) {
 	if !strings.Contains(string(b), recent) {
 		t.Error("an id expired <10 min ago was pruned")
 	}
-	if err := Consume(d, recent, tNow.Unix()+60, tNow); !errors.Is(err, ErrReplay) {
+	if err := Consume(d, recent, tNow.Unix()+60, clockAt(tNow)); !errors.Is(err, ErrReplay) {
 		t.Errorf("recent replay: %v", err)
 	}
 }
@@ -481,7 +492,7 @@ func TestConsumePrunesOnlyLongExpiredIDs(t *testing.T) {
 func TestConsumeHardCapRefuses(t *testing.T) {
 	d := t.TempDir()
 	var sb strings.Builder
-	sb.WriteString(`{"v":2,"pruned_through":0,"ids":[`)
+	sb.WriteString(`{"v":3,"pruned_through":0,"clock_floor":0,"ids":[`)
 	for i := 0; i < MaxSeenEntries; i++ {
 		if i > 0 {
 			sb.WriteByte(',')
@@ -492,13 +503,13 @@ func TestConsumeHardCapRefuses(t *testing.T) {
 	sb.WriteString(`]}`)
 	_ = os.MkdirAll(Dir(d), 0o700)
 	_ = os.WriteFile(SeenPath(d), []byte(sb.String()), 0o600)
-	if err := Consume(d, "0123456789abcdef", tNow.Unix()+60, tNow); !errors.Is(err, ErrSeenFull) {
+	if err := Consume(d, "0123456789abcdef", tNow.Unix()+60, clockAt(tNow)); !errors.Is(err, ErrSeenFull) {
 		t.Fatalf("err = %v, want ErrSeenFull", err)
 	}
 	// positive control: once they are long expired they prune and a grant
 	// that is current at that clock is accepted
 	later := tNow.Add(30 * time.Minute)
-	if err := Consume(d, "0123456789abcdef", later.Unix()+60, later); err != nil {
+	if err := Consume(d, "0123456789abcdef", later.Unix()+60, clockAt(later)); err != nil {
 		t.Fatalf("positive control: %v", err)
 	}
 }
@@ -512,7 +523,7 @@ func TestConcurrentConsumeAdmitsExactlyOne(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := Consume(d, "0123456789abcdef", tNow.Unix()+60, tNow)
+			err := Consume(d, "0123456789abcdef", tNow.Unix()+60, clockAt(tNow))
 			mu.Lock()
 			defer mu.Unlock()
 			switch {
@@ -543,7 +554,7 @@ func TestAuthorizeMintsAGrantTheVerifierAccepts(t *testing.T) {
 		t.Fatalf("grant %+v", g)
 	}
 	key, _ := LoadDeviceKey(d)
-	if !VerifyMAC(key, g.ReleaseID, g.JobID, g.ExpiresAt, g.HMAC) {
+	if !VerifyMAC(key, tUser, g.ReleaseID, g.JobID, g.ExpiresAt, g.HMAC) {
 		t.Fatal("grant MAC does not verify")
 	}
 	if CheckExpiry(g.ExpiresAt, tNow) != nil {

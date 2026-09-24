@@ -34,7 +34,7 @@ import (
 // grantBodyUnder is an install body whose MAC is computed under key.
 func grantBodyUnder(t *testing.T, key []byte, rel, job string, exp int64) string {
 	t.Helper()
-	mac, err := updateauth.ComputeMAC(key, rel, job, exp)
+	mac, err := updateauth.ComputeMAC(key, updAdminID, rel, job, exp)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func grantBodyUnder(t *testing.T, key []byte, rel, job string, exp int64) string
 // updateauth minting rule applies (it is how a guessed key would be used).
 func attackerBodyUnder(key []byte, rel, job string, exp int64) string {
 	m := hmac.New(sha256.New, key)
-	fmt.Fprintf(m, "%s|%s|%s|%d", updateauth.MACPurpose, rel, job, exp)
+	fmt.Fprintf(m, "%s|%s|%s|%s|%d", updateauth.MACPurpose, updAdminID, rel, job, exp)
 	return grantBody(updateauth.Grant{ReleaseID: rel, JobID: job, ExpiresAt: exp, HMAC: hex.EncodeToString(m.Sum(nil))})
 }
 
@@ -165,6 +165,10 @@ func TestInstallRefusesAnUnsafeSeenStoreUniformlyAndNeverRewritesIt(t *testing.T
 		t.Fatalf("positive control: first install = %d", w.Code)
 	}
 	p := updateauth.SeenPath(e.dataDir)
+	// grants for the unsafe-store requests are minted while the store is
+	// safe: the attended minter itself refuses to mint over an unreadable
+	// store (red-3 #5)
+	g0644, gSymlink := e.grant(updRelease), e.grant(updRelease)
 	if err := os.Chmod(p, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +176,7 @@ func TestInstallRefusesAnUnsafeSeenStoreUniformlyAndNeverRewritesIt(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w := e.do("POST", "/api/updates/install", grantBody(e.grant(updRelease))); w.Code != http.StatusForbidden || w.Body.String() != forbiddenBody {
+	if w := e.do("POST", "/api/updates/install", grantBody(g0644)); w.Code != http.StatusForbidden || w.Body.String() != forbiddenBody {
 		t.Errorf("0644 seen store = %d %s, want 403 %s", w.Code, w.Body.String(), forbiddenBody)
 	}
 	if after, _ := os.ReadFile(p); !bytes.Equal(before, after) {
@@ -195,7 +199,7 @@ func TestInstallRefusesAnUnsafeSeenStoreUniformlyAndNeverRewritesIt(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w := e.do("POST", "/api/updates/install", grantBody(e.grant(updRelease))); w.Code != http.StatusForbidden || w.Body.String() != forbiddenBody {
+	if w := e.do("POST", "/api/updates/install", grantBody(gSymlink)); w.Code != http.StatusForbidden || w.Body.String() != forbiddenBody {
 		t.Errorf("symlinked seen store = %d %s, want 403 %s", w.Code, w.Body.String(), forbiddenBody)
 	}
 	if fi, err := os.Lstat(p); err != nil || fi.Mode()&os.ModeSymlink == 0 {
@@ -329,10 +333,17 @@ func TestInstallReplayRefusedAfterAClockStepBackPastRetention(t *testing.T) {
 	if w := e.do("POST", "/api/updates/install", bodyA); w.Code != http.StatusConflict {
 		t.Errorf("after a restart: %d %s, want 409", w.Code, w.Body.String())
 	}
-	// positive control: a grant minted at the stepped-back clock (expires_at
-	// above the watermark) is authorized and reaches the stub
-	if w := e.do("POST", "/api/updates/install", grantBodyUnder(t, key, updRelease, "rollback-job-c0001", cur.Unix()+300)); w.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("positive control: a fresh grant at the stepped-back clock = %d %s, want 422", w.Code, w.Body.String())
+	// a grant minted at the stepped-back clock (expires_at above the
+	// watermark, but at or below the clock floor the store recorded when it
+	// consumed B) is expired: the uniform 403 (red-3 #2)
+	if w := e.do("POST", "/api/updates/install", grantBodyUnder(t, key, updRelease, "rollback-job-c0001", cur.Unix()+300)); w.Code != http.StatusForbidden || w.Body.String() != forbiddenBody {
+		t.Fatalf("a fresh grant at the stepped-back clock = %d %s, want 403 (below the clock floor)", w.Code, w.Body.String())
+	}
+	// positive control: once the clock passes the floor a fresh grant is
+	// authorized and reaches the stub
+	cur = time.Unix(expA+602, 0)
+	if w := e.do("POST", "/api/updates/install", grantBodyUnder(t, key, updRelease, "rollback-job-d0001", cur.Unix()+300)); w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("positive control: a fresh grant past the clock floor = %d %s, want 422", w.Code, w.Body.String())
 	}
 }
 
