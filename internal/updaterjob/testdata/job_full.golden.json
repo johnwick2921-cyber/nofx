@@ -14,112 +14,134 @@
     {
       "state": "requested",
       "phase": "done",
-      "at": "2026-09-24T18:02:11.123456789Z"
+      "at": "2026-09-24T18:02:11.123456789Z",
+      "receipts": 0
     },
     {
       "state": "downloaded",
       "phase": "started",
-      "at": "2026-09-24T18:02:12.123456789Z"
+      "at": "2026-09-24T18:02:12.123456789Z",
+      "receipts": 0
     },
     {
       "state": "downloaded",
       "phase": "done",
-      "at": "2026-09-24T18:02:13.123456789Z"
+      "at": "2026-09-24T18:02:13.123456789Z",
+      "receipts": 1
     },
     {
       "state": "verified",
       "phase": "started",
-      "at": "2026-09-24T18:02:14.123456789Z"
+      "at": "2026-09-24T18:02:14.123456789Z",
+      "receipts": 1
     },
     {
       "state": "verified",
       "phase": "done",
-      "at": "2026-09-24T18:02:15.123456789Z"
+      "at": "2026-09-24T18:02:15.123456789Z",
+      "receipts": 2
     },
     {
       "state": "preflight_ok",
       "phase": "started",
-      "at": "2026-09-24T18:02:16.123456789Z"
+      "at": "2026-09-24T18:02:16.123456789Z",
+      "receipts": 2
     },
     {
       "state": "preflight_ok",
       "phase": "done",
-      "at": "2026-09-24T18:02:17.123456789Z"
+      "at": "2026-09-24T18:02:17.123456789Z",
+      "receipts": 3
     },
     {
       "state": "maintenance_held",
       "phase": "started",
-      "at": "2026-09-24T18:02:18.123456789Z"
+      "at": "2026-09-24T18:02:18.123456789Z",
+      "receipts": 3
     },
     {
       "state": "maintenance_held",
       "phase": "done",
-      "at": "2026-09-24T18:02:19.123456789Z"
+      "at": "2026-09-24T18:02:19.123456789Z",
+      "receipts": 4
     },
     {
       "state": "drained_acked",
       "phase": "started",
-      "at": "2026-09-24T18:02:20.123456789Z"
+      "at": "2026-09-24T18:02:20.123456789Z",
+      "receipts": 4
     },
     {
       "state": "drained_acked",
       "phase": "done",
-      "at": "2026-09-24T18:02:21.123456789Z"
+      "at": "2026-09-24T18:02:21.123456789Z",
+      "receipts": 5
     },
     {
       "state": "gate_ok",
       "phase": "started",
-      "at": "2026-09-24T18:02:22.123456789Z"
+      "at": "2026-09-24T18:02:22.123456789Z",
+      "receipts": 5
     },
     {
       "state": "gate_ok",
       "phase": "done",
-      "at": "2026-09-24T18:02:23.123456789Z"
+      "at": "2026-09-24T18:02:23.123456789Z",
+      "receipts": 6
     },
     {
       "state": "backup_done",
       "phase": "started",
-      "at": "2026-09-24T18:02:24.123456789Z"
+      "at": "2026-09-24T18:02:24.123456789Z",
+      "receipts": 6
     },
     {
       "state": "backup_done",
       "phase": "done",
-      "at": "2026-09-24T18:02:25.123456789Z"
+      "at": "2026-09-24T18:02:25.123456789Z",
+      "receipts": 7
     },
     {
       "state": "nt8_updated",
       "phase": "started",
-      "at": "2026-09-24T18:02:26.123456789Z"
+      "at": "2026-09-24T18:02:26.123456789Z",
+      "receipts": 7
     },
     {
       "state": "nt8_updated",
       "phase": "done",
-      "at": "2026-09-24T18:02:27.123456789Z"
+      "at": "2026-09-24T18:02:27.123456789Z",
+      "receipts": 8
     },
     {
       "state": "activated",
       "phase": "started",
-      "at": "2026-09-24T18:03:28.123456789Z"
+      "at": "2026-09-24T18:03:28.123456789Z",
+      "receipts": 9
     },
     {
       "state": "activated",
       "phase": "done",
-      "at": "2026-09-24T18:03:29.123456789Z"
+      "at": "2026-09-24T18:03:29.123456789Z",
+      "receipts": 10
     },
     {
       "state": "booted",
       "phase": "started",
-      "at": "2026-09-24T18:03:30.123456789Z"
+      "at": "2026-09-24T18:03:30.123456789Z",
+      "receipts": 10
     },
     {
       "state": "rolling_back",
       "phase": "started",
-      "at": "2026-09-24T18:05:00.123456789Z"
+      "at": "2026-09-24T18:05:00.123456789Z",
+      "receipts": 11
     },
     {
       "state": "recovery_needed",
       "phase": "done",
-      "at": "2026-09-24T18:06:35.123456789Z"
+      "at": "2026-09-24T18:06:35.123456789Z",
+      "receipts": 13
     }
   ],
   "receipts": [
