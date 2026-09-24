@@ -723,8 +723,14 @@ func TestArmRespecForEntryEdges(t *testing.T) {
 // placement switch place cancel_pending rows left every E1/E2 test green).
 // Here the pass AFTER the cancel sees a fresh FLAT live book (the one-contract
 // guard admits) with no persisted book confirming the cancel, so the row is
-// still cancel_pending and only the placement switch (`case "armed":`) keeps
-// it off the wire.
+// still cancel_pending. Two layers then keep it off the wire [A, probed]: the
+// placement switch in runArmedPlacementAt (`case "armed":`) never enters the
+// placement path for it, and the store CAS BeginPlacement (state = armed AND
+// no signal) refuses it before the send. The send assertion needs both layers
+// to fail (both mutated → the v1 order, limit 100.00 SL 98 TP 110, re-sent);
+// the log assertion isolates the switch — with the switch alone mutated the
+// CAS refuses every pass and "📌 armed place failed … no longer eligible for
+// placement" is logged for a row nothing should have tried to place.
 func TestRespecCancelPendingRowIsNeverPlacedOnAFlatLiveBook(t *testing.T) {
 	r := newZoneRig(t, "w1b-respec-cp-unplaced", zoneDoc(zoneScenario("S1", kernel.EntryPolicyPlannedOrder, zone, false)))
 	sid := r.placeWorking(100).SignalID
@@ -743,12 +749,16 @@ func TestRespecCancelPendingRowIsNeverPlacedOnAFlatLiveBook(t *testing.T) {
 	// The adapter's B3 duplicate guard runs on the WALL clock; re-made so it
 	// cannot be what keeps the row off the wire (as settleAndReArm does).
 	r.at.trader = ntTrader.NewTCPTrader(r.srv, "MNQ", "Sim101")
+	logs := captureTraderLog(t)
 	t2 := t1.Add(30 * time.Second)
 	r.flatBook(t2)
 	r.setTape(zoneTape(101.95, t2, 0))
 	r.at.maybeManageArmedOrdersAt(nil, t2)
 	if sigs, _ := r.drain(); len(sigs) != 0 {
 		t.Fatalf("a cancel_pending row must never be placed, even on a flat live book: sigs=%+v", sigs)
+	}
+	if strings.Contains(logs.String(), "armed place failed") || strings.Contains(logs.String(), "placement requested") {
+		t.Fatalf("a cancel_pending row must never enter the placement path at all:\n%s", logs.String())
 	}
 	if rows := r.rows(); len(rows) != 1 || rows[0].SignalID != sid {
 		t.Fatalf("no successor may be minted before a persisted book confirms the cancel: %+v", rows)
