@@ -79,3 +79,13 @@ func TestEveryTransitionPersistsBeforeItsSideEffect(t *testing.T) {
 		})
 	}
 }
+
+// A rolled-back job keeps the error that sent it back (M5 renders it).
+func TestRolledBackKeepsWhyItRolledBack(t *testing.T) {
+	r := newRig(t)
+	r.watchFail[boxNew] = true
+	j := r.runToEnd(t)
+	if j.State != updaterjob.StateRolledBack || !strings.Contains(j.Error, "not proven within") {
+		t.Fatalf("rolled_back with error %q", j.Error)
+	}
+}
