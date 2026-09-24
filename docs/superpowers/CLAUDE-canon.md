@@ -126,3 +126,31 @@ guessing at git's layout.
 That is the same shape as everything else in this file: a statement ABOUT the
 tool, written where nothing compares it to the tool. The remedy is the same —
 ask the tool.
+
+---
+
+## Updates page truth rules (W-ONE-BUTTON M5, 2026-09-24)
+
+The Settings → Updates page is the owner's face of the one-button update and is
+bound harder than any other page by the no-fabrication laws:
+
+- **Renders only API truth.** Every panel value comes from a READ endpoint
+  (`/api/health`, `/api/maintenance`, `/api/installation-gate`, `/api/updates`,
+  `/api/updates/jobs/:id`, `/api/strategies/:id/effective`) — the page derives
+  nothing it could not read, computes nothing in the browser, and invents no
+  optimistic state.
+- **n/a, never a guess.** A value the binary cannot know prints n/a (the MVID /
+  hello match, the completed 4H-bar count, the last-progress age and the
+  paused-while-loading flag have no endpoint yet; each is OWED, not fabricated).
+- **Absent ≠ [].** A job that has not run renders "no update job", never an
+  empty timeline; a null addon ack renders "no ack yet", never "false"; a null
+  withdraw renders nothing, never empty lists.
+- **Exact blocker text.** A refusal is shown with the server's own error text; a
+  403 install refusal renders "not authorized on this device" with that text and
+  is never retried in a loop.
+- **The install button is gated on the review.** While the M3 update
+  authorization adversarial review is open, the install button is disabled with
+  the text "install authorization under review" and no install POST can fire —
+  a constant flag pinned by its own test. The header badge polls once a minute,
+  shows Unknown on any error, and its first-fetch spinner is capped at 10 s so
+  it can never spin forever.
