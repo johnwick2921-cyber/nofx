@@ -151,7 +151,9 @@ jobs:
 
           # Test backend healthcheck command
           echo "Testing backend healthcheck..."
-          docker exec nofx-trading wget --no-verbose --tries=1 --spider http://localhost:8080/api/health
+          # CLASS 251: 127.0.0.1 for the same reason as the compose probe —
+          # localhost is [::1] in busybox and the API is IPv4-loopback only.
+          docker exec nofx-trading wget --no-verbose --tries=1 --spider http://127.0.0.1:8080/api/health
           echo "✅ Backend healthcheck command works"
 
           # Test frontend healthcheck command
