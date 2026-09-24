@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"go/parser"
 	"go/token"
 	"io/fs"
@@ -29,8 +30,11 @@ import (
 // writes the manifest, the REAL `ssh-keygen -Y sign -n release` signs it, and
 // GNU `tar -C stage -czf` packs it. The only deviation from release.yml is the
 // one routed to 3a/103 (brief C8): the manifest is written OUTSIDE the stage
-// and moved in, so it does not list itself — and one test runs release.yml's
-// verbatim redirect to prove that today's output is REFUSED for exactly that.
+// and moved in, so it does not list itself. The 0-byte self-entry today's
+// redirect produces is INJECTED into manifest.sh's output (so the parser's
+// refusal is pinned whatever manifest.sh does — 103's #201 afd60391 makes
+// manifest.sh refuse the redirect itself), and one test runs release.yml's
+// verbatim redirect and accepts exactly one of the two refusals.
 // Hostile archives (entries the scripts would never produce) are written with
 // archive/tar over a legitimately staged tree, with a control that the same
 // tree WITHOUT the hostile entry is accepted.
@@ -114,6 +118,10 @@ func runIn(t *testing.T, dir string, stdoutOnly bool, name string, args ...strin
 }
 
 type testRelease struct {
+	// redirectRefused is set, and nothing else, when verbatimRedirect was
+	// asked and manifest.sh itself refused the redirect (its output).
+	redirectRefused string
+
 	archive  string
 	stage    string
 	signer   testSigner
@@ -124,11 +132,12 @@ type testRelease struct {
 }
 
 type releaseOpts struct {
-	selfEntry      bool // release.yml:172 verbatim — manifest.sh redirected INTO the stage
-	noIndex        bool
-	beforeManifest func(t *testing.T, stage string) // add to the stage before manifest.sh lists it
-	editManifest   func(b []byte) []byte            // rewrite the manifest BEFORE it is signed
-	afterSign      func(t *testing.T, stage string) // tamper after signing, before tar
+	selfEntry        bool // inject the 0-byte manifest.json self-entry release.yml:172's redirect produces
+	verbatimRedirect bool // release.yml:172 verbatim — manifest.sh redirected INTO the stage
+	noIndex          bool
+	beforeManifest   func(t *testing.T, stage string) // add to the stage before manifest.sh lists it
+	editManifest     func(b []byte) []byte            // rewrite the manifest BEFORE it is signed
+	afterSign        func(t *testing.T, stage string) // tamper after signing, before tar
 }
 
 func buildRelease(t *testing.T, o releaseOpts) testRelease {
@@ -142,10 +151,18 @@ func buildRelease(t *testing.T, o releaseOpts) testRelease {
 	if o.beforeManifest != nil {
 		o.beforeManifest(t, stage)
 	}
-	if o.selfEntry {
-		runIn(t, root, false, "bash", "-c", `bash deploy/release/manifest.sh "$1" "$2" "$3" > "$1/manifest.json"`, "_", stage, testSHA, testReleaseID)
+	if o.verbatimRedirect {
+		cmd := exec.Command("bash", "-c", `bash deploy/release/manifest.sh "$1" "$2" "$3" > "$1/manifest.json"`, "_", stage, testSHA, testReleaseID)
+		cmd.Dir = root
+		cmd.Env = keygenEnv(t)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return testRelease{redirectRefused: fmt.Sprintf("%v: %s", err, out)}
+		}
 	} else {
 		out := runIn(t, root, true, "bash", "deploy/release/manifest.sh", stage, testSHA, testReleaseID)
+		if o.selfEntry {
+			out = injectSelfEntry(t, out)
+		}
 		if o.editManifest != nil {
 			out = o.editManifest(out)
 		}
@@ -169,6 +186,21 @@ func buildRelease(t *testing.T, o releaseOpts) testRelease {
 		signers: writeAllowedSigners(t, work, "release "+signer.pub),
 		fp:      signer.fingerprint(t), manifest: manifest, sig: sig,
 	}
+}
+
+// zeroSelfEntry is the artifacts[] entry release.yml:172's redirect makes the
+// manifest list for itself: the shell creates manifest.json (0 bytes, the
+// sha256 of nothing) before find runs.
+const zeroSelfEntry = `{"path":"manifest.json","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","bytes":0}`
+
+// injectSelfEntry puts zeroSelfEntry first in manifest.sh's artifacts[].
+func injectSelfEntry(t *testing.T, manifest []byte) []byte {
+	t.Helper()
+	const open = `"artifacts": [`
+	if bytes.Count(manifest, []byte(open)) != 1 {
+		t.Fatalf("fixture: manifest.sh output has no single %q:\n%s", open, manifest)
+	}
+	return bytes.Replace(manifest, []byte(open), []byte(open+zeroSelfEntry+","), 1)
 }
 
 type fetchEnv struct{ releaseRoot, dataDir string }
@@ -504,15 +536,14 @@ func TestRehashRefusesExtraMissingOrChangedArtifact(t *testing.T) {
 		}}, ErrArtifactMismatch, "changed: nofx-bin"},
 		// C8: release.yml:172 redirects manifest.sh INTO the stage, so the shell
 		// has created a 0-byte manifest.json before find runs and artifacts[]
-		// lists it — an entry the signed file can never match.
-		"the 0-byte manifest self-entry (release.yml verbatim)": {releaseOpts{selfEntry: true}, ErrManifest, "lists itself"},
+		// lists it — an entry the signed file can never match. Injected, so the
+		// parser's refusal is pinned whatever manifest.sh does.
+		"the 0-byte manifest self-entry": {releaseOpts{selfEntry: true}, ErrManifest, "lists itself"},
 	} {
 		t.Run("fetch/"+name, func(t *testing.T) {
 			r := buildRelease(t, c.o)
-			if name == "the 0-byte manifest self-entry (release.yml verbatim)" {
-				if !bytes.Contains(r.manifest, []byte(`{"path":"manifest.json","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","bytes":0}`)) {
-					t.Fatalf("fixture: release.yml's redirect did not produce the 0-byte self-entry:\n%s", r.manifest)
-				}
+			if name == "the 0-byte manifest self-entry" && !bytes.Contains(r.manifest, []byte(zeroSelfEntry)) {
+				t.Fatalf("fixture: the signed manifest does not carry the 0-byte self-entry:\n%s", r.manifest)
 			}
 			e := newFetchEnv(t)
 			v, err := FetchRelease(e.cfg(r))
@@ -525,6 +556,32 @@ func TestRehashRefusesExtraMissingOrChangedArtifact(t *testing.T) {
 			e.assertNothingLanded(t)
 		})
 	}
+	// release.yml:172's verbatim redirect, run through whichever manifest.sh is
+	// in the tree: today's lists the 0-byte self-entry and the FETCH refuses it;
+	// 103's #201 (afd60391) makes manifest.sh refuse the redirect itself. Either
+	// refusal passes; a release that gets through both fails.
+	t.Run("fetch/release.yml's verbatim redirect", func(t *testing.T) {
+		r := buildRelease(t, releaseOpts{verbatimRedirect: true})
+		if r.redirectRefused != "" {
+			if !strings.Contains(r.redirectRefused, "REFUSED") || !strings.Contains(r.redirectRefused, "0 bytes") {
+				t.Fatalf("manifest.sh failed the redirect, but not with its 0-byte self-listing refusal: %s", r.redirectRefused)
+			}
+			t.Logf("manifest.sh itself refuses release.yml's redirect: %s", strings.TrimSpace(r.redirectRefused))
+			return
+		}
+		if !bytes.Contains(r.manifest, []byte(zeroSelfEntry)) {
+			t.Fatalf("fixture: release.yml's redirect did not produce the 0-byte self-entry:\n%s", r.manifest)
+		}
+		e := newFetchEnv(t)
+		v, err := FetchRelease(e.cfg(r))
+		if err == nil {
+			t.Fatalf("ACCEPTED release.yml's verbatim output; verdict %+v", v)
+		}
+		if !errors.Is(err, ErrManifest) || !strings.Contains(err.Error(), "lists itself") {
+			t.Fatalf("err = %v; want ErrManifest naming \"lists itself\"", err)
+		}
+		e.assertNothingLanded(t)
+	})
 	// (b) at the job's downloaded state: RehashRelease over the materialized dir
 	r := buildRelease(t, releaseOpts{})
 	for name, c := range map[string]struct {
