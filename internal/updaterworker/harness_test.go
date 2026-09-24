@@ -127,7 +127,12 @@ func withCSChanged() rigOpt {
 func newRig(t *testing.T, opts ...rigOpt) *rig {
 	t.Helper()
 	t.Setenv(CutoverTokenEnv, boxToken)
-	root := t.TempDir()
+	// a SHORT root: <root>/nofx/data/updater/<socket> must fit sun_path (107)
+	root, err := os.MkdirTemp("", "u4-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(root) })
 	b := &box{
 		t: t, clock: &fakeClock{t: time.Date(2026, 9, 24, 10, 0, 0, 0, time.Local)},
 		inst: filepath.Join(root, "nofx"), backupRoot: filepath.Join(root, "nofx-backups", "updater"),
@@ -157,6 +162,7 @@ func newRig(t *testing.T, opts ...rigOpt) *rig {
 	}
 
 	r := &rig{box: b, log: &strings.Builder{}}
+	var app *HTTPApp
 	r.srv = httptest.NewServer(http.HandlerFunc(b.serveApp))
 	t.Cleanup(r.srv.Close)
 	port := r.srv.Listener.Addr().(*net.TCPAddr).Port
@@ -172,7 +178,7 @@ func newRig(t *testing.T, opts ...rigOpt) *rig {
 		defer logMu.Unlock()
 		fmt.Fprintf(r.log, format+"\n", a...)
 	}
-	app, err := NewHTTPApp(r.cfg.Target.BaseURL())
+	app, err = NewHTTPApp(r.cfg.Target.BaseURL())
 	if err != nil {
 		t.Fatal(err)
 	}
