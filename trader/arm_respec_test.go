@@ -510,3 +510,137 @@ func TestArmRespecAbsentPriorAuthoredLegNeverCancels(t *testing.T) {
 		t.Fatalf("the WARN must say why the prior is absent:\n%s", logs.String())
 	}
 }
+
+// ── W1b FOLD-1 — E1 judges a re-priced ENTRY (CTO ruling, P1) ──────────────
+//
+// E1 compared only the authored stop and target, so a v2 that moved a
+// planned_order limit's ENTRY (SL/TP unchanged) left the v1 limit resting at
+// the old price with v1's bracket until the 30-minute rest cap. The rule: a
+// non-market_in_zone WORKING row whose AUTHORED entry moved ≥ 2 ticks (the
+// churnNeedsModify threshold) under a newer version is cancelled through the
+// same single-cancel function as E1/E2, reason "entry re-spec by vN: E a→b"
+// (authored values); market_in_zone keeps E2's zone rule.
+
+// entryVersion publishes the next plan version whose S1 is the planned_order
+// reject with only its AUTHORED entry moved (stop 98 / target 110 unchanged).
+// The doc is built at the unmoved entry first so the fixture links S1 to its
+// level identity (structuralTestMap links on Arm.Entry == level price), then
+// the entry alone is moved.
+func (r *zoneRig) entryVersion(entry float64) {
+	r.t.Helper()
+	d := zoneDoc(zoneScenario("S1", kernel.EntryPolicyPlannedOrder, zone, false))
+	d.Scenarios[0].Arm.Entry = entry
+	blob, _ := json.Marshal(d)
+	shadowPlanAtTime(r.t, r.at, r.st, string(blob), r.now)
+}
+
+// FOLD-1 RED at the production call site: v2 moves ONLY the authored entry of
+// a working planned_order limit by exactly 2 ticks (100.00 → 99.50, the
+// inclusive edge) → the v1 order is cancelled once, "entry re-spec by v2:
+// E 100.00→99.50", counted under arm:respec_cancel; a fresh PERSISTED flat
+// book (st.NT8OrderSnapshots().Insert) settles it and the scenario re-arms
+// under v2 with a NEW signal at the NEW entry.
+func TestPlannedOrderEntryRespecByNewVersionReplacesTheOrder(t *testing.T) {
+	r := newZoneRig(t, "w1b-respec-entry", zoneDoc(zoneScenario("S1", kernel.EntryPolicyPlannedOrder, zone, false)))
+	first := r.placeWorking(100)
+	sid := first.SignalID
+	if row := r.row("S1"); row.Policy == kernel.EntryPolicyMarketInZone || row.EntryPx != 100 {
+		t.Fatalf("fixture: the row must be a non-market_in_zone limit at 100.00: %+v", row)
+	}
+	before, _ := store.SystemCounter(r.st, "arm:respec_cancel")
+
+	r.entryVersion(99.5)
+	t1 := r.now.Add(time.Minute)
+	r.restingBook(t1, sid, 100)
+	r.setTape(zoneTape(101.95, t1, 0))
+	r.at.maybeManageArmedOrdersAt(nil, t1)
+	sigs, cancels := r.drain()
+	if len(cancels) != 1 || cancels[0].SignalID != sid || len(sigs) != 0 {
+		t.Fatalf("a re-priced entry must cancel the working order %s exactly once and place nothing: sigs=%+v cancels=%+v", sid, sigs, cancels)
+	}
+	row := r.row("S1")
+	if row.State != store.StateCancelPending || !strings.Contains(row.StateReason, "entry re-spec by v2: E 100.00→99.50") {
+		t.Fatalf("the working row must be cancel_pending naming the AUTHORED entry change 'entry re-spec by v2: E 100.00→99.50': %+v", row)
+	}
+	if n, _ := store.SystemCounter(r.st, "arm:respec_cancel"); n != before+1 {
+		t.Fatalf("the entry re-spec cancel must be counted once under arm:respec_cancel (%d → %d)", before, n)
+	}
+
+	sigs, cancels = r.settleAndReArm()
+	if len(cancels) != 0 || len(sigs) != 1 || sigs[0].SignalID == sid || sigs[0].LimitPrice != 99.5 {
+		t.Fatalf("the settled scenario must re-arm and place ONE new signal at the v2 entry 99.50: sigs=%+v cancels=%+v", sigs, cancels)
+	}
+	nw := r.row("S1")
+	if len(r.rows()) != 2 || nw.PlacementSeq != 1 || nw.Version != 2 || nw.EntryPx != 99.5 || nw.SignalID != sigs[0].SignalID {
+		t.Fatalf("the successor must be ONE row, placement_seq 1 under v2 at 99.50, carrying the new signal: %+v", r.rows())
+	}
+}
+
+// FOLD-1 edge at the production call site: the authored entry moved ONE tick
+// (100.00 → 99.75) under v2 — under the 2-tick threshold, so nothing is sent,
+// the row stays working under v1 and nothing is counted.
+func TestPlannedOrderEntryMovedUnderTwoTicksLeavesTheOrderAlone(t *testing.T) {
+	r := newZoneRig(t, "w1b-respec-entry-1t", zoneDoc(zoneScenario("S1", kernel.EntryPolicyPlannedOrder, zone, false)))
+	sid := r.placeWorking(100).SignalID
+	before, _ := store.SystemCounter(r.st, "arm:respec_cancel")
+	r.entryVersion(99.75)
+	t1 := r.now.Add(time.Minute)
+	r.restingBook(t1, sid, 100)
+	r.setTape(zoneTape(101.95, t1, 0))
+	r.at.maybeManageArmedOrdersAt(nil, t1)
+	if sigs, cancels := r.drain(); len(sigs) != 0 || len(cancels) != 0 {
+		t.Fatalf("an entry moved < 2 ticks must send nothing: sigs=%+v cancels=%+v", sigs, cancels)
+	}
+	if row := r.row("S1"); row.State != store.StateWorking || row.Version != 1 || row.SignalID != sid {
+		t.Fatalf("the working row must stay working under v1: %+v", row)
+	}
+	if n, _ := store.SystemCounter(r.st, "arm:respec_cancel"); n != before {
+		t.Fatalf("nothing happened, so nothing is recorded (%d → %d)", before, n)
+	}
+}
+
+// FOLD-1 predicate edges (pure): the entry rule is for non-market_in_zone rows
+// only (a market_in_zone row's resting price is the zone's far edge, judged by
+// E2); the threshold is churnNeedsModify's (≥ 2 ticks); an entry move and a
+// bracket move under one version bump are ONE decision (the entry's); an
+// absent (zero) authored entry on either side is never a change (L7).
+func TestArmRespecForEntryEdges(t *testing.T) {
+	wasLeg := kernel.PlanArmLeg{Entry: 100, Stop: 98, Target: 110}
+	was := func(l kernel.PlanArmLeg) func() (kernel.PlanArmLeg, string) {
+		return func() (kernel.PlanArmLeg, string) { return l, "" }
+	}
+	base := store.ArmedOrderDB{State: store.StateWorking, SignalID: "sig", Version: 1, EntryPx: 100, StopPx: 98, TargetPx: 110}
+	moved := kernel.PlanArmLeg{Entry: 99.5, Stop: 98, Target: 110}
+	c, _, ok := armRespecFor(2, base, moved, moved, zoneLeg{}, 0.25, was(wasLeg))
+	if !ok || c.counter != "arm:respec_cancel" || c.class != "entry re-spec" ||
+		!strings.HasPrefix(c.reason, "entry re-spec by v2: E 100.00→99.50") {
+		t.Fatalf("a 2-tick authored entry move on a planned_order/legacy row is E1: %+v %v", c, ok)
+	}
+	if c, _, ok := armRespecFor(2, base, kernel.PlanArmLeg{Entry: 99.75, Stop: 98, Target: 110}, moved, zoneLeg{}, 0.25, was(wasLeg)); ok {
+		t.Fatalf("a 1-tick entry move is not a re-spec: %+v", c)
+	}
+	if c, _, ok := armRespecFor(1, base, moved, moved, zoneLeg{}, 0.25, was(wasLeg)); ok {
+		t.Fatalf("the same version never re-specs an entry: %+v", c)
+	}
+	both := kernel.PlanArmLeg{Entry: 99.5, Stop: 96, Target: 112}
+	if c, _, ok := armRespecFor(2, base, both, both, zoneLeg{}, 0.25, was(wasLeg)); !ok || !strings.HasPrefix(c.reason, "entry re-spec by v2: E 100.00→99.50") {
+		t.Fatalf("entry AND bracket moved → ONE decision, the entry's: %+v %v", c, ok)
+	}
+	for name, pair := range map[string][2]float64{"absent prior entry": {0, 99.5}, "absent authored entry": {100, 0}} {
+		w := wasLeg
+		w.Entry = pair[0]
+		a := moved
+		a.Entry = pair[1]
+		if c, _, ok := armRespecFor(2, base, a, a, zoneLeg{}, 0.25, was(w)); ok {
+			t.Fatalf("%s: absent is never changed: %+v", name, c)
+		}
+	}
+	// market_in_zone keeps E2's zone rule: its authored entry moving inside a
+	// zone that still contains the resting limit is not an E1 entry re-spec.
+	miz := base
+	miz.Policy, miz.EntryPx = kernel.EntryPolicyMarketInZone, 100.5
+	zl := zoneLeg{on: true, v: kernel.ZoneVerdict{Lo: 99.5, Hi: 100.5, Far: 100.5, Near: 99.5}}
+	if c, _, ok := armRespecFor(2, miz, moved, moved, zl, 0.25, was(wasLeg)); ok {
+		t.Fatalf("a market_in_zone row is never judged by the entry rule: %+v", c)
+	}
+}

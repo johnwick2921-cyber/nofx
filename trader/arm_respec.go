@@ -30,6 +30,9 @@ import (
 // arm:respec_cancel count, for a re-spec that never happened (class 35). The
 // prior version's authored leg is read from plan history through the one fold;
 // when it cannot be read, E1 does not fire (absent ≠ changed) and says why once.
+// E1 judges the authored ENTRY too (W1b FOLD-1, CTO): a non-market_in_zone row
+// rests AT its authored entry, so a v2 that moved only the entry left the v1
+// limit resting at the old price with v1's bracket until the rest cap.
 //
 // E2 (the moved zone). A working market_in_zone limit is keyed by (plan,
 // scenario, leg), which survives a re-plan, but the zone that justified its
@@ -119,9 +122,11 @@ func (at *AutoTrader) armAuthoredLegAt(planID string, version int, scenario stri
 //     is always contained, so this is silent when nothing moved — and an
 //     overlay that moves the zone inside the SAME version also cancels (the
 //     D15 pin then keeps that version from re-arming: fail-closed, named).
-//   - E1: under a NEWER plan version, the AUTHORED stop or target of this
-//     scenario's leg (authored = the plan doc's price, armScenarioLegs) moved by
-//     ≥ 2 ticks from the one the version the row was placed under authored.
+//   - E1: under a NEWER plan version, the AUTHORED entry (non-market_in_zone
+//     rows only — "entry re-spec by vN: E a→b", asked first), stop or target of
+//     this scenario's leg (authored = the plan doc's price, armScenarioLegs)
+//     moved by ≥ 2 ticks from the one the version the row was placed under
+//     authored. A market_in_zone row's entry is E2's (the zone decides).
 //     The composed bracket (live-ATR min-SL floor, structure anchor, obstacle
 //     target) is NEVER compared: it drifts with ATR inside and across versions,
 //     and that drift is not a re-spec (W1b verifier: an identical scenario
@@ -154,6 +159,22 @@ func armRespecFor(planVersion int, prior store.ArmedOrderDB, authored, leg kerne
 	was, why := priorAuthored()
 	if why != "" {
 		return armRespecCancel{}, why, false
+	}
+	// W1b FOLD-1 (CTO, P1) — a re-priced ENTRY. A non-market_in_zone row rests
+	// AT its authored entry, and the AddOn cannot move a resting entry, so an
+	// authored entry moved by ≥ 2 ticks (churnNeedsModify's threshold, one
+	// definition) is a re-spec like the bracket's. A market_in_zone row rests
+	// at the zone's far edge and keeps E2's zone rule. A zero entry on either
+	// side is absent, never a change (L7). Asked before the bracket: one
+	// decision per row.
+	if prior.Policy != kernel.EntryPolicyMarketInZone && was.Entry > 0 && authored.Entry > 0 &&
+		churnNeedsModify(was.Entry, 0, authored.Entry, 0, tick) {
+		return armRespecCancel{
+			reason: fmt.Sprintf("entry re-spec by v%d: E %.2f→%.2f (v%d→v%d; resting E %.2f, composed now E %.2f)",
+				planVersion, was.Entry, authored.Entry, prior.Version, planVersion, prior.EntryPx, leg.Entry),
+			counter: "arm:respec_cancel",
+			class:   "entry re-spec",
+		}, "", true
 	}
 	if !churnNeedsModify(was.Stop, was.Target, authored.Stop, authored.Target, tick) {
 		return armRespecCancel{}, "", false
