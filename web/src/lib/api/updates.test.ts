@@ -119,6 +119,7 @@ describe('updatesApi shape pins', () => {
     const out = await updatesApi.check()
     expect(mocks.request).toHaveBeenCalledWith('/api/updates/check', {
       method: 'POST',
+      headers: { 'X-NOFX-Update': '1' },
       silent: true,
     })
     expect(out).toEqual({
@@ -137,7 +138,7 @@ describe('updatesApi shape pins', () => {
       await updatesApi.install({
         release_id: 'r1',
         job_id: 'job-9',
-        expires_at: '2030-01-01T00:00:00Z',
+        expires_at: 1893456000,
         hmac: 'x',
       })
     ).toEqual({ ok: true, job_id: 'job-9' })
@@ -145,17 +146,19 @@ describe('updatesApi shape pins', () => {
     mocks.request.mockResolvedValueOnce({
       success: false,
       statusCode: 403,
-      data: { error: 'install: MAC mismatch' },
+      // the server's ONE 403 body for every /updates refusal (api/handler_updates.go
+      // errForbiddenBody); 'install: MAC mismatch' is a server LOG category, never a body
+      data: { error: 'forbidden' },
       message: '',
     })
     const refused = await updatesApi.install({
       release_id: 'r1',
       job_id: 'job-9',
-      expires_at: '2030-01-01T00:00:00Z',
+      expires_at: 1893456000,
       hmac: 'x',
     })
     expect(refused.ok).toBe(false)
-    expect(refused.error).toBe('install: MAC mismatch')
+    expect(refused.error).toBe('forbidden')
     expect(refused.status).toBe(403)
   })
 
@@ -177,6 +180,7 @@ describe('updatesApi shape pins', () => {
     })
     const out = await updatesApi.job('job-1')
     expect(mocks.request).toHaveBeenCalledWith('/api/updates/jobs/job-1', {
+      headers: { 'X-NOFX-Update': '1' },
       silent: true,
     })
     expect(out).toEqual({ error: 'not found', status: 404 })
