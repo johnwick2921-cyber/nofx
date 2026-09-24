@@ -124,9 +124,11 @@ type testRelease struct {
 }
 
 type releaseOpts struct {
-	selfEntry bool // release.yml:172 verbatim — manifest.sh redirected INTO the stage
-	noIndex   bool
-	afterSign func(t *testing.T, stage string) // tamper after signing, before tar
+	selfEntry      bool // release.yml:172 verbatim — manifest.sh redirected INTO the stage
+	noIndex        bool
+	beforeManifest func(t *testing.T, stage string) // add to the stage before manifest.sh lists it
+	editManifest   func(b []byte) []byte            // rewrite the manifest BEFORE it is signed
+	afterSign      func(t *testing.T, stage string) // tamper after signing, before tar
 }
 
 func buildRelease(t *testing.T, o releaseOpts) testRelease {
@@ -137,10 +139,16 @@ func buildRelease(t *testing.T, o releaseOpts) testRelease {
 	stage := filepath.Join(work, "stage")
 	runIn(t, root, false, "bash", "deploy/release/package.sh", releaseSource(t, !o.noIndex), stage, testSHA)
 	manifestPath := filepath.Join(stage, "manifest.json")
+	if o.beforeManifest != nil {
+		o.beforeManifest(t, stage)
+	}
 	if o.selfEntry {
 		runIn(t, root, false, "bash", "-c", `bash deploy/release/manifest.sh "$1" "$2" "$3" > "$1/manifest.json"`, "_", stage, testSHA, testReleaseID)
 	} else {
 		out := runIn(t, root, true, "bash", "deploy/release/manifest.sh", stage, testSHA, testReleaseID)
+		if o.editManifest != nil {
+			out = o.editManifest(out)
+		}
 		if err := os.WriteFile(manifestPath, out, 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -483,15 +491,15 @@ func TestRehashRefusesExtraMissingOrChangedArtifact(t *testing.T) {
 		want  error
 		names string
 	}{
-		"extra file":               {releaseOpts{afterSign: func(t *testing.T, s string) { writeFiles(t, s, map[string]string{"web/dist/extra.js": "x"}) }}, ErrArtifactMismatch, "web/dist/extra.js"},
-		"extra empty file":         {releaseOpts{afterSign: func(t *testing.T, s string) { writeFiles(t, s, map[string]string{"notes.txt": ""}) }}, ErrArtifactMismatch, "notes.txt"},
-		"missing file":             {releaseOpts{afterSign: func(t *testing.T, s string) { _ = os.Remove(filepath.Join(s, "LICENSE")) }}, ErrArtifactMismatch, "LICENSE"},
-		"changed bytes, same size": {releaseOpts{afterSign: flip("web/dist/index.html")}, ErrArtifactMismatch, "web/dist/index.html"},
+		"extra file":               {releaseOpts{afterSign: func(t *testing.T, s string) { writeFiles(t, s, map[string]string{"web/dist/extra.js": "x"}) }}, ErrArtifactMismatch, "extra (not in artifacts[]): web/dist/extra.js"},
+		"extra empty file":         {releaseOpts{afterSign: func(t *testing.T, s string) { writeFiles(t, s, map[string]string{"notes.txt": ""}) }}, ErrArtifactMismatch, "extra (not in artifacts[]): notes.txt"},
+		"missing file":             {releaseOpts{afterSign: func(t *testing.T, s string) { _ = os.Remove(filepath.Join(s, "LICENSE")) }}, ErrArtifactMismatch, "missing: LICENSE"},
+		"changed bytes, same size": {releaseOpts{afterSign: flip("web/dist/index.html")}, ErrArtifactMismatch, "changed: web/dist/index.html"},
 		"changed size": {releaseOpts{afterSign: func(t *testing.T, s string) {
 			f, _ := os.OpenFile(filepath.Join(s, "nofx-bin"), os.O_APPEND|os.O_WRONLY, 0)
 			_, _ = f.WriteString("more")
 			_ = f.Close()
-		}}, ErrArtifactMismatch, "nofx-bin"},
+		}}, ErrArtifactMismatch, "changed: nofx-bin"},
 		// C8: release.yml:172 redirects manifest.sh INTO the stage, so the shell
 		// has created a 0-byte manifest.json before find runs and artifacts[]
 		// lists it — an entry the signed file can never match.
@@ -522,10 +530,10 @@ func TestRehashRefusesExtraMissingOrChangedArtifact(t *testing.T) {
 		want   error
 		names  string
 	}{
-		"extra file":      {func(t *testing.T, d string) { writeFiles(t, d, map[string]string{"web/dist/extra.js": "x"}) }, ErrArtifactMismatch, "web/dist/extra.js"},
-		"missing file":    {func(t *testing.T, d string) { _ = os.Remove(filepath.Join(d, "ninjascript", "VLTraderTcp.cs")) }, ErrArtifactMismatch, "ninjascript/VLTraderTcp.cs"},
-		"changed binary":  {func(t *testing.T, d string) { flip("nofx-bin")(t, d) }, ErrArtifactMismatch, "nofx-bin"},
-		"planted symlink": {func(t *testing.T, d string) { _ = os.Symlink("/etc/passwd", filepath.Join(d, "web", "dist", "x.js")) }, ErrArtifactMismatch, "web/dist/x.js"},
+		"extra file":      {func(t *testing.T, d string) { writeFiles(t, d, map[string]string{"web/dist/extra.js": "x"}) }, ErrArtifactMismatch, "extra (not in artifacts[]): web/dist/extra.js"},
+		"missing file":    {func(t *testing.T, d string) { _ = os.Remove(filepath.Join(d, "ninjascript", "VLTraderTcp.cs")) }, ErrArtifactMismatch, "missing: ninjascript/VLTraderTcp.cs"},
+		"changed binary":  {func(t *testing.T, d string) { flip("nofx-bin")(t, d) }, ErrArtifactMismatch, "changed: nofx-bin"},
+		"planted symlink": {func(t *testing.T, d string) { _ = os.Symlink("/etc/passwd", filepath.Join(d, "web", "dist", "x.js")) }, ErrArtifactMismatch, "not a regular file: web/dist/x.js"},
 		"RELEASE rewritten": {func(t *testing.T, d string) {
 			_ = os.WriteFile(filepath.Join(d, "RELEASE"), []byte(strings.Repeat("b", 40)+"\n"), 0o644)
 		}, ErrLayout, "RELEASE"},
@@ -592,6 +600,9 @@ func TestVerdictWrittenOnlyAfterEveryCheck(t *testing.T) {
 			c.AllowedSigners = filepath.Join(t.TempDir(), "deploy", "release_allowed_signers")
 		}, nil, ErrNoAllowedSigners},
 		"release id disagrees with the signed manifest": {func(t *testing.T, e fetchEnv, c *FetchConfig) { c.ReleaseID = "v9.9.9" }, nil, ErrManifest},
+		"signed source_sha disagrees with deploy/RELEASE": {nil, &releaseOpts{editManifest: func(b []byte) []byte {
+			return bytes.Replace(b, []byte(`"source_sha": "`+testSHA+`"`), []byte(`"source_sha": "`+strings.Repeat("d", 40)+`"`), 1)
+		}}, ErrLayout},
 		"unsafe entry": {func(t *testing.T, e fetchEnv, c *FetchConfig) {
 			c.Archive = repack(t, good.stage, tarEntry{hdr: tar.Header{Typeflag: tar.TypeSymlink, Name: "./l", Linkname: "/"}})
 		}, nil, ErrUnsafeEntry},
@@ -625,6 +636,10 @@ func TestVerdictWrittenOnlyAfterEveryCheck(t *testing.T) {
 			if !errors.Is(err, c.want) {
 				t.Fatalf("%s: err = %v, want %v", name, err, c.want)
 			}
+			// the id is refused where it is first known, before anything is materialized
+			if name == "release id disagrees with the signed manifest" && !strings.Contains(err.Error(), `not the "v9.9.9" asked for`) {
+				t.Fatalf("the release id was not refused at the manifest step: %v", err)
+			}
 			_ = os.Chmod(e.releaseRoot, 0o755)
 			if _, err := os.Lstat(filepath.Join(e.dataDir, "updater", "verdicts")); !errors.Is(err, fs.ErrNotExist) {
 				t.Fatalf("a refused fetch created the verdicts dir (lstat err %v)", err)
@@ -645,6 +660,22 @@ func TestVerdictWrittenOnlyAfterEveryCheck(t *testing.T) {
 		}
 		if got := dirNames(t, keep); len(got) != 1 || got[0] != "sentinel" {
 			t.Fatalf("the pre-existing release dir was touched: %v", got)
+		}
+		if _, err := os.Lstat(e.verdictPath()); !errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("verdict written for a refused fetch")
+		}
+	})
+	// an EMPTY dir under the sha is refused too (rename(2) would silently replace it)
+	t.Run("release dir already exists (empty)", func(t *testing.T) {
+		e := newFetchEnv(t)
+		if err := os.Mkdir(filepath.Join(e.releaseRoot, testSHA), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := FetchRelease(e.cfg(good)); !errors.Is(err, ErrReleaseDirExists) {
+			t.Fatalf("err = %v, want ErrReleaseDirExists", err)
+		}
+		if got := dirNames(t, filepath.Join(e.releaseRoot, testSHA)); len(got) != 0 {
+			t.Fatalf("the pre-existing empty release dir was filled: %v", got)
 		}
 		if _, err := os.Lstat(e.verdictPath()); !errors.Is(err, fs.ErrNotExist) {
 			t.Fatalf("verdict written for a refused fetch")
@@ -729,6 +760,9 @@ func TestFetchRefusesAnExistingVerdict(t *testing.T) {
 			if got := dirNames(t, e2.releaseRoot); len(got) != 0 {
 				t.Fatalf("release root = %v, want empty", got)
 			}
+			if v, err := ReadReleaseVerdict(e2.dataDir, testReleaseID); !errors.Is(err, ErrVerdict) {
+				t.Fatalf("ReadReleaseVerdict on %s = %+v, %v; want ErrVerdict (absent fields are not empty ones)", name, v, err)
+			}
 		})
 	}
 	if p, err := VerdictPath(e.dataDir, testReleaseID); err != nil || p != e.verdictPath() {
@@ -763,5 +797,145 @@ func TestReleaseFetchHasNoNetworkCode(t *testing.T) {
 				t.Errorf("%s imports %s — %s", file, p, why)
 			}
 		}
+	}
+}
+
+// Names the materialized layout owns (RELEASE, signed/…) may not be artifacts:
+// they would collide with what fetch writes. Put there BEFORE manifest.sh runs,
+// so they are listed with their true hashes and only this rule can refuse them.
+func TestManifestRefusesArtifactsTheLayoutOwns(t *testing.T) {
+	for name, extra := range map[string]map[string]string{
+		"RELEASE at the root":  {"RELEASE": testSHA + "\n"},
+		"a file under signed/": {"signed/manifest.json": "{}"},
+		"the signature name":   {"manifest.json.sig": "x"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := buildRelease(t, releaseOpts{beforeManifest: func(t *testing.T, s string) { writeFiles(t, s, extra) }})
+			e := newFetchEnv(t)
+			v, err := FetchRelease(e.cfg(r))
+			if err == nil {
+				t.Fatalf("ACCEPTED a manifest listing %v; verdict %+v", extra, v)
+			}
+			if !errors.Is(err, ErrManifest) || !strings.Contains(err.Error(), "the materialized layout owns") {
+				t.Fatalf("err = %v, want ErrManifest (a name the materialized layout owns)", err)
+			}
+			e.assertNothingLanded(t)
+		})
+	}
+}
+
+// Only zero padding may follow the tar end, and the gzip stream is read to
+// its end so its CRC is checked.
+func TestExtractRefusesDataAfterTheTarEnd(t *testing.T) {
+	r := buildRelease(t, releaseOpts{})
+	clean := repack(t, r.stage)
+	raw, err := os.ReadFile(clean)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, err := gzip.NewReader(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tarBytes bytes.Buffer
+	if _, err := tarBytes.ReadFrom(zr); err != nil {
+		t.Fatal(err)
+	}
+	regz := func(b []byte) string {
+		var buf bytes.Buffer
+		w := gzip.NewWriter(&buf)
+		_, _ = w.Write(b)
+		_ = w.Close()
+		p := filepath.Join(t.TempDir(), testReleaseID+".tar.gz")
+		if err := os.WriteFile(p, buf.Bytes(), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	crc := append([]byte(nil), raw...)
+	crc[len(crc)-8] ^= 0xff // the gzip trailer's CRC-32
+	crcPath := filepath.Join(t.TempDir(), testReleaseID+".tar.gz")
+	if err := os.WriteFile(crcPath, crc, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for name, c := range map[string]struct {
+		archive string
+		ok      bool
+	}{
+		"control: zero padding after the end": {regz(append(tarBytes.Bytes(), make([]byte, 10240)...)), true},
+		"a payload after the end":             {regz(append(tarBytes.Bytes(), []byte("#!/bin/sh\nhidden\n")...)), false},
+		"a corrupted gzip CRC":                {crcPath, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := newFetchEnv(t)
+			cfg := e.cfg(r)
+			cfg.Archive = c.archive
+			v, err := FetchRelease(cfg)
+			if c.ok {
+				if err != nil {
+					t.Fatalf("control refused: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("ACCEPTED %s; verdict %+v", name, v)
+			}
+			if !errors.Is(err, ErrArchive) {
+				t.Fatalf("%s: err = %v, want ErrArchive", name, err)
+			}
+			e.assertNothingLanded(t)
+		})
+	}
+}
+
+// The job's verified state re-proves the signature NOW, against the current
+// trust anchor, and refuses an activation manifest whose verdict it did not
+// itself produce.
+func TestReverifyRefusesAVerdictItDidNotProve(t *testing.T) {
+	r := buildRelease(t, releaseOpts{})
+	foreign := newTestSigner(t, t.TempDir(), "foreign")
+	for name, c := range map[string]struct {
+		tamper func(t *testing.T, dir string) (signers, id string)
+		want   error
+	}{
+		"control": {func(t *testing.T, d string) (string, string) { return r.signers, testReleaseID }, nil},
+		"forged signature_verdict": {func(t *testing.T, d string) (string, string) {
+			p := filepath.Join(d, "manifest.json")
+			b, _ := os.ReadFile(p)
+			_ = os.WriteFile(p, bytes.Replace(b, []byte("sshsig:release:SHA256:"), []byte("sshsig:release:SHA256:forged"), 1), 0o644)
+			return r.signers, testReleaseID
+		}, ErrLayout},
+		"the trust anchor changed since fetch": {func(t *testing.T, d string) (string, string) {
+			return writeAllowedSigners(t, t.TempDir(), "release "+foreign.pub), testReleaseID
+		}, ErrSigForeignKey},
+		"another release id": {func(t *testing.T, d string) (string, string) { return r.signers, "v0.0.2-u3" }, ErrManifest},
+		"signed manifest edited": {func(t *testing.T, d string) (string, string) {
+			p := filepath.Join(d, "signed", "manifest.json")
+			b, _ := os.ReadFile(p)
+			_ = os.WriteFile(p, append(b, ' '), 0o644)
+			return r.signers, testReleaseID
+		}, ErrSigInvalid},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := newFetchEnv(t)
+			v, err := FetchRelease(e.cfg(r))
+			if err != nil {
+				t.Fatal(err)
+			}
+			signers, id := c.tamper(t, v.ReleaseDir)
+			m, sv, err := ReverifyRelease(v.ReleaseDir, signers, id)
+			if c.want == nil {
+				if err != nil || m.SourceSHA != testSHA || sv.String() != "sshsig:release:"+r.fp {
+					t.Fatalf("control: %+v %+v %v", m, sv, err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("ReverifyRelease ACCEPTED (%s): %+v %+v", name, m, sv)
+			}
+			if !errors.Is(err, c.want) {
+				t.Fatalf("%s: err = %v, want %v", name, err, c.want)
+			}
+		})
 	}
 }
