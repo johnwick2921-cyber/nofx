@@ -142,8 +142,10 @@ func throughResume(e ast.Expr) bool {
 	}
 }
 
-// resumeWrites reports how f fills a Resume field without naming a builder
-// (U2 verifier defect 2); local and dot are f's names for the wire package.
+// resumeWrites reports how f (a file, or inside the wire package one
+// declaration's body with dot=true) fills a Resume field without naming a
+// builder (U2 verifier defect 2); local and dot are f's names for the wire
+// package.
 //
 //   - Every file: a composite key Resume, &X.Resume, an assignment to
 //     X.Resume, or anything below it. Fail closed: Resume is a field of the
@@ -156,7 +158,7 @@ func throughResume(e ast.Expr) bool {
 //     wire API takes one (Client.Do and the worker's Handler take values).
 //
 // READS are not judged: r.Resume != nil and r.Resume.JobID stay admitted.
-func resumeWrites(f *ast.File, local map[string]bool, dot bool) []string {
+func resumeWrites(f ast.Node, local map[string]bool, dot bool) []string {
 	isRequest := func(e ast.Expr) bool {
 		switch x := e.(type) {
 		case *ast.SelectorExpr:
@@ -262,10 +264,124 @@ func resumeWrites(f *ast.File, local map[string]bool, dot bool) []string {
 	return out
 }
 
+// wireDecl is one top-level declaration of the wire package: its pin name
+// (a method as Recv.Name) and the nodes of its body — never its own defining
+// name, so NewResume's declaration is judged by what NewResume contains.
+type wireDecl struct {
+	name  string
+	parts []ast.Node
+}
+
+func wireDeclsOf(d ast.Decl) []wireDecl {
+	switch d := d.(type) {
+	case *ast.FuncDecl:
+		name, parts := d.Name.Name, []ast.Node{d.Type}
+		if d.Recv != nil {
+			parts = append(parts, d.Recv)
+			if len(d.Recv.List) == 1 {
+				name = recvTypeName(d.Recv.List[0].Type) + "." + name
+			}
+		}
+		if d.Body != nil {
+			parts = append(parts, d.Body)
+		}
+		return []wireDecl{{name, parts}}
+	case *ast.GenDecl:
+		var out []wireDecl
+		for _, s := range d.Specs {
+			switch s := s.(type) {
+			case *ast.TypeSpec:
+				parts := []ast.Node{s.Type}
+				if s.TypeParams != nil {
+					parts = append(parts, s.TypeParams)
+				}
+				out = append(out, wireDecl{s.Name.Name, parts})
+			case *ast.ValueSpec:
+				var parts []ast.Node
+				if s.Type != nil {
+					parts = append(parts, s.Type)
+				}
+				for _, v := range s.Values {
+					parts = append(parts, v)
+				}
+				for _, n := range s.Names {
+					out = append(out, wireDecl{n.Name, parts})
+				}
+			}
+		}
+		return out
+	}
+	return nil
+}
+
+func recvTypeName(e ast.Expr) string {
+	for {
+		switch x := e.(type) {
+		case *ast.StarExpr:
+			e = x.X
+		case *ast.ParenExpr:
+			e = x.X
+		case *ast.IndexExpr:
+			e = x.X
+		case *ast.IndexListExpr:
+			e = x.X
+		case *ast.Ident:
+			return x.Name
+		default:
+			return "?"
+		}
+	}
+}
+
+// reachesResume reports whether a wire-package declaration body names a
+// builder (bare, as the package itself spells it), spells a resume frame, or
+// writes a Resume field / takes a pointer to a Request (resumeWrites, with
+// the package's own names read as a dot import would read them).
+func reachesResume(parts []ast.Node) bool {
+	for _, p := range parts {
+		hit := false
+		ast.Inspect(p, func(n ast.Node) bool {
+			switch x := n.(type) {
+			case *ast.Ident:
+				hit = hit || resumeBuilders[x.Name]
+			case *ast.BasicLit:
+				if x.Kind == token.STRING {
+					s, err := strconv.Unquote(x.Value)
+					hit = hit || (err == nil && spellsResume(s))
+				}
+			}
+			return !hit
+		})
+		if hit || len(resumeWrites(p, nil, true)) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// resumeWireDecls is the EXACT set of top-level declarations of
+// resumeWireDir (methods as Recv.Name) whose bodies reach a resume builder:
+// name one, spell a resume frame, or write a Resume field. The wire directory
+// is admitted wholesale, so without this pin a new exported wrapper there
+// (func Continue(j string) Request { return NewResume(j) }) would hand the
+// app a resume under a name no census judges (U2 verifier defect 4). A new
+// member is an offender; a removed or renamed one fails the real-tree census.
+var resumeWireDecls = map[string]bool{
+	"Verbs":            true, // the fixed verb list
+	"Verb.Known":       true, // the fixed verb set
+	"Request":          true, // the Resume *ResumePayload field
+	"NewResume":        true, // THE builder (the CLI's)
+	"payloadKeys":      true, // resume's payload allow-list
+	"DecodeRequest":    true, // decodes a resume frame via NewResume
+	"Request.Validate": true, // checks the resume payload
+	"EncodeRequest":    true, // encodes the resume payload
+}
+
 type resumeCensus struct {
-	offenders []string
-	scanned   int
-	defined   map[string]bool // builder names declared at top level of resumeWireDir
+	offenders    []string
+	scanned      int
+	defined      map[string]bool // builder names declared at top level of resumeWireDir
+	wireMentions map[string]bool // top-level decls of resumeWireDir that reach a builder
 }
 
 // resumeBuilderCensus scans every non-test .go file under root (the ONE
@@ -273,7 +389,7 @@ type resumeCensus struct {
 // resumeAdmittedDirs that names a resume builder of <module>/internal/updaterwire
 // or spells a resume frame.
 func resumeBuilderCensus(root string) (resumeCensus, error) {
-	c := resumeCensus{defined: map[string]bool{}}
+	c := resumeCensus{defined: map[string]bool{}, wireMentions: map[string]bool{}}
 	module, err := censuswalk.ModulePath(root)
 	if err != nil {
 		return c, err
@@ -314,6 +430,15 @@ func resumeBuilderCensus(root string) (resumeCensus, error) {
 								}
 							}
 						}
+					}
+				}
+				for _, wd := range wireDeclsOf(d) {
+					if !reachesResume(wd.parts) {
+						continue
+					}
+					c.wireMentions[wd.name] = true
+					if !resumeWireDecls[wd.name] {
+						hits[rel+": declares "+wd.name+", which reaches a resume builder outside the pinned set (resumeWireDecls)"] = true
 					}
 				}
 			}
@@ -393,6 +518,11 @@ func TestOnlyTheUpdaterCLIBuildsAResumeCensus(t *testing.T) {
 	for name := range resumeBuilders {
 		if !c.defined[name] {
 			t.Fatalf("%s is not declared in %s — the census would judge a name that no longer exists (update resumeBuilders with the rename)", name, resumeWireDir)
+		}
+	}
+	for name := range resumeWireDecls {
+		if !c.wireMentions[name] {
+			t.Fatalf("%s is pinned in resumeWireDecls but no longer reaches a resume builder in %s (reached: %v) — update the pin with the rename or removal", name, resumeWireDir, c.wireMentions)
 		}
 	}
 	if len(c.offenders) > 0 {
@@ -491,7 +621,7 @@ func TestResumeBuilderCensusSeesEveryForm(t *testing.T) {
 	for _, ok := range []struct{ name, rel, body string }{
 		{"the CLI", "cmd/nofx-updater/main.go", imp("main", "", "func main() {\n\t_ = updaterwire.NewResume(\"job-0001abcd\")\n\t_ = updaterwire.Request{Verb: updaterwire.VerbResume, Resume: &updaterwire.ResumePayload{}}\n}")},
 		{"the CLI, a second file", "cmd/nofx-updater/resume.go", imp("main", "uw", "const frame = `{\"v\":1,\"verb\":\"resume\",\"payload\":{}}`\n\nvar _ = uw.VerbResume")},
-		{"the wire package itself", "internal/updaterwire/more.go", "package updaterwire\n\nvar _ = NewResume(\"job-0001abcd\")\n\nconst f = `{\"verb\":\"resume\"}`\n"},
+		{"the wire package itself, a pinned declaration", "internal/updaterwire/more.go", "package updaterwire\n\nfunc EncodeRequest(r Request) ([]byte, error) {\n\tif r.Verb == VerbResume {\n\t\treturn []byte(`{\"verb\":\"resume\"}`), nil\n\t}\n\treturn nil, nil\n}\n"},
 		{"a handler reading the payload pointer", "internal/updaterworker/socket.go", imp("updaterworker", "", "func isResume(r updaterwire.Request) bool { return r.Resume != nil }")},
 		{"an unrelated resume word", "agent/x.go", "package agent\n\nvar words = []string{\"resume\", \"continue\"}\n"},
 	} {
@@ -667,4 +797,54 @@ func TestResumeCensusAdmitsOnlyPackageMainInTheCLIDir(t *testing.T) {
 		c := resumeCensusOf(t, map[string]string{"cmd/nofx-updater/main.go": resumeCensusImp("main", "", "func main() { _ = updaterwire.NewResume(\"job-0001abcd\") }")})
 		wantResumeOffenders(t, c, "cmd/nofx-updater/main.go")
 	})
+}
+
+// PIN (U2 verifier defect 4, probe2.out G2): the wire directory is admitted
+// wholesale, so the census pins WHICH of its top-level declarations reach a
+// resume builder (resumeWireDecls). A new one — an exported wrapper the app
+// could call, a method, an init, a blank var, a frame constant, a function
+// that only writes Resume — is an offender naming the declaration; a pinned
+// name in any file of the package is admitted, and so is a declaration that
+// reaches no builder.
+func TestResumeCensusPinsTheWirePackagesResumeDeclarations(t *testing.T) {
+	// the synthetic wire package: its type field and its constructor body
+	if c := resumeCensusOf(t, nil); strings.Join(sortedKeys(c.wireMentions), " ") != "NewResume Request" {
+		t.Errorf("synthetic wire package reaches a builder from %v, want [NewResume Request]", sortedKeys(c.wireMentions))
+	}
+	const more = "internal/updaterwire/more.go"
+	for _, tc := range []struct{ name, body, decl string }{
+		{"G2: an exported wrapper the app calls", "func Continue(j string) Request { return NewResume(j) }", "Continue"},
+		{"a method", "func (r Request) AsResume(j string) Request { return NewResume(j) }", "Request.AsResume"},
+		{"a pointer-receiver method writing Resume", "func (r *Request) Park(j string) { r.Resume = &ResumePayload{JobID: j} }", "Request.Park"},
+		{"a wrapper that only writes Resume", "func Continue(j string) (r Request) {\n\tr.Verb = Verbs()[3]\n\t_ = json.Unmarshal([]byte(`{\"job_id\":\"`+j+`\"}`), &r.Resume)\n\treturn r\n}", "Continue"},
+		{"a wrapper that only spells a frame", "func Continue(j string) (Request, error) {\n\treturn DecodeRequest([]byte(`{\"v\":1,\"verb\":\"resume\",\"payload\":{\"job_id\":\"` + j + `\"}}`))\n}", "Continue"},
+		{"an init", "func init() { _ = NewResume(\"job-0001abcd\") }", "init"},
+		{"a blank var", "var _ = NewResume(\"job-0001abcd\")", "_"},
+		{"a frame constant", "const resumeFrame = `{\"verb\":\"resume\"}`", "resumeFrame"},
+		{"a type alias of the payload", "type Payload = ResumePayload", "Payload"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := "package updaterwire\n\nimport \"encoding/json\"\n\nvar _ = json.Unmarshal\n\n" + tc.body + "\n"
+			wantResumeOffenders(t, resumeCensusOf(t, map[string]string{more: body}), more,
+				"declares "+tc.decl+", which reaches a resume builder outside the pinned set (resumeWireDecls)")
+		})
+	}
+	for _, ok := range []struct{ name, body string }{
+		{"a pinned name in another file", "func DecodeRequest(b []byte) (Request, error) { return NewResume(string(b)), nil }"},
+		{"a pinned method in another file", "func (v Verb) Known() bool { return v == VerbResume }"},
+		{"a declaration that reaches no builder", "func Helper(r Request) bool { return r.Resume != nil }"},
+	} {
+		t.Run("admitted "+ok.name, func(t *testing.T) {
+			wantResumeOffenders(t, resumeCensusOf(t, map[string]string{more: "package updaterwire\n\n" + ok.body + "\n"}), more)
+		})
+	}
+}
+
+func sortedKeys(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
