@@ -368,10 +368,10 @@ func TestFetchMaterializesTheActivationLayout(t *testing.T) {
 		t.Fatalf("updaterjob.ReadVerdict = %+v, %v; want %+v", rv, err, want)
 	}
 	// the job's re-proofs (states downloaded / verified) accept what fetch made
-	if n, err := RehashRelease(final, v.ManifestSHA256); err != nil || n != v.Artifacts {
+	if n, err := RehashRelease(v); err != nil || n != v.Artifacts {
 		t.Fatalf("RehashRelease = %d, %v; want %d, nil", n, err, v.Artifacts)
 	}
-	m, sv, err := ReverifyRelease(final, r.signers, testReleaseID)
+	m, sv, err := ReverifyRelease(v, r.signers)
 	if err != nil || m.SourceSHA != testSHA || m.ReleaseID != testReleaseID || m.AddonBuildID != testBuildID || sv.Fingerprint != r.fp || m.SHA256 != v.ManifestSHA256 {
 		t.Fatalf("ReverifyRelease = %+v, %+v, %v", m, sv, err)
 	}
@@ -620,11 +620,11 @@ func TestRehashRefusesExtraMissingOrChangedArtifact(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if n, err := RehashRelease(v.ReleaseDir, v.ManifestSHA256); err != nil || n != v.Artifacts {
+			if n, err := RehashRelease(v); err != nil || n != v.Artifacts {
 				t.Fatalf("control: RehashRelease on the fresh release = %d, %v", n, err)
 			}
 			c.tamper(t, e.releaseDirOf(t, v))
-			n, err := RehashRelease(v.ReleaseDir, v.ManifestSHA256)
+			n, err := RehashRelease(v)
 			if err == nil {
 				t.Fatalf("RehashRelease ACCEPTED a release with %s (%d artifacts)", name, n)
 			}
@@ -639,10 +639,39 @@ func TestRehashRefusesExtraMissingOrChangedArtifact(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := RehashRelease(v.ReleaseDir, ""); !errors.Is(err, ErrManifest) {
-			t.Fatalf("RehashRelease with no expected manifest sha: err = %v, want ErrManifest", err)
+		v.ManifestSHA256 = ""
+		if _, err := RehashRelease(v); !errors.Is(err, updaterjob.ErrVerdict) {
+			t.Fatalf("RehashRelease with no expected manifest sha: err = %v, want updaterjob.ErrVerdict", err)
 		}
 	})
+	// the re-proof is OF THE VERDICT (verifier D6): a verdict that passes
+	// Check but records something the signed manifest does not say is refused
+	for name, edit := range map[string]func(t *testing.T, e fetchEnv, v *updaterjob.Verdict){
+		"another release id":     func(t *testing.T, e fetchEnv, v *updaterjob.Verdict) { v.ReleaseID = "v0.0.2-u3" },
+		"another artifact count": func(t *testing.T, e fetchEnv, v *updaterjob.Verdict) { v.Artifacts++ },
+		"another source sha (its dir renamed to match)": func(t *testing.T, e fetchEnv, v *updaterjob.Verdict) {
+			renameToOtherSHA(t, e, v)
+		},
+	} {
+		t.Run("job/the verdict records "+name, func(t *testing.T) {
+			e := newFetchEnv(t)
+			v, err := FetchRelease(e.cfg(r))
+			if err != nil {
+				t.Fatal(err)
+			}
+			edit(t, e, &v)
+			if err := v.Check(); err != nil {
+				t.Fatalf("fixture: the edited verdict fails Check, so Check (not the re-proof) would refuse it: %v", err)
+			}
+			n, err := RehashRelease(v)
+			if err == nil {
+				t.Fatalf("RehashRelease ACCEPTED a verdict that records %s (%d artifacts)", name, n)
+			}
+			if !errors.Is(err, ErrManifest) || !strings.Contains(err.Error(), "the verdict") {
+				t.Fatalf("%s: err = %v; want ErrManifest naming the verdict", name, err)
+			}
+		})
+	}
 }
 
 // ── the verdict: written once, and only after every check ────────────────────
@@ -860,6 +889,19 @@ func TestFetchRefusesAnExistingVerdict(t *testing.T) {
 			t.Fatalf("VerdictPath(%q, %q) = %q, want a refusal", bad.dir, bad.id, p)
 		}
 	}
+}
+
+// renameToOtherSHA moves the fetched release dir to <root>/<dddd…> and makes
+// the verdict say that sha — a verdict that passes Check and names a real dir,
+// but not the release the signed manifest describes.
+func renameToOtherSHA(t *testing.T, e fetchEnv, v *updaterjob.Verdict) {
+	t.Helper()
+	other := strings.Repeat("d", 40)
+	dst := filepath.Join(e.releaseRoot, other)
+	if err := os.Rename(e.releaseDirOf(t, *v), dst); err != nil {
+		t.Fatal(err)
+	}
+	v.SourceSHA, v.ReleaseDir = other, dst
 }
 
 // ── the app-side reader refuses what FetchRelease never writes ──────────────
@@ -1111,27 +1153,50 @@ func TestExtractRefusesDataAfterTheTarEnd(t *testing.T) {
 func TestReverifyRefusesAVerdictItDidNotProve(t *testing.T) {
 	r := buildRelease(t, releaseOpts{})
 	foreign := newTestSigner(t, t.TempDir(), "foreign")
+	foreignFP := foreign.fingerprint(t)
 	for name, c := range map[string]struct {
-		tamper func(t *testing.T, dir string) (signers, id string)
+		// tamper changes the release dir and/or the verdict; returns the signers file
+		tamper func(t *testing.T, e fetchEnv, v *updaterjob.Verdict) (signers string)
 		want   error
 	}{
-		"control": {func(t *testing.T, d string) (string, string) { return r.signers, testReleaseID }, nil},
-		"forged signature_verdict": {func(t *testing.T, d string) (string, string) {
-			p := filepath.Join(d, "manifest.json")
+		"control": {func(t *testing.T, e fetchEnv, v *updaterjob.Verdict) string { return r.signers }, nil},
+		"forged signature_verdict": {func(t *testing.T, e fetchEnv, v *updaterjob.Verdict) string {
+			p := filepath.Join(e.releaseDirOf(t, *v), "manifest.json")
 			b, _ := os.ReadFile(p)
 			_ = os.WriteFile(p, bytes.Replace(b, []byte("sshsig:release:SHA256:"), []byte("sshsig:release:SHA256:forged"), 1), 0o644)
-			return r.signers, testReleaseID
+			return r.signers
 		}, ErrLayout},
-		"the trust anchor changed since fetch": {func(t *testing.T, d string) (string, string) {
-			return writeAllowedSigners(t, t.TempDir(), "release "+foreign.pub), testReleaseID
+		"the trust anchor changed since fetch": {func(t *testing.T, e fetchEnv, v *updaterjob.Verdict) string {
+			return writeAllowedSigners(t, t.TempDir(), "release "+foreign.pub)
 		}, ErrSigForeignKey},
-		"another release id": {func(t *testing.T, d string) (string, string) { return r.signers, "v0.0.2-u3" }, ErrManifest},
-		"signed manifest edited": {func(t *testing.T, d string) (string, string) {
-			p := filepath.Join(d, "signed", "manifest.json")
+		"signed manifest edited": {func(t *testing.T, e fetchEnv, v *updaterjob.Verdict) string {
+			p := filepath.Join(e.releaseDirOf(t, *v), "signed", "manifest.json")
 			b, _ := os.ReadFile(p)
 			_ = os.WriteFile(p, append(b, ' '), 0o644)
-			return r.signers, testReleaseID
+			return r.signers
 		}, ErrSigInvalid},
+		// the re-proof is OF THE VERDICT (verifier D6): each verdict below passes
+		// Check but records something the signed release does not say
+		"the verdict records another release id": {func(t *testing.T, e fetchEnv, v *updaterjob.Verdict) string {
+			v.ReleaseID = "v0.0.2-u3"
+			return r.signers
+		}, ErrManifest},
+		"the verdict records another manifest": {func(t *testing.T, e fetchEnv, v *updaterjob.Verdict) string {
+			v.ManifestSHA256 = strings.Repeat("b", 64)
+			return r.signers
+		}, ErrManifest},
+		"the verdict records another source sha (its dir renamed to match)": {func(t *testing.T, e fetchEnv, v *updaterjob.Verdict) string {
+			renameToOtherSHA(t, e, v)
+			return r.signers
+		}, ErrManifest},
+		"the verdict records another signer": {func(t *testing.T, e fetchEnv, v *updaterjob.Verdict) string {
+			v.SignerFingerprint = foreignFP
+			return r.signers
+		}, ErrManifest},
+		"the verdict fails Check": {func(t *testing.T, e fetchEnv, v *updaterjob.Verdict) string {
+			v.ReleaseDir = "/"
+			return r.signers
+		}, updaterjob.ErrVerdict},
 	} {
 		t.Run(name, func(t *testing.T) {
 			e := newFetchEnv(t)
@@ -1139,8 +1204,13 @@ func TestReverifyRefusesAVerdictItDidNotProve(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			signers, id := c.tamper(t, e.releaseDirOf(t, v))
-			m, sv, err := ReverifyRelease(v.ReleaseDir, signers, id)
+			signers := c.tamper(t, e, &v)
+			if c.want != updaterjob.ErrVerdict {
+				if err := v.Check(); err != nil {
+					t.Fatalf("fixture: the verdict fails Check, so Check (not the re-proof) would refuse it: %v", err)
+				}
+			}
+			m, sv, err := ReverifyRelease(v, signers)
 			if c.want == nil {
 				if err != nil || m.SourceSHA != testSHA || sv.String() != "sshsig:release:"+r.fp {
 					t.Fatalf("control: %+v %+v %v", m, sv, err)

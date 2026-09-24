@@ -244,11 +244,27 @@ func FetchRelease(cfg FetchConfig) (updaterjob.Verdict, error) {
 		return updaterjob.Verdict{}, fmt.Errorf("%w: %w", ErrArchive, err)
 	}
 
-	// 8. the job's own re-proofs, over what was just materialized
-	if _, err := RehashRelease(staging, m.SHA256); err != nil {
+	// 8. the verdict this fetch will write, and the job's own re-proofs of it
+	// over what was just materialized (still the staging dir)
+	v := updaterjob.Verdict{
+		Schema:            updaterjob.VerdictSchema,
+		ReleaseID:         m.ReleaseID,
+		SourceSHA:         m.SourceSHA,
+		ReleaseDir:        final,
+		Signer:            sv.Principal,
+		SignerFingerprint: sv.Fingerprint,
+		HashAlg:           sv.HashAlg,
+		ManifestSHA256:    m.SHA256,
+		Artifacts:         len(m.Artifacts),
+		VerifiedAt:        now().UTC().Format(time.RFC3339Nano),
+	}
+	if err := v.Check(); err != nil {
+		return updaterjob.Verdict{}, fmt.Errorf("%w: %w", ErrVerdictWrite, err)
+	}
+	if _, err := rehashDir(staging, v); err != nil {
 		return updaterjob.Verdict{}, err
 	}
-	if _, _, err := ReverifyRelease(staging, cfg.AllowedSigners, cfg.ReleaseID); err != nil {
+	if _, _, err := reverifyDir(staging, cfg.AllowedSigners, v); err != nil {
 		return updaterjob.Verdict{}, err
 	}
 
@@ -263,18 +279,6 @@ func FetchRelease(cfg FetchConfig) (updaterjob.Verdict, error) {
 	_ = syncDir(cfg.ReleaseRoot)
 
 	// 10. the verdict — last, and only now
-	v := updaterjob.Verdict{
-		Schema:            updaterjob.VerdictSchema,
-		ReleaseID:         m.ReleaseID,
-		SourceSHA:         m.SourceSHA,
-		ReleaseDir:        final,
-		Signer:            sv.Principal,
-		SignerFingerprint: sv.Fingerprint,
-		HashAlg:           sv.HashAlg,
-		ManifestSHA256:    m.SHA256,
-		Artifacts:         len(m.Artifacts),
-		VerifiedAt:        now().UTC().Format(time.RFC3339Nano),
-	}
 	if err := writeVerdict(cfg.DataDir, vpath, v); err != nil {
 		// no release dir survives without its verdict
 		_ = os.RemoveAll(final)
@@ -284,15 +288,26 @@ func FetchRelease(cfg FetchConfig) (updaterjob.Verdict, error) {
 	return v, nil
 }
 
-// RehashRelease is the job's `downloaded` re-proof over a materialized
-// release dir: the signed manifest is the one the verdict recorded
-// (wantManifestSHA256), every artifacts[] entry re-hashes, no file exists
-// beyond artifacts[] and the four the materialization owns, RELEASE is a
-// byte-identical copy of deploy/RELEASE naming source_sha, and the activation
-// manifest names source_sha and the binary's current md5. Returns the number
-// of artifacts re-hashed.
-func RehashRelease(releaseDir, wantManifestSHA256 string) (int, error) {
-	if !sha256Re.MatchString(wantManifestSHA256) {
+// RehashRelease is the job's `downloaded` re-proof of a verdict (brief §3.7
+// Releases.Rehash) over the release dir it names: the verdict passes Check,
+// the signed manifest is the one the verdict recorded (manifest_sha256) and
+// says the verdict's release_id, source_sha and artifact count, every
+// artifacts[] entry re-hashes, no file exists beyond artifacts[] and the four
+// the materialization owns, RELEASE is a byte-identical copy of
+// deploy/RELEASE naming source_sha, and the activation manifest names
+// source_sha and the binary's current md5. Returns the number of artifacts
+// re-hashed.
+func RehashRelease(v updaterjob.Verdict) (int, error) {
+	if err := v.Check(); err != nil {
+		return 0, err
+	}
+	return rehashDir(v.ReleaseDir, v)
+}
+
+// rehashDir is RehashRelease over dir — FetchRelease's staging dir before
+// the rename, v.ReleaseDir after it.
+func rehashDir(releaseDir string, v updaterjob.Verdict) (int, error) {
+	if !sha256Re.MatchString(v.ManifestSHA256) {
 		return 0, fmt.Errorf("%w: no expected manifest_sha256 to re-hash against", ErrManifest)
 	}
 	root, err := openReleaseRoot(releaseDir)
@@ -304,11 +319,14 @@ func RehashRelease(releaseDir, wantManifestSHA256 string) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("%w: %w", ErrManifest, err)
 	}
-	if got := sha256Hex(mb); got != wantManifestSHA256 {
-		return 0, fmt.Errorf("%w: signed/manifest.json hashes to %s, the verdict's manifest_sha256 is %s", ErrManifest, got, wantManifestSHA256)
+	if got := sha256Hex(mb); got != v.ManifestSHA256 {
+		return 0, fmt.Errorf("%w: signed/manifest.json hashes to %s, the verdict's manifest_sha256 is %s", ErrManifest, got, v.ManifestSHA256)
 	}
 	m, err := parseSignedManifest(mb)
 	if err != nil {
+		return 0, err
+	}
+	if err := manifestIsTheVerdicts(m, v); err != nil {
 		return 0, err
 	}
 	exempt := map[string]bool{
@@ -346,11 +364,22 @@ func RehashRelease(releaseDir, wantManifestSHA256 string) (int, error) {
 	return len(m.Artifacts), nil
 }
 
-// ReverifyRelease is the job's `verified` re-proof: the signed pair under
-// signed/ verifies against the allowed-signers file NOW, the signed manifest
-// is release wantReleaseID, and the activation manifest's signature_verdict is
+// ReverifyRelease is the job's `verified` re-proof of a verdict (brief §3.7
+// Releases.Reverify): the verdict passes Check, the signed pair under signed/
+// in the release dir it names verifies against the allowed-signers file NOW,
+// the signed manifest IS the one the verdict recorded (manifest_sha256,
+// release_id, source_sha) and was signed by the key it recorded
+// (signer_fingerprint), and the activation manifest's signature_verdict is
 // exactly this verification's verdict.
-func ReverifyRelease(releaseDir, allowedSigners, wantReleaseID string) (SignedManifest, SignatureVerdict, error) {
+func ReverifyRelease(v updaterjob.Verdict, allowedSigners string) (SignedManifest, SignatureVerdict, error) {
+	if err := v.Check(); err != nil {
+		return SignedManifest{}, SignatureVerdict{}, err
+	}
+	return reverifyDir(v.ReleaseDir, allowedSigners, v)
+}
+
+// reverifyDir is ReverifyRelease over dir (see rehashDir).
+func reverifyDir(releaseDir, allowedSigners string, v updaterjob.Verdict) (SignedManifest, SignatureVerdict, error) {
 	root, err := openReleaseRoot(releaseDir)
 	if err != nil {
 		return SignedManifest{}, SignatureVerdict{}, err
@@ -372,8 +401,11 @@ func ReverifyRelease(releaseDir, allowedSigners, wantReleaseID string) (SignedMa
 	if err != nil {
 		return SignedManifest{}, SignatureVerdict{}, err
 	}
-	if m.ReleaseID != wantReleaseID {
-		return SignedManifest{}, SignatureVerdict{}, fmt.Errorf("%w: the signed manifest is release %q, not %q", ErrManifest, m.ReleaseID, wantReleaseID)
+	if err := manifestIsTheVerdicts(m, v); err != nil {
+		return SignedManifest{}, SignatureVerdict{}, err
+	}
+	if sv.Fingerprint != v.SignerFingerprint {
+		return SignedManifest{}, SignatureVerdict{}, fmt.Errorf("%w: signed by %s; the verdict records %s", ErrManifest, sv.Fingerprint, v.SignerFingerprint)
 	}
 	am, err := readActivationManifest(root)
 	if err != nil {
@@ -384,6 +416,17 @@ func ReverifyRelease(releaseDir, allowedSigners, wantReleaseID string) (SignedMa
 			ErrLayout, am.Signature, am.SourceSHA, sv.String(), m.SourceSHA)
 	}
 	return m, sv, nil
+}
+
+// manifestIsTheVerdicts refuses a signed manifest that is not the one the
+// verdict recorded: its bytes (manifest_sha256), release_id, source_sha and
+// artifact count must all be the verdict's (verifier D6).
+func manifestIsTheVerdicts(m SignedManifest, v updaterjob.Verdict) error {
+	if m.SHA256 != v.ManifestSHA256 || m.ReleaseID != v.ReleaseID || m.SourceSHA != v.SourceSHA || len(m.Artifacts) != v.Artifacts {
+		return fmt.Errorf("%w: the signed manifest (sha256 %s) is release %q, source_sha %s, %d artifacts; the verdict records %s, %q, %s, %d",
+			ErrManifest, m.SHA256, m.ReleaseID, m.SourceSHA, len(m.Artifacts), v.ManifestSHA256, v.ReleaseID, v.SourceSHA, v.Artifacts)
+	}
+	return nil
 }
 
 // ── extraction ────────────────────────────────────────────────────────────────
