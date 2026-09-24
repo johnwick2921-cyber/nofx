@@ -56,8 +56,8 @@ func step(t *testing.T, dd string, j *Job, now *time.Time, to State) {
 
 // restoreSeams puts every seam back after a test replaces it.
 func restoreSeams(t *testing.T) {
-	e, f, r, d := geteuid, fsyncFile, renameFile, fsyncDir
-	t.Cleanup(func() { geteuid, fsyncFile, renameFile, fsyncDir = e, f, r, d })
+	e, o, f, r, d := geteuid, ownerOf, fsyncFile, renameFile, fsyncDir
+	t.Cleanup(func() { geteuid, ownerOf, fsyncFile, renameFile, fsyncDir = e, o, f, r, d })
 }
 
 func tree(t *testing.T, root string) []string {
@@ -328,6 +328,17 @@ func TestReadRefusesUnsafeAndForgedFiles(t *testing.T) {
 			_ = os.WriteFile(p, bytes.Repeat([]byte(" "), MaxFileBytes+1), 0o600)
 		},
 		"jobs symlink": func(t *testing.T, dd, p string, b []byte) { mvDirToSymlink(t, filepath.Dir(p)) },
+		"file of another uid": func(t *testing.T, dd, p string, b []byte) {
+			real := ownerOf
+			ownerOf = func(fi fs.FileInfo) (uint32, bool) {
+				uid, ok := real(fi)
+				if fi.Name() == filepath.Base(p) {
+					uid++
+				}
+				return uid, ok
+			}
+			t.Cleanup(func() { ownerOf = real })
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dd, p, b := fresh(t)
@@ -370,6 +381,32 @@ func TestReadRefusesUnsafeAndForgedFiles(t *testing.T) {
 			}
 		})
 	}
+	// Crafted in the writer's exact byte form (so only the history rules can
+	// refuse them): a job BORN mid-flight — parked at nt8_updated, where the
+	// attended resume would act on it — and one whose history skips a state.
+	born := Job{Schema: SchemaVersion, JobID: "job-0010", ReleaseID: "v1.2.0", State: StateNT8Updated, Phase: PhaseDone,
+		CreatedAt: t0, UpdatedAt: t0, Transitions: []Transition{{StateNT8Updated, PhaseDone, t0}}, Receipts: []Receipt{}}
+	skip := Job{Schema: SchemaVersion, JobID: "job-0010", ReleaseID: "v1.2.0", State: StatePreflightOK, Phase: PhaseStarted, Attempts: 1,
+		CreatedAt: t0, UpdatedAt: t0, Transitions: []Transition{{StateRequested, PhaseDone, t0}, {StateDownloaded, PhaseStarted, t0},
+			{StateDownloaded, PhaseDone, t0}, {StatePreflightOK, PhaseStarted, t0}}, Receipts: []Receipt{}}
+	for name, j := range map[string]Job{"born at nt8_updated": born, "verified skipped": skip} {
+		t.Run(name, func(t *testing.T) {
+			dd, p, _ := fresh(t)
+			b, err := encode(j)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_ = os.WriteFile(p, b, 0o600)
+			if _, err := Read(dd, "job-0010"); !errors.Is(err, ErrCorrupt) {
+				t.Errorf("Read = %v, want ErrCorrupt", err)
+			}
+			d2 := t.TempDir()
+			if err := Write(d2, j); err == nil {
+				t.Error("Write accepted it")
+			}
+		})
+	}
+
 	// positive control: the unedited file reads.
 	dd, _, _ := fresh(t)
 	if j, err := Read(dd, "job-0010"); err != nil || j.State != StateDownloaded || j.Phase != PhaseDone {
@@ -537,7 +574,11 @@ func TestWriteRefusesAForbiddenEdgeOrARewrite(t *testing.T) {
 
 	cases := map[string]func(k *Job){
 		"state set directly (skips preflight_ok)": func(k *Job) { k.State, k.Phase = StateMaintenanceHeld, PhaseStarted },
-		"forbidden edge appended by hand": func(k *Job) {
+		"forbidden edge appended by hand (skips preflight)": func(k *Job) {
+			k.Transitions = append(k.Transitions, Transition{StateMaintenanceHeld, PhaseStarted, now})
+			k.State, k.Phase, k.Attempts = StateMaintenanceHeld, PhaseStarted, 1
+		},
+		"activated appended by hand": func(k *Job) {
 			k.Transitions = append(k.Transitions, Transition{StateActivated, PhaseStarted, now})
 			k.State, k.Phase, k.Attempts = StateActivated, PhaseStarted, 1
 		},

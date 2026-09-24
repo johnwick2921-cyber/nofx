@@ -50,7 +50,16 @@ var (
 // Seams (tests only): the owner lookup, and the three durability calls whose
 // ORDER is the crash-safety claim (TestWriteIsTmpFsyncRenameAndPrivate).
 var (
-	geteuid    = os.Geteuid
+	geteuid = os.Geteuid
+	// ownerOf reads a job file's owner (tests make one file read as another
+	// uid's without root; the DIRS go through updaterwire's own lookup).
+	ownerOf = func(fi fs.FileInfo) (uint32, bool) {
+		st, ok := fi.Sys().(*syscall.Stat_t)
+		if !ok {
+			return 0, false
+		}
+		return st.Uid, true
+	}
 	fsyncFile  = func(f *os.File) error { return f.Sync() }
 	renameFile = os.Rename
 	fsyncDir   = func(dir string) error {
@@ -144,8 +153,7 @@ func readSafe(p string) ([]byte, error) {
 	if fi.Mode().Perm()&0o077 != 0 {
 		return nil, fmt.Errorf("%w: %s mode %04o is looser than 0600", ErrUnsafe, filepath.Base(p), fi.Mode().Perm())
 	}
-	st, ok := fi.Sys().(*syscall.Stat_t)
-	if !ok || int(st.Uid) != geteuid() {
+	if uid, ok := ownerOf(fi); !ok || int(uid) != geteuid() {
 		return nil, fmt.Errorf("%w: %s is not owned by this uid", ErrUnsafe, filepath.Base(p))
 	}
 	if fi.Size() > MaxFileBytes {
