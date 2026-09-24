@@ -264,3 +264,94 @@ func TestWatchRefusesWhenHealthAgreesButTheLogNeverShowsARestart(t *testing.T) {
 		t.Fatal("Watch was satisfied by /api/health alone")
 	}
 }
+
+// FOUND ON THE LIVE BOX: /api/health reports the SHORT sha while a release
+// names the full 40 hex, so strict equality could never match in production.
+// These pin the comparison in both directions and at the boundary.
+func TestHealthMayReportAnAbbreviatedRevision(t *testing.T) {
+	full := "662c79bd236f43fb15eb0c7950880123896be8c0"
+	cases := []struct {
+		name     string
+		reported string
+		want     bool
+	}{
+		{"the live box's actual short form", "662c79bd236f", true},
+		{"identical full sha", full, true},
+		{"a seven-character abbreviation", "662c79b", true},
+		{"too short to mean anything", "662c79", false},
+		{"a different revision", "deadbeefdead", false},
+		{"empty", "", false},
+		{"LONGER than expected is never an abbreviation", full + "00", false},
+	}
+	for _, c := range cases {
+		if got := revisionsAgree(c.reported, full); got != c.want {
+			t.Errorf("%s: revisionsAgree(%q, full) = %v, want %v", c.name, c.reported, got, c.want)
+		}
+	}
+}
+
+// The live boot line prints the SHORT rev and the full sha never appears in
+// the log at all. This pins the real line shape, copied from the live box.
+func TestBootLineIsRecognisedFromTheShortRevTheBotActuallyPrints(t *testing.T) {
+	full := "662c79bd236f43fb15eb0c7950880123896be8c0"
+	live := "09-23 18:50:09 [INFO] nofx-clean/main.go:322 🔐 BOOT INTEGRITY OK — rev 662c79bd236f · built 2026-09-23T23:45:35Z · expected 662c79bd236f"
+	if !lineNamesRevision(live, full) {
+		t.Fatal("the REAL boot line from the live box is not recognised — both legs of Watch would be unfalsifiable")
+	}
+	other := "09-23 18:50:09 [INFO] 🔐 BOOT INTEGRITY OK — rev 0e490e448279 · built …"
+	if lineNamesRevision(other, full) {
+		t.Fatal("a DIFFERENT revision's boot line was accepted")
+	}
+	if lineNamesRevision("09-23 18:50:09 [INFO] nothing to see", full) {
+		t.Fatal("a line naming no revision was accepted")
+	}
+}
+
+// Watch must accept a real boot line written after the kill even though that
+// line carries only the short rev.
+func TestWatchAcceptsTheShortRevBootLineTheBotWrites(t *testing.T) {
+	full := "aabbccddeeff00112233445566778899aabbccdd"
+	short := full[:12]
+	logPath := filepath.Join(t.TempDir(), "nofx_2026-09-23.log")
+	line := fmt.Sprintf("%s [INFO] 🔐 BOOT INTEGRITY OK — rev %s · built x\n",
+		time.Now().Add(time.Second).Format("01-02 15:04:05"), short)
+	if err := os.WriteFile(logPath, []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"revision":%q}`, short) // the live box answers short too
+	}))
+	defer srv.Close()
+	withSystem(t, &system{Now: time.Now, Sleep: func(time.Duration) {}})
+	rc, err := Watch(Release{SHA: full}, Identity{PID: 1}, logPath, srv.URL, 2*time.Second)
+	if err != nil {
+		t.Fatalf("Watch refused a genuine boot proven by the forms the bot actually emits: %v", err)
+	}
+	if rc.Evidence["health_sha"] != short {
+		t.Fatalf("receipt must record what health REPORTED, got %q", rc.Evidence["health_sha"])
+	}
+}
+
+// LOGS ARE NAMED BY BOOT DATE, NOT CALENDAR DATE: on the live box at 08:04 on
+// 09-24 the active file was nofx_2026-09-23.log.
+func TestNewestLogPathIgnoresTheCalendarAndPicksTheActiveFile(t *testing.T) {
+	dir := t.TempDir()
+	stale := filepath.Join(dir, "nofx_2026-09-24.log") // today's DATE, but older
+	active := filepath.Join(dir, "nofx_2026-09-23.log")
+	for _, p := range []string{stale, active} {
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	old := time.Now().Add(-48 * time.Hour)
+	if err := os.Chtimes(stale, old, old); err != nil {
+		t.Fatal(err)
+	}
+	got, err := NewestLogPath(dir)
+	if err != nil {
+		t.Fatalf("NewestLogPath: %v", err)
+	}
+	if got != active {
+		t.Fatalf("picked %s, want the file actually being written (%s) — a date-built path points at the wrong log", got, active)
+	}
+}

@@ -167,7 +167,7 @@ func Watch(rel Release, id Identity, logPath, healthURL string, within time.Dura
 		if !sawHealth {
 			if sha, err := healthSHA(healthURL); err == nil {
 				rc.Evidence["health_sha"] = sha
-				if sha == rel.SHA {
+				if revisionsAgree(sha, rel.SHA) {
 					sawHealth = true
 				}
 			}
@@ -203,7 +203,7 @@ func bootLineAfter(path, sha string, since time.Time) (bool, error) {
 		return false, err
 	}
 	for _, ln := range strings.Split(string(b), "\n") {
-		if !strings.Contains(ln, sha) {
+		if !lineNamesRevision(ln, sha) {
 			continue
 		}
 		ts, ok := lineTime(ln)
@@ -215,6 +215,33 @@ func bootLineAfter(path, sha string, since time.Time) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// lineNamesRevision reports whether a log line names this revision.
+//
+// FOUND ON THE LIVE BOX, and worse than the health case: the boot line prints
+// the SHORT rev —
+//
+//	🔐 BOOT INTEGRITY OK — rev 662c79bd236f · built 2026-09-23T23:45:35Z · …
+//
+// and the full 40-hex sha appears ZERO times in the live log. A
+// strings.Contains(line, fullSHA) could therefore NEVER match, so the
+// boot-line leg of Watch was as unfalsifiable as the health leg was. Both legs
+// of a two-leg proof could not pass, which would have made every real
+// activation roll back and left the reason looking like "the bot did not come
+// up" (CLASS 240 twice in one function).
+//
+// It scans the line's whitespace-separated tokens rather than substring-
+// matching, so a hex-looking fragment inside some other value is not mistaken
+// for the revision.
+func lineNamesRevision(ln, sha string) bool {
+	for _, tok := range strings.Fields(ln) {
+		tok = strings.Trim(tok, ".,;:()[]")
+		if revisionsAgree(tok, sha) {
+			return true
+		}
+	}
+	return false
 }
 
 // lineTime reads the timestamp a nofx log line starts with: "MM-DD HH:MM:SS".
@@ -231,6 +258,35 @@ func lineTime(ln string) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	return t, true
+}
+
+// revisionsAgree compares a revision the machine REPORTED against the one we
+// expect, allowing the reported value to be an abbreviation.
+//
+// FOUND ON THE LIVE BOX, not in a test: /api/health reports the SHORT sha
+// ("662c79bd236f"), while a release names the full 40 hex. A strict equality
+// check therefore could NEVER have matched in production — the health leg of
+// Watch would have failed every real activation, which is CLASS 240: a
+// verification step that cannot succeed as written, whose realistic fate is
+// deletion by whoever hits it mid-incident. kernel/boot_integrity.go already
+// had this right ("prefix match so a short SHA in deploy/RELEASE matches the
+// full one"); this package did not.
+//
+// The comparison is deliberately one-directional and length-floored: the
+// REPORTED value may abbreviate the EXPECTED one, never the reverse, and an
+// abbreviation shorter than 7 characters is not evidence of anything.
+func revisionsAgree(reported, expected string) bool {
+	if reported == "" || expected == "" {
+		return false
+	}
+	if reported == expected {
+		return true
+	}
+	const minAbbrev = 7
+	if len(reported) < minAbbrev || len(reported) >= len(expected) {
+		return false
+	}
+	return strings.HasPrefix(expected, reported)
 }
 
 func healthSHA(url string) (string, error) {

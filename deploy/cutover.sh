@@ -113,7 +113,7 @@ if [ "$DRY" -eq 1 ]; then
   plan "run: nofx-activate activate -release $RELEASES/$NEW_SHA -prev $RELEASES/$OLD_SHA"
   plan "  which installs binary + dist + RELEASE atomically, THEN kills the unit's"
   plan "  MainPID only if /proc/<pid>/stat field 22 still matches (a recycled pid is refused)"
-  plan "run: nofx-activate watch -release $RELEASES/$NEW_SHA -log $INSTALL/data/nofx_<date>.log"
+  plan "run: nofx-activate watch -release $RELEASES/$NEW_SHA -log <the NEWEST data/nofx_*.log>"
   plan "  GREEN needs BOTH a boot line newer than the kill AND /api/health reporting $SHORT"
   plan "on ANY failure: nofx-activate rollback -prev $RELEASES/$OLD_SHA, restoring all three"
   plan "  halves, and prove $OLD_SHORT came back"
@@ -125,7 +125,7 @@ die "unattended activation is not enabled in v7 from this script.
     Run the steps explicitly with the owner present, each printing its receipt:
       nofx-activate backup   -db $INSTALL/data/data.db
       nofx-activate activate -release $RELEASES/$NEW_SHA -prev $RELEASES/$OLD_SHA
-      nofx-activate watch    -release $RELEASES/$NEW_SHA -log $INSTALL/data/nofx_\$(date +%F).log
+      nofx-activate watch    -release $RELEASES/$NEW_SHA    # -log defaults to the NEWEST data/nofx_*.log; do NOT build it from today's date
       nofx-activate rollback -prev $RELEASES/$OLD_SHA        # if watch refuses
     NO UNATTENDED DEPLOYS is canon: a cutover needs the owner reachable and
     acking the boot line, or a tested auto-rollback. The worker (3b-B) is the
