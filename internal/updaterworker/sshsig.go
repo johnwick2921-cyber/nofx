@@ -46,6 +46,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 const (
@@ -189,16 +190,37 @@ func VerifySSHSIG(message, armored []byte, allowedSignersPath string) (Signature
 	}, nil
 }
 
+// signersCheckedHook is a TEST SEAM, nil in production: it runs after the
+// trust anchor has passed its checks and before its bytes are read — the
+// window a swap of the file would use.
+var signersCheckedHook func(path string)
+
 // releaseSignerKeys reads the allowed-signers file and returns the key blob
 // of every ssh-ed25519 key it lists for the principal "release". The file is
 // a trust anchor: it must be a regular file (never a symlink) that neither
-// group nor other can write. Any malformed line refuses the WHOLE file — a
-// parser that skips what it cannot read decides trust on a file nobody wrote.
-// A line with options (namespaces=, valid-before=, cert-authority, …) that
-// names release is refused: those are restrictions ssh-keygen enforces and
-// this verifier does not implement, so ignoring them would widen trust.
+// group nor other can write, and it is judged and read as ONE file — opened
+// once (O_NOFOLLOW, O_NONBLOCK: a symlink fails, a FIFO cannot block), then
+// every check is made on that descriptor, so a swap of the path after the
+// checks changes nothing that is read.
+//
+// Only lines that name "release" in their principal list are parsed; a
+// malformed one of those refuses the WHOLE file (a parser that skipped a
+// release line it could not read would decide trust on a file nobody wrote).
+// Lines for other principals are skipped UNPARSED: whatever they say, they
+// admit nothing here. A release line with options (namespaces=,
+// valid-before=, cert-authority, …) is refused: those are restrictions
+// ssh-keygen enforces and this verifier does not implement, so ignoring them
+// would widen trust.
 func releaseSignerKeys(path string) ([][]byte, error) {
-	fi, err := os.Lstat(path)
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0)
+	if err != nil {
+		if errors.Is(err, syscall.ELOOP) {
+			return nil, fmt.Errorf("%w: %s is a symlink: %w", ErrAllowedSignersUnsafe, path, err)
+		}
+		return nil, fmt.Errorf("%w: %s: %w", ErrNoAllowedSigners, path, err)
+	}
+	defer f.Close()
+	fi, err := f.Stat()
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s: %w", ErrNoAllowedSigners, path, err)
 	}
@@ -208,11 +230,9 @@ func releaseSignerKeys(path string) ([][]byte, error) {
 	if fi.Mode().Perm()&0o022 != 0 {
 		return nil, fmt.Errorf("%w: %s is writable by group or other (%#o)", ErrAllowedSignersUnsafe, path, fi.Mode().Perm())
 	}
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %s: %w", ErrNoAllowedSigners, path, err)
+	if signersCheckedHook != nil {
+		signersCheckedHook(path)
 	}
-	defer f.Close()
 	raw, err := io.ReadAll(io.LimitReader(f, MaxAllowedSignersBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s: %w", ErrAllowedSignersBad, path, err)
