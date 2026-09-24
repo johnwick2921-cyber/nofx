@@ -5,15 +5,15 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"io/fs"
 	"path/filepath"
 	"sort"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+
+	"nofx/internal/censuswalk"
 )
 
 // M3 verifier defect 4 — CTO ruling 1790243040753: ValidateJWT refuses a
@@ -110,34 +110,51 @@ func TestServerNeverMintsAFutureIat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	minters, iatSites, offenders, scanned, err := futureIatCensus(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scanned < 200 {
+		t.Fatalf("positive control: scanned only %d Go files — the walk did not cover the module", scanned)
+	}
+	if iatSites["auth/auth.go"] != 2 {
+		t.Fatalf("positive control: auth/auth.go has %d IssuedAt/NotBefore sites, want 2 (signToken)", iatSites["auth/auth.go"])
+	}
+	var extra []string
+	for rel, n := range minters {
+		if rel != "auth/auth.go" || n != 1 {
+			extra = append(extra, rel+"×"+strconv.Itoa(n))
+		}
+	}
+	sort.Strings(extra)
+	if minters["auth/auth.go"] != 1 || len(extra) > 0 {
+		t.Errorf("jwt.NewWithClaims/jwt.New in production code must be exactly auth/auth.go×1 (signToken); got %v", extra)
+	}
+	sort.Strings(offenders)
+	for _, o := range offenders {
+		t.Errorf("a token minted with a non-now iat/nbf: %s", o)
+	}
+}
+
+// futureIatCensus walks every non-test .go file of the module at root
+// (internal/censuswalk: root-only skips — a minter in api/.hidden, _x or
+// x/testdata/y is compiled and linked like any other, class 258) and returns
+// the jwt.NewWithClaims/jwt.New call sites per file, the IssuedAt/NotBefore
+// sites per file, and every site that is not exactly
+// jwt.NewNumericDate(time.Now()).
+func futureIatCensus(root string) (minters, iatSites map[string]int, offenders []string, scanned int, err error) {
 	const jwtPath = "github.com/golang-jwt/jwt/v5"
-	minters := map[string]int{}
-	var offenders []string
-	iatSites := map[string]int{}
-	scanned := 0
+	files, err := censuswalk.NonTestGoFiles(root)
+	if err != nil {
+		return nil, nil, nil, 0, err
+	}
+	minters, iatSites = map[string]int{}, map[string]int{}
 	fset := token.NewFileSet()
-	err = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+	for _, gf := range files {
+		rel := gf.Rel
+		f, err := parser.ParseFile(fset, gf.Path, nil, parser.SkipObjectResolution)
 		if err != nil {
-			return err
-		}
-		rel, _ := filepath.Rel(root, p)
-		rel = filepath.ToSlash(rel)
-		if d.IsDir() {
-			n := d.Name()
-			if p != root && (strings.HasPrefix(n, ".") || strings.HasPrefix(n, "_") || n == "testdata") {
-				return filepath.SkipDir
-			}
-			if rel == "web" || rel == "vendor" || rel == "node_modules" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
-			return nil
-		}
-		f, err := parser.ParseFile(fset, p, nil, parser.SkipObjectResolution)
-		if err != nil {
-			return err
+			return nil, nil, nil, 0, err
 		}
 		scanned++
 		jwtName, timeName := "", ""
@@ -161,11 +178,11 @@ func TestServerNeverMintsAFutureIat(t *testing.T) {
 			}
 		}
 		if jwtName == "" {
-			return nil
+			continue
 		}
 		if jwtName == "." || jwtName == "_" {
 			offenders = append(offenders, rel+": golang-jwt imported as "+jwtName+" — the census cannot read it")
-			return nil
+			continue
 		}
 		isSel := func(e ast.Expr, pkg, name string) bool {
 			s, ok := e.(*ast.SelectorExpr)
@@ -214,29 +231,6 @@ func TestServerNeverMintsAFutureIat(t *testing.T) {
 			}
 			return true
 		})
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
-	if scanned < 200 {
-		t.Fatalf("positive control: scanned only %d Go files — the walk did not cover the module", scanned)
-	}
-	if iatSites["auth/auth.go"] != 2 {
-		t.Fatalf("positive control: auth/auth.go has %d IssuedAt/NotBefore sites, want 2 (signToken)", iatSites["auth/auth.go"])
-	}
-	var extra []string
-	for rel, n := range minters {
-		if rel != "auth/auth.go" || n != 1 {
-			extra = append(extra, rel+"×"+strconv.Itoa(n))
-		}
-	}
-	sort.Strings(extra)
-	if minters["auth/auth.go"] != 1 || len(extra) > 0 {
-		t.Errorf("jwt.NewWithClaims/jwt.New in production code must be exactly auth/auth.go×1 (signToken); got %v", extra)
-	}
-	sort.Strings(offenders)
-	for _, o := range offenders {
-		t.Errorf("a token minted with a non-now iat/nbf: %s", o)
-	}
+	return minters, iatSites, offenders, scanned, nil
 }
