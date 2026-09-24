@@ -31,29 +31,29 @@ import (
 // <release_root>/<40-hex> dir that no verdict names is renamed (never
 // deleted: the bytes stay for the operator) to
 // <release_root>/.orphan-<sha>-<unix>, freeing the name for a clean re-fetch.
-// It holds <release_root>/.fetch.lock (non-blocking: a fetch in flight makes
-// it refuse — that fetch may be exactly between rename and link), and it
-// refuses outright when any verdict cannot be read (it cannot then prove a
-// dir is unreferenced).
+// It holds an exclusive flock on the release root DIRECTORY itself (no lock
+// file: a refused fetch must leave the release root empty; non-blocking: a
+// fetch in flight makes it refuse — that fetch may be exactly between rename
+// and link), and it refuses outright when any verdict cannot be read (it
+// cannot then prove a dir is unreferenced).
 
 // ErrFetchInFlight: another fetch holds the release root's lock.
 var ErrFetchInFlight = errors.New("updaterworker: a fetch is in flight (the release root lock is held)")
 
 const (
-	fetchLockName  = ".fetch.lock"
 	orphanPrefix   = ".orphan-"
 	verdictsSubdir = "verdicts"
 	maxVerdictRead = 64 << 10
 )
 
-// LockReleaseRoot takes <release_root>/.fetch.lock exclusively without
+// LockReleaseRoot flocks the release root directory exclusively without
 // waiting. The fetch holds it from before its rename until after its verdict
 // link, so the recovery below never races a live fetch.
 func LockReleaseRoot(releaseRoot string) (func(), error) {
 	if releaseRoot == "" || !filepath.IsAbs(releaseRoot) {
 		return nil, errors.New("updaterworker: the release root must be an absolute path")
 	}
-	f, err := os.OpenFile(filepath.Join(releaseRoot, fetchLockName), os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0o600)
+	f, err := os.OpenFile(releaseRoot, os.O_RDONLY|syscall.O_DIRECTORY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
 	if err != nil {
 		return nil, err
 	}
