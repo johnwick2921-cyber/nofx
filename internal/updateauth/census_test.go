@@ -4,11 +4,12 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"io/fs"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+
+	"nofx/internal/censuswalk"
 )
 
 // ── W-ONE-BUTTON M3 census: who may touch the enrollment, and who may mint ──
@@ -29,6 +30,25 @@ import (
 //     (internal/updater*, cmd/updater*) may import this package at all, and
 //     never as a dot-import.
 func TestUpdateAuthCensus(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	offenders, scanned, err := updateAuthOffenders(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scanned < 100 {
+		t.Fatalf("scan saw only %d files — the walk is not covering the module", scanned)
+	}
+	if len(offenders) > 0 {
+		t.Fatalf("update-authorization census:\n%s", strings.Join(offenders, "\n"))
+	}
+}
+
+// updateAuthOffenders is the census over every non-test .go file under root
+// (the ONE root-only walk, internal/censuswalk — M3 fold M5).
+func updateAuthOffenders(root string) (offenders []string, scanned int, err error) {
 	literalHome := "internal/updateauth/paths.go"
 	fileNames := []string{adminFileName, deviceKeyName, seenFileName, enrollLockName, seenLockName}
 	callers := map[string]map[string]bool{
@@ -42,32 +62,16 @@ func TestUpdateAuthCensus(t *testing.T) {
 			strings.HasPrefix(rel, "internal/updater") || strings.HasPrefix(rel, "cmd/updater")
 	}
 
-	root, err := filepath.Abs(filepath.Join("..", ".."))
+	files, err := censuswalk.NonTestGoFiles(root)
 	if err != nil {
-		t.Fatal(err)
+		return nil, 0, err
 	}
-	var offenders []string
-	scanned := 0
-	err = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			switch d.Name() {
-			case ".git", "node_modules", "web", "vendor", ".claude", ".Codex", ".understand-anything":
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
-			return nil
-		}
-		rel, _ := filepath.Rel(root, p)
-		rel = filepath.ToSlash(rel)
+	for _, file := range files {
+		p, rel := file.Path, file.Rel
 		f, perr := parser.ParseFile(token.NewFileSet(), p, nil, 0)
 		if perr != nil {
 			offenders = append(offenders, rel+": cannot be parsed, so it cannot be checked ("+perr.Error()+")")
-			return nil
+			continue
 		}
 		scanned++
 
@@ -109,15 +113,6 @@ func TestUpdateAuthCensus(t *testing.T) {
 			}
 			return true
 		})
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
-	if scanned < 100 {
-		t.Fatalf("scan saw only %d files — the walk is not covering the module", scanned)
-	}
-	if len(offenders) > 0 {
-		t.Fatalf("update-authorization census:\n%s", strings.Join(offenders, "\n"))
-	}
+	return offenders, scanned, nil
 }
