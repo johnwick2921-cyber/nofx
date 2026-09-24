@@ -28,6 +28,11 @@ import (
 //     ("device"+".key", a const + "_ids.json", dir + "/ad" + "min.json"),
 //     and the key file's name may not be spelled even in FRAGMENTS a
 //     variable could join (a path element "device" / "device.*" / "*.key");
+//     a directive the compiler reads is code too, so no //go:embed pattern
+//     may even be able to MATCH the updater dir or the key file (rule 5).
+//     "Spelled" means in the Go source this walk reads: a prose comment is
+//     not code, and a non-Go file (.s, .syso, .swig) is not read at all —
+//     see WHAT THIS CANNOT PROVE;
 //  2. only EXACT importers may import this package — the update handler, the
 //     Server wiring, the attended CLI's one file, and the M4 worker package
 //     by its exact directory (never a prefix: "internal/updater" also covered
@@ -105,19 +110,47 @@ import (
 // any import of "C" even in a file a build tag excludes.
 //
 // WHAT THIS CANNOT PROVE (M3 fold M4 — stated, not implied): it is a
-// syntactic census over identifiers, imports, comments and constant
-// strings. A file that builds the key's path at run time (fmt.Sprintf with a
-// non-literal, byte arithmetic, a directory listing) or from a name it
-// re-binds to a second constant (constantStrings folds a name to one value),
-// and reads the file itself, receives the key bytes or a path through an interface or a
-// function value handed to it by an admitted file, or reaches the updater
-// dir through a package the census does not relate to it, passes — rule 6
-// binds only the key LoadDeviceKey returns. The app process runs as the same
-// uid that owns device.key, so nothing but review and this tripwire stops
-// app code from reading the key; the census makes the direct spellings and
-// the likely drift (a helper reused, a prefix admission, a second import
-// name, a linkname, a MAC beside the key, a different HMAC over the loaded
-// key) fail loudly.
+// syntactic census over the NON-TEST .go FILES of the walk — identifiers,
+// imports, the comments the compiler reads (//go:linkname, //go:embed, a cgo
+// preamble behind import "C") and constant strings. These pass:
+//   - RUN TIME: a file that builds the key's path at run time (fmt.Sprintf
+//     with a non-literal, byte arithmetic, a directory listing) or from a
+//     name it re-binds to a second constant (constantStrings folds a name to
+//     one value), and reads the file itself; one that receives the key bytes
+//     or a path through an interface or a function value handed to it by an
+//     admitted file; one that reaches the updater dir through a package the
+//     census does not relate to it — rule 6 binds only the key LoadDeviceKey
+//     returns.
+//   - COMPILE TIME, in the tree: a data dir configured (DB_PATH) strictly
+//     BELOW a package directory, reached by a //go:embed pattern that names
+//     an ANCESTOR of it — a directory pattern embeds its whole subtree
+//     (DB_PATH=kernel/st/x.db with //go:embed st) [B: the embed spec; not
+//     probed]. Rule 5 covers the default data dir (no embed in the root
+//     package) and a data dir AT a package directory (no element that can
+//     match "updater" / "device.key"), not a deeper one. And source this walk
+//     never opens: an assembly file's #include (cmd/asm preprocesses .s
+//     files), a .syso object the linker takes as-is, SWIG files
+//     (.swig/.swigcxx, which go build turns into cgo), and every third-party
+//     module — the module cache, a vendor/ dir, a go.mod replace pointing
+//     outside the tree [B].
+//   - BUILD TIME, outside the source: go generate (it writes source before
+//     the build), -toolexec, -ldflags -X (sets a string variable from the
+//     build command line), -overlay, GOFLAGS or go.env — none of it is in a
+//     .go file [B].
+//   - BY HAND: a key file copied into the source tree under another name
+//     (then any embed, or a literal of its bytes, carries it), or a .go file
+//     placed inside the data dir itself [B].
+//   - TEST FILES: a _test.go file is outside the walk by design — it is
+//     never linked into the app binary [A: rule 5's controls].
+//
+// The app process runs as the same uid that owns device.key, so nothing but
+// review and this tripwire stops app code from reading the key: the census is
+// a BELT against a careless future lane, never a boundary against a
+// determined one. What it makes fail loudly is the direct spelling in the Go
+// source it reads (a literal, a constant run, a fragment, an embed pattern)
+// and the likely drift: a helper reused, a prefix admission, a second import
+// name, a linkname, a cgo preamble, an embed in the root package, a MAC
+// beside the key, a different HMAC over the loaded key.
 var (
 	// updateAuthImporterFiles may import the package (exact files).
 	updateAuthImporterFiles = map[string]bool{
