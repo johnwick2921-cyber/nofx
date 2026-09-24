@@ -134,12 +134,19 @@ func TestWriteIsTmpFsyncRenameAndPrivate(t *testing.T) {
 		return os.Rename(from, to)
 	}
 	fsyncDir = func(dir string) error {
-		if dir != filepath.Dir(w.target) {
-			w.t.Errorf("fsync-dir %s, want %s", dir, filepath.Dir(w.target))
-		}
-		w.ops = append(w.ops, "fsync-dir")
-		if w.crash == "fsync-dir" {
-			return errCrash
+		jobs := filepath.Dir(w.target)
+		switch dir {
+		case jobs:
+			w.ops = append(w.ops, "fsync-dir")
+			if w.crash == "fsync-dir" {
+				return errCrash
+			}
+		case filepath.Dir(jobs), filepath.Dir(filepath.Dir(jobs)):
+			// the parent of a dir this write's Mkdir created
+			// (TestFirstWriteMakesEveryNewDirDurable owns that rule)
+			w.ops = append(w.ops, "fsync-parent")
+		default:
+			w.t.Errorf("fsync-dir %s, want %s or one of its parents", dir, jobs)
 		}
 		return realFsyncDir(dir)
 	}
@@ -153,8 +160,10 @@ func TestWriteIsTmpFsyncRenameAndPrivate(t *testing.T) {
 	jobs := filepath.Dir(target)
 	w.t, w.target = t, target
 	mustWrite(t, dd, j)
-	if got := strings.Join(w.ops, ","); got != "fsync-file,rename,fsync-dir" {
-		t.Fatalf("durability order = %s, want fsync-file,rename,fsync-dir", got)
+	// a first write into a fresh data dir creates <data>/updater and its jobs
+	// dir, each made durable (parent fsync) before the job file is written
+	if got := strings.Join(w.ops, ","); got != "fsync-parent,fsync-parent,fsync-file,rename,fsync-dir" {
+		t.Fatalf("durability order = %s, want fsync-parent,fsync-parent,fsync-file,rename,fsync-dir", got)
 	}
 	for p, want := range map[string]os.FileMode{target: 0o600, jobs: 0o700 | fs.ModeDir, filepath.Dir(jobs): 0o700 | fs.ModeDir} {
 		fi, err := os.Lstat(p)

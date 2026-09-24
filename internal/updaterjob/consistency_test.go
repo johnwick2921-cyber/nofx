@@ -2,7 +2,10 @@ package updaterjob
 
 import (
 	"errors"
+	"io/fs"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -452,4 +455,63 @@ func TestHistoryTimesNeverRunBackwards(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustWrite(t, dd, j)
+}
+
+// TestFirstWriteMakesEveryNewDirDurable (U1 verifier defect 8, probe H6): a
+// directory entry is durable only once its PARENT is fsynced, so every
+// directory Write's Mkdir actually creates (<data>/updater, then its jobs
+// dir) is followed by an fsync of its parent, before the job file is
+// written; a dir that already existed is not re-synced; and when that
+// parent fsync fails the write fails, the job file is not written, and the
+// just-made empty dir is removed so the next write makes it — and syncs it —
+// again.
+func TestFirstWriteMakesEveryNewDirDurable(t *testing.T) {
+	restoreSeams(t)
+	var synced []string
+	failOn := ""
+	dd := t.TempDir()
+	rel := func(p string) string {
+		r, _ := filepath.Rel(dd, p)
+		return r
+	}
+	fsyncDir = func(dir string) error {
+		synced = append(synced, rel(dir))
+		if rel(dir) == failOn {
+			return errCrash
+		}
+		return realFsyncDir(dir)
+	}
+	jobsDir := filepath.Join("updater", "jobs")
+	// the parent fsync fails: nothing half-made survives
+	failOn = "."
+	if err := Write(dd, mustNew(t, "job-0160", "v1.2.0", t0)); !errors.Is(err, errCrash) {
+		t.Fatalf("Write with the data dir fsync failing = %v, want the fsync error", err)
+	}
+	if _, err := os.Lstat(filepath.Join(dd, "updater")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("the updater dir whose creation was not made durable survived: %v", err)
+	}
+	// first write into a fresh data dir: data dir, updater, then (after the
+	// rename) the jobs dir
+	failOn, synced = "", nil
+	mustWrite(t, dd, mustNew(t, "job-0160", "v1.2.0", t0))
+	if got, want := strings.Join(synced, ","), strings.Join([]string{".", "updater", jobsDir}, ","); got != want {
+		t.Errorf("first write fsyncs dirs [%s], want [%s]", got, want)
+	}
+	// nothing created: only the jobs dir after the rename
+	synced = nil
+	mustWrite(t, dd, mustNew(t, "job-0161", "v1.2.0", t0))
+	if got := strings.Join(synced, ","); got != jobsDir {
+		t.Errorf("a write that creates no dir fsyncs [%s], want [%s]", got, jobsDir)
+	}
+	// updater dir already there (the hold writer / the wire made it): only
+	// the jobs dir is new, so only its parent is synced before the write
+	dd = t.TempDir()
+	if err := os.Mkdir(filepath.Join(dd, "updater"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	synced = nil
+	mustWrite(t, dd, mustNew(t, "job-0162", "v1.2.0", t0))
+	if got, want := strings.Join(synced, ","), strings.Join([]string{"updater", jobsDir}, ","); got != want {
+		t.Errorf("first job write under an existing updater dir fsyncs [%s], want [%s]", got, want)
+	}
 }

@@ -103,7 +103,10 @@ func Path(dataDir, jobID string) (string, error) {
 // privateDirs checks <dataDir>/updater and its jobs dir: real directories,
 // owned by this uid, no group/other bits (updaterwire.CheckPrivateDir). With
 // create, missing ones are made 0700 first (never MkdirAll: the data dir must
-// already exist); an existing loose/foreign/symlinked one is refused, never
+// already exist), and every dir Mkdir actually creates is made durable by an
+// fsync of its PARENT before anything is written into it — if that fsync
+// fails the empty dir is removed again, so the next write re-creates and
+// re-syncs it; an existing loose/foreign/symlinked one is refused, never
 // repaired. Without create, a missing one is ErrNotFound and nothing is made.
 func privateDirs(dataDir string, create bool) (string, error) {
 	jobs, err := JobsDir(dataDir)
@@ -112,7 +115,14 @@ func privateDirs(dataDir string, create bool) (string, error) {
 	}
 	for _, d := range []string{filepath.Dir(jobs), jobs} {
 		if create {
-			if err := os.Mkdir(d, 0o700); err != nil && !errors.Is(err, fs.ErrExist) {
+			err := os.Mkdir(d, 0o700)
+			switch {
+			case err == nil:
+				if err := fsyncDir(filepath.Dir(d)); err != nil {
+					_ = os.Remove(d)
+					return "", err
+				}
+			case !errors.Is(err, fs.ErrExist):
 				return "", err
 			}
 		}
