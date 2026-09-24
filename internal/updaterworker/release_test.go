@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"nofx/internal/updaterjob"
 )
 
 // ── release materialization, at the production call sites ────────────────────
@@ -258,7 +260,7 @@ func (e fetchEnv) assertNothingLanded(t *testing.T) {
 // absolute dir inside this env's release root — a broken FetchRelease (an
 // empty ReleaseDir) must never make a tamper helper write relative to the
 // test's cwd, which is the package's SOURCE directory.
-func (e fetchEnv) releaseDirOf(t *testing.T, v ReleaseVerdict) string {
+func (e fetchEnv) releaseDirOf(t *testing.T, v updaterjob.Verdict) string {
 	t.Helper()
 	if !filepath.IsAbs(v.ReleaseDir) || filepath.Dir(v.ReleaseDir) != e.releaseRoot {
 		t.Fatalf("verdict release_dir %q is not a dir inside the test's release root %s — refusing to tamper", v.ReleaseDir, e.releaseRoot)
@@ -352,7 +354,7 @@ func TestFetchMaterializesTheActivationLayout(t *testing.T) {
 	var art struct{ Artifacts []json.RawMessage }
 	_ = json.Unmarshal(r.manifest, &art)
 	msum := sha256.Sum256(r.manifest)
-	want := ReleaseVerdict{
+	want := updaterjob.Verdict{
 		Schema: 1, ReleaseID: testReleaseID, SourceSHA: testSHA, ReleaseDir: final,
 		Signer: "release", SignerFingerprint: r.fp, HashAlg: "sha512",
 		ManifestSHA256: hex.EncodeToString(msum[:]), Artifacts: len(art.Artifacts),
@@ -361,8 +363,8 @@ func TestFetchMaterializesTheActivationLayout(t *testing.T) {
 	if v != want {
 		t.Fatalf("returned verdict = %+v\nwant %+v", v, want)
 	}
-	if rv, err := ReadReleaseVerdict(e.dataDir, testReleaseID); err != nil || rv != want {
-		t.Fatalf("ReadReleaseVerdict = %+v, %v; want %+v", rv, err, want)
+	if rv, err := updaterjob.ReadVerdict(e.dataDir, testReleaseID); err != nil || rv != want {
+		t.Fatalf("updaterjob.ReadVerdict = %+v, %v; want %+v", rv, err, want)
 	}
 	// the job's re-proofs (states downloaded / verified) accept what fetch made
 	if n, err := RehashRelease(final, v.ManifestSHA256); err != nil || n != v.Artifacts {
@@ -760,6 +762,23 @@ func TestVerdictWrittenOnlyAfterEveryCheck(t *testing.T) {
 		}
 		e.assertNothingLanded(t)
 	})
+	// the writer refuses a verdict the app-side reader (updaterjob.ReadVerdict)
+	// would refuse — no file, not even the dirs
+	t.Run("a verdict the reader would refuse is never written", func(t *testing.T) {
+		e := newFetchEnv(t)
+		bad := updaterjob.Verdict{
+			Schema: updaterjob.VerdictSchema, ReleaseID: testReleaseID, SourceSHA: testSHA,
+			ReleaseDir: filepath.Join(e.releaseRoot, testSHA), Signer: "release", SignerFingerprint: "SHA256:x",
+			HashAlg: "sha512", ManifestSHA256: strings.Repeat("a", 64), Artifacts: 0, // uncomputed
+			VerifiedAt: testNow.Format(time.RFC3339Nano),
+		}
+		if err := writeVerdict(e.dataDir, e.verdictPath(), bad); !errors.Is(err, ErrVerdictWrite) || !errors.Is(err, updaterjob.ErrVerdict) {
+			t.Fatalf("writeVerdict(artifacts=0) = %v, want ErrVerdictWrite wrapping updaterjob.ErrVerdict", err)
+		}
+		if _, err := os.Lstat(filepath.Join(e.dataDir, "updater")); !errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("a refused verdict write created <data>/updater (lstat err %v)", err)
+		}
+	})
 	// and the control: every check passes ⇒ exactly one verdict
 	t.Run("every check passes", func(t *testing.T) {
 		e := newFetchEnv(t)
@@ -770,8 +789,8 @@ func TestVerdictWrittenOnlyAfterEveryCheck(t *testing.T) {
 		if got := dirNames(t, filepath.Dir(e.verdictPath())); len(got) != 1 || got[0] != testReleaseID+".json" {
 			t.Fatalf("verdicts dir = %v, want exactly [%s.json] (no temp debris)", got, testReleaseID)
 		}
-		if rv, err := ReadReleaseVerdict(e.dataDir, testReleaseID); err != nil || rv != v {
-			t.Fatalf("ReadReleaseVerdict = %+v, %v; want %+v", rv, err, v)
+		if rv, err := updaterjob.ReadVerdict(e.dataDir, testReleaseID); err != nil || rv != v {
+			t.Fatalf("updaterjob.ReadVerdict = %+v, %v; want %+v", rv, err, v)
 		}
 	})
 }
@@ -827,16 +846,16 @@ func TestFetchRefusesAnExistingVerdict(t *testing.T) {
 			if got := dirNames(t, e2.releaseRoot); len(got) != 0 {
 				t.Fatalf("release root = %v, want empty", got)
 			}
-			if v, err := ReadReleaseVerdict(e2.dataDir, testReleaseID); !errors.Is(err, ErrVerdict) {
-				t.Fatalf("ReadReleaseVerdict on %s = %+v, %v; want ErrVerdict (absent fields are not empty ones)", name, v, err)
+			if v, err := updaterjob.ReadVerdict(e2.dataDir, testReleaseID); !errors.Is(err, updaterjob.ErrVerdict) {
+				t.Fatalf("updaterjob.ReadVerdict on %s = %+v, %v; want ErrVerdict (absent fields are not empty ones)", name, v, err)
 			}
 		})
 	}
-	if p, err := VerdictPath(e.dataDir, testReleaseID); err != nil || p != e.verdictPath() {
+	if p, err := updaterjob.VerdictPath(e.dataDir, testReleaseID); err != nil || p != e.verdictPath() {
 		t.Fatalf("VerdictPath = %q, %v; want %q", p, err, e.verdictPath())
 	}
 	for _, bad := range []struct{ dir, id string }{{"relative/data", testReleaseID}, {e.dataDir, "../x"}, {e.dataDir, ""}, {"", testReleaseID}} {
-		if p, err := VerdictPath(bad.dir, bad.id); err == nil {
+		if p, err := updaterjob.VerdictPath(bad.dir, bad.id); err == nil {
 			t.Fatalf("VerdictPath(%q, %q) = %q, want a refusal", bad.dir, bad.id, p)
 		}
 	}
@@ -864,6 +883,15 @@ func TestReleaseFetchHasNoNetworkCode(t *testing.T) {
 				t.Errorf("%s imports %s — %s", file, p, why)
 			}
 		}
+	}
+}
+
+// The app-side reader's constants restate the worker's signature policy
+// (internal/updaterjob cannot import this package): pinned equal.
+func TestVerdictConstantsMatchTheSignaturePolicy(t *testing.T) {
+	if updaterjob.VerdictSigner != ReleaseSignaturePrincipal || updaterjob.VerdictHashAlg != ReleaseSignatureHashAlg {
+		t.Fatalf("updaterjob verdict signer/hashalg = %q/%q, the SSHSIG policy is %q/%q",
+			updaterjob.VerdictSigner, updaterjob.VerdictHashAlg, ReleaseSignaturePrincipal, ReleaseSignatureHashAlg)
 	}
 }
 
