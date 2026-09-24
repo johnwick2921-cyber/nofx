@@ -10,7 +10,7 @@ in CLAUDE.md).
 
 ## PART 1 — THE BUG CLASSES (name · root cause · probe · law)
 
-*Highest occupied class: **247** (2026-09-24). Numbers are assigned AT MERGE and
+*Highest occupied class: **249** (2026-09-24). Numbers are assigned AT MERGE and
 never renumbered; a gap means a wave took a later slot to avoid a collision.*
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
@@ -6947,3 +6947,21 @@ At HEAD `c4111476` (FOLD-3 + FOLD-10) the NT8 decision path is: `executeOpen*Wit
 **Fixed in W1b (`99a7c323`):** the exemption names `recordAndConfirmOrderAs`, and nothing else in the guard changed. FOLD-12's pin (`TestWindowSweepPacesOnlyACancelPendingRow`) also retyped a state list; it now calls two named subtests.
 
 **Probe:** for every guard exemption keyed by a name (function, file, type), grep the repo for that name at HEAD. Zero hits, or a hit that is now a thin wrapper, means the exemption has expired. A wave that renames code inside a guarded file must run that guard's package, not only the targeted tests of the files it edited.
+
+## CLASS 248 — a verifier that rejects the artifact the workflow actually produces
+
+**Found:** 2026-09-24, WAVE 3a, while building a binary to exercise `cutover.sh --dry-run` [A]. The script proves a new binary by reading `vcs.revision`/`vcs.modified` back out of it — and a binary built in a linked git worktree carries NO `vcs.*` entries at all. Proven by elimination on one box, one toolchain (go1.25.13), one module, one commit: worktree `go build` → 0 vcs lines; worktree `go build -buildvcs=true` → **rc=0 and still 0 vcs lines** (the flag whose purpose is to make stamping mandatory fails OPEN); clean clone of the same commit `0adaee41` → `vcs.revision=0adaee41…`, `vcs.modified=false`. WORKTREE LAW puts every lane in a worktree, so the wave's central guarantee refused a correct binary for everyone except the deploy lane — and refused it with "it is not the binary for this sha", which accuses the artifact when the cause is the build LOCATION. An operator checks the sha, finds it already correct, and concludes the check is broken. That is how a guard gets deleted at 3am. (A linked worktree's `.git` is a FILE, `gitdir: …/worktrees/<name>` — the same layout fact that broke a `[ -d "$W/.git" ]` guard on 09-10, biting a second time in a different tool.)
+
+**Fixed in 3a:** `deploy/cutover.sh` tests for the zero-stamp case FIRST and refuses with the cause and the cure ("carries NO vcs stamps at all … Go does not stamp a build from a linked git worktree on this toolchain … build from a clean clone or the main tree", with the clone/checkout/build/verify lines); a stamped-but-different binary gets its own distinct message. `deploy/RESTORE.md` and `deploy/release/README.md` both say which refusal means what. Pinned by `TestCutoverDistinguishesAnUnstampedBinaryFromAWrongOne`, which asserts the two messages exist separately and that the wrong-sha wording appears on the wrong-sha path only.
+
+**Probe:** for every verifier, build the artifact the way the TEAM actually builds it and run the verifier on it. A check whose passing case is unreachable from your own procedure is worse than no check: it trains people to bypass checks. And when one refusal can have two causes, give it two messages — a refusal that names the wrong cause sends the reader to fix something that is not broken.
+
+## CLASS 249 — a guard that runs at module scope is not a build-time check
+
+**Found:** 2026-09-24, WAVE 3a, by running the negative case instead of describing it [A]. The build-time `GUIDE_BUILT_REV` guarantee was a `throw` inside a function called at module scope in `web/src/guide/types.ts`, with a comment above it asserting "A PRODUCTION build with the variable missing … FAILS here". It does not. Vite does not EXECUTE the module while building — it substitutes `import.meta.env` and bundles the result — so `VITE_GUIDE_BUILT_REV= npx vite build` exited **0**, and `grep 'must be a 40-hex commit sha' dist/assets/*.js` found the throw compiled INTO the bundle, where it fires at module evaluation on page load. A release cut with a missing rev would have shown the owner a white screen on the trading UI.
+
+**Why it is worse than what it replaced:** the hand-edited constant went stale and MISINFORMED; this shipped an AVAILABILITY failure on the trading UI over a documentation revision, and the code comment, the canon file and the owner-facing guide all asserted the opposite. Second order, it would also have blocked every release: `release.yml` carries a negative-proof step asserting that same build must FAIL, so the step — whose passing case was unreachable — would have failed the release job (CLASS 240).
+
+**Fixed in 3a:** the refusal moved to `web/vite.config.ts` as the `guide-built-rev-is-a-build-input` plugin (`apply: 'build'`, validated in `config()`), which is the only place that can refuse a build. `types.ts` no longer throws: at runtime an unusable value degrades to `'unknown'` — an honest unknowable (A24), never a real-looking sha and never a crash path — and its comment now records WHY the check cannot live there. RED→GREEN at the real call site: before, empty rev → exit 0; after, exit 1 with the message; positive, exit 0 with the sha in the bundle and the throw string gone. `TestGuideRevIsRefusedByTheBUILDNotByAModuleScopeThrow` fails if the gate is deleted or moved back into application code — it is not the proof (it cannot run a build), it is the tripwire.
+
+**Probe:** ask of every "build-time" check whether the build EXECUTES the file it lives in, or only transforms it. Bundlers, transpilers and code generators read and rewrite; they do not run your module. A guard in transformed code reads in review exactly like a build gate and ships as a runtime crash. The enforcement point must be something the build itself runs: a plugin, a prebuild script, a CI step — and the negative case must be RUN, not described.

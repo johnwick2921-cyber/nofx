@@ -57,3 +57,11 @@ exists only in a local run, where the NOTE says so.
 this repository (`johnwick2921-cyber/nofx`) and is one line to change. The
 partner mirror is never a valid target, and the contract test fails if its name
 appears in the workflow.
+
+## Build location matters (it is not optional)
+
+A release binary must carry `vcs.revision` and `vcs.modified=false`; `cutover.sh`
+refuses without them. Go does NOT stamp builds made from a linked git worktree
+— it produces zero `vcs.*` entries, and `-buildvcs=true` exits 0 while still
+stamping nothing. Build releases from a clean clone or the main tree, and verify
+with `go version -m <bin> | grep vcs.` before handing the binary to anything.

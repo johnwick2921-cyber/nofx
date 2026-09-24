@@ -47,7 +47,23 @@ SHORT="${NEW_SHA:0:12}"
 # is not a cutover; it is a restart with a false safety net.
 [ -f "$NEW_BIN" ] || die "new binary $NEW_BIN not found"
 NEW_VCS="$(go version -m "$NEW_BIN" 2>/dev/null || true)"
-printf '%s' "$NEW_VCS" | grep -q "vcs.revision=$NEW_SHA" || die "$NEW_BIN does not carry vcs.revision=$NEW_SHA — it is not the binary for this sha"
+# CLASS 248: two different causes must not share one refusal. A binary with NO
+# vcs stamps at all is not "the wrong binary" — it was built somewhere Go does
+# not stamp, and the cure is a different build, not a different file. Every
+# lane builds in a linked git worktree (WORKTREE LAW) and those builds carry
+# ZERO vcs.* entries on this toolchain: `go build` and even `-buildvcs=true`
+# (which exits 0 and stamps nothing) produced none, while a clean clone of the
+# SAME commit produced vcs.revision + vcs.modified=false. Told "it is not the
+# binary for this sha", an operator checks the sha, finds it correct, and
+# concludes the check is broken — which is how a guard gets deleted mid-boot.
+if ! printf '%s' "$NEW_VCS" | grep -q 'vcs\.revision='; then
+  die "$NEW_BIN carries NO vcs stamps at all, so its identity cannot be proven.
+    Go does not stamp a build from a linked git worktree on this toolchain.
+    Build from a clean clone or the main tree:
+      git clone --no-local <repo> /tmp/build && cd /tmp/build && git checkout $NEW_SHA
+      go build -o <bin> .   # then check: go version -m <bin> | grep vcs."
+fi
+printf '%s' "$NEW_VCS" | grep -q "vcs.revision=$NEW_SHA" || die "$NEW_BIN is stamped, but with a DIFFERENT revision than $NEW_SHA — it is not the binary for this sha"
 printf '%s' "$NEW_VCS" | grep -q 'vcs.modified=false'     || die "$NEW_BIN was built from a DIRTY tree (vcs.modified != false)"
 NEW_MD5="$(md5sum "$NEW_BIN" | cut -d' ' -f1)"
 say "new binary proven: vcs.revision=$SHORT vcs.modified=false md5=$NEW_MD5"

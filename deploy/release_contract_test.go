@@ -517,3 +517,31 @@ func TestGuideRevIsRefusedByTheBUILDNotByAModuleScopeThrow(t *testing.T) {
 		t.Fatalf("an unusable rev must degrade to the honest 'unknown' at runtime, never a real-looking sha and never a crash")
 	}
 }
+
+// TestCutoverDistinguishesAnUnstampedBinaryFromAWrongOne pins CLASS 248: two
+// causes must not share one refusal. A binary built in a linked git worktree
+// carries NO vcs stamps (proven 2026-09-24: `go build` and `-buildvcs=true`
+// both produced zero vcs.* entries in a worktree, while a clean clone of the
+// same commit produced vcs.revision + vcs.modified=false). Every lane builds
+// in a worktree, so telling that operator "it is not the binary for this sha"
+// sends them to check a sha that is already correct — and a guard that looks
+// broken gets deleted mid-boot.
+func TestCutoverDistinguishesAnUnstampedBinaryFromAWrongOne(t *testing.T) {
+	sh := repoFile(t, "deploy/cutover.sh")
+	if !strings.Contains(sh, "carries NO vcs stamps at all") {
+		t.Fatalf("cutover.sh must refuse an UNSTAMPED binary with its own message")
+	}
+	if !strings.Contains(sh, "linked git worktree") {
+		t.Fatalf("the unstamped refusal must name the CAUSE (a worktree build), not just the symptom")
+	}
+	if !strings.Contains(sh, "clean clone") {
+		t.Fatalf("the unstamped refusal must name the CURE (build from a clean clone)")
+	}
+	if !strings.Contains(sh, "is stamped, but with a DIFFERENT revision") {
+		t.Fatalf("a stamped-but-wrong binary must get a DIFFERENT message than an unstamped one")
+	}
+	// The two refusals must not be the same sentence: that is the whole point.
+	if strings.Count(sh, "it is not the binary for this sha") != 1 {
+		t.Fatalf("the wrong-sha wording must appear once, on the wrong-sha path only")
+	}
+}
