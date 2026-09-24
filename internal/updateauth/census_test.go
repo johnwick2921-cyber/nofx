@@ -49,19 +49,37 @@ import (
 //     go1.25.13 refuses an .s file's call to another package's Go function
 //     ("relocation target … not defined for ABI0"; the <ABIInternal>
 //     selector is "only permitted when compiling runtime") [A, probed
-//     2026-09-24], so without a linkname it cannot reach ComputeMAC.
+//     2026-09-24], so without a linkname it cannot reach ComputeMAC;
+//  6. the LOADED device key is used only to verify (verifier D3: the file
+//     admitted LoadDeviceKey minted a grant through golang-jwt's HS256 —
+//     rule 4 sees only crypto/hmac). In every file that references
+//     LoadDeviceKey, the call is bound `key, err := …LoadDeviceKey(dir)` and
+//     the key variable appears ONLY as the first argument of
+//     updateauth.VerifyMAC, of a LoadAdmin result's PasswordStillBound (the
+//     H1 belt's constant-time check), or of the builtin clear — whatever the
+//     primitive (crypto/hmac, a JWT signer, hand-rolled SHA-256), the key
+//     must be NAMED to reach it (keyFlowOffenders).
+//
+// Fail-closed side effects, named: the fragment rule refuses ANY literal
+// path element that is exactly "device", starts "device." or ends ".key"
+// module-wide (a future "server.key" or a JSON field literally "device"
+// trips it and must be spelled another way); rule 6 judges by NAME, so an
+// unrelated variable sharing the key's name in the same function is
+// reported.
 //
 // WHAT THIS CANNOT PROVE (M3 fold M4 — stated, not implied): it is a
-// syntactic census over identifiers, imports and constant strings. A file
-// that builds the path at run time (fmt.Sprintf with a non-literal, byte
-// arithmetic, a directory listing), receives the key bytes or a path through
-// an interface or a function value handed to it by an admitted file,
-// hand-rolls HMAC over crypto/sha256, or reaches the updater dir through a
-// package the census does not relate to it, passes. The app process runs as
-// the same uid that owns device.key, so nothing but review and this tripwire
-// stops app code from reading the key; the census makes the direct
-// spellings and the likely drift (a helper reused, a prefix admission, a MAC
-// beside the key) fail loudly.
+// syntactic census over identifiers, imports, comments and constant
+// strings. A file that builds the key's path at run time (fmt.Sprintf with a
+// non-literal, byte arithmetic, a directory listing) and reads the file
+// itself, receives the key bytes or a path through an interface or a
+// function value handed to it by an admitted file, or reaches the updater
+// dir through a package the census does not relate to it, passes — rule 6
+// binds only the key LoadDeviceKey returns. The app process runs as the same
+// uid that owns device.key, so nothing but review and this tripwire stops
+// app code from reading the key; the census makes the direct spellings and
+// the likely drift (a helper reused, a prefix admission, a second import
+// name, a linkname, a MAC beside the key, a different HMAC over the loaded
+// key) fail loudly.
 var (
 	// updateAuthImporterFiles may import the package (exact files).
 	updateAuthImporterFiles = map[string]bool{
@@ -229,9 +247,19 @@ func updateAuthOffenders(root string) (offenders []string, scanned int, err erro
 	}
 	type pkgFacts struct {
 		hmacFiles  []string
-		updaterWhy string // first reason the package reaches the updater dir; "" = none
+		updaterWhy string          // first reason the package reaches the updater dir; "" = none
+		topNames   map[string]bool // every package-level name any file of the package declares
 	}
 	pkgs := map[string]*pkgFacts{}
+	// 6. files that load the device key, judged once every file of their
+	// package is parsed (a package-level `clear` may sit in another file)
+	type keyHolder struct {
+		rel, dir string
+		fset     *token.FileSet
+		f        *ast.File
+		aliases  map[string]bool
+	}
+	var holders []keyHolder
 	seen := map[string]bool{}
 	offend := func(line string) {
 		if !seen[line] {
@@ -248,7 +276,8 @@ func updateAuthOffenders(root string) (offenders []string, scanned int, err erro
 		rel := file.Rel
 		// ParseComments: directives live in comments (verifier D2 — mode 0
 		// dropped them, so a //go:linkname was invisible).
-		f, perr := parser.ParseFile(token.NewFileSet(), file.Path, nil, parser.ParseComments)
+		fset := token.NewFileSet()
+		f, perr := parser.ParseFile(fset, file.Path, nil, parser.ParseComments)
 		if perr != nil {
 			offend(rel + ": cannot be parsed, so it cannot be checked (" + perr.Error() + ")")
 			continue
@@ -269,8 +298,27 @@ func updateAuthOffenders(root string) (offenders []string, scanned int, err erro
 		dir := path.Dir(rel)
 		facts := pkgs[dir]
 		if facts == nil {
-			facts = &pkgFacts{}
+			facts = &pkgFacts{topNames: map[string]bool{}}
 			pkgs[dir] = facts
+		}
+		for _, d := range f.Decls {
+			switch x := d.(type) {
+			case *ast.FuncDecl:
+				if x.Recv == nil {
+					facts.topNames[x.Name.Name] = true
+				}
+			case *ast.GenDecl:
+				for _, s := range x.Specs {
+					switch sp := s.(type) {
+					case *ast.ValueSpec:
+						for _, n := range sp.Names {
+							facts.topNames[n.Name] = true
+						}
+					case *ast.TypeSpec:
+						facts.topNames[sp.Name.Name] = true
+					}
+				}
+			}
 		}
 		reach := func(why string) {
 			if facts.updaterWhy == "" {
@@ -333,6 +381,7 @@ func updateAuthOffenders(root string) (offenders []string, scanned int, err erro
 			}
 		}
 
+		holdsKey := false
 		ast.Inspect(f, func(n ast.Node) bool {
 			switch x := n.(type) {
 			case *ast.Ident: // 4. data-dir / updater-dir helpers (bare, or a selector's Sel)
@@ -342,6 +391,7 @@ func updateAuthOffenders(root string) (offenders []string, scanned int, err erro
 			case *ast.SelectorExpr: // 3. classified references (any reference, not only calls)
 				if id, ok := x.X.(*ast.Ident); ok && aliases[id.Name] {
 					name := x.Sel.Name
+					holdsKey = holdsKey || name == "LoadDeviceKey"
 					if allowed, restricted := updateAuthRestricted[name]; restricted {
 						if !allowed[rel] {
 							offend(rel + ": references updateauth." + name)
@@ -353,6 +403,16 @@ func updateAuthOffenders(root string) (offenders []string, scanned int, err erro
 			}
 			return true
 		})
+		if holdsKey && dir != macPackageHome {
+			holders = append(holders, keyHolder{rel: rel, dir: dir, fset: fset, f: f, aliases: aliases})
+		}
+	}
+
+	// 6. the loaded device key is used only to verify
+	for _, h := range holders {
+		for _, line := range keyFlowOffenders(h.rel, h.fset, h.f, h.aliases, pkgs[h.dir].topNames["clear"]) {
+			offend(line)
+		}
 	}
 
 	// 4. crypto/hmac beside the updater dir, per package
@@ -375,6 +435,199 @@ func updateAuthOffenders(root string) (offenders []string, scanned int, err erro
 		}
 	}
 	return offenders, scanned, nil
+}
+
+// keyFlowOffenders is rule 6 over one file that references
+// updateauth.LoadDeviceKey (through any of its import names): per top-level
+// declaration,
+//   - every reference to LoadDeviceKey is the whole right-hand side of a `:=`
+//     whose first name is a real identifier — the key variable (a function
+//     value, `=`, `var`, `_` or an inline use is refused);
+//   - every other appearance of a key variable's name anywhere in the
+//     declaration is the FIRST argument of exactly one of:
+//     <import name>.VerifyMAC(key, …), with the import name not re-declared
+//     in the declaration; <admin>.PasswordStillBound(key, …), where <admin>
+//     is the `:=` result of <import name>.LoadAdmin, the call sits inside
+//     that binding's scope after it, and the name is declared nowhere else
+//     in the declaration; or clear(key) with clear the builtin (declared
+//     neither in the declaration nor at the package's top level).
+//
+// It is judged by NAME, not by type: a second variable that happens to share
+// the key's name, a struct-literal field spelled like it, or a key re-bound
+// in a nested scope is reported — it can only over-report.
+func keyFlowOffenders(rel string, fset *token.FileSet, f *ast.File, aliases map[string]bool, packageDeclaresClear bool) []string {
+	var out []string
+	at := func(n ast.Node) string { return " (line " + strconv.Itoa(fset.Position(n.Pos()).Line) + ")" }
+	for _, decl := range f.Decls {
+		parent := map[ast.Node]ast.Node{}
+		var stack []ast.Node
+		ast.Inspect(decl, func(n ast.Node) bool {
+			if n == nil {
+				stack = stack[:len(stack)-1]
+				return true
+			}
+			if len(stack) > 0 {
+				parent[n] = stack[len(stack)-1]
+			}
+			stack = append(stack, n)
+			return true
+		})
+		// boundBy: the key variable when sel is the callee of the whole RHS of
+		// `name, … := sel(…)`; nil otherwise.
+		boundBy := func(sel *ast.SelectorExpr) (*ast.Ident, *ast.AssignStmt) {
+			call, ok := parent[sel].(*ast.CallExpr)
+			if !ok || call.Fun != sel {
+				return nil, nil
+			}
+			as, ok := parent[call].(*ast.AssignStmt)
+			if !ok || as.Tok != token.DEFINE || len(as.Rhs) != 1 || as.Rhs[0] != call || len(as.Lhs) == 0 {
+				return nil, nil
+			}
+			id, ok := as.Lhs[0].(*ast.Ident)
+			if !ok || id.Name == "_" {
+				return nil, nil
+			}
+			return id, as
+		}
+		keyBinds := map[*ast.Ident]bool{}
+		keyNames := map[string]bool{}
+		adminBinds := map[*ast.Ident]*ast.AssignStmt{}
+		ast.Inspect(decl, func(n ast.Node) bool {
+			sel, ok := n.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			if x, ok := sel.X.(*ast.Ident); !ok || !aliases[x.Name] {
+				return true
+			}
+			switch sel.Sel.Name {
+			case "LoadDeviceKey":
+				id, _ := boundBy(sel)
+				if id == nil {
+					out = append(out, rel+": updateauth.LoadDeviceKey must be bound as `key, err := updateauth.LoadDeviceKey(dir)` and the key used only to verify"+at(sel))
+					return true
+				}
+				keyBinds[id], keyNames[id.Name] = true, true
+			case "LoadAdmin":
+				if id, as := boundBy(sel); id != nil {
+					adminBinds[id] = as
+				}
+			}
+			return true
+		})
+		if len(keyNames) == 0 {
+			continue
+		}
+		// declaredOther: name is declared (or assigned) in the declaration by
+		// something other than the idents in except.
+		declaredOther := func(name string, except func(*ast.Ident) bool) bool {
+			found := false
+			check := func(id *ast.Ident) {
+				if id != nil && id.Name == name && (except == nil || !except(id)) {
+					found = true
+				}
+			}
+			ast.Inspect(decl, func(n ast.Node) bool {
+				switch x := n.(type) {
+				case *ast.AssignStmt:
+					for _, l := range x.Lhs {
+						if id, ok := l.(*ast.Ident); ok {
+							check(id)
+						}
+					}
+				case *ast.ValueSpec:
+					for _, id := range x.Names {
+						check(id)
+					}
+				case *ast.Field:
+					for _, id := range x.Names {
+						check(id)
+					}
+				case *ast.RangeStmt:
+					if k, ok := x.Key.(*ast.Ident); ok {
+						check(k)
+					}
+					if v, ok := x.Value.(*ast.Ident); ok {
+						check(v)
+					}
+				case *ast.TypeSpec:
+					check(x.Name)
+				case *ast.FuncDecl:
+					check(x.Name)
+				}
+				return true
+			})
+			return found
+		}
+		// inScopeOf: use lies after the `:=` and inside the block it declares in.
+		inScopeOf := func(use ast.Node, as *ast.AssignStmt) bool {
+			scope := parent[as]
+			switch s := scope.(type) {
+			case *ast.BlockStmt, *ast.CaseClause, *ast.CommClause:
+			case *ast.IfStmt:
+				if s.Init != as {
+					return false
+				}
+			case *ast.SwitchStmt:
+				if s.Init != as {
+					return false
+				}
+			case *ast.TypeSwitchStmt:
+				if s.Init != as {
+					return false
+				}
+			case *ast.ForStmt:
+				if s.Init != as {
+					return false
+				}
+			default:
+				return false
+			}
+			return use.Pos() > as.End() && use.End() <= scope.End()
+		}
+		admitted := func(id *ast.Ident) bool {
+			call, ok := parent[id].(*ast.CallExpr)
+			if !ok || len(call.Args) == 0 || call.Args[0] != id {
+				return false
+			}
+			switch fn := call.Fun.(type) {
+			case *ast.Ident: // the builtin clear, and nothing that shadows it
+				return fn.Name == "clear" && len(call.Args) == 1 && !packageDeclaresClear && !declaredOther("clear", nil)
+			case *ast.SelectorExpr:
+				x, ok := fn.X.(*ast.Ident)
+				if !ok {
+					return false
+				}
+				if fn.Sel.Name == "VerifyMAC" {
+					return aliases[x.Name] && !declaredOther(x.Name, nil)
+				}
+				if fn.Sel.Name != "PasswordStillBound" {
+					return false
+				}
+				for b, as := range adminBinds {
+					if b.Name == x.Name && inScopeOf(call, as) &&
+						!declaredOther(x.Name, func(d *ast.Ident) bool { _, isBind := adminBinds[d]; return isBind && d.Name == b.Name }) {
+						return true
+					}
+				}
+			}
+			return false
+		}
+		ast.Inspect(decl, func(n ast.Node) bool {
+			id, ok := n.(*ast.Ident)
+			if !ok || !keyNames[id.Name] || keyBinds[id] {
+				return true
+			}
+			if s, ok := parent[id].(*ast.SelectorExpr); ok && s.Sel == id {
+				return true // a field or method name, never the variable
+			}
+			if !admitted(id) {
+				out = append(out, rel+": the loaded device key "+strconv.Quote(id.Name)+" is used outside updateauth.VerifyMAC / <LoadAdmin result>.PasswordStillBound / clear"+at(id))
+			}
+			return true
+		})
+	}
+	return out
 }
 
 // constantStrings returns every string the file spells as a constant: each
