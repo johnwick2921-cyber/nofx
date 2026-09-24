@@ -165,17 +165,36 @@ func enroll(dataDir, dbFile, email string, replace bool, stdin io.Reader, stdout
 		fmt.Fprintf(stderr, "refusing: %v\n", err)
 		return 1
 	}
-	if !replace {
-		for _, p := range []string{updateauth.AdminPath(dataDir), updateauth.DeviceKeyPath(dataDir)} {
-			if _, err := os.Lstat(p); !errors.Is(err, os.ErrNotExist) {
-				fmt.Fprintln(stderr, "refusing: this installation is already enrolled — re-run with --replace to replace it (rotates the device key)")
-				return 1
-			}
+	existing := false
+	for _, p := range []string{updateauth.AdminPath(dataDir), updateauth.DeviceKeyPath(dataDir)} {
+		if _, err := os.Lstat(p); !errors.Is(err, os.ErrNotExist) {
+			existing = true
 		}
 	}
-	fmt.Fprintf(stderr, "Enroll the app user with this exact email as the installation's update administrator.\n")
-	if !confirm(stdin, stderr, "ENROLL "+email) {
+	if existing && !replace {
+		fmt.Fprintln(stderr, "refusing: this installation is already enrolled — re-run with --replace to replace it (rotates the device key)")
 		return 1
+	}
+	if existing {
+		// Red-team red-4 #6: replacing is a different act from enrolling —
+		// it removes the current administrator and kills every outstanding
+		// code — so it names both and takes its own typed line.
+		current, tag := "an enrollment whose administrator cannot be read", "UNREADABLE"
+		if a, err := updateauth.LoadAdmin(dataDir); err == nil {
+			current = fmt.Sprintf("%s (user_id %s…, enrolled %s)", a.Email, shortID(a.UserID), a.EnrolledAt)
+			tag = a.Email
+		}
+		fmt.Fprintf(stderr, "REPLACE the installation's update administrator.\n  current: %s\n  new:     %s (user_id %s…)\n"+
+			"The device key rotates: every outstanding authorization code stops working. Until this prints \"enrolled:\", the current administrator may still be enrolled.\n",
+			current, email, shortID(userID))
+		if !confirm(stdin, stderr, "REPLACE "+tag+" WITH "+email) {
+			return 1
+		}
+	} else {
+		fmt.Fprintf(stderr, "Enroll the app user with this exact email as the installation's update administrator.\n")
+		if !confirm(stdin, stderr, "ENROLL "+email) {
+			return 1
+		}
 	}
 	if err := updateauth.Enroll(dataDir, userID, email, now(), replace); err != nil {
 		if errors.Is(err, updateauth.ErrAlreadyEnrolled) {
