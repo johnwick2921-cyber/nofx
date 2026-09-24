@@ -374,6 +374,7 @@ func (j Job) Validate() error {
 	}
 	sawActivated := false
 	var parkDone, leftPark *time.Time // the nt8_updated park: done, and the move to activated
+	var nt8State State                // the AddOn branch the history entered, if any
 	for i := 1; i < len(j.Transitions); i++ {
 		p, c := j.Transitions[i-1], j.Transitions[i]
 		if c.At.IsZero() {
@@ -401,6 +402,9 @@ func (j Job) Validate() error {
 		}
 		if c.Phase != EntryPhase(c.State) {
 			return bad("transition %d enters %s %s, want %s", i, c.State, c.Phase, EntryPhase(c.State))
+		}
+		if c.State == StateNT8Skipped || c.State == StateNT8Updated {
+			nt8State = c.State
 		}
 		if c.State == StateActivated {
 			sawActivated = true
@@ -461,6 +465,16 @@ func (j Job) Validate() error {
 	}
 	if j.NT8 != nil && j.NT8.Decision != NT8Skipped && j.NT8.Decision != NT8Updated {
 		return bad("nt8 decision %q", clip(j.NT8.Decision))
+	}
+	// the AddOn branch the history took carries its own decision
+	if nt8State != "" {
+		want := NT8Skipped
+		if nt8State == StateNT8Updated {
+			want = NT8Updated
+		}
+		if j.NT8 == nil || j.NT8.Decision != want {
+			return bad("%s without nt8.decision %q", nt8State, want)
+		}
 	}
 	if j.LastGoodReceipt != nil && (*j.LastGoodReceipt < 0 || *j.LastGoodReceipt >= len(j.Receipts)) {
 		return bad("last_good_receipt %d out of range", *j.LastGoodReceipt)
