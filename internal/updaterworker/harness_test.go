@@ -91,8 +91,10 @@ type box struct {
 	rollbackFail   bool
 	badToken       bool // the app refuses the token (401)
 	verdictMissing bool
-	holdWriteLies  bool // the hold write lands on disk, then errs (U1 item 9)
-	holdWriteFails bool // the hold write errs before anything lands
+	holdWriteLies  bool   // the hold write lands on disk, then errs (U1 item 9)
+	holdWriteFails bool   // the hold write errs before anything lands
+	ackStale       bool   // the AddOn's last ack is 20 s old
+	ackJob         string // the AddOn acks this job id instead of the hold's
 
 	calls       []string
 	violations  []string
@@ -593,7 +595,7 @@ func (b *box) serveApp(w http.ResponseWriter, r *http.Request) {
 // resent every 5 s (received = the last 5 s tick; age = now − received).
 func (b *box) ack() *AckView {
 	b.mu.Lock()
-	connected, build := b.addonConnected, b.addonBuild
+	connected, build, stale, ackJob := b.addonConnected, b.addonBuild, b.ackStale, b.ackJob
 	b.mu.Unlock()
 	if !connected {
 		return nil
@@ -604,6 +606,12 @@ func (b *box) ack() *AckView {
 	a := &AckView{Received: recv.Format(time.RFC3339Nano), AgeMs: now.Sub(recv).Milliseconds(), BuildID: build, AcceptSeq: 1}
 	if st.Held && !st.Corrupt {
 		a.Held, a.JobID = true, st.Hold.JobID
+	}
+	if stale {
+		a.AgeMs = 20000
+	}
+	if ackJob != "" {
+		a.JobID = ackJob
 	}
 	return a
 }
