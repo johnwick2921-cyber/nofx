@@ -713,3 +713,44 @@ func TestArmRespecForEntryEdges(t *testing.T) {
 		t.Fatalf("a market_in_zone row is never judged by the entry rule: %+v", c)
 	}
 }
+
+// ── W1b FOLD-8 — the corrected comment's claim, pinned (CTO ruling, P2) ──────
+//
+// The comment above the respecWorkingArm call now says "No hole: a
+// cancel_pending row is never placed". The cancelling pass's "place nothing"
+// assertions do NOT pin that: on that pass the book still shows the entry
+// resting, so the one-contract guard refuses too (a mutation that let the
+// placement switch place cancel_pending rows left every E1/E2 test green).
+// Here the pass AFTER the cancel sees a fresh FLAT live book (the one-contract
+// guard admits) with no persisted book confirming the cancel, so the row is
+// still cancel_pending and only the placement switch (`case "armed":`) keeps
+// it off the wire.
+func TestRespecCancelPendingRowIsNeverPlacedOnAFlatLiveBook(t *testing.T) {
+	r := newZoneRig(t, "w1b-respec-cp-unplaced", zoneDoc(zoneScenario("S1", kernel.EntryPolicyPlannedOrder, zone, false)))
+	sid := r.placeWorking(100).SignalID
+	r.entryVersion(99.5)
+	t1 := r.now.Add(time.Minute)
+	r.restingBook(t1, sid, 100)
+	r.setTape(zoneTape(101.95, t1, 0))
+	r.at.maybeManageArmedOrdersAt(nil, t1)
+	if sigs, cancels := r.drain(); len(cancels) != 1 || len(sigs) != 0 {
+		t.Fatalf("fixture: the entry re-spec must cancel once and place nothing: sigs=%+v cancels=%+v", sigs, cancels)
+	}
+	if row := r.row("S1"); row.State != store.StateCancelPending || row.SignalID != sid {
+		t.Fatalf("fixture: the row must be cancel_pending on its own signal: %+v", row)
+	}
+
+	// The adapter's B3 duplicate guard runs on the WALL clock; re-made so it
+	// cannot be what keeps the row off the wire (as settleAndReArm does).
+	r.at.trader = ntTrader.NewTCPTrader(r.srv, "MNQ", "Sim101")
+	t2 := t1.Add(30 * time.Second)
+	r.flatBook(t2)
+	r.setTape(zoneTape(101.95, t2, 0))
+	r.at.maybeManageArmedOrdersAt(nil, t2)
+	if sigs, _ := r.drain(); len(sigs) != 0 {
+		t.Fatalf("a cancel_pending row must never be placed, even on a flat live book: sigs=%+v", sigs)
+	}
+	if rows := r.rows(); len(rows) != 1 || rows[0].SignalID != sid {
+		t.Fatalf("no successor may be minted before a persisted book confirms the cancel: %+v", rows)
+	}
+}
