@@ -373,6 +373,7 @@ func (j Job) Validate() error {
 		return bad("history does not start at requested/done at created_at")
 	}
 	sawActivated := false
+	var parkDone, leftPark *time.Time // the nt8_updated park: done, and the move to activated
 	for i := 1; i < len(j.Transitions); i++ {
 		p, c := j.Transitions[i-1], j.Transitions[i]
 		if c.At.IsZero() {
@@ -390,6 +391,9 @@ func (j Job) Validate() error {
 			if c.Receipts <= p.Receipts {
 				return bad("transition %d: %s is done with no receipt since it started", i, c.State)
 			}
+			if c.State == StateNT8Updated {
+				parkDone = &c.At
+			}
 			continue
 		}
 		if err := CheckMove(p.State, p.Phase, c.State); err != nil {
@@ -400,6 +404,9 @@ func (j Job) Validate() error {
 		}
 		if c.State == StateActivated {
 			sawActivated = true
+			if p.State == StateNT8Updated {
+				leftPark = &c.At
+			}
 		}
 	}
 	last := j.Transitions[len(j.Transitions)-1]
@@ -408,6 +415,22 @@ func (j Job) Validate() error {
 	}
 	if last.Receipts > len(j.Receipts) {
 		return bad("the history records %d receipts, the file holds %d", last.Receipts, len(j.Receipts))
+	}
+	// The attended park: the job leaves nt8_updated only on a resume recorded
+	// inside the park (after it was done, no later than the move out), and a
+	// resume time exists only on a job that parked.
+	if j.ResumedAt != nil {
+		switch {
+		case parkDone == nil:
+			return bad("resumed_at on a job that never parked at nt8_updated")
+		case !j.ResumedAt.After(*parkDone):
+			return bad("resumed_at is not after the nt8_updated park")
+		case leftPark != nil && j.ResumedAt.After(*leftPark):
+			return bad("resumed_at is after the job left the nt8_updated park")
+		}
+	}
+	if leftPark != nil && j.ResumedAt == nil {
+		return bad("left the nt8_updated park for activated with no attended resume")
 	}
 	for i, r := range j.Receipts {
 		if r.Step == "" {

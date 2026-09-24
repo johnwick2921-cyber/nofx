@@ -144,3 +144,106 @@ func withRollbackInputs(j *Job) {
 	j.BackupPath = "/b/data.db"
 	j.IdentityBefore = &Identity{PID: 172, StartTicks: 23987}
 }
+
+// walkTo steps a fresh job through states with the production API (step =
+// Enter, Write, receipt, Finish, Write), setting the AddOn decision each nt8
+// state requires.
+func walkTo(t *testing.T, dd, jobID string, states ...State) (Job, time.Time) {
+	t.Helper()
+	now := t0
+	j := mustNew(t, jobID, "v1.2.0", now)
+	mustWrite(t, dd, j)
+	for _, s := range states {
+		switch s {
+		case StateNT8Skipped:
+			j.NT8 = &NT8Decision{Decision: NT8Skipped}
+		case StateNT8Updated:
+			j.NT8 = &NT8Decision{Decision: NT8Updated, Reason: "ninjascript/*.cs changed"}
+		}
+		step(t, dd, &j, &now, s)
+	}
+	return j, now
+}
+
+var toPark = []State{StateDownloaded, StateVerified, StatePreflightOK, StateMaintenanceHeld, StateDrainedAcked, StateGateOK, StateBackupDone, StateNT8Updated}
+
+// TestLeavingTheParkNeedsAnAttendedResume (U1 verifier defect 3, probes H20
+// and H18): the job leaves the nt8_updated park for activated only with a
+// resumed_at recorded AFTER the park was done and no later than the move
+// out of it (the attended `nofx-updater resume` is the only way out); and a
+// resumed_at on a job that never parked is refused.
+func TestLeavingTheParkNeedsAnAttendedResume(t *testing.T) {
+	restoreSeams(t)
+	sha := "0123456789abcdef0123456789abcdef01234567"
+	leave := func(t *testing.T, resumed *time.Time) (Job, string, []byte) {
+		t.Helper()
+		dd := t.TempDir()
+		j, now := walkTo(t, dd, "job-0110", toPark...)
+		withRollbackInputs(&j)
+		p, _ := Path(dd, j.JobID)
+		before, _ := os.ReadFile(p)
+		j.ResumedAt = resumed
+		if err := j.Enter(StateActivated, now.Add(time.Minute)); err != nil {
+			t.Fatal(err)
+		}
+		return j, dd, before
+	}
+	parkDone := t0.Add(16 * time.Second) // walkTo: 8 steps × 2 s
+	for name, resumed := range map[string]*time.Time{
+		"H20: no resumed_at":             nil,
+		"resumed_at at the park instant": ptr(parkDone),
+		"resumed_at before the park":     ptr(parkDone.Add(-time.Second)),
+		"resumed_at after it left":       ptr(parkDone.Add(2 * time.Minute)),
+	} {
+		t.Run(name, func(t *testing.T) {
+			j, dd, before := leave(t, resumed)
+			if err := Write(dd, j); !errors.Is(err, ErrCorrupt) {
+				t.Errorf("Write(nt8_updated → activated, %s) = %v, want ErrCorrupt", name, err)
+			}
+			p, _ := Path(dd, j.JobID)
+			if b, _ := os.ReadFile(p); string(b) != string(before) {
+				t.Error("a refused leave changed the file")
+			}
+			refusedAtBothCallSites(t, name, j)
+		})
+	}
+	// H18: a resume time on a job that never parked — mid-flight, and on the
+	// nt8_skipped path.
+	for name, states := range map[string][]State{
+		"H18: downloaded":       {StateDownloaded},
+		"nt8_skipped, no park":  {StateDownloaded, StateVerified, StatePreflightOK, StateMaintenanceHeld, StateDrainedAcked, StateGateOK, StateBackupDone, StateNT8Skipped},
+		"nt8_updated not done": {StateDownloaded, StateVerified, StatePreflightOK, StateMaintenanceHeld, StateDrainedAcked, StateGateOK, StateBackupDone},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dd := t.TempDir()
+			j, now := walkTo(t, dd, "job-0111", states...)
+			if name == "nt8_updated not done" {
+				j.NT8 = &NT8Decision{Decision: NT8Updated}
+				if err := j.Enter(StateNT8Updated, now.Add(time.Second)); err != nil {
+					t.Fatal(err)
+				}
+				mustWrite(t, dd, j)
+			}
+			j.ResumedAt = ptr(now.Add(time.Minute))
+			j.UpdatedAt = *j.ResumedAt
+			if err := Write(dd, j); !errors.Is(err, ErrCorrupt) {
+				t.Errorf("Write(resumed_at, %s) = %v, want ErrCorrupt", name, err)
+			}
+			refusedAtBothCallSites(t, name, j)
+		})
+	}
+	// positive control: resumed inside the park window, then activated.
+	j, dd, _ := leave(t, ptr(parkDone.Add(30*time.Second)))
+	mustWrite(t, dd, j)
+	if got, err := Read(dd, j.JobID); err != nil || got.State != StateActivated || got.ResumedAt == nil || got.Release.SHA != sha {
+		t.Fatalf("positive control: %+v %v", got, err)
+	}
+	// and the park itself may carry the resume before the runner moves
+	k := t.TempDir()
+	pj, now := walkTo(t, k, "job-0112", toPark...)
+	pj.ResumedAt = ptr(now.Add(time.Second))
+	pj.UpdatedAt = *pj.ResumedAt
+	mustWrite(t, k, pj)
+}
+
+func ptr[T any](v T) *T { return &v }
