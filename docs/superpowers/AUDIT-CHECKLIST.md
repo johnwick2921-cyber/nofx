@@ -7332,6 +7332,8 @@ Both suites were green, and neither contained the call site that crosses the wir
 
 **Probe:** for every contract that crosses a language or wave boundary (a header, a field, a route shape), find ONE test that runs the producer's real client code against the consumer's real rule. If each side has only its own pins (a mocked transport on one side, hand-built requests on the other), the wire is unpinned. Add a parity pin that reads the constant from one side and the call sites from the other.
 
+**Instance 2026-09-24 PR #200 review F1:** the web client typed the install body's `expires_at` as a STRING while `rawUnixSeconds` takes only a bare JSON number, so every UI install would have been 400. Pinned by ONE committed byte string (`web/src/lib/api/testdata/updates-install-body.wire.txt`) that vitest (wire bytes), api (parser, router, and the TS-declared kinds derived from the parser) and updaterbootstrap (the line `Run` prints) all read (`21a22d04`). The same review found an older test mock that invented a 403 body (`'install: MAC mismatch'`, which is a LOG category); the real body is `forbidden` (`0dc7bd2f`).
+
 ## CLASS 261 — a literal that is green on each branch and red at the merged head
 
 **Found:** 2026-09-24 04:55 CT, merging dev 710e96aa (#199, WAVE 3a) into M3 (merge `c27a8851`) [A].
@@ -7357,6 +7359,8 @@ Each branch was green alone: 3a had no such census, and M3 had no db-compat.sh. 
 - Run the FULL suite at the merged head before calling a merge green.
 - When a merge turns a census RED, read it as a finding about the incoming file, not about the census.
 - Fix the offender, not the census's allow-list. An allow-list entry for a published secret is a published secret.
+
+**Instance 2026-09-24 PR #200 review folds:** four fold builders each went green on the packages they touched. At the merged head, the users-table writer census (`store/`) went RED on F5's served advice constant, `UPDATE users SET … updated_at=CURRENT_TIMESTAMP …` in `api/handler_user.go`. The fix was to review and list it, because it IS a way to move the credential epoch (the owner runs it by hand), not to weaken the census (`35899dea`). Run every real-tree census at the merged head, not only the touched packages.
 
 ## CLASS 262 — a census that reads one compiler directive but not its siblings
 
@@ -7428,6 +7432,8 @@ bot.go:263:51: b.userID — in a closure built by (*botIdentity).refresh
 - Pin by TYPE (go/types), not by variable name: an alias must not escape the pin.
 - Pair the structural pin with a race-tagged reproduction that skips without the detector, and see it RED on the revert in the race slot before calling it a pin (CLASS 196: a detector can stay green on a real race when nothing drives the interleave).
 
+**Instance 2026-09-24 PR #200 review F4b/F7:** the bot now re-mints when its own token is blacklisted, and a same-second re-mint is re-checked and retried once. Failing closed then had two gaps, both folded. On a USER change it kept acting for the PREVIOUS user; it now acts for nobody (`45197f48`). And the fail-closed pin's token check could never fire, because its starting token came from the same second (`89deaa5b`). Named, not folded: runBot still says "No account found" when an account exists but no admitted token could be minted.
+
 ## CLASS 264 — a clock-skew fix judged at one instant, on a token shape the server never mints
 
 **Found:** 2026-09-24, three times, and each time the finding was narrower than it read.
@@ -7464,3 +7470,6 @@ bot.go:263:51: b.userID — in a closure built by (*botIdentity).refresh
 - Build every probe token with the production minter, or pin the probe's shape AND the minted shape side by side and say which one the fix changes.
 - When a parser option widens an accepted window, list every other structure keyed on the same claims (blacklists, caches, TTL sweeps, the UI's own expiry) and pin, at the production router, that each covers the new window.
 - Pin minted VALUES by decoding real mints from every entry point, not the spelling of the stamp (CLASS 259).
+
+**Instance 2026-09-24 PR #200 review F6:** a credential epoch in the FUTURE (a clock step-back after a password change) refuses every new sign-in until the clock passes it. That stays fail-closed, and the refusal now says so: "credential epoch is Ns in the future — clock stepped back; sign-in refused until then". The bound is the size of the step. It is pinned at the production router for authMiddleware and, through a gorm hook between the two reads, for the credential guard (`53bc9734`, `fc17a1c9`). The /updates gate's Q8 line has no clock note (a follow-up).
+
