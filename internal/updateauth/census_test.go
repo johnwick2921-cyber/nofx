@@ -132,7 +132,8 @@ import (
 //     files), a .syso object the linker takes as-is, SWIG files
 //     (.swig/.swigcxx, which go build turns into cgo), and every third-party
 //     module — the module cache, a vendor/ dir, a go.mod replace pointing
-//     outside the tree [B].
+//     outside the tree, a go.work use/replace (the toolchain reads a go.work
+//     beside or above the module automatically) [B].
 //   - BUILD TIME, outside the source: go generate (it writes source before
 //     the build), -toolexec, -ldflags -X (sets a string variable from the
 //     build command line), -overlay, GOFLAGS or go.env — none of it is in a
@@ -868,6 +869,10 @@ func parseEmbedPatterns(args string) ([]string, error) {
 // refused too.
 func embedPatternReachesEnrollment(pattern string) (string, bool) {
 	for _, e := range strings.Split(strings.TrimPrefix(pattern, "all:"), "/") {
+		// Case-folded: on a case-insensitive filesystem the toolchain resolves
+		// a literal pattern by Lstat, so UPDATER/DEVICE.KEY reaches the key.
+		// Lowering a class ([A-Z]) can only widen the match — fail closed.
+		e = strings.ToLower(e)
 		for _, name := range []string{updaterDirName, deviceKeyName} {
 			ok, err := path.Match(e, name)
 			if err != nil {
