@@ -168,7 +168,14 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 		}
 
 		// ── AI agent ─────────────────────────────────────────────────────────
-		go func(chatID int64, text string) {
+		// The manager is captured HERE, on the main loop, and handed in: the
+		// next message's refresh() may replace ident.agents / ident.token
+		// while this one is still being answered, so the goroutine reads no
+		// field of ident (M3 ha verifier 3 — TestRunBotGoroutinesReadNoBotIdentityField).
+		// A message in flight across a re-mint finishes on the manager, and
+		// the token, it started with.
+		agents := ident.agents
+		go func(agents *agent.Manager, chatID int64, text string) {
 			sent, err := bot.Send(tgbotapi.NewMessage(chatID, "⏳"))
 			placeholderID := 0
 			if err == nil {
@@ -193,7 +200,7 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 				bot.Send(edit) //nolint:errcheck
 			}
 
-			reply := ident.agents.Run(chatID, text, onChunk)
+			reply := agents.Run(chatID, text, onChunk)
 
 			if placeholderID != 0 {
 				edit := tgbotapi.NewEditMessageText(chatID, placeholderID, reply)
@@ -210,7 +217,7 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 					bot.Send(msg) //nolint:errcheck
 				}
 			}
-		}(chatID, text)
+		}(agents, chatID, text)
 	}
 
 	return true
@@ -221,7 +228,10 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 // token. runBot calls refresh() at start, on /start and before every AI
 // call — so the M3 red-team H2 re-mint (botTokenStale) is exercised where
 // runBot reaches it (bot_token_test.go drives refresh against the
-// production server).
+// production server). Its fields belong to runBot's main loop: refresh
+// reassigns them, so the per-message goroutine gets the manager as a value
+// captured before the go statement, and the closures refresh builds read
+// locals, never the receiver (bot_goroutine_test.go pins both).
 type botIdentity struct {
 	st      *store.Store
 	apiPort int
@@ -259,8 +269,13 @@ func (b *botIdentity) refresh() bool {
 	b.userID = u.ID
 	b.email = u.Email
 	b.token = newToken
+	// The LLM factory runs on the per-message goroutine (Manager.Run →
+	// agent.New / Agent.Run) while the next refresh rewrites b's fields on
+	// the main loop: it closes over locals, never b.<field>
+	// (TestBotIdentityClosuresReadNoReceiverField).
+	st, userID := b.st, b.userID
 	b.agents = agent.NewManager(b.apiPort, b.token, b.email, b.userID,
-		func() mcp.AIClient { return newLLMClient(b.st, b.userID) },
+		func() mcp.AIClient { return newLLMClient(st, userID) },
 		api.GetAPIDocs(),
 	)
 	switch prev {
