@@ -528,7 +528,14 @@ func TestArmRespecAbsentPriorAuthoredLegNeverCancels(t *testing.T) {
 // the entry alone is moved.
 func (r *zoneRig) entryVersion(entry float64) {
 	r.t.Helper()
-	d := zoneDoc(zoneScenario("S1", kernel.EntryPolicyPlannedOrder, zone, false))
+	r.entryVersionFor(kernel.EntryPolicyPlannedOrder, entry)
+}
+
+// entryVersionFor is entryVersion for any policy ("" = legacy): the same doc,
+// zone and authored bracket, only S1's AUTHORED entry moved.
+func (r *zoneRig) entryVersionFor(policy string, entry float64) {
+	r.t.Helper()
+	d := zoneDoc(zoneScenario("S1", policy, zone, false))
 	d.Scenarios[0].Arm.Entry = entry
 	blob, _ := json.Marshal(d)
 	shadowPlanAtTime(r.t, r.at, r.st, string(blob), r.now)
@@ -596,6 +603,68 @@ func TestPlannedOrderEntryMovedUnderTwoTicksLeavesTheOrderAlone(t *testing.T) {
 	}
 	if n, _ := store.SystemCounter(r.st, "arm:respec_cancel"); n != before {
 		t.Fatalf("nothing happened, so nothing is recorded (%d → %d)", before, n)
+	}
+}
+
+// FOLD-1 "market_in_zone keeps E2's zone rule", at the production call site
+// (L8 — the pure edge below cannot see the arm loop): a working market_in_zone
+// limit resting at the far edge 100.50, and v2 moves ONLY S1's authored entry
+// 100.00 → 99.50 (2 ticks) with the SAME zone 99.50–100.50 and the same
+// authored bracket. The zone still holds the limit (E2 silent) and the entry
+// rule never judges a market_in_zone row, so nothing is sent, the row stays
+// working under v1 and no counter moves.
+func TestMarketInZoneEntryMovedInsideTheSameZoneLeavesTheOrderAlone(t *testing.T) {
+	r := newZoneRig(t, "w1b-respec-entry-miz", zoneDoc(zoneScenario("S1", kernel.EntryPolicyMarketInZone, zone, false)))
+	sid := r.placeWorking(100.5).SignalID
+	if row := r.row("S1"); row.Policy != kernel.EntryPolicyMarketInZone || row.EntryPx != 100.5 {
+		t.Fatalf("fixture: the row must be a market_in_zone limit at the far edge 100.50: %+v", row)
+	}
+	respec, _ := store.SystemCounter(r.st, "arm:respec_cancel")
+	moved, _ := store.SystemCounter(r.st, "market_in_zone:zone_moved")
+	r.entryVersionFor(kernel.EntryPolicyMarketInZone, 99.5)
+	t1 := r.now.Add(time.Minute)
+	r.restingBook(t1, sid, 100.5)
+	r.setTape(zoneTape(101.95, t1, 0))
+	r.at.maybeManageArmedOrdersAt(nil, t1)
+	if sigs, cancels := r.drain(); len(sigs) != 0 || len(cancels) != 0 {
+		t.Fatalf("a market_in_zone entry moved inside the same zone is E2's to judge, and E2 is silent: sigs=%+v cancels=%+v", sigs, cancels)
+	}
+	if row := r.row("S1"); row.State != store.StateWorking || row.Version != 1 || row.SignalID != sid {
+		t.Fatalf("the working market_in_zone row must stay working under v1: %+v", row)
+	}
+	if n, _ := store.SystemCounter(r.st, "arm:respec_cancel"); n != respec {
+		t.Fatalf("arm:respec_cancel must not move for a market_in_zone entry (%d → %d)", respec, n)
+	}
+	if n, _ := store.SystemCounter(r.st, "market_in_zone:zone_moved"); n != moved {
+		t.Fatalf("the zone did not move, so market_in_zone:zone_moved must not move (%d → %d)", moved, n)
+	}
+}
+
+// FOLD-1 on a LEGACY (policy "") row at the production call site: the legacy
+// limit rests AT its authored entry too, so v2 moving only that entry
+// 100.00 → 99.50 cancels it once as "entry re-spec by v2: E 100.00→99.50",
+// counted under arm:respec_cancel.
+func TestLegacyWorkingArmEntryRespecByNewVersionCancelsTheOrder(t *testing.T) {
+	r := newZoneRig(t, "w1b-respec-entry-legacy", zoneDoc(zoneScenario("S1", "", zone, false)))
+	sid := r.placeWorking(100).SignalID
+	if row := r.row("S1"); row.Policy != "" || row.EntryPx != 100 {
+		t.Fatalf("fixture: the row must be a legacy limit at 100.00: %+v", row)
+	}
+	before, _ := store.SystemCounter(r.st, "arm:respec_cancel")
+	r.entryVersionFor("", 99.5)
+	t1 := r.now.Add(time.Minute)
+	r.restingBook(t1, sid, 100)
+	r.setTape(zoneTape(101.95, t1, 0))
+	r.at.maybeManageArmedOrdersAt(nil, t1)
+	sigs, cancels := r.drain()
+	if len(cancels) != 1 || cancels[0].SignalID != sid || len(sigs) != 0 {
+		t.Fatalf("a re-priced legacy entry must cancel the working order %s exactly once and place nothing: sigs=%+v cancels=%+v", sid, sigs, cancels)
+	}
+	if row := r.row("S1"); row.State != store.StateCancelPending || !strings.Contains(row.StateReason, "entry re-spec by v2: E 100.00→99.50") {
+		t.Fatalf("the legacy row must be cancel_pending naming the AUTHORED entry change: %+v", row)
+	}
+	if n, _ := store.SystemCounter(r.st, "arm:respec_cancel"); n != before+1 {
+		t.Fatalf("the legacy entry re-spec cancel must be counted once (%d → %d)", before, n)
 	}
 }
 
