@@ -1,6 +1,7 @@
 package updaterwire
 
 import (
+	"encoding/json"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -57,6 +58,47 @@ const resumeWireDir = "internal/updaterwire"
 
 // resumeFrameRe matches a hand-spelled resume frame inside a string literal.
 var resumeFrameRe = regexp.MustCompile(`"verb"\s*:\s*"resume"`)
+
+// spellsResume reports whether a string literal's (Go-unquoted) value spells a
+// resume frame: the raw fragment rule, or — when the value is JSON — a "verb"
+// key whose value DECODES to resume anywhere in it. JSON escapes (a unicode
+// escape inside the key or the value) are what DecodeRequest reads, not what
+// a regex sees (U2 verifier defect 1).
+func spellsResume(s string) bool {
+	if resumeFrameRe.MatchString(s) {
+		return true
+	}
+	var v any
+	if json.Unmarshal([]byte(s), &v) != nil {
+		return false
+	}
+	return jsonSpellsResume(v)
+}
+
+// jsonSpellsResume walks a decoded JSON value; a string inside it is judged
+// again, so a frame encoded inside a JSON string is seen too.
+func jsonSpellsResume(v any) bool {
+	switch v := v.(type) {
+	case map[string]any:
+		for k, e := range v {
+			if s, ok := e.(string); ok && k == "verb" && s == "resume" {
+				return true
+			}
+			if jsonSpellsResume(e) {
+				return true
+			}
+		}
+	case []any:
+		for _, e := range v {
+			if jsonSpellsResume(e) {
+				return true
+			}
+		}
+	case string:
+		return spellsResume(v)
+	}
+	return false
+}
 
 type resumeCensus struct {
 	offenders []string
@@ -145,7 +187,7 @@ func resumeBuilderCensus(root string) (resumeCensus, error) {
 				}
 			case *ast.BasicLit:
 				if x.Kind == token.STRING {
-					if s, err := strconv.Unquote(x.Value); err == nil && resumeFrameRe.MatchString(s) {
+					if s, err := strconv.Unquote(x.Value); err == nil && spellsResume(s) {
 						hits[rel+": spells a resume frame"] = true
 					}
 				}
@@ -271,6 +313,52 @@ func TestResumeBuilderCensusSeesEveryForm(t *testing.T) {
 	for _, dir := range censuswalk.NestedProbeDirs() {
 		cases = append(cases, struct{ name, rel, body, want string }{
 			"nested " + dir, dir + "/resume.go", imp(censuswalk.PackageName(dir), "", ctor), "names updaterwire.NewResume",
+		})
+	}
+
+	// U2 verifier defect 1: frames with NO raw `"verb":"resume"` in them that
+	// the PRODUCTION codec still decodes to exactly NewResume(job) — JSON
+	// escapes are what DecodeRequest reads, not what a regex sees. The codec
+	// proof first, so no case here is a strawman.
+	wantFrame, err := EncodeRequest(NewResume("job-0001abcd"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// jsonU spells a JSON unicode escape (backslash, u, four hex) at run time,
+	// so no editor or tool that decodes escapes can quietly turn a case back
+	// into the raw form the regex already sees — the guard below proves it.
+	jsonU := func(hex string) string { return `\` + "u" + hex }
+	for _, f := range []struct{ name, frame string }{
+		{"JSON-escaped verb value", `{"v":1,"verb":"` + jsonU("0072") + `esume","payload":{"job_id":"job-0001abcd"}}`},
+		{"JSON-escaped verb key", `{"v":1,"v` + jsonU("0065") + `rb":"resume","payload":{"job_id":"job-0001abcd"}}`},
+	} {
+		if strings.Contains(f.frame, `"verb":"resume"`) {
+			t.Fatalf("%s is not escaped, the case proves nothing: %s", f.name, f.frame)
+		}
+		r, err := DecodeRequest([]byte(f.frame))
+		got, eerr := EncodeRequest(r)
+		if err != nil || eerr != nil || string(got) != string(wantFrame) {
+			t.Fatalf("%s: the codec must read %s as a resume (decode %v, encode %v, frame %q)", f.name, f.frame, err, eerr, got)
+		}
+		cases = append(cases, struct{ name, rel, body, want string }{
+			f.name, "api/resume.go", "package api\n\nconst f = `" + f.frame + "`\n", "spells a resume frame",
+		})
+	}
+	inner, err := json.Marshal(`{"v` + jsonU("0065") + `rb":"resume"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases = append(cases, struct{ name, rel, body, want string }{
+		"escaped frame inside a JSON string", "api/resume.go", "package api\n\nconst f = `{\"frames\":[" + string(inner) + "]}`\n", "spells a resume frame",
+	})
+	for _, ok := range []struct{ name, rel, body string }{
+		{"JSON naming another verb", "agent/x.go", "package agent\n\nconst f = `{\"v\":1,\"verb\":\"status\",\"payload\":{}}`\n"},
+		{"a receipt step called resume", "internal/updaterworker/receipt.go", "package updaterworker\n\nconst f = `{\"step\":\"resume\",\"resumed_at\":\"2026-09-24T10:00:00Z\"}`\n"},
+	} {
+		t.Run("admitted "+ok.name, func(t *testing.T) {
+			if c := census(t, ok.rel, ok.body); len(c.offenders) != 0 {
+				t.Fatalf("%s must be admitted, census offenders = %v", ok.rel, c.offenders)
+			}
 		})
 	}
 	for _, tc := range cases {
