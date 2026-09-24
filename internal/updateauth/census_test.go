@@ -447,9 +447,11 @@ func updateAuthOffenders(root string) (offenders []string, scanned int, err erro
 //     declaration is the FIRST argument of exactly one of:
 //     <import name>.VerifyMAC(key, …), with the import name not re-declared
 //     in the declaration; <admin>.PasswordStillBound(key, …), where <admin>
-//     is the `:=` result of <import name>.LoadAdmin, the call sits inside
-//     that binding's scope after it, and the name is declared nowhere else
-//     in the declaration; or clear(key) with clear the builtin (declared
+//     is the `:=` result of <import name>.LoadAdmin with THAT import name
+//     not re-declared in the declaration either (census-repair verify P2: a
+//     fake bound after a shadowing `updateauth := …` received the key), the
+//     call sits inside that binding's scope after it, and the name is
+//     declared nowhere else in the declaration; or clear(key) with clear the builtin (declared
 //     neither in the declaration nor at the package's top level).
 //
 // It is judged by NAME, not by type: a second variable that happens to share
@@ -492,6 +494,7 @@ func keyFlowOffenders(rel string, fset *token.FileSet, f *ast.File, aliases map[
 		keyBinds := map[*ast.Ident]bool{}
 		keyNames := map[string]bool{}
 		adminBinds := map[*ast.Ident]*ast.AssignStmt{}
+		adminVia := map[*ast.Ident]string{} // the import name each LoadAdmin binding was called through
 		ast.Inspect(decl, func(n ast.Node) bool {
 			sel, ok := n.(*ast.SelectorExpr)
 			if !ok {
@@ -511,6 +514,7 @@ func keyFlowOffenders(rel string, fset *token.FileSet, f *ast.File, aliases map[
 			case "LoadAdmin":
 				if id, as := boundBy(sel); id != nil {
 					adminBinds[id] = as
+					adminVia[id] = sel.X.(*ast.Ident).Name
 				}
 			}
 			return true
@@ -605,7 +609,7 @@ func keyFlowOffenders(rel string, fset *token.FileSet, f *ast.File, aliases map[
 					return false
 				}
 				for b, as := range adminBinds {
-					if b.Name == x.Name && inScopeOf(call, as) &&
+					if b.Name == x.Name && inScopeOf(call, as) && !declaredOther(adminVia[b], nil) &&
 						!declaredOther(x.Name, func(d *ast.Ident) bool { _, isBind := adminBinds[d]; return isBind && d.Name == b.Name }) {
 						return true
 					}
