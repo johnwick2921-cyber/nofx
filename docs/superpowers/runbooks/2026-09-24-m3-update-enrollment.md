@@ -4,7 +4,7 @@
 
 **What this is:** the owner's procedure for binding this installation's update administrator (**enroll**), re-binding it after a password change (**enroll --replace**), and taking the binding away again (**un-enroll**). It also covers what a refusal looks like and where its cause is logged.
 
-**Owner-attended, on the box, as the bot's own user.** No API creates, resets or reads the enrollment. Nothing here restarts the bot or touches trading.
+**Owner-attended, on the box, as the bot's own user.** No API creates or resets the enrollment. The `/updates` gate READS `admin.json` and `device.key` on every `/api/updates*` request, read-only (that is why enrolling needs no restart). Nothing here restarts the bot or touches trading.
 
 ## What M3 does and does not do
 
@@ -120,6 +120,8 @@ Keep `hold.json`, which is the maintenance hold. `seen_job_ids.json` may stay: i
 ## Known limits (named, not implied)
 
 - **Loopback-direct only.** A relay that adds no forwarding header is indistinguishable from a local client. Do not put a proxy or tunnel in front of `/api/updates`.
+- **WSL2 mirrored networking makes the whole machine the transport boundary.** This box needs mirrored mode so the bot can reach NT8. In that mode a process on the WINDOWS host arrives at the bot as a loopback peer. "Loopback" therefore means "anything on this physical machine", not "this Linux user". The factors that still stand are the enrolled admin's session (JWT), the `X-NOFX-Update` header, and the HMAC that only `updater-bootstrap authorize` can compute from `device.key`.
+- **Logout is process-lifetime.** The logout blacklist lives in the bot's memory. A bot restart forgets it, so a session logged out before the restart is accepted again until its expiry + 60 s. A password change is the durable way to end sessions: it moves the credential epoch, which is stored.
 - **Vite dev server.** Under `npm run dev` (`:3000`, proxy `changeOrigin: true`), the POSTs (`/check`, `/install`) read `cross-origin`. Production is same-origin: Go serves `web/dist`.
 - **The receipt link** is a plain `<a href>`, which cannot carry the header or the bearer token. In M3 every job id is `404`; M4/M5 must fetch receipts through the client.
 - **The census is a belt, not the boundary.** The worker shares the key file's UID. The boundary is the file mode, the attended enrollment and, later, the isolated host (M1 §8). "Nothing API-side mints a MAC" is enforced by a syntactic census with its named limits, never proven.
