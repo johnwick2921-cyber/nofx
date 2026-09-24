@@ -117,6 +117,12 @@ type ReleaseFacts struct {
 	// AddonBuildID is manifest addon.build_id verbatim ("" absent, "n/a" passes
 	// through — the nt8 rule refuses both).
 	AddonBuildID string
+	// Artifacts is the signed manifest's artifacts[] as path → sha256 (the
+	// adapter copies U3's SignedManifest.Artifacts). The nt8 rule reads the
+	// ninjascript/*.cs entries (C12) and the boot check reads
+	// web/dist/index.html (OQ-6 R-b) from HERE — the signed bytes, re-verified
+	// at the step that reads them — never from a file's name or date.
+	Artifacts map[string]string
 }
 
 // Reverifier re-proves a release the attended fetch verified. The job's
@@ -130,7 +136,9 @@ type Reverifier interface {
 	// (U3 RehashRelease(v.ReleaseDir, v.ManifestSHA256)); returns the count.
 	Rehash(v Verdict) (int, error)
 	// Reverify re-verifies the SSHSIG over the signed manifest against the
-	// installation's allowed-signers file NOW (U3 ReverifyRelease).
+	// installation's allowed-signers file NOW (U3 ReverifyRelease) and binds
+	// the result to the verdict: the adapter refuses unless the signed
+	// manifest's sha256 and source_sha are the verdict's (U3 verifier defect 6).
 	Reverify(v Verdict) (ReleaseFacts, error)
 }
 
