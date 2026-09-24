@@ -216,6 +216,18 @@ func TestSSHSIGRefusesWrongPrincipal(t *testing.T) {
 	t.Run("a negated principal", func(t *testing.T) {
 		refuseBoth(t, writeAllowedSigners(t, f.dir, "!release "+f.signer.pub), sig, f.msg, false, ErrSigPrincipal)
 	})
+	// A list that names release AND negates a pattern matching it: ssh-keygen
+	// refuses (a matching negation wins); so must we — never looser (verifier D1).
+	for _, list := range []string{"release,!release", "release,!*", "release,!rel*"} {
+		t.Run("a list that names and negates release: "+list, func(t *testing.T) {
+			refuseBoth(t, writeAllowedSigners(t, f.dir, list+" "+f.signer.pub), sig, f.msg, false, ErrSigPrincipal)
+		})
+	}
+	// Any negation on the line admits nothing here, even one that cannot match
+	// release (ssh-keygen honours "!foo,release"; we do not implement patterns).
+	t.Run("a list with a negation ssh-keygen honours", func(t *testing.T) {
+		refuseBoth(t, writeAllowedSigners(t, f.dir, "!foo,release "+f.signer.pub), sig, f.msg, true, ErrSigPrincipal)
+	})
 	// ssh-keygen matches principals as PATTERNS; we match the exact name only.
 	t.Run("a wildcard principal ssh-keygen honours", func(t *testing.T) {
 		refuseBoth(t, writeAllowedSigners(t, f.dir, "rel* "+f.signer.pub), sig, f.msg, true, ErrSigPrincipal)
