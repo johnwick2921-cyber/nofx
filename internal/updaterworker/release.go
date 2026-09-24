@@ -28,7 +28,7 @@ package updaterworker
 //  5. re-hashes EVERY artifacts[] entry (size and sha256) and refuses any
 //     extra, missing or changed file — only the signed pair itself is exempt;
 //  6. requires the layout: nofx-bin, web/dist/index.html and deploy/RELEASE
-//     listed, deploy/RELEASE naming source_sha;
+//     listed, nofx-bin owner-executable, deploy/RELEASE naming source_sha;
 //  7. materializes activation's layout in the staging dir: RELEASE (a copy of
 //     deploy/RELEASE), manifest.json = {source_sha, binary_md5 (computed),
 //     signature_verdict "sshsig:release:SHA256:…"}, and the signed pair moved
@@ -737,6 +737,11 @@ func checkArchiveLayout(root *os.Root, m SignedManifest) error {
 		if !listed[need] {
 			return fmt.Errorf("%w: the manifest lists no %s", ErrLayout, need)
 		}
+	}
+	// the manifest hashes contents, not modes: a binary nobody can execute
+	// would pass every hash and fail only after the activation had killed the bot
+	if fi, err := root.Lstat(binaryName); err != nil || !fi.Mode().IsRegular() || fi.Mode().Perm()&0o100 == 0 {
+		return fmt.Errorf("%w: %s is not an owner-executable regular file (%v, %v)", ErrLayout, binaryName, fi, err)
 	}
 	marker, err := readRegular(root, archiveMarker, 4096)
 	if err != nil {

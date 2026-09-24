@@ -610,6 +610,12 @@ func TestVerdictWrittenOnlyAfterEveryCheck(t *testing.T) {
 		}, nil, ErrUnsafeEntry},
 		"extra artifact":         {nil, &releaseOpts{afterSign: func(t *testing.T, s string) { writeFiles(t, s, map[string]string{"x": "x"}) }}, ErrArtifactMismatch},
 		"no web/dist/index.html": {nil, &releaseOpts{noIndex: true}, ErrLayout},
+		// modes are not hashed: chmod after signing changes no sha256
+		"nofx-bin not executable": {nil, &releaseOpts{afterSign: func(t *testing.T, s string) {
+			if err := os.Chmod(filepath.Join(s, "nofx-bin"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}}, ErrLayout},
 		"archive absent": {func(t *testing.T, e fetchEnv, c *FetchConfig) {
 			c.Archive = filepath.Join(t.TempDir(), "absent.tar.gz")
 		}, nil, ErrFetchConfig},
