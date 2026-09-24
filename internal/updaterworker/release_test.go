@@ -654,8 +654,8 @@ func TestVerdictWrittenOnlyAfterEveryCheck(t *testing.T) {
 		e := newFetchEnv(t)
 		keep := filepath.Join(e.releaseRoot, testSHA)
 		writeFiles(t, keep, map[string]string{"sentinel": "the running release"})
-		if _, err := FetchRelease(e.cfg(good)); !errors.Is(err, ErrReleaseDirExists) {
-			t.Fatalf("err = %v, want ErrReleaseDirExists", err)
+		if _, err := FetchRelease(e.cfg(good)); !errors.Is(err, ErrReleaseDirExists) || !strings.Contains(err.Error(), "never overwritten") {
+			t.Fatalf("err = %v, want ErrReleaseDirExists from the early check (\"never overwritten\")", err)
 		}
 		if got := dirNames(t, e.releaseRoot); len(got) != 1 || got[0] != testSHA {
 			t.Fatalf("release root = %v, want only the pre-existing %s", got, testSHA)
@@ -667,14 +667,16 @@ func TestVerdictWrittenOnlyAfterEveryCheck(t *testing.T) {
 			t.Fatalf("verdict written for a refused fetch")
 		}
 	})
-	// an EMPTY dir under the sha is refused too (rename(2) would silently replace it)
+	// an EMPTY dir under the sha is refused too, by the explicit early check.
+	// (Go's os.Rename also refuses an existing directory destination on Unix —
+	// EEXIST — so it is a third layer, behind the check before the rename.)
 	t.Run("release dir already exists (empty)", func(t *testing.T) {
 		e := newFetchEnv(t)
 		if err := os.Mkdir(filepath.Join(e.releaseRoot, testSHA), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := FetchRelease(e.cfg(good)); !errors.Is(err, ErrReleaseDirExists) {
-			t.Fatalf("err = %v, want ErrReleaseDirExists", err)
+		if _, err := FetchRelease(e.cfg(good)); !errors.Is(err, ErrReleaseDirExists) || !strings.Contains(err.Error(), "never overwritten") {
+			t.Fatalf("err = %v, want ErrReleaseDirExists from the early check (\"never overwritten\")", err)
 		}
 		if got := dirNames(t, filepath.Join(e.releaseRoot, testSHA)); len(got) != 0 {
 			t.Fatalf("the pre-existing empty release dir was filled: %v", got)
