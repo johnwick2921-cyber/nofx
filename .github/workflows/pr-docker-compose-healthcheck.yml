@@ -42,6 +42,28 @@ jobs:
           JWT_SECRET=test-jwt-secret-minimum-32-chars
           EOF
 
+          # CLASS 251: this file has never produced a green run. The backend
+          # FATALs at boot — "failed to load RSA private key: environment
+          # variable RSA_PRIVATE_KEY not set" (main.go:60) — and restarts until
+          # the healthcheck times out, because the .env above predates the key
+          # becoming mandatory. Four runs in this workflow's life, all red, and
+          # nobody saw it: its paths filter is narrow enough that almost nothing
+          # triggers it.
+          #
+          # An EPHEMERAL key, exactly as deploy/release/db-compat.sh mints one
+          # for its throwaway boots: generated fresh per run, used only by this
+          # container, never persisted and never echoed (A25). crypto/crypto.go:30
+          # documents the format as PEM with literal \n for newlines, so the
+          # PEM is folded onto one line here.
+          openssl genrsa -out /tmp/healthcheck-rsa.pem 2048 >/dev/null 2>&1 \
+            || { echo "::error::cannot generate an ephemeral RSA key (openssl missing?)"; exit 1; }
+          chmod 600 /tmp/healthcheck-rsa.pem
+          # Written straight into .env — the key itself never reaches stdout.
+          printf 'RSA_PRIVATE_KEY=%s\n' \
+            "$(awk '{printf "%s\\n", $0}' /tmp/healthcheck-rsa.pem)" >> .env
+          rm -f /tmp/healthcheck-rsa.pem
+          echo "wrote an ephemeral RSA_PRIVATE_KEY into .env ($(grep -c . .env) lines total)"
+
       - name: Create minimal config.json
         run: |
           cat > config.json <<EOF

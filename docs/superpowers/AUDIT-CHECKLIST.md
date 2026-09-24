@@ -10,7 +10,7 @@ in CLAUDE.md).
 
 ## PART 1 — THE BUG CLASSES (name · root cause · probe · law)
 
-*Highest occupied class: **250** (2026-09-24). Numbers are assigned AT MERGE and
+*Highest occupied class: **251** (2026-09-24). Numbers are assigned AT MERGE and
 never renumbered; a gap means a wave took a later slot to avoid a collision.*
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
@@ -6977,3 +6977,15 @@ At HEAD `c4111476` (FOLD-3 + FOLD-10) the NT8 decision path is: `executeOpen*Wit
 **Fixed in 3a:** every producer supplies the input (step `env:` from the head sha; `ARG`+`ENV` above the `RUN` in `Dockerfile.frontend`; `build-args` in both image workflows; `args:` in compose using `${VITE_GUIDE_BUILT_REV:?…}` so compose REFUSES loudly rather than building an unstamped guide; job-level `env:` in the healthcheck workflow because `compose down` reads the same file). Pinned by `TestEveryProductionFrontendBuildSuppliesTheGuideRev` + the compose and workflow boundary tests, which scan `.github/workflows/`, `docker/`, `docker-compose*.yml` and `deploy/`, skip comment lines (the pin failed on its own explanatory comments first), and carry a NAMED exemption for `pr-checks-comment.yml` with the reason — an unexplained exemption is how a real producer gets waved through later (CLASS 242). `deploy/release/README.md` lists the producers so the next one added knows the input exists.
 
 **Probe:** when you add a required build input, enumerate every place that produces the artifact — workflows, Dockerfiles, compose, deploy scripts, the manual boot procedure — and make the enumeration a TEST, not a list in a PR. Prove the guard fires (negative) AND that every producer satisfies it (positive); the second is the one that gets skipped, because the first feels like proof. And a census that stops at its first finding is not a census: report all, or you will fix what you found and ship what you did not.
+
+## CLASS 251 — a check with no census of WHEN IT RUNS
+
+**Found:** 2026-09-24, WAVE 3a [A]. `Test Docker Compose Healthcheck` failed on PR #199. It was not caused by the PR: `gh run list --workflow=pr-docker-compose-healthcheck.yml` returns FOUR runs in the workflow's entire life and **all four are failures** — three on an unrelated branch on 2026-09-13, one here. It has never once been green. The cause is one missing line: its "Create minimal .env for testing" step writes `DATA_ENCRYPTION_KEY` and `JWT_SECRET` and never `RSA_PRIVATE_KEY`, so since that key became mandatory the backend has FATALed at `main.go:60` and restart-looped until the healthcheck timed out. What hid it is the paths filter — `docker-compose.yml`, `docker/Dockerfile.frontend`, the workflow itself — narrow enough that months pass between triggers. A wave that touches none of those never sees it, and the one that does assumes it broke it.
+
+**The inverse of CLASS 250.** There, a guard had no census of its PRODUCERS: many places had to satisfy it and nobody enumerated them. Here, a check has no census of its TRIGGERS: it almost never runs, so its permanent redness is invisible. Both are failures of enumeration, and both stay hidden for the same reason — the event that would reveal them is rare.
+
+**A check that has never been green is not a check.** It is a name in a list. Worse, it teaches every lane that hits it to treat that name as noise, which is exactly the habit that lets a real failure through later.
+
+**Fixed in 3a:** the step mints an EPHEMERAL RSA key per run (`openssl genrsa` into a 600-mode temp file, folded to one line with literal `\n` as `crypto/crypto.go:30` documents, written straight into `.env`, the file removed and the key never echoed — A25), exactly as `deploy/release/db-compat.sh` does for its throwaway boots. Both PEM encodings are accepted by the loader (`ParsePKCS1PrivateKey` / `ParsePKCS8PrivateKey`, `crypto/crypto.go:117-119`), verified by reading the parser rather than assuming the header.
+
+**Probe:** for every workflow in `.github/workflows/`, name what triggers it and when it last ran GREEN — `gh run list --workflow=<file>` answers both in one line. A workflow with no green run in its history is broken or vestigial; decide which and act, rather than leaving a red name that everyone learns to ignore. Treat "this check has always been red" as a finding, never as context.
