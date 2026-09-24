@@ -38,8 +38,10 @@ package updaterworker
 //  9. renames the staging dir to <release_root>/<source_sha> (refused if that
 //     exists — it may be the running release);
 //  10. writes <data>/updater/verdicts/<release_id>.json (0600, dirs 0700,
-//     no-clobber link). If THAT fails, the just-renamed release dir is removed:
-//     no release dir survives without its verdict.
+//     no-clobber link) — the updaterjob.Verdict the app-side reader
+//     (updaterjob.ReadVerdict) accepts; this package is its ONLY writer. If
+//     THAT fails, the just-renamed release dir is removed: no release dir
+//     survives without its verdict.
 //
 // Any refusal removes the staging dir; nothing outside it is ever written
 // before step 9.
@@ -65,6 +67,7 @@ import (
 	"syscall"
 	"time"
 
+	"nofx/internal/updaterjob"
 	"nofx/internal/updaterwire"
 )
 
@@ -78,18 +81,14 @@ var (
 	ErrLayout           = errors.New("release: release layout is incomplete or inconsistent")
 	ErrReleaseDirExists = errors.New("release: the release directory already exists")
 	ErrVerdictExists    = errors.New("release: a verdict already exists for this release id")
-	ErrVerdict          = errors.New("release: verdict file is unreadable or malformed")
+	ErrVerdictWrite     = errors.New("release: the verdict could not be written")
 )
 
 const (
-	// VerdictSchema is the verdict file's schema version.
-	VerdictSchema = 1
-
 	// Limits: an archive over any of them is refused, never truncated.
 	MaxArchiveEntries = 20000
 	MaxReleaseBytes   = 2 << 30 // total uncompressed bytes of regular files
 	MaxManifestBytes  = 8 << 20
-	maxVerdictBytes   = 64 << 10
 	maxTrailingBytes  = 1 << 20 // tar record padding after the end-of-archive blocks
 	maxPathBytes      = 1024
 	maxElementBytes   = 255
@@ -99,14 +98,13 @@ const (
 	signedSigName      = "manifest.json.sig"
 	// The materialized layout (activation.Resolve: <dir>/{nofx-bin, web/dist,
 	// RELEASE, manifest.json}) plus the signed pair kept under signed/.
-	signedDir       = "signed"
-	activationMfst  = "manifest.json"
-	releaseMarker   = "RELEASE"
-	archiveMarker   = "deploy/RELEASE"
-	binaryName      = "nofx-bin"
-	distIndex       = "web/dist/index.html"
-	verdictsDirName = "verdicts"
-	stagingPrefix   = ".fetch-"
+	signedDir      = "signed"
+	activationMfst = "manifest.json"
+	releaseMarker  = "RELEASE"
+	archiveMarker  = "deploy/RELEASE"
+	binaryName     = "nofx-bin"
+	distIndex      = "web/dist/index.html"
+	stagingPrefix  = ".fetch-"
 )
 
 var (
@@ -131,22 +129,6 @@ type SignedManifest struct {
 	SHA256       string // sha256 of the signed manifest bytes
 }
 
-// ReleaseVerdict is the verdict file <data>/updater/verdicts/<release_id>.json
-// (brief §3.2). The app-side reader (U1's internal/updaterjob) must accept
-// exactly these keys; TestFetchMaterializesTheActivationLayout pins the set.
-type ReleaseVerdict struct {
-	Schema            int    `json:"schema"`
-	ReleaseID         string `json:"release_id"`
-	SourceSHA         string `json:"source_sha"`
-	ReleaseDir        string `json:"release_dir"`
-	Signer            string `json:"signer"`
-	SignerFingerprint string `json:"signer_fingerprint"`
-	HashAlg           string `json:"hashalg"`
-	ManifestSHA256    string `json:"manifest_sha256"`
-	Artifacts         int    `json:"artifacts"`
-	VerifiedAt        string `json:"verified_at"` // RFC3339Nano, UTC
-}
-
 // FetchConfig is everything FetchRelease reads; it reads no environment.
 type FetchConfig struct {
 	Archive        string           // the local <release_id>.tar.gz (a path, never a URL)
@@ -166,31 +148,31 @@ type activationManifest struct {
 
 // FetchRelease materializes and verifies a local release archive and writes
 // its verdict (see the file comment for the exact order).
-func FetchRelease(cfg FetchConfig) (ReleaseVerdict, error) {
+func FetchRelease(cfg FetchConfig) (updaterjob.Verdict, error) {
 	// 1. the verdict comes first: nothing else is looked at for an id that has one
-	vpath, err := VerdictPath(cfg.DataDir, cfg.ReleaseID)
+	vpath, err := updaterjob.VerdictPath(cfg.DataDir, cfg.ReleaseID)
 	if err != nil {
-		return ReleaseVerdict{}, err
+		return updaterjob.Verdict{}, fmt.Errorf("%w: %w", ErrFetchConfig, err)
 	}
 	if _, err := os.Lstat(vpath); err == nil {
-		return ReleaseVerdict{}, fmt.Errorf("%w: %s (written once; remove it by hand to re-fetch)", ErrVerdictExists, vpath)
+		return updaterjob.Verdict{}, fmt.Errorf("%w: %s (written once; remove it by hand to re-fetch)", ErrVerdictExists, vpath)
 	} else if !errors.Is(err, fs.ErrNotExist) {
-		return ReleaseVerdict{}, fmt.Errorf("%w: cannot tell whether %s exists: %w", ErrVerdictExists, vpath, err)
+		return updaterjob.Verdict{}, fmt.Errorf("%w: cannot tell whether %s exists: %w", ErrVerdictExists, vpath, err)
 	}
 	if err := checkRealDir(cfg.DataDir, false); err != nil {
-		return ReleaseVerdict{}, fmt.Errorf("%w: data dir: %w", ErrFetchConfig, err)
+		return updaterjob.Verdict{}, fmt.Errorf("%w: data dir: %w", ErrFetchConfig, err)
 	}
 	if !filepath.IsAbs(cfg.ReleaseRoot) {
-		return ReleaseVerdict{}, fmt.Errorf("%w: release root %q is not absolute", ErrFetchConfig, cfg.ReleaseRoot)
+		return updaterjob.Verdict{}, fmt.Errorf("%w: release root %q is not absolute", ErrFetchConfig, cfg.ReleaseRoot)
 	}
 	if err := checkRealDir(cfg.ReleaseRoot, true); err != nil {
-		return ReleaseVerdict{}, fmt.Errorf("%w: release root: %w", ErrFetchConfig, err)
+		return updaterjob.Verdict{}, fmt.Errorf("%w: release root: %w", ErrFetchConfig, err)
 	}
 	if cfg.AllowedSigners == "" {
-		return ReleaseVerdict{}, fmt.Errorf("%w: no allowed-signers path", ErrFetchConfig)
+		return updaterjob.Verdict{}, fmt.Errorf("%w: no allowed-signers path", ErrFetchConfig)
 	}
 	if fi, err := os.Lstat(cfg.Archive); err != nil || !fi.Mode().IsRegular() {
-		return ReleaseVerdict{}, fmt.Errorf("%w: archive %q is not a regular file (%v)", ErrFetchConfig, cfg.Archive, err)
+		return updaterjob.Verdict{}, fmt.Errorf("%w: archive %q is not a regular file (%v)", ErrFetchConfig, cfg.Archive, err)
 	}
 	now := time.Now
 	if cfg.Now != nil {
@@ -200,7 +182,7 @@ func FetchRelease(cfg FetchConfig) (ReleaseVerdict, error) {
 	// 2. extract into a private staging dir inside the release root
 	staging, err := os.MkdirTemp(cfg.ReleaseRoot, stagingPrefix+cfg.ReleaseID+"-")
 	if err != nil {
-		return ReleaseVerdict{}, fmt.Errorf("%w: staging dir: %w", ErrFetchConfig, err)
+		return updaterjob.Verdict{}, fmt.Errorf("%w: staging dir: %w", ErrFetchConfig, err)
 	}
 	renamed := false
 	defer func() {
@@ -209,80 +191,80 @@ func FetchRelease(cfg FetchConfig) (ReleaseVerdict, error) {
 		}
 	}()
 	if err := extractArchive(cfg.Archive, staging); err != nil {
-		return ReleaseVerdict{}, err
+		return updaterjob.Verdict{}, err
 	}
 	root, err := os.OpenRoot(staging)
 	if err != nil {
-		return ReleaseVerdict{}, fmt.Errorf("%w: %w", ErrArchive, err)
+		return updaterjob.Verdict{}, fmt.Errorf("%w: %w", ErrArchive, err)
 	}
 	defer root.Close()
 
 	// 3. the signature over the signed bytes
 	mb, err := readRegular(root, signedManifestName, MaxManifestBytes)
 	if err != nil {
-		return ReleaseVerdict{}, fmt.Errorf("%w: %w", ErrManifest, err)
+		return updaterjob.Verdict{}, fmt.Errorf("%w: %w", ErrManifest, err)
 	}
 	sb, err := readRegular(root, signedSigName, MaxSignatureBytes)
 	if err != nil {
-		return ReleaseVerdict{}, fmt.Errorf("%w: %w", ErrManifest, err)
+		return updaterjob.Verdict{}, fmt.Errorf("%w: %w", ErrManifest, err)
 	}
 	sv, err := VerifySSHSIG(mb, sb, cfg.AllowedSigners)
 	if err != nil {
-		return ReleaseVerdict{}, err
+		return updaterjob.Verdict{}, err
 	}
 
 	// 4. the manifest
 	m, err := parseSignedManifest(mb)
 	if err != nil {
-		return ReleaseVerdict{}, err
+		return updaterjob.Verdict{}, err
 	}
 	if m.ReleaseID != cfg.ReleaseID {
-		return ReleaseVerdict{}, fmt.Errorf("%w: the signed manifest is release %q, not the %q asked for", ErrManifest, m.ReleaseID, cfg.ReleaseID)
+		return updaterjob.Verdict{}, fmt.Errorf("%w: the signed manifest is release %q, not the %q asked for", ErrManifest, m.ReleaseID, cfg.ReleaseID)
 	}
 	final := filepath.Join(cfg.ReleaseRoot, m.SourceSHA)
 	if _, err := os.Lstat(final); !errors.Is(err, fs.ErrNotExist) {
-		return ReleaseVerdict{}, fmt.Errorf("%w: %s (it may be the running release; never overwritten) (lstat: %v)", ErrReleaseDirExists, final, err)
+		return updaterjob.Verdict{}, fmt.Errorf("%w: %s (it may be the running release; never overwritten) (lstat: %v)", ErrReleaseDirExists, final, err)
 	}
 
 	// 5. every artifact, and nothing else (the signed pair alone is exempt)
 	if err := rehashTree(root, m.Artifacts, map[string]bool{signedManifestName: true, signedSigName: true}); err != nil {
-		return ReleaseVerdict{}, err
+		return updaterjob.Verdict{}, err
 	}
 
 	// 6. the layout the activation needs
 	if err := checkArchiveLayout(root, m); err != nil {
-		return ReleaseVerdict{}, err
+		return updaterjob.Verdict{}, err
 	}
 
 	// 7. materialize activation's layout
 	if err := materialize(root, m, sv); err != nil {
-		return ReleaseVerdict{}, err
+		return updaterjob.Verdict{}, err
 	}
 	if err := syncDir(staging); err != nil {
-		return ReleaseVerdict{}, fmt.Errorf("%w: %w", ErrArchive, err)
+		return updaterjob.Verdict{}, fmt.Errorf("%w: %w", ErrArchive, err)
 	}
 
 	// 8. the job's own re-proofs, over what was just materialized
 	if _, err := RehashRelease(staging, m.SHA256); err != nil {
-		return ReleaseVerdict{}, err
+		return updaterjob.Verdict{}, err
 	}
 	if _, _, err := ReverifyRelease(staging, cfg.AllowedSigners, cfg.ReleaseID); err != nil {
-		return ReleaseVerdict{}, err
+		return updaterjob.Verdict{}, err
 	}
 
 	// 9. into place
 	if _, err := os.Lstat(final); !errors.Is(err, fs.ErrNotExist) {
-		return ReleaseVerdict{}, fmt.Errorf("%w: %s appeared during the fetch", ErrReleaseDirExists, final)
+		return updaterjob.Verdict{}, fmt.Errorf("%w: %s appeared during the fetch", ErrReleaseDirExists, final)
 	}
 	if err := os.Rename(staging, final); err != nil {
-		return ReleaseVerdict{}, fmt.Errorf("%w: %s: %w", ErrReleaseDirExists, final, err)
+		return updaterjob.Verdict{}, fmt.Errorf("%w: %s: %w", ErrReleaseDirExists, final, err)
 	}
 	renamed = true
 	_ = syncDir(cfg.ReleaseRoot)
 
 	// 10. the verdict — last, and only now
-	v := ReleaseVerdict{
-		Schema:            VerdictSchema,
+	v := updaterjob.Verdict{
+		Schema:            updaterjob.VerdictSchema,
 		ReleaseID:         m.ReleaseID,
 		SourceSHA:         m.SourceSHA,
 		ReleaseDir:        final,
@@ -297,7 +279,7 @@ func FetchRelease(cfg FetchConfig) (ReleaseVerdict, error) {
 		// no release dir survives without its verdict
 		_ = os.RemoveAll(final)
 		_ = syncDir(cfg.ReleaseRoot)
-		return ReleaseVerdict{}, err
+		return updaterjob.Verdict{}, err
 	}
 	return v, nil
 }
@@ -402,59 +384,6 @@ func ReverifyRelease(releaseDir, allowedSigners, wantReleaseID string) (SignedMa
 			ErrLayout, am.Signature, am.SourceSHA, sv.String(), m.SourceSHA)
 	}
 	return m, sv, nil
-}
-
-// VerdictPath is <dataDir>/updater/verdicts/<releaseID>.json. It touches no
-// filesystem; it refuses a relative data dir and any id the wire refuses.
-func VerdictPath(dataDir, releaseID string) (string, error) {
-	if dataDir == "" || !filepath.IsAbs(dataDir) {
-		return "", fmt.Errorf("%w: data dir %q is not absolute", ErrFetchConfig, dataDir)
-	}
-	if !updaterwire.ValidReleaseID(releaseID) {
-		return "", fmt.Errorf("%w: release id %q is not a valid release id", ErrFetchConfig, releaseID)
-	}
-	return filepath.Join(filepath.Clean(dataDir), updaterwire.UpdaterDirName, verdictsDirName, releaseID+".json"), nil
-}
-
-// ReadReleaseVerdict reads and validates a verdict file: a private regular
-// file, exactly the schema's keys, schema 1, the id asked for, and every
-// field computed (never an empty stand-in).
-func ReadReleaseVerdict(dataDir, releaseID string) (ReleaseVerdict, error) {
-	p, err := VerdictPath(dataDir, releaseID)
-	if err != nil {
-		return ReleaseVerdict{}, err
-	}
-	fi, err := os.Lstat(p)
-	if err != nil {
-		return ReleaseVerdict{}, fmt.Errorf("%w: %w", ErrVerdict, err)
-	}
-	if !fi.Mode().IsRegular() || fi.Mode().Perm()&0o077 != 0 {
-		return ReleaseVerdict{}, fmt.Errorf("%w: %s is not a private regular file (%v)", ErrVerdict, p, fi.Mode())
-	}
-	f, err := os.Open(p)
-	if err != nil {
-		return ReleaseVerdict{}, fmt.Errorf("%w: %w", ErrVerdict, err)
-	}
-	defer f.Close()
-	b, err := io.ReadAll(io.LimitReader(f, maxVerdictBytes+1))
-	if err != nil || len(b) > maxVerdictBytes {
-		return ReleaseVerdict{}, fmt.Errorf("%w: %s unreadable or oversized (%v)", ErrVerdict, p, err)
-	}
-	dec := json.NewDecoder(bytes.NewReader(b))
-	dec.DisallowUnknownFields()
-	var v ReleaseVerdict
-	if err := dec.Decode(&v); err != nil {
-		return ReleaseVerdict{}, fmt.Errorf("%w: %s: %w", ErrVerdict, p, err)
-	}
-	if v.Schema != VerdictSchema || v.ReleaseID != releaseID || !sha40Re.MatchString(v.SourceSHA) ||
-		!filepath.IsAbs(v.ReleaseDir) || v.Signer != ReleaseSignaturePrincipal || !strings.HasPrefix(v.SignerFingerprint, "SHA256:") ||
-		v.HashAlg != ReleaseSignatureHashAlg || !sha256Re.MatchString(v.ManifestSHA256) || v.Artifacts <= 0 {
-		return ReleaseVerdict{}, fmt.Errorf("%w: %s: a field is absent or out of range: %+v", ErrVerdict, p, v)
-	}
-	if _, err := time.Parse(time.RFC3339Nano, v.VerifiedAt); err != nil {
-		return ReleaseVerdict{}, fmt.Errorf("%w: %s: verified_at: %w", ErrVerdict, p, err)
-	}
-	return v, nil
 }
 
 // ── extraction ────────────────────────────────────────────────────────────────
@@ -805,25 +734,29 @@ func readActivationManifest(root *os.Root) (activationManifest, error) {
 // verdicts/ are private dirs of this uid (created 0700 when absent, refused
 // when loose), the bytes are fsynced in a temp file, and link(2) publishes
 // them only if no verdict exists — a second writer gets ErrVerdictExists.
-func writeVerdict(dataDir, vpath string, v ReleaseVerdict) error {
+func writeVerdict(dataDir, vpath string, v updaterjob.Verdict) error {
+	// never write a verdict the app-side reader would refuse
+	if err := v.Check(); err != nil {
+		return fmt.Errorf("%w: %w", ErrVerdictWrite, err)
+	}
 	updaterDir := filepath.Join(filepath.Clean(dataDir), updaterwire.UpdaterDirName)
 	vdir := filepath.Dir(vpath)
 	for _, d := range []string{updaterDir, vdir} {
 		if err := os.Mkdir(d, 0o700); err != nil && !errors.Is(err, fs.ErrExist) {
-			return fmt.Errorf("%w: %s: %w", ErrVerdict, d, err)
+			return fmt.Errorf("%w: %s: %w", ErrVerdictWrite, d, err)
 		}
 		if err := updaterwire.CheckPrivateDir(d, os.Geteuid()); err != nil {
-			return fmt.Errorf("%w: %w", ErrVerdict, err)
+			return fmt.Errorf("%w: %w", ErrVerdictWrite, err)
 		}
 	}
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrVerdict, err)
+		return fmt.Errorf("%w: %w", ErrVerdictWrite, err)
 	}
 	b = append(b, '\n')
 	tmp, err := os.CreateTemp(vdir, ".verdict-*")
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrVerdict, err)
+		return fmt.Errorf("%w: %w", ErrVerdictWrite, err)
 	}
 	defer os.Remove(tmp.Name())
 	_, err = tmp.Write(b)
@@ -837,13 +770,13 @@ func writeVerdict(dataDir, vpath string, v ReleaseVerdict) error {
 		err = cerr
 	}
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrVerdict, err)
+		return fmt.Errorf("%w: %w", ErrVerdictWrite, err)
 	}
 	if err := os.Link(tmp.Name(), vpath); err != nil {
 		if errors.Is(err, fs.ErrExist) {
 			return fmt.Errorf("%w: %s", ErrVerdictExists, vpath)
 		}
-		return fmt.Errorf("%w: %w", ErrVerdict, err)
+		return fmt.Errorf("%w: %w", ErrVerdictWrite, err)
 	}
 	return syncDir(vdir)
 }
