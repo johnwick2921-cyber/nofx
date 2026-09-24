@@ -11,7 +11,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 // ── SSHSIG, cross-checked against the REAL ssh-keygen ─────────────────────────
@@ -301,6 +303,128 @@ func TestSSHSIGRefusesAnAbsentOrUnsafeAllowedSignersFile(t *testing.T) {
 	bad := writeAllowedSigners(t, f.dir, "release ssh-ed25519 not-base64!!", "#")
 	if _, err := VerifySSHSIG(f.msg, sig, bad); !errors.Is(err, ErrAllowedSignersBad) {
 		t.Fatalf("undecodable release key: err = %v, want ErrAllowedSignersBad", err)
+	}
+}
+
+// verifyWithin runs VerifySSHSIG and fails the test if it has not returned
+// within 10 s; unblock is called first so a stuck open can end.
+func verifyWithin(t *testing.T, msg, sig []byte, signers string, unblock func()) error {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() {
+		_, err := VerifySSHSIG(msg, sig, signers)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(10 * time.Second):
+		if unblock != nil {
+			unblock()
+		}
+		<-done
+		t.Fatalf("VerifySSHSIG blocked for 10 s opening the trust anchor %s", signers)
+		return nil
+	}
+}
+
+// unblockFifo opens a FIFO for writing (non-blocking: a reader is waiting)
+// and closes it, which ends a reader stuck in open(2).
+func unblockFifo(p string) func() {
+	return func() {
+		if w, err := os.OpenFile(p, os.O_WRONLY|syscall.O_NONBLOCK, 0); err == nil {
+			_ = w.Close()
+		}
+	}
+}
+
+// The trust anchor is judged and read as ONE file (verifier D7): a swap in
+// the window between the checks and the read must not change which keys are
+// trusted, nor hang the worker. The seam runs in that window; the file that
+// was checked lists only the real signer, while every swapped-in file lists
+// the FOREIGN key that signed the message.
+func TestSSHSIGReadsTheTrustAnchorItChecked(t *testing.T) {
+	f := newSigFixture(t)
+	foreign := newTestSigner(t, f.dir, "foreign")
+	sig := foreign.sign(t, f.msgPath, "release")
+	t.Cleanup(func() { signersCheckedHook = nil })
+	for name, c := range map[string]struct {
+		swap func(t *testing.T, anchor string) (unblock func())
+		want error
+	}{
+		"a regular file renamed over it": {func(t *testing.T, anchor string) func() {
+			evil := writeAllowedSigners(t, t.TempDir(), "release "+foreign.pub)
+			if err := os.Rename(evil, anchor); err != nil {
+				t.Fatal(err)
+			}
+			return nil
+		}, ErrSigForeignKey},
+		"a symlink to a loose file renamed over it": {func(t *testing.T, anchor string) func() {
+			d := t.TempDir()
+			evil := writeAllowedSigners(t, d, "release "+foreign.pub)
+			if err := os.Chmod(evil, 0o666); err != nil {
+				t.Fatal(err)
+			}
+			link := filepath.Join(d, "link")
+			if err := os.Symlink(evil, link); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Rename(link, anchor); err != nil {
+				t.Fatal(err)
+			}
+			return nil
+		}, ErrSigForeignKey},
+		"a FIFO renamed over it": {func(t *testing.T, anchor string) func() {
+			fifo := filepath.Join(t.TempDir(), "fifo")
+			if err := syscall.Mkfifo(fifo, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Rename(fifo, anchor); err != nil {
+				t.Fatal(err)
+			}
+			return unblockFifo(anchor)
+		}, ErrSigForeignKey},
+	} {
+		t.Run(name, func(t *testing.T) {
+			anchor := writeAllowedSigners(t, t.TempDir(), "release "+f.signer.pub)
+			var unblock func()
+			signersCheckedHook = func(p string) {
+				if p == anchor {
+					unblock = c.swap(t, anchor)
+				}
+			}
+			err := verifyWithin(t, f.msg, sig, anchor, func() {
+				if unblock != nil {
+					unblock()
+				}
+			})
+			signersCheckedHook = nil
+			if err == nil {
+				t.Fatalf("VerifySSHSIG ACCEPTED a foreign signature through a trust anchor swapped after its checks (%s)", name)
+			}
+			if !errors.Is(err, c.want) {
+				t.Fatalf("%s: err = %v, want %v (the keys of the file that was CHECKED)", name, err, c.want)
+			}
+		})
+	}
+	// control: the swapped-in regular file, read on its own, does admit the
+	// foreign key — so the refusal above is the swap being ignored, not a fixture
+	evil := writeAllowedSigners(t, t.TempDir(), "release "+foreign.pub)
+	if _, err := VerifySSHSIG(f.msg, sig, evil); err != nil {
+		t.Fatalf("control: the foreign allowed-signers file is refused on its own: %v", err)
+	}
+}
+
+// A FIFO at the trust anchor's path is refused, and never blocks the open.
+func TestSSHSIGRefusesAFifoTrustAnchorWithoutBlocking(t *testing.T) {
+	f := newSigFixture(t)
+	sig := f.signer.sign(t, f.msgPath, "release")
+	fifo := filepath.Join(t.TempDir(), "release_allowed_signers")
+	if err := syscall.Mkfifo(fifo, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyWithin(t, f.msg, sig, fifo, unblockFifo(fifo)); !errors.Is(err, ErrAllowedSignersUnsafe) {
+		t.Fatalf("FIFO allowed-signers: err = %v, want ErrAllowedSignersUnsafe", err)
 	}
 }
 
