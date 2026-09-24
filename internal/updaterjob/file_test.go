@@ -385,10 +385,13 @@ func TestReadRefusesUnsafeAndForgedFiles(t *testing.T) {
 	// refuse them): a job BORN mid-flight — parked at nt8_updated, where the
 	// attended resume would act on it — and one whose history skips a state.
 	born := Job{Schema: SchemaVersion, JobID: "job-0010", ReleaseID: "v1.2.0", State: StateNT8Updated, Phase: PhaseDone,
-		CreatedAt: t0, UpdatedAt: t0, Transitions: []Transition{{StateNT8Updated, PhaseDone, t0}}, Receipts: []Receipt{}}
+		CreatedAt: t0, UpdatedAt: t0, Transitions: []Transition{{State: StateNT8Updated, Phase: PhaseDone, At: t0}}, Receipts: []Receipt{}}
+	// (the done step carries its receipt and honest counts, so only the skip
+	// can refuse it — TestDoneStepCarriesItsReceipt owns the receipt rule)
 	skip := Job{Schema: SchemaVersion, JobID: "job-0010", ReleaseID: "v1.2.0", State: StatePreflightOK, Phase: PhaseStarted, Attempts: 1,
-		CreatedAt: t0, UpdatedAt: t0, Transitions: []Transition{{StateRequested, PhaseDone, t0}, {StateDownloaded, PhaseStarted, t0},
-			{StateDownloaded, PhaseDone, t0}, {StatePreflightOK, PhaseStarted, t0}}, Receipts: []Receipt{}}
+		CreatedAt: t0, UpdatedAt: t0, Transitions: []Transition{{State: StateRequested, Phase: PhaseDone, At: t0}, {State: StateDownloaded, Phase: PhaseStarted, At: t0},
+			{State: StateDownloaded, Phase: PhaseDone, At: t0, Receipts: 1}, {State: StatePreflightOK, Phase: PhaseStarted, At: t0, Receipts: 1}},
+		Receipts: []Receipt{{Step: "download", StartedAt: t0, EndedAt: t0, OK: true}}}
 	for name, j := range map[string]Job{"born at nt8_updated": born, "verified skipped": skip} {
 		t.Run(name, func(t *testing.T) {
 			dd, p, _ := fresh(t)
@@ -575,11 +578,11 @@ func TestWriteRefusesAForbiddenEdgeOrARewrite(t *testing.T) {
 	cases := map[string]func(k *Job){
 		"state set directly (skips preflight_ok)": func(k *Job) { k.State, k.Phase = StateMaintenanceHeld, PhaseStarted },
 		"forbidden edge appended by hand (skips preflight)": func(k *Job) {
-			k.Transitions = append(k.Transitions, Transition{StateMaintenanceHeld, PhaseStarted, now})
+			k.Transitions = append(k.Transitions, Transition{State: StateMaintenanceHeld, Phase: PhaseStarted, At: now, Receipts: len(k.Receipts)})
 			k.State, k.Phase, k.Attempts = StateMaintenanceHeld, PhaseStarted, 1
 		},
 		"activated appended by hand": func(k *Job) {
-			k.Transitions = append(k.Transitions, Transition{StateActivated, PhaseStarted, now})
+			k.Transitions = append(k.Transitions, Transition{State: StateActivated, Phase: PhaseStarted, At: now, Receipts: len(k.Receipts)})
 			k.State, k.Phase, k.Attempts = StateActivated, PhaseStarted, 1
 		},
 		"rewound to downloaded": func(k *Job) {

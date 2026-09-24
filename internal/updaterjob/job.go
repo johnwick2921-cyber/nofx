@@ -98,6 +98,12 @@ type Transition struct {
 	State State     `json:"state"`
 	Phase Phase     `json:"phase"`
 	At    time.Time `json:"at"`
+	// Receipts is how many receipts the job held when this transition was
+	// recorded — a RECORDED count, never inferred (canon 35) — so "a receipt
+	// was appended since this step started" survives a Read: a STARTED step
+	// becomes DONE only with more receipts than its started transition
+	// recorded (Finish, Validate).
+	Receipts int `json:"receipts"`
 }
 
 // Receipt mirrors activation.Receipt field for field — names, types, order
@@ -150,6 +156,10 @@ const (
 // ErrBadReleaseID: the release id fails updaterwire.ValidReleaseID.
 var ErrBadReleaseID = errors.New("updaterjob: invalid release id")
 
+// ErrNoReceipt: Finish on a step that has appended no receipt since it
+// started (U1 verifier defect 2).
+var ErrNoReceipt = errors.New("updaterjob: a step is done only with its receipt")
+
 // ErrAttemptsExhausted: the current state's step has run MaxAttempts times.
 var ErrAttemptsExhausted = errors.New("updaterjob: attempts exhausted")
 
@@ -185,7 +195,7 @@ func New(jobID, releaseID string, now time.Time) (Job, error) {
 		Phase:       PhaseDone,
 		CreatedAt:   now,
 		UpdatedAt:   now,
-		Transitions: []Transition{{State: StateRequested, Phase: PhaseDone, At: now}},
+		Transitions: []Transition{{State: StateRequested, Phase: PhaseDone, At: now, Receipts: 0}},
 		Receipts:    []Receipt{},
 	}, nil
 }
@@ -211,15 +221,23 @@ func (j *Job) Enter(to State, now time.Time) error {
 	}
 	j.Blocker = ""
 	j.UpdatedAt = now
-	j.Transitions = append(append([]Transition(nil), j.Transitions...), Transition{State: to, Phase: ph, At: now})
+	j.Transitions = append(append([]Transition(nil), j.Transitions...), Transition{State: to, Phase: ph, At: now, Receipts: len(j.Receipts)})
 	return nil
 }
 
 // Finish marks the current STARTED state DONE (CheckFinish) and appends the
-// transition. The caller has appended the step's receipt first.
+// transition. The caller has appended the step's receipt first: Finish
+// refuses (ErrNoReceipt) unless a receipt was added since the state's
+// started transition — a receipt of an earlier step never finishes this one.
 func (j *Job) Finish(now time.Time) error {
 	if err := CheckFinish(j.State, j.Phase); err != nil {
 		return err
+	}
+	if len(j.Transitions) == 0 {
+		return fmt.Errorf("%w: no history", ErrCorrupt)
+	}
+	if started := j.Transitions[len(j.Transitions)-1].Receipts; len(j.Receipts) <= started {
+		return fmt.Errorf("%w: %s holds %d receipts, as many as when it started", ErrNoReceipt, j.State, len(j.Receipts))
 	}
 	if len(j.Transitions) >= MaxTransitions {
 		return fmt.Errorf("%w: more than %d transitions", ErrCorrupt, MaxTransitions)
@@ -227,7 +245,7 @@ func (j *Job) Finish(now time.Time) error {
 	now = norm(now)
 	j.Phase = PhaseDone
 	j.UpdatedAt = now
-	j.Transitions = append(append([]Transition(nil), j.Transitions...), Transition{State: j.State, Phase: PhaseDone, At: now})
+	j.Transitions = append(append([]Transition(nil), j.Transitions...), Transition{State: j.State, Phase: PhaseDone, At: now, Receipts: len(j.Receipts)})
 	return nil
 }
 
@@ -360,9 +378,17 @@ func (j Job) Validate() error {
 		if c.At.IsZero() {
 			return bad("transition %d has no time", i)
 		}
+		// receipt counts are recorded, so they never run backwards: two
+		// finished steps can never share one receipt
+		if c.Receipts < p.Receipts {
+			return bad("transition %d records %d receipts, fewer than the %d before it", i, c.Receipts, p.Receipts)
+		}
 		if c.State == p.State && c.Phase == PhaseDone {
 			if err := CheckFinish(p.State, p.Phase); err != nil {
 				return bad("transition %d: %v", i, err)
+			}
+			if c.Receipts <= p.Receipts {
+				return bad("transition %d: %s is done with no receipt since it started", i, c.State)
 			}
 			continue
 		}
@@ -379,6 +405,9 @@ func (j Job) Validate() error {
 	last := j.Transitions[len(j.Transitions)-1]
 	if last.State != j.State || last.Phase != j.Phase {
 		return bad("history ends at %s/%s, the job says %s/%s", last.State, last.Phase, j.State, j.Phase)
+	}
+	if last.Receipts > len(j.Receipts) {
+		return bad("the history records %d receipts, the file holds %d", last.Receipts, len(j.Receipts))
 	}
 	for i, r := range j.Receipts {
 		if r.Step == "" {
