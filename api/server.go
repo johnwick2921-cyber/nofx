@@ -180,7 +180,7 @@ func (s *Server) setupRoutes() {
 
 			// User account management
 			s.routeWithSchema(protected, "PUT", "/user/password", "Change current user password",
-				`Body: {"new_password":"<string, min 8 chars>"}`,
+				`Body: {"current_password":"<string>","new_password":"<string, min 8 chars>"}`,
 				s.handleChangePassword)
 
 			// SECURITY (P0 S4): RSA decryption oracle — JWT + only when transport

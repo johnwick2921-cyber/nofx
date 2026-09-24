@@ -605,7 +605,7 @@ func TestPasswordChangeRetiresOlderTokensAndUnbindsTheEnrollment(t *testing.T) {
 	e.expectAllAdmitted("old token before the change")
 	before := snapshotTree(t, updateauth.Dir(e.dataDir))
 
-	r := httptest.NewRequest("PUT", "/api/user/password", strings.NewReader(`{"new_password":"another-long-pass"}`))
+	r := httptest.NewRequest("PUT", "/api/user/password", strings.NewReader(`{"current_password":"`+updAdminPass+`","new_password":"another-long-pass"}`))
 	r.RemoteAddr, r.Host = "127.0.0.1:52000", "127.0.0.1:8080"
 	r.Header.Set("Authorization", "Bearer "+e.tok)
 	r.Header.Set("Content-Type", "application/json")

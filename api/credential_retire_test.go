@@ -20,14 +20,15 @@ func TestRetiredTokenCannotChangeThePasswordAgain(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("owner login = %d", code)
 	}
-	if w := credCall(t, e, "PUT", "/api/user/password", owner, `{"new_password":"owner-rotated-pass-9"}`); w.Code != http.StatusOK {
+	if w := credCall(t, e, "PUT", "/api/user/password", owner, `{"current_password":"`+updAdminPass+`","new_password":"owner-rotated-pass-9"}`); w.Code != http.StatusOK {
 		t.Fatalf("positive control: the owner's rotation = %d %s", w.Code, w.Body.String())
 	}
 	e.expectAllForbidden("stolen token after the owner's rotation (control: Q8 holds)", withToken(stolen))
 	rotated := e.adminRow()
 
-	// The revival attempt.
-	if w := credCall(t, e, "PUT", "/api/user/password", stolen, `{"new_password":"thief-pass-0001"}`); w.Code != http.StatusForbidden {
+	// The revival attempt — carrying the CORRECT (rotated) current password,
+	// so the refusal is the retirement's alone, not the current-password check.
+	if w := credCall(t, e, "PUT", "/api/user/password", stolen, `{"current_password":"owner-rotated-pass-9","new_password":"thief-pass-0001"}`); w.Code != http.StatusForbidden {
 		t.Fatalf("PUT /api/user/password with the RETIRED token = %d %s — want 403", w.Code, w.Body.String())
 	}
 	if e.adminRow() != rotated {
@@ -49,7 +50,7 @@ func TestRetiredTokenCannotChangeThePasswordAgain(t *testing.T) {
 	}
 	// Positive control: a session opened AFTER the rotation may change it.
 	after, _ := credLogin(t, e, updAdminEmail, "owner-rotated-pass-9")
-	if w := credCall(t, e, "PUT", "/api/user/password", after, `{"new_password":"owner-rotated-pass-10"}`); w.Code != http.StatusOK {
+	if w := credCall(t, e, "PUT", "/api/user/password", after, `{"current_password":"owner-rotated-pass-9","new_password":"owner-rotated-pass-10"}`); w.Code != http.StatusOK {
 		t.Fatalf("positive control: a post-rotation session's change = %d %s", w.Code, w.Body.String())
 	}
 }

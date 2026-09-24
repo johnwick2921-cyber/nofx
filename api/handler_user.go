@@ -182,8 +182,14 @@ func (s *Server) handleLogin(c *gin.Context) {
 
 // handleChangePassword changes the password for the currently authenticated user.
 //
-// H1 (M3 red team): only a token whose email is the row's own may do it —
-// credentialActorRefusal (credential_guard.go) runs before anything else.
+// H1 (M3 red team, CTO ruling 1790231205208 item 1): only a token whose email
+// is the row's own may do it — credentialActorRefusal (credential_guard.go)
+// runs before anything else — AND the request must carry the account's
+// CURRENT password, verified against the stored hash. A bearer token alone
+// (the Telegram bot's, a stolen session's) can no longer set the password.
+// Missing/empty current_password → 400; wrong → 403 "current password is
+// incorrect" (the web form shows it; web/src/pages/SettingsPage.tsx sends the
+// field since the same change).
 func (s *Server) handleChangePassword(c *gin.Context) {
 	u, why := s.credentialActorRefusal(c)
 	if why != "" {
@@ -192,10 +198,16 @@ func (s *Server) handleChangePassword(c *gin.Context) {
 	}
 	userID := u.ID
 	var req struct {
-		NewPassword string `json:"new_password" binding:"required,min=8"`
+		CurrentPassword string `json:"current_password" binding:"required"`
+		NewPassword     string `json:"new_password" binding:"required,min=8"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		SafeBadRequest(c, "new_password is required (min 8 chars)")
+		SafeBadRequest(c, "current_password and new_password (min 8 chars) are required")
+		return
+	}
+	if !auth.CheckPassword(req.CurrentPassword, u.PasswordHash) {
+		logger.Warnf("🔒 [credentials] refused %s %s from %s: current password is incorrect", c.Request.Method, c.FullPath(), c.ClientIP())
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "current password is incorrect"})
 		return
 	}
 	hash, err := auth.HashPassword(req.NewPassword)
