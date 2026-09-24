@@ -45,8 +45,10 @@ import (
 //     and every enrollment path helper) are admitted per FILE; open ones
 //     (types, errors, limits, validators) to any admitted importer; an
 //     unclassified one is refused until someone classifies it (CTO ruling
-//     Q1(a): nothing API-side mints a MAC; M3 spec: NO API creates, resets
-//     or reads the enrollment);
+//     Q1(a): nothing API-side mints a MAC; M3 spec: no API creates or
+//     resets the enrollment — the /updates gate, admitted by FILE, READS
+//     admin.json and device.key on every request, and nothing else API-side
+//     may (PR #200 review #19));
 //  4. crypto/hmac is imported ONLY by this package among the packages that
 //     reach the updater data dir (an updater/installpath/holdcli import, a
 //     data-dir or updater-dir helper, or a path element "updater") — a MAC
