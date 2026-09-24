@@ -58,6 +58,10 @@ const (
 	parityC     = "C_picture"
 	parityD     = "D_picture_scenario"
 	parityDSend = "D_picture_send"
+	// parityE (WAVE 1a-plan T3) — the conversational door: agent chat
+	// execute_trade → trader.OpenLong → TCPTrader.placeEntry, judged by the
+	// SAME one-entry latch every other producer's send rides.
+	parityE = "E_agent_chat"
 )
 
 // parityVia names the layer expected to refuse the cell.
@@ -298,6 +302,35 @@ func (r *parityRig) clock() time.Time {
 		return r.sendAt
 	}
 	return r.now
+}
+
+// parityAgentChatRig is the E rig: the decision rig's wire with the one-entry
+// latch wired exactly as production wires it (wireNT8EntryLatch) and an empty,
+// fresh book seeded at link-up — the conversational door's own positive control.
+func parityAgentChatRig(t *testing.T, id, template string) *parityRig {
+	t.Helper()
+	r := parityDecisionRig(t, id, template)
+	wireNT8EntryLatch(r.at, r.w.nt)
+	if snaps := r.w.srv.OrderSnapshots(); snaps != nil {
+		snaps.PutAt(ntwire.OrderSnapshotPayload{Account: "Sim101", Orders: []ntwire.NT8Order{}}, time.Now())
+	} else {
+		t.Fatal("fixture: the parity wire must carry order snapshots for the latch book")
+	}
+	r.path = parityE
+	return r
+}
+
+// parityTripLatchBook (E) seeds a working entry on Sim101 into the book the
+// latch reads — the conversational door must refuse a duplicate entry the same
+// way every other producer does.
+func parityTripLatchBook(r *parityRig) {
+	snaps := r.w.srv.OrderSnapshots()
+	if snaps == nil {
+		r.t.Fatal("fixture: the parity wire must carry order snapshots for the latch book")
+	}
+	snaps.PutAt(ntwire.OrderSnapshotPayload{Account: "Sim101", Orders: []ntwire.NT8Order{
+		{OrderID: "working-1", Symbol: "MNQ", Action: "buy", Type: "limit", LimitPrice: 100, Quantity: 1, Filled: 0, State: "Working"},
+	}}, time.Now())
 }
 
 // parityBaseB is the arm fixture's clock: Friday 2026-09-11 10:00 CT (open,
@@ -651,6 +684,13 @@ func parityTable() []parityRow {
 	add(parityRow{gate: "day_plan_off", path: parityD, via: parityViaProducerHead, trip: parityTripDayPlanOff})
 	add(parityRow{gate: "day_plan_off", path: parityDSend, via: parityViaAdmit, class: "day_plan_off", trip: parityTripDayPlanOff})
 
+	// WAVE 1a-plan T3 (ADD rows only): the conversational door. The latch book
+	// row's refusal counts class one_entry_latch:working_entry_or_position under
+	// the wire trader's id (this fixture does not stamp one), so via is
+	// producer_head — no counter asserted, the refusal TEXT is.
+	add(parityRow{gate: "positive", path: parityE})
+	add(parityRow{gate: "latch_book", path: parityE, via: parityViaProducerHead, text: "working_entry_or_position", trip: parityTripLatchBook})
+
 	// The shared system/owner gates — every path, through admitEntry.
 	shared := []struct {
 		gate, class, text string
@@ -791,6 +831,8 @@ func newParityRig(t *testing.T, row parityRow, template string) *parityRig {
 			r.sendAt = parityBaseB.Add(row.offset)
 		}
 		return r
+	case parityE:
+		return parityAgentChatRig(t, id, template)
 	}
 	t.Fatalf("unknown path %q", row.path)
 	return nil
@@ -891,6 +933,25 @@ func parityDrive(r *parityRig, row parityRow, expectPass bool) parityOutcome {
 		r.env.eval.markFresh5mReceivedAt(r.env.now)
 		res := r.env.eval.Evaluate("MNQ", r.env.now)
 		return parityOutcome{passed: len(r.env.submits) > before, clean: res.Stage == store.PictureStagePlanned, text: res.Reason, detail: "stage=" + res.Stage + " reason=" + res.Reason}
+
+	case parityE:
+		// The conversational door: OpenLong → placeEntry → the one-entry
+		// latch → the wire. A send we expect is a signal frame; a refusal
+		// must send nothing (sentinel barrier).
+		if row.trip != nil {
+			row.trip(r)
+		}
+		// The door's own preconditions, verbatim from the agent path:
+		// SL/TP must be set before placeEntry (agent/trade.go sets both).
+		if err := r.w.nt.SetStopLoss("MNQ", "long", 1, 90); err != nil {
+			return parityOutcome{passed: false, text: parityErr(err), detail: "sl err=" + parityErr(err)}
+		}
+		if err := r.w.nt.SetTakeProfit("MNQ", "long", 1, 110); err != nil {
+			return parityOutcome{passed: false, text: parityErr(err), detail: "tp err=" + parityErr(err)}
+		}
+		res, err := r.w.nt.OpenLong("MNQ", 1, 1)
+		clean := err == nil && res != nil
+		return parityOutcome{passed: sent(), clean: clean, text: parityErr(err), detail: "err=" + parityErr(err)}
 	}
 	r.t.Fatalf("unknown path %q", r.path)
 	return parityOutcome{}

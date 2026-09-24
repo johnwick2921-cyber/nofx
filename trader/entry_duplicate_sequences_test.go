@@ -1008,3 +1008,34 @@ func waitGroupBounded(t *testing.T, wg *sync.WaitGroup, d time.Duration) {
 		t.Fatalf("the racing producers did not return within %s", d)
 	}
 }
+
+// ── S6 E→book ──────────────────────────────────────────────────────────────
+
+// S6 (WAVE 1a-plan T3): the BOOK itself holds a working entry — a raw NT8
+// order snapshot, no ledger row, no position — and the CONVERSATIONAL door
+// (agent chat → trader.OpenLong → placeEntry) must be refused by the latch's
+// BOOK leg as working_entry_or_position, the leg the other sequences reach
+// through the ledger/queue. No signal frame; the refusal names the reason.
+// (The gate-block class is one_entry_latch:working_entry_or_position, counted
+// under the wire trader's id — this fixture does not stamp one, so no counter
+// is asserted; the matrix's latch_book row pins the same leg on the wire.)
+func TestDupS6AgentChatOpenWhileBookWorkingIsRefused(t *testing.T) {
+	w := newDupWire(t)
+	l := w.main()
+	l.s.OrderSnapshots().PutAt(ntwire.OrderSnapshotPayload{Account: "Sim101", Orders: []ntwire.NT8Order{
+		{OrderID: "book-working-1", Symbol: "MNQ", Action: "buy", Type: "limit", LimitPrice: 100, Quantity: 1, Filled: 0, State: "Working"},
+	}}, time.Now())
+
+	// The conversational door's own preconditions: SL/TP before placeEntry.
+	if err := l.nt.SetStopLoss("MNQ", "long", 1, 99); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.nt.SetTakeProfit("MNQ", "long", 1, 106); err != nil {
+		t.Fatal(err)
+	}
+	_, err := l.nt.OpenLong("MNQ", 1, 1)
+	w.expectFrames("S6 (book working)", 0)
+	if err == nil || !strings.Contains(err.Error(), "working_entry_or_position") {
+		t.Fatalf("S6: the agent-chat open must be refused by the latch BOOK leg: %v", err)
+	}
+}
