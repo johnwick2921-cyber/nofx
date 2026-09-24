@@ -445,11 +445,27 @@ func TestCutoverInstallsTheNewBinaryItWasGiven(t *testing.T) {
 	if !strings.Contains(sh, "NEW_BIN=") {
 		t.Fatalf("cutover must take the new binary as an argument")
 	}
-	if !strings.Contains(sh, "vcs.revision=$NEW_SHA") || !strings.Contains(sh, "vcs.modified=false") {
-		t.Fatalf("the new binary must be PROVEN (revision + clean tree) before anything is touched")
+	// MOVED WITH THE CHANGE (CLASS 239). These used to assert that cutover.sh
+	// ITSELF greps `vcs.revision=$NEW_SHA` out of `go version -m` and stages a
+	// `nofx-bin.new`. v7 delegates both to cmd/nofx-activate, so the shell no
+	// longer contains those strings — and asserting them would now be pinning
+	// the OLD implementation rather than the guarantee.
+	//
+	// The guarantee did not weaken, it moved somewhere better tested:
+	// internal/activation.Stage reads the build info with debug/buildinfo
+	// (no text to misparse — the v6 awk read the wrong field because
+	// `go version -m` is TAB-separated) and refuses on revision, dirty tree or
+	// md5 mismatch; TestStageRefuses* mutation-prove each refusal. The atomic
+	// install is atomicCopy (temp in the destination's own directory + rename),
+	// pinned by TestActivateInstallsAllThreeHalvesBeforeKilling.
+	//
+	// What this test can still guarantee is that the shell DELEGATES rather
+	// than growing a second implementation, which is the drift v7 exists to end.
+	if !strings.Contains(sh, "nofx-activate") {
+		t.Fatalf("cutover.sh must delegate the proof to cmd/nofx-activate, not reimplement it")
 	}
-	if !strings.Contains(sh, `mv -f "$INSTALL/nofx-bin.new" "$INSTALL/nofx-bin"`) {
-		t.Fatalf("the new binary must be installed ATOMICALLY (stage + mv -f)")
+	if !strings.Contains(sh, "verify -release") {
+		t.Fatalf("cutover.sh must PROVE the new binary (nofx-activate verify) before anything is touched")
 	}
 }
 
@@ -473,14 +489,22 @@ func TestCutoverRollbackRestartsAndProvesTheOldRev(t *testing.T) {
 	// P1-c: after a failed boot the RUNNING process is the NEW binary, so a
 	// files-only rollback leaves the bad build serving while printing
 	// "restart the unit". The canon requires a TESTED auto-rollback.
-	if !strings.Contains(sh, "ROLLBACK OK") || !strings.Contains(sh, "ROLLBACK FAILED") {
-		t.Fatalf("rollback must reach a verdict, never leave it to the reader")
-	}
-	if !strings.Contains(sh, `wait_boot "$OLD_SHORT" "rollback"`) {
-		t.Fatalf("rollback must PROVE the old rev booted, not just swap files")
-	}
-	if !strings.Contains(sh, `printf '%s\n' "$OLD_SHA" > "$INSTALL/deploy/RELEASE"`) {
-		t.Fatalf("P3: rollback must write the full 40-hex old sha to RELEASE, not a 12-char stub")
+	// MOVED WITH THE CHANGE (CLASS 239). v7 does not implement rollback in
+	// bash any more, so ROLLBACK OK / wait_boot / the RELEASE write are no
+	// longer strings in this file. Asserting them would pin the old shell.
+	//
+	// The guarantee moved and got STRONGER: internal/activation.Rollback and
+	// RollbackTo restore all three halves (binary, dist AND the RELEASE
+	// marker — "restore the binary" leaves the UI serving the new bundle and
+	// the marker claiming the new sha), refuse to signal a recycled pid, and
+	// return the identity the caller then proves with Watch. Pinned by
+	// TestRollbackRestoresTheDistAndTheMarkerNotJustTheBinary and
+	// TestRollbackRefusesToSignalARecycledPID, both mutation-proven.
+	//
+	// v7 must still TELL the operator how to roll back, or the procedure is
+	// only in someone's head.
+	if !strings.Contains(sh, "rollback -prev") {
+		t.Fatalf("cutover.sh must name the rollback command, or the procedure exists only in someone's head")
 	}
 	if !strings.Contains(sh, "--dry-run") {
 		t.Fatalf("a procedure nobody has executed is not TESTED; --dry-run is how it gets exercised")
@@ -528,20 +552,29 @@ func TestGuideRevIsRefusedByTheBUILDNotByAModuleScopeThrow(t *testing.T) {
 // broken gets deleted mid-boot.
 func TestCutoverDistinguishesAnUnstampedBinaryFromAWrongOne(t *testing.T) {
 	sh := repoFile(t, "deploy/cutover.sh")
-	if !strings.Contains(sh, "carries NO vcs stamps at all") {
-		t.Fatalf("cutover.sh must refuse an UNSTAMPED binary with its own message")
+	// MOVED WITH THE CHANGE (CLASS 239). Both refusals now live in
+	// internal/activation.Stage, which cutover.sh reaches through
+	// `nofx-activate verify`. The DISTINCTION is the guarantee — an unstamped
+	// binary and a wrong-revision binary send the operator to different
+	// places, and a refusal that names the wrong cause sends them to fix
+	// something that is not broken — so it is pinned where it now lives:
+	// TestStageRefusesABinaryWithNoVCSStampsAndSaysWhy asserts cause AND cure,
+	// and TestStageRefusesAStampedBinaryWithADifferentRevision asserts the
+	// wrong-revision path does NOT reuse the unstamped wording.
+	lib := repoFile(t, "internal/activation/activation.go")
+	if !strings.Contains(lib, "carries NO vcs stamps at all") {
+		t.Fatalf("the library must refuse an UNSTAMPED binary with its own message")
 	}
-	if !strings.Contains(sh, "linked git worktree") {
+	if !strings.Contains(lib, "linked git worktree") {
 		t.Fatalf("the unstamped refusal must name the CAUSE (a worktree build), not just the symptom")
 	}
-	if !strings.Contains(sh, "clean clone") {
+	if !strings.Contains(lib, "clean clone") {
 		t.Fatalf("the unstamped refusal must name the CURE (build from a clean clone)")
 	}
-	if !strings.Contains(sh, "is stamped, but with a DIFFERENT revision") {
+	if !strings.Contains(lib, "is stamped, but with revision") {
 		t.Fatalf("a stamped-but-wrong binary must get a DIFFERENT message than an unstamped one")
 	}
-	// The two refusals must not be the same sentence: that is the whole point.
-	if strings.Count(sh, "it is not the binary for this sha") != 1 {
-		t.Fatalf("the wrong-sha wording must appear once, on the wrong-sha path only")
+	if !strings.Contains(sh, "nofx-activate") {
+		t.Fatalf("cutover.sh must reach those refusals by delegating, not by reimplementing them")
 	}
 }
