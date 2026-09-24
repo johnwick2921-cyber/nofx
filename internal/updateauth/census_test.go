@@ -58,14 +58,27 @@ import (
 //     updateauth.VerifyMAC, of a LoadAdmin result's PasswordStillBound (the
 //     H1 belt's constant-time check), or of the builtin clear — whatever the
 //     primitive (crypto/hmac, a JWT signer, hand-rolled SHA-256), the key
-//     must be NAMED to reach it (keyFlowOffenders).
+//     must be NAMED to reach it (keyFlowOffenders). The ADMISSION is by name,
+//     so it is exactly as sound as the resolution of the four names it
+//     trusts — the import name at VerifyMAC, the import name a LoadAdmin
+//     binding was called through, that binding, and clear. Each is admitted
+//     only when NO declaration in the declaration re-binds it — every site
+//     go/types declares an identifier, a generic method's receiver type
+//     parameters included — and, for clear, none in the package block
+//     either. Census-repair verify P1 (a receiver type parameter named
+//     clear) and P2 (the import name shadowed before a LoadAdmin binding)
+//     were two forms the name check did not read, and each admitted a real
+//     mint; the claim is now CHECKED against go/types over every (trusted
+//     name × declaration form) by
+//     TestUpdateAuthKeyFlowAdmissionMatchesTheCompilersResolution.
 //
 // Fail-closed side effects, named: the fragment rule refuses ANY literal
 // path element that is exactly "device", starts "device." or ends ".key"
 // module-wide (a future "server.key" or a JSON field literally "device"
 // trips it and must be spelled another way); rule 6 judges by NAME, so an
 // unrelated variable sharing the key's name in the same function is
-// reported.
+// reported, and a trusted name re-declared ANYWHERE in the declaration —
+// even in a scope the admitted call is not in — refuses that call.
 //
 // WHAT THIS CANNOT PROVE (M3 fold M4 — stated, not implied): it is a
 // syntactic census over identifiers, imports, comments and constant
@@ -456,9 +469,22 @@ func updateAuthOffenders(root string) (offenders []string, scanned int, err erro
 //     receiver type parameters included, census-repair verify P1 — nor at
 //     the package's top level).
 //
-// It is judged by NAME, not by type: a second variable that happens to share
-// the key's name, a struct-literal field spelled like it, or a key re-bound
-// in a nested scope is reported — it can only over-report.
+// It is judged by NAME, not by type. Where it REFUSES by name it
+// over-reports: a second variable that happens to share the key's name, a
+// struct-literal field spelled like it, a key re-bound in a nested scope,
+// or a trusted name re-declared in a scope the admitted call is not in.
+// Where it ADMITS by name it is only as sound as its resolution of the four
+// trusted names (the import name at VerifyMAC, the import name behind a
+// LoadAdmin binding, that binding, clear) — which is why the earlier "it can
+// only over-report" was FALSE: P1 and P2 were each a declaration form the
+// resolution did not read. declaredOther now counts every site go/types
+// declares an identifier — checked by
+// TestUpdateAuthKeyFlowAdmissionMatchesTheCompilersResolution. Labels have
+// their own namespace; an import cannot re-bind a trusted name at an
+// admitted call in a file that compiles (`import clear "…"` makes clear(key)
+// "use of package clear not in selector", and a second package under the
+// updateauth name "updateauth redeclared in this block" — go1.25.13, probed;
+// a second import of updateauth itself is rule 2's).
 func keyFlowOffenders(rel string, fset *token.FileSet, f *ast.File, aliases map[string]bool, packageDeclaresClear bool) []string {
 	var out []string
 	at := func(n ast.Node) string { return " (line " + strconv.Itoa(fset.Position(n.Pos()).Line) + ")" }
