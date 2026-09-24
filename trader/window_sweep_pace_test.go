@@ -138,3 +138,65 @@ func TestWindowSweepPacesTheNoLinkIntentRecord(t *testing.T) {
 		t.Fatalf("past the pace the intent is recorded once more (cancel_attempts=2): %s", cancelBrief(got))
 	}
 }
+
+// Only a cancel_pending row is paced: a row in any other non-terminal state is
+// sent its cancel even when the sweep's own record says it sent one 4 s ago.
+func TestWindowSweepPacesOnlyACancelPendingRow(t *testing.T) {
+	for _, st := range []string{store.StateWorking, store.StatePlacePending} {
+		t.Run(st, func(t *testing.T) {
+			r, sid := windowSweepRig(t, "w1b-fold12-only-pending-"+st)
+			sweep := r.windowPass(e13Lead, sid)
+			if sweep == 0 {
+				t.Fatal("fixture: the window sweep must send the working arm's cancel")
+			}
+			got := r.row("S1")
+			if got.State != store.StateCancelPending {
+				t.Fatalf("fixture: %s", cancelBrief(got))
+			}
+			if err := r.st.ArmedOrders().DB().Model(&store.ArmedOrderDB{}).Where("id = ?", got.ID).UpdateColumn("state", st).Error; err != nil {
+				t.Fatal(err)
+			}
+			if n := r.windowPass(e13Lead.Add(4*time.Second), sid); n != sweep {
+				t.Fatalf("a %s row (the sweep's record 4 s old) was paced: sent %d frame(s), want %d", st, n, sweep)
+			}
+		})
+	}
+}
+
+// "Requested" is any path's request the ledger records, not only the sweep's
+// own: a cancel another path requested 10 s ago paces the sweep; one requested
+// 60 s ago does not.
+func TestWindowSweepPaceCountsAnotherPathsRequest(t *testing.T) {
+	for _, c := range []struct {
+		age  time.Duration
+		send bool
+	}{{10 * time.Second, false}, {60 * time.Second, true}} {
+		t.Run(c.age.String(), func(t *testing.T) {
+			r, sid := windowSweepRig(t, "w1b-fold12-other-path-"+c.age.String())
+			got := r.row("S1")
+			if err := r.st.ArmedOrders().RequestCancel(got.ID, "another path", e13Lead.Add(-c.age).UnixMilli()); err != nil {
+				t.Fatal(err)
+			}
+			if n := r.windowPass(e13Lead, sid); (n > 0) != c.send {
+				t.Fatalf("a cancel another path requested %s ago: the sweep sent %d frame(s), want send=%v", c.age, n, c.send)
+			}
+		})
+	}
+}
+
+// Over a long dark window (the T1 lead running into the blackout band) a lost
+// cancel is re-sent every 30 s — never starved, never twice inside 30 s — with
+// passes every 5 s.
+func TestWindowSweepReSendsEveryThirtySecondsAcrossALongWindow(t *testing.T) {
+	r, sid := windowSweepRig(t, "w1b-fold12-cadence")
+	var sends []time.Duration
+	for dt := time.Duration(0); dt <= 150*time.Second; dt += 5 * time.Second {
+		if n := r.windowPass(e13Lead.Add(dt), sid); n > 0 {
+			sends = append(sends, dt)
+		}
+	}
+	want := []time.Duration{0, 30 * time.Second, 60 * time.Second, 90 * time.Second, 120 * time.Second, 150 * time.Second}
+	if fmt.Sprint(sends) != fmt.Sprint(want) {
+		t.Fatalf("send cadence %v, want %v (%s)", sends, want, cancelBrief(r.row("S1")))
+	}
+}
