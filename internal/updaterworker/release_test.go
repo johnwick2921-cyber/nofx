@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -858,6 +859,127 @@ func TestFetchRefusesAnExistingVerdict(t *testing.T) {
 		if p, err := updaterjob.VerdictPath(bad.dir, bad.id); err == nil {
 			t.Fatalf("VerdictPath(%q, %q) = %q, want a refusal", bad.dir, bad.id, p)
 		}
+	}
+}
+
+// ── the app-side reader refuses what FetchRelease never writes ──────────────
+//
+// Each case starts from the verdict a real FetchRelease wrote (the production
+// writer) and changes ONE thing; updaterjob.ReadVerdict is the reader U5b's
+// API verifier calls (brief §3.8). Verifier D4 (data after the object) and D5
+// (release_dir only checked to be absolute) — each accepted before the fix.
+func TestReadVerdictRefusesWhatFetchNeverWrites(t *testing.T) {
+	r := buildRelease(t, releaseOpts{})
+	editField := func(k string, val any) func(t *testing.T, e fetchEnv, raw []byte) []byte {
+		return func(t *testing.T, e fetchEnv, raw []byte) []byte {
+			var m map[string]any
+			if err := json.Unmarshal(raw, &m); err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := m[k]; !ok {
+				t.Fatalf("fixture: the written verdict has no %q", k)
+			}
+			m[k] = val
+			b, err := json.Marshal(m)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return b
+		}
+	}
+	for name, c := range map[string]struct {
+		edit func(t *testing.T, e fetchEnv, raw []byte) []byte
+		ok   bool
+	}{
+		"control: as written":                {func(t *testing.T, e fetchEnv, raw []byte) []byte { return raw }, true},
+		"control: trailing whitespace":       {func(t *testing.T, e fetchEnv, raw []byte) []byte { return append(raw, " \n\t\n"...) }, true},
+		"trailing garbage after the object":  {func(t *testing.T, e fetchEnv, raw []byte) []byte { return append(raw, " trailing garbage"...) }, false},
+		"a second object after the first":    {func(t *testing.T, e fetchEnv, raw []byte) []byte { return append(raw, `{"schema":2}`...) }, false},
+		"release_dir is the filesystem root": {editField("release_dir", "/"), false},
+		"release_dir names another source sha": {func(t *testing.T, e fetchEnv, raw []byte) []byte {
+			return editField("release_dir", filepath.Join(e.releaseRoot, strings.Repeat("d", 40)))(t, e, raw)
+		}, false},
+		"release_dir is not clean": {func(t *testing.T, e fetchEnv, raw []byte) []byte {
+			return editField("release_dir", e.releaseRoot+"/x/../"+testSHA)(t, e, raw)
+		}, false},
+		"release_dir is relative":             {editField("release_dir", testSHA), false},
+		"signer_fingerprint is only a prefix": {editField("signer_fingerprint", "SHA256:"), false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := newFetchEnv(t)
+			v, err := FetchRelease(e.cfg(r))
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw, err := os.ReadFile(e.verdictPath())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(e.verdictPath(), c.edit(t, e, raw), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			got, err := updaterjob.ReadVerdict(e.dataDir, testReleaseID)
+			if c.ok {
+				if err != nil || got != v {
+					t.Fatalf("control refused: %+v, %v; want %+v", got, err, v)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("updaterjob.ReadVerdict ACCEPTED a verdict with %s: %+v", name, got)
+			}
+			if !errors.Is(err, updaterjob.ErrVerdict) {
+				t.Fatalf("%s: err = %v, want updaterjob.ErrVerdict", name, err)
+			}
+		})
+	}
+	// the file itself: private, regular, never followed, never blocking
+	for name, plant := range map[string]func(t *testing.T, p string){
+		"a group-readable verdict": func(t *testing.T, p string) {
+			if err := os.Chmod(p, 0o640); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"a symlink to the real verdict": func(t *testing.T, p string) {
+			real := p + ".real"
+			if err := os.Rename(p, real); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(real, p); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"a FIFO": func(t *testing.T, p string) {
+			if err := os.Remove(p); err != nil {
+				t.Fatal(err)
+			}
+			if err := syscall.Mkfifo(p, 0o600); err != nil {
+				t.Fatal(err)
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := newFetchEnv(t)
+			if _, err := FetchRelease(e.cfg(r)); err != nil {
+				t.Fatal(err)
+			}
+			plant(t, e.verdictPath())
+			done := make(chan error, 1)
+			go func() {
+				_, err := updaterjob.ReadVerdict(e.dataDir, testReleaseID)
+				done <- err
+			}()
+			select {
+			case err := <-done:
+				if !errors.Is(err, updaterjob.ErrVerdict) {
+					t.Fatalf("%s: err = %v, want updaterjob.ErrVerdict", name, err)
+				}
+			case <-time.After(10 * time.Second):
+				unblockFifo(e.verdictPath())()
+				<-done
+				t.Fatalf("updaterjob.ReadVerdict blocked for 10 s opening %s", name)
+			}
+		})
 	}
 }
 
