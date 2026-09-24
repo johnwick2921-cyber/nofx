@@ -892,6 +892,11 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 	// was a stub returning empty, so the leg passed VACUOUSLY at every cutover
 	// 35 → 41. Wired HERE (not lazily) so the dead-man watchdog's own
 	// GetOpenOrders probe has a source from the first cycle.
+	// WAVE 1a-plan N5 — the CSV transport takes the same maintenance
+	// permit (only entry sends); wired at construction like the TCP path.
+	if csv, ok := at.trader.(*ntTrader.Trader); ok {
+		csv.SetEntryPermit(MaintenanceEntryPermit)
+	}
 	if nt, ok := at.trader.(*ntTrader.TCPTrader); ok {
 		nt.SetOpenOrdersSource(at.ledgerOpenOrders)
 		// THE LEDGER'S EAR FOR A REFUSAL (2026-09-07). Every entry-reject path
