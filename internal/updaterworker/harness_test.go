@@ -95,6 +95,7 @@ type box struct {
 	holdWriteFails bool   // the hold write errs before anything lands
 	ackStale       bool   // the AddOn's last ack is 20 s old
 	ackJob         string // the AddOn acks this job id instead of the hold's
+	exe            string // /proc/<MainPID>/exe, when not the install's binary
 
 	calls       []string
 	violations  []string
@@ -554,6 +555,9 @@ func (h *fakeHost) ExeOf(pid int) (string, error) {
 	defer h.b.mu.Unlock()
 	if pid != h.b.id.PID {
 		return "", fmt.Errorf("no such process %d", pid)
+	}
+	if h.b.exe != "" {
+		return h.b.exe, nil
 	}
 	return filepath.Join(h.b.inst, "nofx-bin"), nil
 }
