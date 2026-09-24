@@ -371,10 +371,13 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 		// below writes onto (or mints the next placement of) this key; when the
 		// row already carries a DIFFERENT opportunity, none of them may run —
 		// the armed branch would rewrite A's unplaced row to B's source_ref,
-		// deadline, epoch and prices. Refused by type, loudly.
+		// deadline, epoch and prices. Refused by type, and SILENTLY here
+		// (WAVE 1b E7): every pass re-authors the same leg and re-hits this
+		// refusal, and the store has no identity to dedupe on. The typed error
+		// carries every field (row, scenario, leg, state, both redacted keys);
+		// the caller logs it — the authoring loop's armSourceRefused WARNs and
+		// counts once per change, the shadow path and the API seams log/return it.
 		if ex := strings.TrimSpace(existing.SourceRef); ex != "" && ex != strings.TrimSpace(row.SourceRef) {
-			logger.Warnf("⛔ arm write refused: %s leg %d row #%d (%s) holds opportunity %s — the write carries %s; a ledger row never changes opportunity",
-				row.Scenario, row.LegIndex+1, existing.ID, existing.State, RedactPictureOppKey(ex), RedactPictureOppKey(strings.TrimSpace(row.SourceRef)))
 			return fmt.Errorf("%w: row #%d (%s leg %d, %s) holds %s, the write carries %s",
 				ErrArmSourceMismatch, existing.ID, row.Scenario, row.LegIndex+1, existing.State,
 				RedactPictureOppKey(ex), RedactPictureOppKey(strings.TrimSpace(row.SourceRef)))
