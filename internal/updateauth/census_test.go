@@ -49,7 +49,13 @@ import (
 //     go1.25.13 refuses an .s file's call to another package's Go function
 //     ("relocation target … not defined for ABI0"; the <ABIInternal>
 //     selector is "only permitted when compiling runtime") [A, probed
-//     2026-09-24], so without a linkname it cannot reach ComputeMAC;
+//     2026-09-24], so without a linkname it cannot reach ComputeMAC.
+//     Nor any `import "C"` (census-repair verify #3 N2): a cgo preamble is C
+//     this census cannot read, and .incbin / #embed / #cgo LDFLAGS read a
+//     file at COMPILE time from any package (../ and absolute paths too) —
+//     the verifier's N2 compiled the key in with every census green. The
+//     module has no cgo [A: go list CgoFiles empty over ./...]; none is
+//     admitted, under any import name;
 //  6. the LOADED device key is used only to verify (verifier D3: the file
 //     admitted LoadDeviceKey minted a grant through golang-jwt's HS256 —
 //     rule 4 sees only crypto/hmac). In every file that references
@@ -348,6 +354,13 @@ func updateAuthOffenders(root string) (offenders []string, scanned int, err erro
 		imported := 0
 		for _, im := range f.Imports {
 			ip, _ := strconv.Unquote(im.Path.Value)
+			// 5. cgo (verify #3 N2): the preamble is C the census cannot read,
+			// and .incbin / #embed / #cgo LDFLAGS read files at COMPILE time
+			// from any package (../ and absolute paths included). The module
+			// has none; none is admitted, under any import name.
+			if ip == "C" {
+				offend(rel + `: imports "C" — a cgo preamble reads files at compile time (.incbin, #embed, #cgo LDFLAGS) past every rule of this census; the module has no cgo and none is admitted`)
+			}
 			if ip == "crypto/hmac" {
 				facts.hmacFiles = append(facts.hmacFiles, rel)
 			}
