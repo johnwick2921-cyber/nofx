@@ -2494,9 +2494,6 @@ func (at *AutoTrader) cancelArmedOrders(reason string, pace ...*armedCancelPace)
 			}
 			continue
 		}
-		if p.paced(r) {
-			continue
-		}
 		if err := at.store.ArmedOrders().RequestCancel(r.ID, reason+" (no broker link — intent recorded, never settled)", now); err == nil {
 			p.sent(r.ID)
 			unsettled++
