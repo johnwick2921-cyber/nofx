@@ -2,8 +2,10 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"nofx/auth"
 	"nofx/logger"
@@ -178,9 +180,25 @@ func (s *Server) credentialActorRefusal(c *gin.Context) (*store.User, string) {
 	// handlers can never be wired without it. The /updates gate stays stricter
 	// (zero updated_at ⇒ refuse).
 	if auth.RetiredBy(cl.IssuedAt, u.CreatedAt, u.UpdatedAt) {
-		return nil, "token predates the account's last credential change"
+		return nil, retiredWhy(auth.CredentialEpoch(u.CreatedAt, u.UpdatedAt), time.Now())
 	}
 	return u, ""
+}
+
+// retiredWhy is the log category of an H2 (retired-token) refusal.
+//
+// PR #200 fold F6 (CTO 1790252194343): a credential epoch AHEAD of this
+// clock — the clock stepped back after a password change — refuses every NEW
+// sign-in too (a token minted now is not strictly after the epoch) until the
+// clock passes it. That stays fail-closed; the line says so, by how many
+// whole seconds, so an owner who cannot sign in is told why. An epoch in the
+// past (or the same second) keeps the plain category.
+func retiredWhy(epoch, now time.Time) string {
+	const plain = "token predates the account's last credential change"
+	if ahead := epoch.Unix() - now.Unix(); !epoch.IsZero() && ahead > 0 {
+		return fmt.Sprintf("%s — credential epoch is %ds in the future — clock stepped back; sign-in refused until then", plain, ahead)
+	}
+	return plain
 }
 
 // tokenRetirement is authMiddleware's H2 check (CTO ruling 1790231205208):
@@ -211,7 +229,7 @@ func (s *Server) tokenRetirement(cl *auth.Claims) (int, string) {
 		return http.StatusUnauthorized, "no account row for the token"
 	}
 	if auth.RetiredBy(cl.IssuedAt, u.CreatedAt, u.UpdatedAt) {
-		return http.StatusUnauthorized, "token predates the account's last credential change"
+		return http.StatusUnauthorized, retiredWhy(auth.CredentialEpoch(u.CreatedAt, u.UpdatedAt), time.Now())
 	}
 	return 0, ""
 }
