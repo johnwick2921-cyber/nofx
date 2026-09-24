@@ -76,6 +76,25 @@ package telegram
 // implicit-address rule even at b.mu.Lock(): a locked field is a new model,
 // so re-anchor the pins with it.
 //
+// NAMED, NOT CHASED (CTO ruling 1790248662535: after the hc repair, a
+// further purely structural escape is named here, not another round; these
+// pins are a BELT, and the boundary is the capture-before-go pattern in
+// runBot). The interface-conversion rule reads single-value assignment
+// contexts only. Each of these compiles, converts the identity to an
+// interface, and passes all three pins [A, hc re-verify, compiling reverts
+// T1–T9]:
+//   - a TUPLE result: f(g()), a, b = g(), var a, b T = g(), return g() — e.g.
+//     `go func(ag Ager, _ bool){…}(pair(ident))`, which also hands the
+//     goroutine an argument that holds the identity;
+//   - comma-ok: ag, _ = <-ch;
+//   - a `:=` that re-declares an existing variable: ag, n := ident, 0;
+//   - range with `=`: for _, ag = range []*botIdentity{ident} {};
+//   - panic(b) then recover().(Ager).
+// The fold, if one is ever wanted, is a spec-derived list of assignability
+// contexts (tuples split per element, := as well as =, range =, panic as a
+// slot of type any), each with one synthetic road in
+// TestBotIdentityPinRulesCatchEveryRoad.
+//
 // The -race reproduction of the factory half is
 // TestRaceBotRefreshAgainstInFlightManager (bot_refresh_race_test.go).
 
