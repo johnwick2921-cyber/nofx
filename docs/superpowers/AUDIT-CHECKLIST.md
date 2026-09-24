@@ -10,7 +10,7 @@ in CLAUDE.md).
 
 ## PART 1 — THE BUG CLASSES (name · root cause · probe · law)
 
-*Highest occupied class: **216** (2026-09-24). Numbers are assigned AT MERGE and
+*Highest occupied class: **219** (2026-09-24). Numbers are assigned AT MERGE and
 never renumbered; a gap means a wave took a later slot to avoid a collision.*
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
@@ -6661,7 +6661,7 @@ took my place". Ask who else Ranges the map before changing what is in it.
 
 **Probe:** for every id a writer mints, find every table keyed on it and ask whether the key's scope (per version, per plan, per chain) is the mint's scope. A key wider than its mint lets two things share one row.
 
-## CLASS NN (assigned at merge) — a UI state not backed by an API field
+## CLASS 217 — a UI state not backed by an API field
 
 **Found:** 2026-09-24, W-ONE-BUTTON M5 build [A]. The Updates page vocabulary
 (Update available, Installing, Up to date) had no backing fields on
@@ -6676,7 +6676,7 @@ A label with no field is either dead (remove it) or a future field (type it
 optional, render Unknown / n/a until the server ships it) — never a browser-side
 derivation.
 
-## CLASS NN (assigned at merge) — a spinner with no timeout
+## CLASS 218 — a spinner with no timeout
 
 **Found:** 2026-09-24, W-ONE-BUTTON M5 build [A]. The header badge's first-fetch
 spinner would hang forever if the poll promise neither resolved nor rejected
@@ -6686,7 +6686,7 @@ settles to Unknown; a rejected poll is caught and also settles to Unknown.
 **Probe:** every spinner in the UI must name the condition that ends it, and one
 of those conditions must be a clock.
 
-## CLASS NN (assigned at merge) — a null rendered as false
+## CLASS 219 — a null rendered as false
 
 **Found:** 2026-09-24, W-ONE-BUTTON M5 build [A]. A null addon_ack (the AddOn
 has not acknowledged the hold yet) read naturally as "false" in JS boolean
