@@ -1,9 +1,16 @@
 package censuswalk
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"go/parser"
+	"go/token"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -118,24 +125,79 @@ func TestToolchainUncoveredControls(t *testing.T) {
 
 // nonTestImporters asks the toolchain which packages matched by ./... import
 // target from a NON-test file (.Imports never carries TestImports or
-// XTestImports). A failing go command is an error (fail closed).
+// XTestImports). .Imports is the CURRENT GOOS/GOARCH/tags only (census-repair
+// verify, LOW note), so two more sources are read for imports: every
+// non-test file a build constraint excludes from a matched package (another
+// platform, a tag — go list's IgnoredGoFiles), and every non-test file of
+// the census walk (build tags ignored) — because ./... does not even MATCH a
+// package whose every file is excluded here (a _windows.go-only package, a
+// //go:build ignore generator: "build constraints exclude all Go files").
+// A failing go command, undecodable output or an unparsable file is an
+// error (fail closed).
 func nonTestImporters(root, target string) (importers []string, matched int, err error) {
-	cmd := goCommand(root, "list", "-e", "-f", "{{.ImportPath}}{{range .Imports}} {{.}}{{end}}", "./...")
+	cmd := goCommand(root, "list", "-e", "-json=ImportPath,Dir,Imports,IgnoredGoFiles", "./...")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, 0, err
 	}
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		f := strings.Fields(line)
-		if len(f) == 0 {
-			continue
+	seen := map[string]bool{}
+	dec := json.NewDecoder(bytes.NewReader(out))
+	for dec.More() {
+		var p struct {
+			ImportPath, Dir         string
+			Imports, IgnoredGoFiles []string
+		}
+		if err := dec.Decode(&p); err != nil {
+			return nil, 0, fmt.Errorf("go list: undecodable output: %v", err)
 		}
 		matched++
-		for _, ip := range f[1:] {
-			if ip == target {
-				importers = append(importers, f[0])
+		hit := false
+		for _, ip := range p.Imports {
+			hit = hit || ip == target
+		}
+		for _, name := range p.IgnoredGoFiles {
+			if strings.HasSuffix(name, "_test.go") {
+				continue
+			}
+			f, err := parser.ParseFile(token.NewFileSet(), filepath.Join(p.Dir, name), nil, parser.ImportsOnly)
+			if err != nil {
+				return nil, 0, fmt.Errorf("%s: ignored by this build but cannot be read for imports: %v", filepath.Join(p.Dir, name), err)
+			}
+			for _, im := range f.Imports {
+				if ip, _ := strconv.Unquote(im.Path.Value); ip == target {
+					hit = true
+				}
 			}
 		}
+		if hit {
+			seen[p.ImportPath] = true
+		}
+	}
+	module, err := ModulePath(root)
+	if err != nil {
+		return nil, 0, err
+	}
+	files, err := NonTestGoFiles(root)
+	if err != nil {
+		return nil, 0, err
+	}
+	for _, file := range files {
+		f, err := parser.ParseFile(token.NewFileSet(), file.Path, nil, parser.ImportsOnly)
+		if err != nil {
+			return nil, 0, fmt.Errorf("%s: cannot be read for imports: %v", file.Rel, err)
+		}
+		for _, im := range f.Imports {
+			if ip, _ := strconv.Unquote(im.Path.Value); ip == target {
+				pkg := module
+				if d := path.Dir(file.Rel); d != "." {
+					pkg += "/" + d
+				}
+				seen[pkg] = true
+			}
+		}
+	}
+	for p := range seen {
+		importers = append(importers, p)
 	}
 	sort.Strings(importers)
 	return importers, matched, nil
@@ -192,5 +254,35 @@ func TestNonTestImportersControls(t *testing.T) {
 	got, _, err = nonTestImporters(root, "nofx/internal/censuswalk")
 	if err != nil || len(got) != 1 || got[0] != "nofx/api" {
 		t.Fatalf("a non-test importer must be reported: got %v err %v", got, err)
+	}
+}
+
+// PIN (census-repair verify, LOW note): go list's .Imports is the CURRENT
+// GOOS/GOARCH/tags only, so a non-test importer behind another platform's
+// build constraint — a _plan9.go file, a package whose every file is
+// _windows.go, a //go:build ignore generator a `go run` would link — was
+// invisible to TestCensusWalkIsTestToolingOnly. Each is reported — so is one
+// in a package under the root-level web/ (outside the census walk, but
+// matched by ./..., so read through go list's IgnoredGoFiles); an
+// other-platform _test.go importer still is not.
+func TestNonTestImportersSeesEveryPlatform(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "go.mod", "module nofx\n\ngo 1.25\n")
+	write(t, root, "internal/censuswalk/w.go", "package censuswalk\n")
+	write(t, root, "api/api.go", "package api\n")
+	write(t, root, "api/uses_plan9.go", "package api\n\nimport _ \"nofx/internal/censuswalk\"\n")
+	write(t, root, "api/x_windows_test.go", "package api\n\nimport _ \"nofx/internal/censuswalk\"\n")
+	write(t, root, "winonly/w_windows.go", "package winonly\n\nimport _ \"nofx/internal/censuswalk\"\n")
+	write(t, root, "tools/gen.go", "//go:build ignore\n\npackage main\n\nimport _ \"nofx/internal/censuswalk\"\n\nfunc main() {}\n")
+	write(t, root, "web/gopkg/a.go", "package gopkg\n")
+	write(t, root, "web/gopkg/b_plan9.go", "package gopkg\n\nimport _ \"nofx/internal/censuswalk\"\n")
+	write(t, root, "clean/c.go", "package clean\n")
+	write(t, root, "clean/c_windows_test.go", "package clean\n\nimport _ \"nofx/internal/censuswalk\"\n")
+	got, _, err := nonTestImporters(root, "nofx/internal/censuswalk")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "nofx/api,nofx/tools,nofx/web/gopkg,nofx/winonly"; strings.Join(got, ",") != want {
+		t.Fatalf("importers behind another platform's build constraint: got %v, want exactly %s", got, want)
 	}
 }
