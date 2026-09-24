@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -69,6 +71,24 @@ func TestServeAndFetchRefuseUntilTheAdaptersLand(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(data, "updater")); !os.IsNotExist(err) {
 		t.Fatalf("a refused serve/fetch created %s (%v)", filepath.Join(data, "updater"), err)
+	}
+	// ONE adapter landed and the other not (the fold may land activation
+	// before U3, or the reverse): still refused, still nothing written
+	defer func() {
+		newLibrary = func() (updaterworker.Library, error) { return nil, updaterworker.ErrNotWired }
+		newReverifier = func(updaterworker.Target) (updaterworker.Reverifier, error) { return nil, updaterworker.ErrNotWired }
+	}()
+	newLibrary = func() (updaterworker.Library, error) { return testLib{}, nil }
+	if rc, _, errs := runCLI(t, nil, "--install-dir", inst, "serve"); rc != 2 || !strings.Contains(errs, "not wired yet") {
+		t.Fatalf("serve with the library but no re-proof adapter = %d %q", rc, errs)
+	}
+	newLibrary = func() (updaterworker.Library, error) { return nil, updaterworker.ErrNotWired }
+	newReverifier = func(updaterworker.Target) (updaterworker.Reverifier, error) { return testRel{}, nil }
+	if rc, _, errs := runCLI(t, nil, "--install-dir", inst, "serve"); rc != 2 || !strings.Contains(errs, "not wired yet") {
+		t.Fatalf("serve with the re-proof but no library adapter = %d %q", rc, errs)
+	}
+	if _, err := os.Stat(filepath.Join(data, "updater")); !os.IsNotExist(err) {
+		t.Fatalf("a half-wired serve created %s (%v)", filepath.Join(data, "updater"), err)
 	}
 	// and serve without the token refuses before anything else
 	os.Unsetenv(updaterworker.CutoverTokenEnv)
@@ -178,3 +198,111 @@ func TestStatusAndRecoveryReadTheJobFile(t *testing.T) {
 		t.Fatalf("status of a forged id = %d %q", rc, errs)
 	}
 }
+
+// testLib / testRel stand in for the two adapters the fold lands; every
+// side effect refuses (serve here only proves its wiring).
+type testLib struct{}
+
+func (testLib) Resolve(string) (updaterworker.Release, error) { return updaterworker.Release{}, errNo }
+func (testLib) Stage(updaterworker.Release) (updaterworker.Receipt, error) {
+	return updaterworker.Receipt{}, errNo
+}
+func (testLib) Backup(string, string) (updaterworker.Receipt, error) {
+	return updaterworker.Receipt{}, errNo
+}
+func (testLib) Snapshot(updaterworker.Release, string) (updaterworker.Receipt, error) {
+	return updaterworker.Receipt{}, errNo
+}
+func (testLib) Activate(updaterworker.Release, updaterworker.Release, updaterworker.Identity) (updaterworker.Identity, updaterworker.Receipt, error) {
+	return updaterworker.Identity{}, updaterworker.Receipt{}, errNo
+}
+func (testLib) Watch(updaterworker.Release, updaterworker.Identity, updaterworker.WatchOpts) (updaterworker.Receipt, error) {
+	return updaterworker.Receipt{}, errNo
+}
+func (testLib) RollbackTo(updaterworker.Release, updaterworker.Release, updaterworker.Identity) (updaterworker.Identity, updaterworker.Receipt, error) {
+	return updaterworker.Identity{}, updaterworker.Receipt{}, errNo
+}
+func (testLib) CurrentIdentity() (updaterworker.Identity, error) {
+	return updaterworker.Identity{}, errNo
+}
+
+type testRel struct{}
+
+func (testRel) Verdict(string) (updaterworker.Verdict, error) { return updaterworker.Verdict{}, errNo }
+func (testRel) Rehash(updaterworker.Verdict) (int, error)     { return 0, errNo }
+func (testRel) Reverify(updaterworker.Verdict) (updaterworker.ReleaseFacts, error) {
+	return updaterworker.ReleaseFacts{}, errNo
+}
+
+var errNo = errors.New("test adapter: refused")
+
+// serve, once its adapters exist, starts the worker (sweep), listens on the
+// installation's socket, prints its start line READ (n/a when absent),
+// answers the verbs, refuses an install whose release has no verdict, and
+// ends cleanly on the signal — removing the socket.
+func TestServeWiresTheWorkerBehindTheSocket(t *testing.T) {
+	inst, data := install(t)
+	t.Setenv(updaterworker.CutoverTokenEnv, "tok-serve-never-printed-9e1f")
+	t.Setenv("HOME", t.TempDir())
+	checkProcess = func() error { return nil }
+	newLibrary = func() (updaterworker.Library, error) { return testLib{}, nil }
+	newReverifier = func(updaterworker.Target) (updaterworker.Reverifier, error) { return testRel{}, nil }
+	ctx, cancel := context.WithCancel(context.Background())
+	serveContext = func() (context.Context, context.CancelFunc) { return ctx, cancel }
+	t.Cleanup(func() {
+		checkProcess = updaterworker.CheckProcess
+		newLibrary = func() (updaterworker.Library, error) { return nil, updaterworker.ErrNotWired }
+		newReverifier = func(updaterworker.Target) (updaterworker.Reverifier, error) { return nil, updaterworker.ErrNotWired }
+		serveContext = func() (context.Context, context.CancelFunc) { return context.WithCancel(context.Background()) }
+	})
+	var errb syncBuffer
+	rc := make(chan int, 1)
+	go func() { rc <- run([]string{"--install-dir", inst, "serve"}, strings.NewReader(""), io.Discard, &errb) }()
+	var c *updaterwire.Client
+	for deadline := time.Now().Add(10 * time.Second); c == nil; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("serve never listened: %s", errb.String())
+		}
+		c, _ = updaterwire.DialWorker(data)
+	}
+	defer c.Close()
+	if resp, err := c.Do(updaterwire.NewStatus("")); err != nil || resp.State != "idle" {
+		t.Fatalf("status = %+v, %v", resp, err)
+	}
+	if resp, err := c.Do(updaterwire.NewInstall("v1.2.0", testJob)); err != nil || resp.Error != "release not verified" {
+		t.Fatalf("install without a verdict = %+v, %v", resp, err)
+	}
+	cancel()
+	if got := <-rc; got != 0 {
+		t.Fatalf("serve ended %d: %s", got, errb.String())
+	}
+	line := errb.String()
+	if !strings.Contains(line, "🔧 nofx-updater: serving ") || !strings.Contains(line, "active=n/a · recovery_needed=n/a · stale_at_start=n/a") {
+		t.Fatalf("start line: %q", line)
+	}
+	if strings.Contains(line, "tok-serve-never-printed") {
+		t.Fatal("serve printed the token")
+	}
+	if p, _ := updaterwire.SocketPath(data); fileExists(p) {
+		t.Fatal("the socket survives serve")
+	}
+}
+
+type syncBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
+}
+
+func fileExists(p string) bool { _, err := os.Lstat(p); return err == nil }

@@ -20,16 +20,21 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
+	"path/filepath"
 	"strings"
+	"syscall"
 
 	"nofx/internal/updaterjob"
 	"nofx/internal/updaterwire"
+	"nofx/internal/updaterwire/wireserver"
 	"nofx/internal/updaterworker"
 )
 
@@ -39,6 +44,21 @@ var (
 	isTerminal   = stdinIsTerminal
 	checkProcess = updaterworker.CheckProcess
 	getwd        = os.Getwd
+	// serveContext ends serve (SIGINT/SIGTERM in production).
+	serveContext = func() (context.Context, context.CancelFunc) {
+		return signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	}
+)
+
+// The two production adapters. Until they land they REFUSE, and serve with
+// them (L4): the activation library adapter (library_activation.go, one-line
+// delegations to nofx/internal/activation) after #201 merges into this
+// branch, the release re-proof (U3's ReadReleaseVerdict / RehashRelease /
+// ReverifyRelease against <install>/deploy/release_allowed_signers) at the
+// U3 fold. The fold replaces these two bodies and nothing else.
+var (
+	newLibrary    = func() (updaterworker.Library, error) { return nil, updaterworker.ErrNotWired }
+	newReverifier = func(updaterworker.Target) (updaterworker.Reverifier, error) { return nil, updaterworker.ErrNotWired }
 )
 
 func main() { os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)) }
@@ -98,20 +118,74 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 }
 
 // serve refuses, in order: the process checks (root, the bot's cgroup, TZ),
-// a missing cutover token, and — until they land — the two production
-// adapters. It writes nothing before the last check passes.
+// a missing cutover token, an adapter that has not landed, no home for the
+// backups, and the start sweep (more than one unfinished job). Only then does
+// it listen, print its start line (READ; n/a when absent) and serve until
+// SIGINT/SIGTERM.
 func serve(t updaterworker.Target, stderr io.Writer) int {
 	if err := checkProcess(); err != nil {
 		fmt.Fprintln(stderr, "nofx-updater serve:", err)
 		return 2
 	}
-	if _, err := updaterworker.NewHTTPApp(t.BaseURL()); err != nil {
+	app, err := updaterworker.NewHTTPApp(t.BaseURL())
+	if err != nil {
 		fmt.Fprintln(stderr, "nofx-updater serve:", err)
 		return 2
 	}
-	fmt.Fprintf(stderr, "nofx-updater serve: %v — the activation library adapter lands after #201 merges to dev and the release re-proof adapter at the U3 fold; refusing to start (install dir %s, data dir %s); nothing was written\n",
-		updaterworker.ErrNotWired, t.InstallDir, t.DataDir)
-	return 2
+	lib, lerr := newLibrary()
+	rel, rerr := newReverifier(t)
+	if lerr != nil || rerr != nil {
+		fmt.Fprintf(stderr, "nofx-updater serve: %v — the activation library adapter lands after #201 merges to dev and the release re-proof adapter at the U3 fold; refusing to start (install dir %s, data dir %s); nothing was written\n",
+			updaterworker.ErrNotWired, t.InstallDir, t.DataDir)
+		return 2
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || !filepath.IsAbs(home) {
+		fmt.Fprintln(stderr, "nofx-updater serve: no home directory for ~/nofx-backups/updater")
+		return 2
+	}
+	logf := func(format string, a ...any) { fmt.Fprintf(stderr, format+"\n", a...) }
+	w, err := updaterworker.New(updaterworker.Config{
+		Target:     t,
+		BackupRoot: filepath.Join(home, "nofx-backups", "updater"),
+		Budgets:    updaterworker.DefaultBudgets(),
+		Logf:       logf,
+	}, updaterworker.Deps{Lib: lib, App: app, Rel: rel, Host: updaterworker.OSHost{LockScript: filepath.Join(t.InstallDir, "deploy", "nofx-lock.sh")}})
+	if err != nil {
+		fmt.Fprintln(stderr, "nofx-updater serve:", err)
+		return 2
+	}
+	path, err := updaterwire.SocketPath(t.DataDir)
+	if err != nil {
+		fmt.Fprintln(stderr, "nofx-updater serve:", err)
+		return 2
+	}
+	ctx, stop := serveContext()
+	defer stop()
+	rep, err := w.Start(ctx)
+	if err != nil {
+		fmt.Fprintln(stderr, "nofx-updater serve:", err)
+		return 2
+	}
+	ln, err := wireserver.Listen(path, logf)
+	if err != nil {
+		fmt.Fprintln(stderr, "nofx-updater serve:", err)
+		return 2
+	}
+	defer ln.Close()
+	fmt.Fprintf(stderr, "🔧 nofx-updater: serving %s · install %s · data %s · active=%s · recovery_needed=%s · stale_at_start=%s\n",
+		path, t.InstallDir, t.DataDir, na(rep.Active), na(strings.Join(rep.Recovery, ",")), na(strings.Join(rep.StaleAtStart, ",")))
+	done := make(chan error, 1)
+	go func() { done <- ln.Serve(w.Handle) }()
+	select {
+	case <-ctx.Done():
+		ln.Close()
+		<-done
+		return 0
+	case err := <-done:
+		fmt.Fprintln(stderr, "nofx-updater serve:", err)
+		return 1
+	}
 }
 
 // statusWorker asks the running worker (status with no job id).
