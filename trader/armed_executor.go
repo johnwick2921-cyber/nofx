@@ -895,12 +895,12 @@ func (at *AutoTrader) maybeManageArmedOrdersAtOpts(snap map[string]kernel.Struct
 					}
 				}
 			}
-			// W1b E1+E2 — a WORKING row the new version re-priced (its AUTHORED
-			// bracket ≥ 2 ticks under a newer version — legs[li] is the leg before
-			// composition — or a zone that no longer holds its limit) is CANCELLED
-			// through the filled-arm guard and re-arms under the new version once
-			// the book confirms (arm_respec.go); nothing is modified in place. A leg
-			// cancelled here is not recorded "admitted" (its order was just pulled).
+			// W1b E1+E2 — a WORKING row the new version re-priced (its AUTHORED entry
+			// or bracket ≥ 2 ticks under a newer version — legs[li], before composition
+			// — or a zone that no longer holds its limit) is CANCELLED via the filled-arm
+			// guard and re-arms once the book confirms (arm_respec.go). The leg IS in
+			// G1's admitted set (admitted.admit above); only its geometry record stops
+			// short of "admitted". No hole: a cancel_pending row is never placed.
 			if row.ID != 0 && at.respecWorkingArm(ledger, plan, sc, li, prior, legs[li], leg, zl, now) {
 				continue
 			}
