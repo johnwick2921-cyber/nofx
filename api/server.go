@@ -38,6 +38,8 @@ type Server struct {
 	updateVerifier updateauth.Verifier
 	updateStart    UpdateStarter
 	updatesNow     func() time.Time
+	// M4 3b-B U5b: NOFX_UPDATER=1 read once at NewServer (configureUpdater).
+	updaterOn bool
 }
 
 // NewServer Creates API server. host is the bind interface — pass
@@ -75,6 +77,8 @@ func NewServer(traderManager *manager.TraderManager, st *store.Store, cryptoServ
 		port:                      port,
 		updateVerifier:            updateauth.StubVerifier{},
 	}
+	// M4 3b-B U5b: the updater glue knob (OFF = M3, byte for byte).
+	s.configureUpdater()
 
 	// Setup routes
 	s.setupRoutes()
