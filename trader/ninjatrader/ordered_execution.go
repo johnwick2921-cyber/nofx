@@ -28,9 +28,13 @@ func (t *TCPTrader) InstallOrderedExecutions(traderID, exchangeID, exchangeType 
 	if st == nil {
 		return nil, errors.New("install ordered executions: nil store")
 	}
-	// The durable close consumer is the SAME recordClose the legacy close-sync
-	// path calls — one funnel, so the worker's receive-order close applies the
-	// same ownership routing, pnl attribution and (R6) ApplyNT8Exit parking.
+	// The durable close consumer is NOT the legacy recordClose the advisory
+	// close-sync path calls — it is recordCloseOrdered → store.ApplyNT8Exit,
+	// with different semantics: one transaction reduces the exact owned
+	// residual, writes the deduped exit fill, flips the receipt, and parks the
+	// receipt (RETAINED as pending) plus the broker price (putPricedClose) when
+	// the row is missing or incomplete — instead of legacy's ProcessTrade
+	// attribution. Both are one funnel per path, but they are different funnels.
 	unreg, err := t.server.RegisterOrderedExecutionsFor(t.symbol, t.boundAccount, ntwire.OrderedExecutionHandlers{
 		Order: orderFn,
 		Fill:  t.handleFillInbound,

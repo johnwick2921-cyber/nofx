@@ -246,3 +246,59 @@ func TestNoOwnerLeavesLegacyPathUnchanged(t *testing.T) {
 		t.Fatal("legacy fill delivery timed out")
 	}
 }
+
+// F-B (CTO review) — the snapshot watermark is PER ACCOUNT. A snapshot for
+// account B arriving between A's order_update and A's own snapshot must NOT
+// satisfy A's wait: A keeps waiting (times out → BookGateNotFresh), and only
+// A's own snapshot flips it to BookGateFresh. RED: the global counter.
+func TestSnapshotWatermarkIsPerAccount(t *testing.T) {
+	s := startedServer(t, nil)
+	w := dialWire(t, s, HelloPayload{})
+	got := make(chan OrderUpdatePayload, 8)
+	unreg, err := s.RegisterOrderedExecutionsFor("MNQ", "Sim101", OrderedExecutionHandlers{
+		Order: func(u OrderUpdatePayload) { got <- u },
+	})
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	defer unreg()
+
+	// Scenario 1 — B's snapshot must NOT certify A's update.
+	if err := WriteFrame(w.conn, FrameOrderUpdate, OrderUpdatePayload{SignalID: "a1", State: "accepted", Symbol: "MNQ", Account: "Sim101", Quantity: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteFrame(w.conn, FrameOrderSnapshot, OrderSnapshotPayload{BuildID: "test", Account: "Sim102", Orders: []NT8Order{}}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case u := <-got:
+		t.Fatalf("B's snapshot certified A's update (BookGate=%d) — the watermark must be per-account", u.BookGate)
+	case <-time.After(300 * time.Millisecond):
+	}
+	// A's own snapshot flips the gate: the update applies promptly as Fresh.
+	if err := WriteFrame(w.conn, FrameOrderSnapshot, OrderSnapshotPayload{BuildID: "test", Account: "Sim101", Orders: []NT8Order{}}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case u := <-got:
+		if u.BookGate != BookGateFresh {
+			t.Fatalf("A's own snapshot must flip the gate to Fresh, got %d", u.BookGate)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("A's update never applied after A's own snapshot")
+	}
+
+	// Scenario 2 — no A snapshot at all: A times out → BookGateNotFresh (the
+	// book is suppressed, never the pre-change one).
+	if err := WriteFrame(w.conn, FrameOrderUpdate, OrderUpdatePayload{SignalID: "a2", State: "working", Symbol: "MNQ", Account: "Sim101", Quantity: 1}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case u := <-got:
+		if u.BookGate != BookGateNotFresh {
+			t.Fatalf("timeout must stamp BookGateNotFresh, got %d", u.BookGate)
+		}
+	case <-time.After(4 * time.Second):
+		t.Fatal("the bounded wait never timed out")
+	}
+}

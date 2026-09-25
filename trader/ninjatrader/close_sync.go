@@ -291,8 +291,17 @@ func (t *TCPTrader) recordCloseOrdered(
 	}
 	if result.Pending {
 		// The receipt is RETAINED (the store parked it) — the exit is never
-		// dropped; it applies when the cumulative entry update lands.
-		logger.Warnf("NT8 exit receipt PENDING owned entry evidence account=%s signal=%s qty=%.0f exit=%.2f (retained, will apply when the row catches up)",
+		// dropped; it applies when the cumulative entry update lands. AND the
+		// two legacy contracts are kept (F-A, class 40): the broker's price is
+		// parked for reconcile's orphan close (a no-row close or a manual
+		// flatten like #526's qty=21-over-1-lot would otherwise close at
+		// exit=entry pnl=0), and the flat signal is dropped exactly like
+		// legacy recordClose.
+		putPricedClose(p.Account, symbol, side, p.ExitPrice, qty, exitMs)
+		t.mu.Lock()
+		t.hasFill = false
+		t.mu.Unlock()
+		logger.Warnf("NT8 exit receipt PENDING owned entry evidence account=%s signal=%s qty=%.0f exit=%.2f (retained + price parked for reconcile; will apply when the row catches up)",
 			p.Account, p.SignalID, qty, p.ExitPrice)
 		return
 	}

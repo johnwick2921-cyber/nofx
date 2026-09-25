@@ -110,11 +110,13 @@ type TCPServer struct {
 
 	// W117 F2 — per-(symbol,account) ordered-execution owners: one FIFO worker
 	// goroutine each, fed by the read loop's non-blocking enqueue. snapSeq is
-	// the order_snapshot watermark (bumped in the read loop) the workers wait
-	// on so recordAcceptedRisk never reads the pre-change broker book.
+	// the PER-ACCOUNT order_snapshot watermark (bumped in the read loop) the
+	// workers wait on so recordAcceptedRisk never reads the pre-change broker
+	// book — an account's snapshot certifies only that account (F-B).
 	orderedMu     sync.Mutex
 	orderedOwners map[string]*orderedOwner
-	snapSeq       atomic.Int64
+	snapSeqMu     sync.Mutex
+	snapSeq       map[string]int64
 
 	// Coordinated order_update fan-out (picture-htf round, 2026-09-20):
 	// subscribeFor REPLACES the (symbol, account) channel, so two in-process
@@ -2063,7 +2065,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			}
 			// W117 F2 — enqueue to the owner's worker (stamped with the
 			// snapshot watermark for the post-change book gate, R4).
-			if s.enqueueOrdered(subKey(oup.Symbol, oup.Account), orderedItem{kind: orderedOrder, order: oup, snapAt: s.snapSeq.Load()}) {
+			if s.enqueueOrdered(subKey(oup.Symbol, oup.Account), orderedItem{kind: orderedOrder, order: oup, snapAt: s.snapSeqFor(oup.Account)}) {
 				oup.OrderedOwned = true
 			}
 			select {
@@ -2087,7 +2089,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			// W117 F2 — R4 watermark: every order_snapshot advances the
 			// counter the ordered workers wait on before applying the
 			// order_update that preceded it.
-			s.snapSeq.Add(1)
+			s.snapSeqBump(p.Account)
 			// The snapshot's build_id feeds the SAME far-side field the E7
 			// heartbeat handshake owns — one received value, one source.
 			if p.BuildID != "" {

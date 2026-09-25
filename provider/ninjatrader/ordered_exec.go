@@ -194,10 +194,32 @@ func (s *TCPServer) runOrderedOwner(key string, owner *orderedOwner) {
 // update before the snapshot would let recordAcceptedRisk read the PRE-change
 // broker book. On timeout the frame is applied with BookGate=bookNotFresh so
 // the book is suppressed rather than read stale.
+// snapSeqFor returns the order_snapshot watermark for one account (0 when none
+// has ever been seen). PER-ACCOUNT: a snapshot for account B must never satisfy
+// account A's post-update wait (the R4 review finding F-B — one global counter
+// let another account's snapshot certify A's pre-change book).
+func (s *TCPServer) snapSeqFor(account string) int64 {
+	s.snapSeqMu.Lock()
+	defer s.snapSeqMu.Unlock()
+	return s.snapSeq[account]
+}
+
+// snapSeqBump advances the account's watermark by one (called by the read loop
+// on every VALID order_snapshot for that account).
+func (s *TCPServer) snapSeqBump(account string) int64 {
+	s.snapSeqMu.Lock()
+	defer s.snapSeqMu.Unlock()
+	if s.snapSeq == nil {
+		s.snapSeq = make(map[string]int64)
+	}
+	s.snapSeq[account]++
+	return s.snapSeq[account]
+}
+
 func (s *TCPServer) waitForPostUpdateSnapshot(it *orderedItem) {
 	at := it.snapAt
 	deadline := time.Now().Add(orderedSnapWait)
-	for s.snapSeq.Load() <= at {
+	for s.snapSeqFor(it.order.Account) <= at {
 		if time.Now().After(deadline) {
 			s.logger.Warn("tcp_server: ordered order_update applied WITHOUT a post-update snapshot (book suppressed — never read stale)", "wait", orderedSnapWait)
 			it.order.BookGate = BookGateNotFresh
