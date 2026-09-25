@@ -7513,3 +7513,27 @@ That is the shape worth naming: a dry run proves the steps it REACHES. Code afte
 **Fixed in 3b-A:** the parse moved into `internal/activation` and reads from the LAST `)` in the line, pinned by a test whose comm is literally `(nofx bin (x))`. `deploy/cutover.sh` v7 delegates rather than carrying its own copy, so the attended boot and the unattended worker share one implementation and one test suite.
 
 **Probe:** for every procedure with a rehearsal mode, list the steps the rehearsal never reaches and ask what tests them. If the answer is "nothing", they are exercised first in production. Either the rehearsal must reach them (a seam, a fixture, a `--force-through` for the safe parts) or they must be moved into code a unit test can call — the second is usually right, because a step that only a live cutover can exercise is a step nobody can afford to debug.
+
+## CLASS NN (assigned at merge) — UI TRUTH MUST DISTINGUISH UNKNOWN FROM EMPTY, AND STALE WRITES MUST NOT LAND
+
+A failed or malformed snapshot fetch (orders, positions, balances) must render UNKNOWN, never an empty table — only a validated success may clear prior state, and late or out-of-scope responses must be discarded against the request's own view identity (symbol/interval/account). Streamed session writes (SSE chat) must be owned by the session that started them: an old stream's completion or failure must not write into a newer session's store, clear its loading flag, or overwrite its history.
+
+## CLASS NN (assigned at merge) — REQUEST MODEL SELECTION MUST NOT MUTATE SHARED AGENT
+
+Two authenticated chats must retain their own selected model credentials through all follow-up calls and summaries. Shared history/flow locks stay shared without copying mutexes. Missing user configuration must not select another owner's default credentials. Exercise both HTTP identity and concurrent model selection.
+
+## CLASS NN (assigned at merge) — a selector in a path the ownership middleware's prefix gate does not match
+
+**Found:** 2026-09-25, W117 PR-D, porting #117 576bd75b [A]. `planTraderOwnership` only ran on plan/risk-prefixed routes; a second `trader_id` selector (query array, `/api/traders/:id` path, body on POST/PUT/PATCH/DELETE) on any OTHER protected route named another owner's trader and sailed through with a 200. **Fixed:** the prefix gate is dropped — the selector sweep runs on every protected route; path segments, query values and body fields are all compared against the session owner. Pinned by a production-router test that plants a second selector at every location and demands 403. **Probe:** for every ownership middleware, list the selector LOCATIONS it reads and the routes it GATES; any location outside the gate is a second selector.
+
+## CLASS NN (assigned at merge) — an optimistic-concurrency edit with no revision the server can compare
+
+**Found:** 2026-09-25, W117 PR-D, porting #117 09e24a08 [A]. Overlay saves carried no expected-revision fields, so a stale draft silently superseded newer rows (no 409 existed). **Fixed:** `handlePlanOverlay` requires `expected_plan_id/expected_plan_version/expected_overlay_version` (400 without); `applyPlanOverlay` 409s when the current row or overlay revision moved past them, and appends via `AppendOverlayChecked` with a writer-side revision guard; `plan/today` returns `plan_id` + `overlay_version` for the client to echo; the web client sends the viewed revision and shows the 409 inline. **Probe:** every edit endpoint that touches per-owner persisted state must name the revision the CLIENT viewed and refuse when the stored one has moved — including the client half that echoes it.
+
+## CLASS NN (assigned at merge) — a gap value resolved after dereference
+
+**Found:** 2026-09-25, W117 PR-D, porting #117 a6b88b7d [A]. `handlePlanAskApply` dereferenced `sess.Name` before the ok check, so a session-gap instant (default window closes 14:45, applies at 15:00) panicked the apply route; `handlePlanRealign` shared the inline form. **Fixed:** `planMutationSessionAt` resolves the session BEFORE any dereference, uses the wrap-aware chain trade date (the date plan reads use), refuses the gap as `ok=false`, and keeps the `sessionRunnable` gate; both handlers guard before touching `sess`. **Probe:** for every `thing, ok := lookup()` followed by a use of `thing`, walk the path from a missing lookup — the use must be behind the `ok` check, and a test must plant the MISSING case at the production call site.
+
+## CLASS NN (assigned at merge) — a request-supplied key selects server-side per-owner state
+
+**Found:** 2026-09-25, W117 PR-D, porting #117 e39d2070 [A]. `HandleChat`/`HandleChatStream` read a `user_id` from the caller's request body — a request carrying another owner's numeric key selected THAT owner's persisted conversation history; the authenticated owner's own clear didn't address it. **Fixed:** HTTP conversation identity derives ONLY from the authenticated middleware (`WithStoreUserID`); the caller-supplied key is ignored; a caller census confirms the two chat handlers are mounted exclusively behind the auth middleware (no telegram/agent-door/internal callers exist today). **Probe:** any endpoint that persists or clears per-owner state must derive the owner from the AUTHENTICATED session, never from a request field — grep the body keys for `user_id`-shaped names and prove each is ignored.
