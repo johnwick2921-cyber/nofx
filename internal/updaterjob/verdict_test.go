@@ -4,7 +4,11 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
+	"path/filepath"
+	"sort"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -46,4 +50,115 @@ func TestVerdictFileHasNoWriter(t *testing.T) {
 		}
 		return true
 	})
+	t.Run("the package: no file but verdict.go names the verdict path", testVerdictPathOnlyInVerdictGo)
+}
+
+// verdictPathNames are the identifiers that name WHERE a verdict lives.
+var verdictPathNames = map[string]bool{"VerdictPath": true, "verdictsDirName": true}
+
+// testVerdictPathOnlyInVerdictGo — CTO ruling 1790279155144 (3): the no-writer
+// pin covers the whole internal/updaterjob PACKAGE, not one file. verdict.go
+// is judged above to write nothing; a SECOND file that could reach the
+// verdict's path could write there and the pin above would never see it
+// (the class-88 shape: a second writer beside the one that was checked). So
+// every NON-test .go file in the package is parsed — whatever its build tags
+// — and any file other than verdict.go that references VerdictPath or
+// verdictsDirName as an identifier or selector (a call, a function-value
+// alias, a Join argument), or spells the "verdicts" directory in a string
+// literal, is refused. A comment mention is not a reference and passes.
+// Inside verdict.go, VerdictPath may only be CALLED and verdictsDirName used
+// only in VerdictPath's own body, so verdict.go cannot hand a second name for
+// either to another file.
+func testVerdictPathOnlyInVerdictGo(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var walked []string
+	sawInVerdictGo := false
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || filepath.Ext(name) != ".go" || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		walked = append(walked, name)
+		f, err := parser.ParseFile(token.NewFileSet(), name, nil, parser.SkipObjectResolution)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if name == "verdict.go" {
+			sawInVerdictGo = checkVerdictGoPathUses(t, f)
+			continue
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			switch n := n.(type) {
+			case *ast.Ident: // also the Sel of every selector
+				if verdictPathNames[n.Name] {
+					t.Errorf("%s references %s — only verdict.go may name the verdict path (the verdict's one writer is internal/updaterworker)", name, n.Name)
+				}
+			case *ast.BasicLit:
+				if n.Kind == token.STRING {
+					if v, err := strconv.Unquote(n.Value); err == nil {
+						for _, seg := range strings.Split(filepath.ToSlash(v), "/") {
+							if seg == verdictsDirName {
+								t.Errorf("%s spells the verdict directory %q in a string literal (%s) — only verdict.go may name the verdict path", name, verdictsDirName, n.Value)
+							}
+						}
+					}
+				}
+			}
+			return true
+		})
+	}
+	sort.Strings(walked)
+	if !sawInVerdictGo || len(walked) < 2 {
+		t.Fatalf("the walk is vacuous: files %v, verdict.go references seen = %v", walked, sawInVerdictGo)
+	}
+}
+
+// checkVerdictGoPathUses holds verdict.go to CALLING VerdictPath and using
+// verdictsDirName only inside VerdictPath; it reports whether it saw both.
+func checkVerdictGoPathUses(t *testing.T, f *ast.File) bool {
+	t.Helper()
+	called, used := false, false
+	allowed := map[*ast.Ident]bool{}
+	for _, d := range f.Decls {
+		switch d := d.(type) {
+		case *ast.FuncDecl:
+			if d.Name.Name == "VerdictPath" && d.Recv == nil {
+				allowed[d.Name] = true
+				ast.Inspect(d.Body, func(n ast.Node) bool {
+					if id, ok := n.(*ast.Ident); ok && id.Name == "verdictsDirName" {
+						allowed[id], used = true, true
+					}
+					return true
+				})
+			}
+		case *ast.GenDecl:
+			for _, sp := range d.Specs {
+				if vs, ok := sp.(*ast.ValueSpec); ok && d.Tok == token.CONST {
+					for _, nm := range vs.Names {
+						if nm.Name == "verdictsDirName" {
+							allowed[nm] = true
+						}
+					}
+				}
+			}
+		}
+	}
+	ast.Inspect(f, func(n ast.Node) bool {
+		if c, ok := n.(*ast.CallExpr); ok {
+			if id, ok := c.Fun.(*ast.Ident); ok && id.Name == "VerdictPath" {
+				allowed[id], called = true, true
+			}
+		}
+		return true
+	})
+	ast.Inspect(f, func(n ast.Node) bool {
+		if id, ok := n.(*ast.Ident); ok && verdictPathNames[id.Name] && !allowed[id] {
+			t.Errorf("verdict.go uses %s other than by a call (VerdictPath) or inside VerdictPath (verdictsDirName) — a second name for the verdict path could reach another file", id.Name)
+		}
+		return true
+	})
+	return called && used
 }

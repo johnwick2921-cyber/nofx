@@ -12,7 +12,8 @@ package updaterjob
 // internal/updaterwire.
 //
 // READ-ONLY ON PURPOSE. Nothing in this file creates, links, renames, chmods
-// or removes a file (TestVerdictFileHasNoWriter pins it). The ONE writer stays
+// or removes a file, and no OTHER file in this package names the verdict path
+// (TestVerdictFileHasNoWriter pins both, over every non-test file). The ONE writer stays
 // in the worker package, which the app cannot link: a writer here would let
 // app code mint the evidence the install gate trusts. (Brief §3.1 listed a
 // WriteVerdict here; it is deliberately kept worker-side — fail-closed.)
