@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -234,4 +235,195 @@ func TestExitBeforeCumulativeEntryIsRetainedThenApplied(t *testing.T) {
 	if closedRows[0].Status != "CLOSED" || closedRows[0].RealizedPnL == 0 {
 		t.Fatalf("the applied exit must close the row with realized pnl: %+v", closedRows[0])
 	}
+}
+
+// G1 (CTO review part 2) — one order_update applies EXACTLY once: the advisory
+// armed consumer (consumeArmedOrderUpdates, the loop the cycle runs) is active
+// and must skip the owned frame. RED: the onArmedOrderUpdate skip guard removed
+// → a second accepted-risk row.
+func TestOneOrderUpdateAppliesExactlyOnce(t *testing.T) {
+	st, err := store.New(filepath.Join(t.TempDir(), "g1.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	srv := ntwire.NewTCPServer(nil)
+	srv.SetAddrForTest("127.0.0.1:0")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := srv.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = srv.Stop() })
+	var c net.Conn
+	for i := 0; i < 100 && c == nil; i++ {
+		cc, err := net.Dial("tcp", srv.ListenAddrForTest().String())
+		if err == nil {
+			deadline := time.Now().Add(20 * time.Millisecond)
+			for time.Now().Before(deadline) && !srv.IsConnected() {
+				time.Sleep(2 * time.Millisecond)
+			}
+			if srv.IsConnected() {
+				c = cc
+			} else {
+				_ = cc.Close()
+			}
+		} else if cc != nil {
+			_ = cc.Close()
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if c == nil {
+		t.Fatal("fake client never connected")
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	if err := ntwire.WriteFrame(c, ntwire.FrameHello, ntwire.HelloPayload{ProtocolVersion: ntwire.ProtocolVersion, Source: "vltrader-addon"}); err != nil {
+		t.Fatal(err)
+	}
+
+	nt := ntTrader.NewTCPTrader(srv, "MNQ", "Sim101")
+	at := &AutoTrader{id: "trader-1", store: st, exchange: "ninjatrader", trader: nt, exchangeID: "ex"}
+	ledger := st.ArmedOrders()
+	// place_pending: the accepted receipt's own transition (StateWorking)
+	// writes "confirmed by order_update signal=…" into the reason — so a double
+	// application is a countable second append, not an invisible no-op.
+	if err := ledger.UpsertArm(&store.ArmedOrderDB{TraderID: at.id, PlanID: "2026-09-25:G1", Version: 1, Session: "NY", Scenario: "S1", Side: "long", EntryPx: 100, StopPx: 95, TargetPx: 110, State: store.StatePlacePending, SignalID: "sig-g4"}); err != nil {
+		t.Fatal(err)
+	}
+	at.installNTOrderedExecutions(nt)
+	t.Cleanup(func() {
+		at.orderedExecMu.Lock()
+		if at.orderedExecUnreg != nil {
+			at.orderedExecUnreg()
+		}
+		at.orderedExecMu.Unlock()
+	})
+	// Activate the ADVISORY consumer subscription (the loop the cycle runs).
+	at.consumeArmedOrderUpdates(nt, ledger)
+
+	if err := ntwire.WriteFrame(c, ntwire.FrameOrderUpdate, ntwire.OrderUpdatePayload{SignalID: "sig-g4", State: "accepted", Symbol: "MNQ", Account: "Sim101", Quantity: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ntwire.WriteFrame(c, ntwire.FrameOrderSnapshot, ntwire.OrderSnapshotPayload{Account: "Sim101", BuildID: "test", Orders: []ntwire.NT8Order{}}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if rows, _ := st.AcceptedRisk().ForSignal("sig-g4"); len(rows) >= 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the ordered worker never applied the update")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	// Drain the advisory copy through the SAME consumer the cycle uses — the
+	// skip guard must make it a no-op.
+	at.consumeArmedOrderUpdates(nt, ledger)
+	time.Sleep(150 * time.Millisecond)
+	if rows, _ := st.AcceptedRisk().ForSignal("sig-g4"); len(rows) != 1 {
+		t.Fatalf("one order_update must produce exactly ONE accepted-risk row, got %d — the advisory consumer double-applied", len(rows))
+	}
+	row, err := ledger.FindBySignal(at.id, "sig-g4")
+	if err != nil || row == nil {
+		t.Fatalf("armed row: %v", err)
+	}
+	if n := strings.Count(row.StateReason, "order_update signal="); n != 1 {
+		t.Fatalf("the placement receipt must be recorded ONCE, got %d appends in %q", n, row.StateReason)
+	}
+}
+
+// G2 (CTO review part 2) — the Stop unregister is pinned: a real Run → Stop,
+// then a SECOND trader's Run on the same (symbol, account) installs cleanly.
+// RED: the unregister block removed from Stop → the second install is refused
+// (ErrOrderedOwnerExists) and its orderedExecUnreg stays nil forever.
+func TestStopUnregistersThenSecondRunInstallsCleanly(t *testing.T) {
+	st, err := store.New(filepath.Join(t.TempDir(), "g2.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	srv := ntwire.NewTCPServer(nil)
+	srv.SetAddrForTest("127.0.0.1:0")
+	srv.SetAccountsList([]ntwire.AccountInfo{{Name: "Sim101", IsSim: true}}, "Sim101")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := srv.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = srv.Stop() })
+	var c net.Conn
+	for i := 0; i < 100 && c == nil; i++ {
+		cc, err := net.Dial("tcp", srv.ListenAddrForTest().String())
+		if err == nil {
+			deadline := time.Now().Add(20 * time.Millisecond)
+			for time.Now().Before(deadline) && !srv.IsConnected() {
+				time.Sleep(2 * time.Millisecond)
+			}
+			if srv.IsConnected() {
+				c = cc
+			} else {
+				_ = cc.Close()
+			}
+		} else if cc != nil {
+			_ = cc.Close()
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if c == nil {
+		t.Fatal("fake client never connected")
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	if err := ntwire.WriteFrame(c, ntwire.FrameHello, ntwire.HelloPayload{ProtocolVersion: ntwire.ProtocolVersion, Source: "vltrader-addon"}); err != nil {
+		t.Fatal(err)
+	}
+
+	mk := func(id string) *AutoTrader {
+		nt := ntTrader.NewTCPTrader(srv, "MNQ", "Sim101")
+		at := &AutoTrader{id: id, store: st, exchange: "ninjatrader", trader: nt, exchangeID: "ex"}
+		at.config.StrategyConfig = &store.StrategyConfig{}
+		at.mcpClient = &fakeDecisionClient{}
+		return at
+	}
+	installed := func(at *AutoTrader) bool {
+		at.orderedExecMu.Lock()
+		defer at.orderedExecMu.Unlock()
+		return at.orderedExecUnreg != nil
+	}
+
+	at1 := mk("trader-1")
+	runDone := make(chan struct{})
+	go func() {
+		defer func() { _ = recover() }() // a bare-fixture cycle panic must not fail the pin
+		defer close(runDone)
+		_ = at1.Run()
+	}()
+	deadline := time.Now().Add(10 * time.Second)
+	for !installed(at1) && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if !installed(at1) {
+		t.Fatal("the first Run never installed the ordered executions")
+	}
+	at1.Stop() // the production Stop — its unregister block is the pin's target
+	select {
+	case <-runDone:
+	case <-time.After(2 * time.Second):
+	}
+
+	at2 := mk("trader-2")
+	runDone2 := make(chan struct{})
+	go func() {
+		defer func() { _ = recover() }()
+		defer close(runDone2)
+		_ = at2.Run()
+	}()
+	deadline = time.Now().Add(10 * time.Second)
+	for !installed(at2) && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if !installed(at2) {
+		t.Fatal("after the first trader's Stop, the second Run on the same (symbol, account) must install cleanly — the owner was not unregistered")
+	}
+	at2.Stop()
 }
