@@ -157,6 +157,41 @@ export default function UpdatesPage() {
     if (maintenance?.job_id) setLastJobID(maintenance.job_id)
   }, [maintenance?.job_id])
 
+  // The receipt download (OQ-7): the route sits behind the M3 gate, so a bare
+  // navigation 403s — the receipt is fetched through the API client (which
+  // sends X-NOFX-Update) and saved as a file. A refusal shows the server's
+  // own text, never a fabricated one.
+  const [receiptBusy, setReceiptBusy] = useState(false)
+  const [receiptError, setReceiptError] = useState<string | null>(null)
+  const downloadReceipt = useCallback(async () => {
+    const id = polledJobID
+    if (!id || receiptBusy) return
+    setReceiptBusy(true)
+    setReceiptError(null)
+    try {
+      const res = await updatesApi.receipt(id)
+      if (!res?.data) {
+        // The server's own text when it said one; nothing fabricated when it
+        // did not (the button simply stops spinning).
+        setReceiptError(res?.error ?? null)
+        return
+      }
+      const blob = new Blob([JSON.stringify(res.data, null, 2)], {
+        type: 'application/json',
+      })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `receipt-${id}.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } finally {
+      setReceiptBusy(false)
+    }
+  }, [polledJobID, receiptBusy, language])
+
   // Panel E — resolve PivotWindow, the trader id and the trader's futures
   // symbol (READ from the trader row via its exchange config — never a
   // literal) from the selected trader.
@@ -436,14 +471,25 @@ export default function UpdatesPage() {
               </div>
             )}
             {job?.receipt_url && (
-              <a
-                href={job.receipt_url}
-                className="mt-2 inline-flex items-center gap-1.5 text-xs text-nofx-gold hover:underline"
-                data-testid="receipt-link"
-              >
-                <Download size={13} />
-                {up('downloadReceipt', language)}
-              </a>
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={downloadReceipt}
+                  disabled={receiptBusy}
+                  className="inline-flex items-center gap-1.5 text-xs text-nofx-gold hover:underline disabled:opacity-60"
+                  data-testid="receipt-link"
+                >
+                  {receiptBusy ? (
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : (
+                    <Download size={13} />
+                  )}
+                  {up('downloadReceipt', language)}
+                </button>
+                {receiptError && (
+                  <p className="mt-1 text-xs text-red-400">{receiptError}</p>
+                )}
+              </div>
             )}
           </>
         )}

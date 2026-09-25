@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   check: vi.fn(),
   install: vi.fn(),
   job: vi.fn(),
+  receipt: vi.fn(),
   getTraders: vi.fn(),
   getStrategyEffective: vi.fn(),
   getExchangeConfigs: vi.fn(),
@@ -27,6 +28,7 @@ vi.mock('../lib/api/updates', () => ({
     check: mocks.check,
     install: mocks.install,
     job: mocks.job,
+    receipt: mocks.receipt,
   },
   INSTALL_AUTHZ_UNDER_REVIEW: true,
   INSTALL_UNDER_REVIEW_TEXT: 'install authorization under review',
@@ -176,6 +178,30 @@ describe('UpdatesPage', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('downloads the receipt through the API client, not a bare navigation (OQ-7)', async () => {
+    mocks.maintenance.mockResolvedValue(heldMaintenance)
+    mocks.job.mockResolvedValue({
+      job_id: 'job-7',
+      state: 'maintenance_held',
+      receipt_url: '/api/updates/jobs/job-7/receipt',
+    })
+    mocks.receipt.mockResolvedValue({
+      data: { receipts: [{ step: 'preflight', ok: true }] },
+    })
+    render(<UpdatesPage />)
+    await waitFor(() => expect(screen.getByTestId('receipt-link')).toBeTruthy())
+    const link = screen.getByTestId('receipt-link')
+    // A browser navigation to the URL cannot carry X-NOFX-Update and 403s;
+    // the page fetches through the client instead.
+    expect(link.tagName).toBe('BUTTON')
+    fireEvent.click(link)
+    await waitFor(() => expect(mocks.receipt).toHaveBeenCalledWith('job-7'))
+    // a refused receipt shows the server's own text
+    mocks.receipt.mockResolvedValueOnce({ data: null, error: 'not found' })
+    fireEvent.click(link)
+    await waitFor(() => expect(screen.getByText('not found')).toBeTruthy())
   })
 
   it('install stays disabled with the exact review text and never POSTs', async () => {
