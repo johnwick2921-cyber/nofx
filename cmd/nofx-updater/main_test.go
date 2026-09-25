@@ -375,6 +375,51 @@ func TestServeWiresTheWorkerBehindTheSocket(t *testing.T) {
 	}
 }
 
+// PIN (U4F, the containment class applied to the backup root): serve refuses
+// — and writes nothing — when ~/nofx-backups/updater is inside the install,
+// by path elements (<install>/..h is inside) and after resolving symlinks
+// (a HOME named through a symlink to the install is inside too). A snapshot
+// that lives inside the install it restores dies with it.
+func TestServeRefusesABackupRootInsideTheInstall(t *testing.T) {
+	inst, data := install(t)
+	t.Setenv(updaterworker.CutoverTokenEnv, "tok-backup-never-printed-3c7d")
+	checkProcess = func() error { return nil }
+	newLibrary = func() (updaterworker.Library, error) { return testLib{}, nil }
+	newReverifier = func(updaterworker.Target) (updaterworker.Reverifier, error) { return testRel{}, nil }
+	done, cancel := context.WithCancel(context.Background())
+	cancel() // a serve that WRONGLY starts ends at once
+	serveContext = func() (context.Context, context.CancelFunc) { return done, cancel }
+	t.Cleanup(func() {
+		checkProcess = updaterworker.CheckProcess
+		newLibrary = func() (updaterworker.Library, error) { return nil, updaterworker.ErrNotWired }
+		newReverifier = updaterworker.NewReleaseReverifier
+		serveContext = func() (context.Context, context.CancelFunc) {
+			return signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		}
+	})
+	link := filepath.Join(t.TempDir(), "instlink")
+	if err := os.Symlink(inst, link); err != nil {
+		t.Fatal(err)
+	}
+	for name, home := range map[string]string{
+		"HOME inside the install":                     filepath.Join(inst, "h"),
+		"HOME named ..h inside the install":           filepath.Join(inst, "..h"),
+		"HOME through a symlink to the install":       filepath.Join(link, "h"),
+		"HOME through a symlink, not yet created too": filepath.Join(link, "h", "not", "yet"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("HOME", home)
+			rc, out, errs := runCLI(t, nil, "--install-dir", inst, "serve")
+			if rc != 2 || !strings.Contains(errs, "is inside the install") || out != "" {
+				t.Fatalf("serve with HOME=%s = %d %q %q; want refused naming the backup root inside the install", home, rc, out, errs)
+			}
+			if _, err := os.Stat(filepath.Join(data, "updater")); !os.IsNotExist(err) {
+				t.Fatalf("a refused serve created %s (%v)", filepath.Join(data, "updater"), err)
+			}
+		})
+	}
+}
+
 type syncBuffer struct {
 	mu sync.Mutex
 	b  bytes.Buffer

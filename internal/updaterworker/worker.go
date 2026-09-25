@@ -90,7 +90,11 @@ func New(cfg Config, d Deps) (*Worker, error) {
 			return nil, fmt.Errorf("updaterworker: %s must be an absolute path", name)
 		}
 	}
-	if within(cfg.BackupRoot, t.InstallDir) {
+	// by path ELEMENTS (within) on RESOLVED paths: a backup root named
+	// through a symlink to the install is inside it (U4F, the containment
+	// class); the root may not exist yet, so its deepest existing ancestor
+	// is what gets resolved
+	if within(resolveExisting(cfg.BackupRoot), resolveExisting(t.InstallDir)) {
 		return nil, fmt.Errorf("updaterworker: the backup root %s is inside the install %s — a snapshot must survive the install it restores", cfg.BackupRoot, t.InstallDir)
 	}
 	if t.Port <= 0 || t.Port > 65535 {
@@ -105,7 +109,28 @@ func New(cfg Config, d Deps) (*Worker, error) {
 	return &Worker{cfg: cfg, lib: d.Lib, app: d.App, rel: d.Rel, host: d.Host, resume: map[string]bool{}, wake: make(chan struct{}, 1)}, nil
 }
 
-// within reports whether p is dir or below it.
+// resolveExisting is p with its deepest EXISTING ancestor resolved through
+// filepath.EvalSymlinks and the not-yet-created rest appended unchanged (p
+// absolute and clean). With nothing resolvable it is p itself.
+func resolveExisting(p string) string {
+	p = filepath.Clean(p)
+	var rest []string
+	for cur := p; ; cur = filepath.Dir(cur) {
+		if real, err := filepath.EvalSymlinks(cur); err == nil {
+			for i := len(rest) - 1; i >= 0; i-- {
+				real = filepath.Join(real, rest[i])
+			}
+			return real
+		}
+		if filepath.Dir(cur) == cur {
+			return p
+		}
+		rest = append(rest, filepath.Base(cur))
+	}
+}
+
+// within reports whether p is dir or below it (path elements, never a string
+// prefix: "<dir>/..x" is below dir).
 func within(p, dir string) bool {
 	rel, err := filepath.Rel(filepath.Clean(dir), filepath.Clean(p))
 	if err != nil {
