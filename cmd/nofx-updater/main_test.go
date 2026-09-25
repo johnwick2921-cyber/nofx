@@ -624,6 +624,19 @@ func TestFetchRefusesWithoutItsInputs(t *testing.T) {
 			}
 			return []string{fetchID}
 		}, "no allowed-signers file"},
+		// U4F defect 3: a symlinked <install>/deploy is never followed to a
+		// trust anchor outside the install (probe P4)
+		{"deploy/ in the install is a symlink", func(t *testing.T, f *fetchRig) []string {
+			deploy := filepath.Join(f.inst, "deploy")
+			elsewhere := filepath.Join(t.TempDir(), "deploy-elsewhere")
+			if err := os.Rename(deploy, elsewhere); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(elsewhere, deploy); err != nil {
+				t.Fatal(err)
+			}
+			return []string{fetchID}
+		}, "allowed-signers file is unsafe"},
 		{"no archive in the inbox", func(t *testing.T, f *fetchRig) []string {
 			if err := os.Remove(filepath.Join(f.inbox, fetchID+".tar.gz")); err != nil {
 				t.Fatal(err)

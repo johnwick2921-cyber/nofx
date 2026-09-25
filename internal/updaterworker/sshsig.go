@@ -43,7 +43,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -199,9 +198,11 @@ var signersCheckedHook func(path string)
 // of every ssh-ed25519 key it lists for the principal "release". The file is
 // a trust anchor: it must be a regular file (never a symlink) that neither
 // group nor other can write, and it is judged and read as ONE file — opened
-// once (O_NOFOLLOW, O_NONBLOCK: a symlink fails, a FIFO cannot block), then
-// every check is made on that descriptor, so a swap of the path after the
-// checks changes nothing that is read.
+// once (O_NOFOLLOW, O_NONBLOCK: a symlink fails, a FIFO cannot block) through
+// its directory, which must itself be a real directory (openTrustAnchor: a
+// symlinked <install>/deploy is never followed), then every check is made on
+// that descriptor, so a swap of the path after the checks changes nothing
+// that is read.
 //
 // Only lines that name "release" in their principal list are parsed; a
 // malformed one of those refuses the WHOLE file (a parser that skipped a
@@ -211,13 +212,27 @@ var signersCheckedHook func(path string)
 // valid-before=, cert-authority, …) is refused: those are restrictions
 // ssh-keygen enforces and this verifier does not implement, so ignoring them
 // would widen trust.
+// anchorOpenError maps a failed open of the trust anchor (isDir: of its
+// directory) to the refusal: a symlink (ELOOP) or a non-directory (ENOTDIR)
+// is UNSAFE; anything else means there is no file to trust (absent ⇒ refused).
+func anchorOpenError(path string, isDir bool, err error) error {
+	what := "the allowed-signers file"
+	if isDir {
+		what = "the allowed-signers directory"
+	}
+	switch {
+	case errors.Is(err, syscall.ELOOP):
+		return fmt.Errorf("%w: %s %s is a symlink: %w", ErrAllowedSignersUnsafe, what, path, err)
+	case isDir && errors.Is(err, syscall.ENOTDIR):
+		return fmt.Errorf("%w: %s %s is not a real directory: %w", ErrAllowedSignersUnsafe, what, path, err)
+	}
+	return fmt.Errorf("%w: %s: %w", ErrNoAllowedSigners, path, err)
+}
+
 func releaseSignerKeys(path string) ([][]byte, error) {
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0)
+	f, err := openTrustAnchor(path)
 	if err != nil {
-		if errors.Is(err, syscall.ELOOP) {
-			return nil, fmt.Errorf("%w: %s is a symlink: %w", ErrAllowedSignersUnsafe, path, err)
-		}
-		return nil, fmt.Errorf("%w: %s: %w", ErrNoAllowedSigners, path, err)
+		return nil, err
 	}
 	defer f.Close()
 	fi, err := f.Stat()
