@@ -5,8 +5,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
+
 	ntwire "nofx/provider/ninjatrader"
 	"nofx/store"
+	"nofx/telemetry"
 )
 
 // W117 a3 — production-call-site pin: a SECOND connection holds the write lock
@@ -125,5 +128,98 @@ func TestBusyCloseFrameIsNeverDropped(t *testing.T) {
 	st.GormDB().Where("account = ? AND applied = ?", "Sim101", false).Find(&left)
 	if len(left) != 0 {
 		t.Fatalf("no receipt may stay pending after the retry applied, got %d", len(left))
+	}
+}
+
+// W117 a3 — the retry loop itself is the normal success path for BRIEF
+// contention. The holder releases INSIDE the retry budget (~250ms), so a
+// no-retry build would park; the retry build applies ON THE WORKER with the
+// park counter untouched. RED = ntExitBusyRetries 4 → 0: the single busy
+// attempt parks instead of applying.
+func TestBriefBusyCloseAppliesOnTheWorkerAfterRetries(t *testing.T) {
+	store.SetImmediateTxBusyTimeoutForTest(120)
+	defer store.ResetImmediateTxBusyTimeoutForTest()
+
+	f := newOrderedOnceFixture(t)
+	tr, st := f.tr, f.st
+	tr.StartCloseSync("t1", "ex", "ninjatrader", st)
+	unreg, err := tr.InstallOrderedExecutions("t1", "ex", "ninjatrader", st, nil)
+	if err != nil {
+		t.Fatalf("install: %v", err)
+	}
+	defer unreg()
+
+	now := time.Now().UTC().UnixMilli()
+	pos := &store.TraderPosition{
+		TraderID: "t1", ExchangeType: "ninjatrader", ExchangePositionID: "p-brief",
+		Symbol: "MNQ", Side: "LONG", Quantity: 1, EntryQuantity: 1,
+		EntryPrice: 29350, EntryTime: now - 60_000, EntryOrderID: "sig-brief",
+		Leverage: 1, Status: "OPEN", Source: "armed_entry", Account: "Sim101",
+		CreatedAt: now - 60_000, UpdatedAt: now - 60_000,
+	}
+	if err := st.Position().CreateOpenPosition(pos); err != nil {
+		t.Fatal(err)
+	}
+
+	parksBefore := testutil.ToFloat64(telemetry.NT8ExitBusyParksTotal)
+
+	// The holder releases at ~250ms — inside the retry budget (attempt 1 burns
+	// 120ms busy, the loop sleeps 50ms, attempt 2 blocks ~80ms and applies).
+	ctx := context.Background()
+	sqlDB, err := st.GormDB().DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	holder, err := sqlDB.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := holder.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		t.Fatalf("holder BEGIN IMMEDIATE: %v", err)
+	}
+	released := make(chan struct{})
+	go func() {
+		time.Sleep(250 * time.Millisecond)
+		_, _ = holder.ExecContext(ctx, "COMMIT")
+		_ = holder.Close()
+		close(released)
+	}()
+	defer func() {
+		select {
+		case <-released:
+		default:
+			_, _ = holder.ExecContext(ctx, "COMMIT")
+			_ = holder.Close()
+		}
+	}()
+
+	if err := ntwire.WriteFrame(f.conn, ntwire.FramePositionClose, ntwire.PositionClosePayload{
+		SignalID: "sig-brief", Symbol: "MNQ", PositionSide: "long", Account: "Sim101",
+		Quantity: 1, ExitPrice: 29360, ExitReason: "sl", ExitTime: time.Now().UTC().Format(time.RFC3339),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for f.countFills("sig-brief") == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if n := f.countFills("sig-brief"); n != 1 {
+		t.Fatalf("the close must end APPLIED on the worker after the retry loop, got %d fills — RED: ntExitBusyRetries=0 parks every brief contention", n)
+	}
+	var closed store.TraderPosition
+	if err := st.GormDB().First(&closed, pos.ID).Error; err != nil || closed.Status != "CLOSED" {
+		t.Fatalf("the applied close must close the row, got %+v err=%v", closed, err)
+	}
+	var left []store.NT8ExitReceipt
+	st.GormDB().Where("account = ? AND applied = ?", "Sim101", false).Find(&left)
+	if len(left) != 0 {
+		t.Fatalf("the retry path must not park a receipt, got %d", len(left))
+	}
+	if _, ok := takePricedClose("Sim101", "MNQ", "LONG", time.Now().UnixMilli()); ok {
+		t.Fatal("the retry path must not park a priced close for reconcile")
+	}
+	if delta := testutil.ToFloat64(telemetry.NT8ExitBusyParksTotal) - parksBefore; delta != 0 {
+		t.Fatalf("the busy-park counter must stay 0 on the retry path, delta %v", delta)
 	}
 }

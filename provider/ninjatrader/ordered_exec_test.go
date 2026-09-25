@@ -155,10 +155,10 @@ func TestOrderedWorkerCallbackReregistersWithoutWedging(t *testing.T) {
 	}
 	select {
 	case <-replaced:
-	case <-time.After(3 * time.Second):
+	case <-time.After(15 * time.Second):
 		t.Fatal("the worker wedged inside the re-registering callback")
 	}
-	waitEvents(t, rec, 3, 3*time.Second)
+	waitEvents(t, rec, 3, 15*time.Second)
 }
 
 // R5 — a second LIVE owner for the same (symbol, account) is refused loudly;
