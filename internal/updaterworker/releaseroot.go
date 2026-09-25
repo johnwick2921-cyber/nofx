@@ -50,7 +50,14 @@ func ReleaseRoot(installDir string) (string, error) {
 	if realRoot != root {
 		return "", fmt.Errorf("%w: NOFX_RELEASE_DIR=%s is not its own resolved path (it resolves to %s) — name the real directory, with no symlink in it", ErrReleaseRoot, root, realRoot)
 	}
-	inside, err := PathWithin(realRoot, installDir)
+	// The install must itself resolve (U4G defect 4, restored): a
+	// non-existent or dangling install is refused here — containment against
+	// an install that does not exist is not "outside", it is unknown.
+	realInstall, err := filepath.EvalSymlinks(installDir)
+	if err != nil {
+		return "", fmt.Errorf("%w: the install %s cannot be resolved: %w", ErrReleaseRoot, installDir, err)
+	}
+	inside, err := PathWithin(realRoot, realInstall)
 	if err != nil {
 		return "", fmt.Errorf("%w: NOFX_RELEASE_DIR=%s cannot be checked against the install %s: %w", ErrReleaseRoot, root, installDir, err)
 	}
