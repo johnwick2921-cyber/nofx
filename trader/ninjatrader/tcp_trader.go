@@ -114,6 +114,11 @@ type TCPTrader struct {
 	// reconcileOnce guards StartPositionReconcile (mirrors closeSyncOnce) so a
 	// re-entrant AutoTrader.Run never spawns a second reconcile goroutine.
 	reconcileOnce sync.Once
+	// W117 F5 — observer lifetime ends only after same-account replacement
+	// drains closes. Ordinary trading Stop and socket disconnect do not retire
+	// these observers.
+	observerDone     chan struct{} // initialized under mu; closed by the close consumer
+	reconcileStopped chan struct{} // initialized under mu; closed by the reconcile worker
 
 	// flatSince tracks, per open-position row id, the first time the reconcile loop
 	// observed it NT8-flat-but-DB-open (Unix ms). It implements the flat-grace
@@ -164,6 +169,13 @@ func IsMaintenanceHold(err error) bool {
 
 // SetEntryHoldCheck forwards the maintenance predicate to this trader's TCP
 // server, whose queue drops held entries on flush (gap U2).
+// IsBound reports whether the trader has a bound NT8 sub-account. An unbound
+// trader has no book to read and cannot flatten: reconcile-before-open skips it
+// so the broker's own binding refusal names the cause (still fail-closed).
+func (t *TCPTrader) IsBound() bool {
+	return strings.TrimSpace(t.boundAccount) != ""
+}
+
 func (t *TCPTrader) SetEntryHoldCheck(fn func() bool) {
 	if t.server != nil {
 		t.server.SetEntryHoldCheck(fn)
@@ -1254,7 +1266,13 @@ func (t *TCPTrader) GetPositions() ([]map[string]interface{}, error) {
 	// reflects positions opened MANUALLY in NT8 (the AddOn emits a `positions`
 	// snapshot on select / connect / PositionUpdate).
 	acct := t.boundAccount
-	if snap, ok := t.server.PositionsFor(acct); ok {
+	if snap, received, entryAfter, ok := t.server.PositionsForExecutionReceipt(acct, t.symbol); ok &&
+		(entryAfter.IsZero() || received.After(entryAfter)) {
+		// W117 F1 — a snapshot received at-or-before the latest entry receipt
+		// is stale: an adapter replacement that forgot an entry would read the
+		// pre-entry flat snapshot as truth and double-open. Only a snapshot
+		// NEWER than the entry receipt serves as NT8 truth; otherwise fall to
+		// the fill-derived cache below (which knows the entry).
 		// NT8-truth uPnL: the account_balance frame carries the account's LIVE
 		// unrealized P&L. When exactly ONE position is open, that total IS this
 		// position's uPnL — use it (and derive the mark) so the displayed P&L
@@ -1288,7 +1306,10 @@ func (t *TCPTrader) GetPositions() ([]map[string]interface{}, error) {
 	t.mu.Lock()
 	if !t.hasFill {
 		t.mu.Unlock()
-		return []map[string]interface{}{}, nil
+		// W117 F4 — no snapshot AND no confirmed entry fill is UNKNOWN, never
+		// flat: fabricating an empty book here let the caller read a silent
+		// "no position" as truth and re-enter on a position NT8 holds.
+		return nil, fmt.Errorf("NT8 account positions unknown: no account snapshot or confirmed entry fill")
 	}
 	fill := t.lastFill
 	t.mu.Unlock()
