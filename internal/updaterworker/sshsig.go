@@ -242,11 +242,17 @@ func releaseSignerKeys(path string) ([][]byte, error) {
 	}
 	var keys [][]byte
 	for i, line := range strings.Split(string(raw), "\n") {
-		line = strings.TrimSpace(line)
+		// Tokenized the way ssh-keygen tokenizes it (CTO ruling 1790279155144
+		// (1)): fields are separated by SPACE and TAB ONLY. strings.TrimSpace /
+		// strings.Fields would also split on VT, FF and Unicode spaces (NBSP,
+		// NEL, …), admitting lines the reference tool refuses; here those
+		// characters stay inside the field they sit in, so the principal or
+		// the key no longer matches and the line admits nothing.
+		line = strings.Trim(line, " \t\r\n")
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		fields := strings.Fields(line)
+		fields := strings.FieldsFunc(line, isAllowedSignersSep)
 		forRelease, negated := false, false
 		for _, p := range strings.Split(fields[0], ",") {
 			forRelease = forRelease || p == ReleaseSignaturePrincipal
@@ -277,6 +283,10 @@ func releaseSignerKeys(path string) ([][]byte, error) {
 	}
 	return keys, nil
 }
+
+// isAllowedSignersSep is the ONLY field separator of an allowed-signers line:
+// space and tab, as in ssh-keygen (sshsig.c) — never unicode.IsSpace.
+func isAllowedSignersSep(r rune) bool { return r == ' ' || r == '\t' }
 
 // looksLikeKeyType reports whether an allowed-signers field is a key type
 // rather than an option list (OpenSSH key type names).

@@ -234,6 +234,41 @@ func TestSSHSIGRefusesWrongPrincipal(t *testing.T) {
 	t.Run("a wildcard principal ssh-keygen honours", func(t *testing.T) {
 		refuseBoth(t, writeAllowedSigners(t, f.dir, "rel* "+f.signer.pub), sig, f.msg, true, ErrSigPrincipal)
 	})
+	// ssh-keygen separates the fields of an allowed-signers line with SPACE and
+	// TAB only (CTO ruling 1790279155144 (1)); every other character — ASCII
+	// VT/FF, Unicode NBSP/NEL — is part of the field it sits in. A parser that
+	// split on Unicode white space would admit each of these lines, which the
+	// tool refuses: a divergence from the reference, never a looseness we keep.
+	keyType, keyRest, ok := strings.Cut(f.signer.pub, " ")
+	if !ok {
+		t.Fatalf("fixture: .pub line %q has no space", f.signer.pub)
+	}
+	for _, tc := range []struct {
+		name, line  string
+		toolAccepts bool
+		want        error
+	}{
+		// ssh-keygen (OpenSSH 9.6p1) refuses all six: "Could not verify
+		// signature." (after "<file>:1: invalid key" for the keytype/key VT).
+		{"a VT separator", "release\v" + f.signer.pub, false, ErrSigPrincipal},
+		{"an FF separator", "release\f" + f.signer.pub, false, ErrSigPrincipal},
+		{"a U+00A0 NBSP separator", "release\u00a0" + f.signer.pub, false, ErrSigPrincipal},
+		{"a U+0085 NEL separator", "release\u0085" + f.signer.pub, false, ErrSigPrincipal},
+		{"a leading VT", "\vrelease " + f.signer.pub, false, ErrSigPrincipal},
+		// "ssh-ed25519\vAAAA…" is one field: a key type that is not
+		// ssh-ed25519, so the line admits nothing.
+		{"a VT between keytype and key", "release " + keyType + "\v" + keyRest, false, ErrSigPrincipal},
+		// The one place the ruled tokenizer is STRICTER than the tool:
+		// ssh-keygen also ends the principal field at a CR (its strdelimw set
+		// is " \t\r\n"); ours does not, so the principal reads
+		// "release\rssh-…" and admits nothing. Refusing what the tool accepts
+		// is the permitted direction; accepting what it refuses is not.
+		{"a CR separator ssh-keygen honours", "release\r" + f.signer.pub, true, ErrSigPrincipal},
+	} {
+		t.Run("a non space/tab separator: "+tc.name, func(t *testing.T) {
+			refuseBoth(t, writeAllowedSigners(t, f.dir, tc.line), sig, f.msg, tc.toolAccepts, tc.want)
+		})
+	}
 }
 
 func TestSSHSIGRefusesForeignKey(t *testing.T) {
