@@ -492,3 +492,189 @@ func prefixed(prefix string, xs []string) []string {
 	}
 	return out
 }
+
+// ── M4 3b-B U5b (g) — only the operator CLI ever SETS withdraw_entries ─────
+//
+// Owner rule (dispatch §0/§2, CTO 1790258770876): the updater never cancels
+// orders, so the worker's hold NEVER carries withdraw_entries. The hold-writer
+// census above admits internal/updaterworker/hold.go as a WRITER by exact
+// name; that admission does not extend to this field. Only the operator CLI
+// (internal/holdcli/holdcli.go — cmd/maintenance-hold --withdraw) may set it;
+// store/maintenance_hold.go only DEFINES it (the struct tag). Reading it
+// (trader/withdraw.go, the worker's own foreign-hold check) is fine.
+//
+// A "set" is any of: a composite-literal key WithdrawEntries / a
+// "withdraw_entries" key; an assignment (any operator) to x.WithdrawEntries;
+// taking &x.WithdrawEntries; a POSITIONAL MaintenanceHold{...} literal (it sets
+// every field); or a string literal naming withdraw_entries (raw JSON) outside
+// the two admitted files.
+var (
+	withdrawSetterFiles  = map[string]bool{"internal/holdcli/holdcli.go": true}
+	withdrawLiteralFiles = map[string]bool{"internal/holdcli/holdcli.go": true, "store/maintenance_hold.go": true}
+)
+
+func TestOnlyTheOperatorCLISetsWithdrawEntries(t *testing.T) {
+	root, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	offenders, scanned, err := withdrawSetterOffenders(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scanned < 100 {
+		t.Fatalf("scan saw only %d files — the walk is not covering the module", scanned)
+	}
+	if len(offenders) > 0 {
+		t.Fatalf("withdraw_entries may be set only by the operator CLI (internal/holdcli/holdcli.go):\n%s", strings.Join(offenders, "\n"))
+	}
+}
+
+// Proved on a synthetic module: the CLI's set and every read are clean
+// (positive control), and each way of setting the field elsewhere — including
+// in the worker's census-ADMITTED hold writer — is caught.
+func TestWithdrawSetterCensusCatchesEveryForm(t *testing.T) {
+	const worker = "package updaterworker\n\nimport \"nofx/store\"\n\n" +
+		"func holdFor(j string) store.MaintenanceHold {\n\treturn store.MaintenanceHold{Held: true, JobID: j, Owner: \"updater\"}\n}\n\n" +
+		"func ours(st store.MaintenanceHoldState, j string) bool {\n\treturn st.Hold.JobID == j && !st.Hold.WithdrawEntries\n}\n"
+	base := func() string {
+		root := t.TempDir()
+		censusWrite(t, root, "go.mod", "module nofx\n\ngo 1.25\n")
+		censusWrite(t, root, "store/maintenance_hold.go", "package store\n\ntype MaintenanceHold struct {\n\tHeld bool `json:\"held\"`\n\tJobID string `json:\"job_id\"`\n\tOwner string `json:\"owner,omitempty\"`\n\tWithdrawEntries bool `json:\"withdraw_entries,omitempty\"`\n}\n\ntype MaintenanceHoldState struct{ Hold MaintenanceHold }\n")
+		censusWrite(t, root, "internal/holdcli/holdcli.go", "package holdcli\n\nimport (\n\t\"fmt\"\n\t\"nofx/store\"\n)\n\nfunc Set(w bool) store.MaintenanceHold {\n\th := store.MaintenanceHold{Held: true, WithdrawEntries: w}\n\tfmt.Printf(\"withdraw_entries=%v\\n\", h.WithdrawEntries)\n\th.WithdrawEntries = w\n\treturn h\n}\n")
+		censusWrite(t, root, "internal/updaterworker/hold.go", worker)
+		censusWrite(t, root, "trader/withdraw.go", "package trader\n\nimport \"nofx/store\"\n\nfunc wants(st store.MaintenanceHoldState) bool { return st.Hold.Held && st.Hold.WithdrawEntries }\n")
+		return root
+	}
+	root := base()
+	if off, scanned, err := withdrawSetterOffenders(root); err != nil || len(off) != 0 || scanned != 4 {
+		t.Fatalf("clean synthetic module: offenders=%v scanned=%d err=%v (want none, 4 files)", off, scanned, err)
+	}
+	for name, c := range map[string]struct{ rel, body, want string }{
+		"the admitted hold writer setting it in its literal": {"internal/updaterworker/hold.go", strings.Replace(worker, `Owner: "updater"}`, `Owner: "updater", WithdrawEntries: true}`, 1), "internal/updaterworker/hold.go: composite literal sets WithdrawEntries"},
+		"an assignment in the worker":                        {"internal/updaterworker/set.go", "package updaterworker\n\nimport \"nofx/store\"\n\nfunc f(h *store.MaintenanceHold) { h.WithdrawEntries = true }\n", "internal/updaterworker/set.go: assigns WithdrawEntries"},
+		"an op-assignment":                                   {"internal/updaterworker/set.go", "package updaterworker\n\nimport \"nofx/store\"\n\nfunc f(h *store.MaintenanceHold, b bool) { h.WithdrawEntries = h.WithdrawEntries || b }\n", "internal/updaterworker/set.go: assigns WithdrawEntries"},
+		"the field's address taken":                          {"cmd/nofx-updater/main.go", "package main\n\nimport \"nofx/store\"\n\nfunc main() { var h store.MaintenanceHold; p := &h.WithdrawEntries; *p = true }\n", "cmd/nofx-updater/main.go: takes the address of WithdrawEntries"},
+		"a positional literal":                               {"internal/updaterworker/pos.go", "package updaterworker\n\nimport \"nofx/store\"\n\nvar h = store.MaintenanceHold{true, \"j\", \"updater\", true}\n", "internal/updaterworker/pos.go: positional MaintenanceHold literal"},
+		"raw JSON naming the key":                            {"cmd/nofx-updater/main.go", "package main\n\nconst raw = `{\"held\":true,\"withdraw_entries\":true}`\n\nfunc main() {}\n", "cmd/nofx-updater/main.go: names withdraw_entries"},
+		"a map literal keyed withdraw_entries":               {"api/handler_updates.go", "package api\n\nvar m = map[string]any{\"withdraw_entries\": true}\n", "api/handler_updates.go: composite literal sets withdraw_entries"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := base()
+			censusWrite(t, root, c.rel, c.body)
+			off, _, err := withdrawSetterOffenders(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			hit := false
+			for _, o := range off {
+				hit = hit || strings.HasPrefix(o, c.want)
+			}
+			if !hit {
+				t.Fatalf("offenders = %v, want one starting %q", off, c.want)
+			}
+		})
+	}
+}
+
+// The admissions are pinned exactly: the worker (any file) is never one.
+func TestWithdrawSetterAdmissionsArePinned(t *testing.T) {
+	for name, pair := range map[string]struct {
+		m    map[string]bool
+		want string
+	}{
+		"setters":  {withdrawSetterFiles, "internal/holdcli/holdcli.go"},
+		"literals": {withdrawLiteralFiles, "internal/holdcli/holdcli.go,store/maintenance_hold.go"},
+	} {
+		var got []string
+		for k, v := range pair.m {
+			if v {
+				got = append(got, k)
+			}
+		}
+		sort.Strings(got)
+		if strings.Join(got, ",") != pair.want {
+			t.Fatalf("withdraw %s admitted = %v, want exactly %s", name, got, pair.want)
+		}
+	}
+	for f := range withdrawSetterFiles {
+		if strings.HasPrefix(f, "internal/updaterworker/") || strings.HasPrefix(f, "cmd/nofx-updater/") || strings.HasPrefix(f, "internal/updaterjob/") || strings.HasPrefix(f, "api/") {
+			t.Fatalf("%s must never be admitted to set withdraw_entries — the updater never cancels orders", f)
+		}
+	}
+}
+
+func withdrawSetterOffenders(root string) (offenders []string, scanned int, err error) {
+	files, err := censuswalk.NonTestGoFiles(root)
+	if err != nil {
+		return nil, 0, err
+	}
+	isField := func(e ast.Expr) bool {
+		sel, ok := e.(*ast.SelectorExpr)
+		return ok && sel.Sel.Name == "WithdrawEntries"
+	}
+	isHoldType := func(e ast.Expr) bool {
+		switch x := e.(type) {
+		case *ast.SelectorExpr:
+			return x.Sel.Name == "MaintenanceHold"
+		case *ast.Ident:
+			return x.Name == "MaintenanceHold"
+		}
+		return false
+	}
+	for _, file := range files {
+		rel := file.Rel
+		f, perr := parser.ParseFile(token.NewFileSet(), file.Path, nil, 0)
+		if perr != nil {
+			offenders = append(offenders, rel+": cannot be parsed, so it cannot be checked ("+perr.Error()+")")
+			continue
+		}
+		scanned++
+		setter := withdrawSetterFiles[rel]
+		ast.Inspect(f, func(n ast.Node) bool {
+			switch x := n.(type) {
+			case *ast.CompositeLit:
+				for _, el := range x.Elts {
+					kv, ok := el.(*ast.KeyValueExpr)
+					if !ok {
+						if isHoldType(x.Type) && !setter {
+							offenders = append(offenders, rel+": positional MaintenanceHold literal (sets every field, withdraw_entries included)")
+							return true
+						}
+						continue
+					}
+					switch k := kv.Key.(type) {
+					case *ast.Ident:
+						if k.Name == "WithdrawEntries" && !setter {
+							offenders = append(offenders, rel+": composite literal sets WithdrawEntries")
+						}
+					case *ast.BasicLit:
+						if strings.Contains(k.Value, "withdraw_entries") && !setter {
+							offenders = append(offenders, rel+": composite literal sets withdraw_entries")
+						}
+					}
+				}
+			case *ast.AssignStmt:
+				for _, l := range x.Lhs {
+					if isField(l) && !setter {
+						offenders = append(offenders, rel+": assigns WithdrawEntries")
+					}
+				}
+			case *ast.IncDecStmt:
+				if isField(x.X) && !setter {
+					offenders = append(offenders, rel+": assigns WithdrawEntries")
+				}
+			case *ast.UnaryExpr:
+				if x.Op == token.AND && isField(x.X) && !setter {
+					offenders = append(offenders, rel+": takes the address of WithdrawEntries")
+				}
+			case *ast.BasicLit:
+				if x.Kind == token.STRING && strings.Contains(x.Value, "withdraw_entries") && !withdrawLiteralFiles[rel] {
+					offenders = append(offenders, rel+": names withdraw_entries in a string literal")
+				}
+			}
+			return true
+		})
+	}
+	return offenders, scanned, nil
+}
