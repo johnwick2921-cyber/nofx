@@ -1295,7 +1295,10 @@ func (t *TCPTrader) GetPositions() ([]map[string]interface{}, error) {
 	t.mu.Lock()
 	if !t.hasFill {
 		t.mu.Unlock()
-		return []map[string]interface{}{}, nil
+		// W117 F4 — no snapshot AND no confirmed entry fill is UNKNOWN, never
+		// flat: fabricating an empty book here let the caller read a silent
+		// "no position" as truth and re-enter on a position NT8 holds.
+		return nil, fmt.Errorf("NT8 account positions unknown: no account snapshot or confirmed entry fill")
 	}
 	fill := t.lastFill
 	t.mu.Unlock()
