@@ -183,8 +183,9 @@ func TestUnknownOneSetupVerdictCannotPlaceOldAuthorization(t *testing.T) {
 	t.Run("retirement write fails: positive control places without the trigger", func(t *testing.T) {
 		at, st, sigs, pid, now := f13RetireWriteFixture(t, false)
 		// POSITIVE CONTROL (CTO F13-verify): identical setup WITHOUT the abort
-		// trigger — the allowed S2 arm MUST reach the wire, so the negative case
-		// below cannot pass vacuously on a fixture where nothing places.
+		// trigger — the allowed arm is S1 at PDL@100 (the best level), and it MUST
+		// reach the wire, so the negative case below cannot pass vacuously on a
+		// fixture where nothing places.
 		at.maybeManageArmedOrdersAt(nil, now)
 		select {
 		case sig := <-sigs:
@@ -196,7 +197,7 @@ func TestUnknownOneSetupVerdictCannotPlaceOldAuthorization(t *testing.T) {
 			if err := st.GormDB().Where("plan_id = ?", pid).Find(&rows).Error; err != nil {
 				t.Fatal(err)
 			}
-			t.Fatalf("positive control: S2 must place when the retire pass can write; rows=%+v", rows)
+			t.Fatalf("positive control: S1 must place when the retire pass can write; rows=%+v", rows)
 		}
 	})
 
@@ -209,9 +210,13 @@ func TestUnknownOneSetupVerdictCannotPlaceOldAuthorization(t *testing.T) {
 			t.Fatalf("a placement reached the wire while the retire pass could not write: %+v", sig)
 		case <-time.After(300 * time.Millisecond):
 		}
-		// The pass must surface the retirement failure — today the whole pass
-		// refuses and logs it; either F13 mutant (error swallowed, or the pass
-		// ignoring the error) must fail this assertion AND the one above.
+		// The pass must surface the retirement failure. EITHER F13 mutant (the
+		// retire-write error swallowed, or the pass ignoring the error) fails THIS
+		// log assertion only: the no-signal assertion above holds under all three
+		// because D4's one-arm consult (oneSetupConsult, 'an allowed scenario
+		// waits while another holds the plan's one arm') holds the slot for the
+		// unretired armed S2 row — the early return is defense-in-depth behind D4,
+		// not the only guard.
 		if !strings.Contains(buf.String(), "one setup retirement unavailable") {
 			t.Fatalf("the pass must log the retirement failure; got logs:\n%s", buf.String())
 		}
