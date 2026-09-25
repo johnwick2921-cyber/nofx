@@ -75,9 +75,10 @@ func TestBootVerifyNeedsHealthToServeTheRelease(t *testing.T) {
 }
 
 // PIN (C11 as ruled, mutants A42/A43): gate_ok needs ready:true on two reads
-// whose acks are DIFFERENT acks (received at least a second apart), both
-// received AFTER the gate step started. The gate step is made to start 3 s
-// after an ack tick, so the ack standing at its start is older than it.
+// whose acks are DIFFERENT acks (arrivals rebuilt on the worker's monotonic
+// clock as now − AgeMs, at least a second apart), both received AFTER the gate
+// step started. The gate step is made to start 3 s after an ack tick, so the
+// ack standing at its start is older than it.
 func TestGateNeedsTwoDistinctAcksBothAfterItsStart(t *testing.T) {
 	r := newRig(t)
 	r.hookAt("gate_ok/started", func() {
@@ -94,8 +95,8 @@ func TestGateNeedsTwoDistinctAcksBothAfterItsStart(t *testing.T) {
 	if g == nil || !g.OK {
 		t.Fatalf("no OK gate receipt: %v", receiptSteps(j))
 	}
-	a1, err1 := time.Parse(time.RFC3339Nano, g.Evidence["ack_1"])
-	a2, err2 := time.Parse(time.RFC3339Nano, g.Evidence["ack_2"])
+	a1, err1 := time.Parse(time.RFC3339Nano, g.Evidence["ack_1_at"])
+	a2, err2 := time.Parse(time.RFC3339Nano, g.Evidence["ack_2_at"])
 	if err1 != nil || err2 != nil {
 		t.Fatalf("gate evidence %v", g.Evidence)
 	}

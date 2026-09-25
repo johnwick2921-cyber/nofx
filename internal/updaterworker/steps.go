@@ -32,11 +32,11 @@ const (
 	// ackMaxAgeMs is provider/ninjatrader MaintenanceAckMaxAge (3 × the 5 s
 	// resend): an older ack is not fresh.
 	ackMaxAgeMs = 15000
-	// ackDistinct: two reads are two ACKS only when their received times are
-	// this far apart. The app renders received as now − age at read time
-	// (trader/maintenance_status.go:65, RFC3339Nano), so two reads of ONE ack
-	// differ in their nanoseconds; comparing the strings would count one ack
-	// twice [A: code read]. Acks are resent every 5 s.
+	// ackDistinct: two acks are DISTINCT only when their ARRIVALS (rebuilt on
+	// the worker's monotonic clock as now − AgeMs) are this far apart. Acks
+	// are resent every 5 s; the threshold only absorbs HTTP-latency jitter
+	// between the app's age reading and the worker's now (~ms), never a
+	// wall-clock step.
 	ackDistinct = time.Second
 )
 
@@ -268,11 +268,21 @@ func ackFor(a *AckView, jobID string) string {
 	return ""
 }
 
-// stepGate: ready:true on two reads whose acks are DIFFERENT acks (received
-// at least ackDistinct apart), both received after this step started (R-q).
+// stepGate: ready:true on two reads whose acks are DIFFERENT acks, both
+// received after this step started (R-q). The comparison is on ONE clock
+// (#206 review fold): each ack's ARRIVAL is rebuilt on the worker's
+// monotonic clock as now − AgeMs (AgeMs is the app's monotonic age, the same
+// box), so the same ack has a constant arrival across reads while a new ack
+// (resent every 5 s) jumps it by 5 s. The rendered "received" strings were
+// wall-clock: this box steps its clock (deploy/fix-wsl2-clock.sh,
+// makestep 1 -1), and a ≥1 s forward step between two polls of the SAME ack
+// moved its rendered time forward enough to pass the old "≥1 s apart and
+// both ≥ start" test — C11 proven by a single ack. Sampling ages directly
+// cannot work: fixed poll and resend periods make the age at each read a
+// fixed phase, equal for every successive ack.
 func (w *Worker) stepGate(ctx context.Context, j updaterjob.Job) stepResult {
 	start, ev := w.host.Now(), map[string]string{}
-	var first time.Time
+	var firstArrival time.Time
 	err := w.poll(ctx, j, w.cfg.Budgets.Gate, func() (string, error) {
 		g, err := w.app.InstallationGate(ctx)
 		if err != nil {
@@ -291,22 +301,25 @@ func (w *Worker) stepGate(ctx context.Context, j updaterjob.Job) stepResult {
 		if b != "" {
 			return b, nil
 		}
-		t, err := time.Parse(time.RFC3339Nano, m.AddonAck.Received)
-		if err != nil {
-			return "addon_ack: received is not a time", nil
+		age := m.AddonAck.AgeMs
+		if age < 0 {
+			return "addon_ack: negative age", nil
 		}
-		if t.Before(start) {
+		arrival := w.host.Now().Add(-time.Duration(age) * time.Millisecond)
+		if arrival.Before(start) {
 			return "gate: waiting for an ack received after the gate step started", nil
 		}
-		if first.IsZero() {
-			first = t
-			ev["ack_1"] = m.AddonAck.Received
+		if firstArrival.IsZero() {
+			firstArrival = arrival
+			ev["ack_1_age_ms"] = strconv.FormatInt(age, 10)
+			ev["ack_1_at"] = arrival.Format(time.RFC3339Nano)
 			return "gate: ready once; waiting for a second, distinct ack", nil
 		}
-		if t.Sub(first) < ackDistinct {
+		if arrival.Sub(firstArrival) < ackDistinct {
 			return "gate: ready once; waiting for a second, distinct ack", nil
 		}
-		ev["ack_2"] = m.AddonAck.Received
+		ev["ack_2_age_ms"] = strconv.FormatInt(age, 10)
+		ev["ack_2_at"] = arrival.Format(time.RFC3339Nano)
 		return "", nil
 	})
 	return stepResult{receipts: []Receipt{w.receipt("gate", start, ev, err)}, err: err}
@@ -502,11 +515,18 @@ func (w *Worker) stepBootVerify(ctx context.Context, j updaterjob.Job) stepResul
 			if b != "" {
 				return b, nil
 			}
-			t, err := time.Parse(time.RFC3339Nano, m.AddonAck.Received)
-			if err != nil || t.Before(since) {
+			// One clock (#206 review fold): the ack was received at
+			// now − AgeMs (monotonic on the app side, the same box), so
+			// "received after the kill" is age ≤ now − since. The old
+			// wall-clock compare of the rendered received string made a
+			// backward clock step read the NEW process's fresh ack as
+			// older than WatchSince — a good release rolled back.
+			age := m.AddonAck.AgeMs
+			if age < 0 || time.Duration(age)*time.Millisecond > w.host.Now().Sub(since) {
 				return "addon_ack: waiting for the AddOn to ack the new process", nil
 			}
-			ev["acked_build_id"], ev["acked_at"] = m.AddonAck.BuildID, m.AddonAck.Received
+			ev["acked_build_id"], ev["acked_age_ms"] = m.AddonAck.BuildID, strconv.FormatInt(age, 10)
+			ev["acked_at"] = w.host.Now().Add(-time.Duration(age) * time.Millisecond).Format(time.RFC3339Nano)
 			if m.AddonAck.BuildID != f.AddonBuildID {
 				return fmt.Sprintf("addon_ack: the AddOn runs build %q, the release is %q", m.AddonAck.BuildID, f.AddonBuildID), nil
 			}

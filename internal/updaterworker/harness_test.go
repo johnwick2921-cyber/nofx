@@ -99,6 +99,7 @@ type box struct {
 	exe            string        // /proc/<MainPID>/exe, when not the install's binary
 	healthRev      string        // /api/health serves this revision instead of the running sha
 	ackLag         time.Duration // the AddOn's last ack is this much older than the 5 s tick (age stays consistent)
+	wallStep       time.Duration // a wall-clock step: shifts the RENDERED received time only; AgeMs stays monotonic
 	maintJob       string        // /api/maintenance names this job instead of the hold's
 	echo500        bool          // the authed endpoints answer 500 echoing the request's Authorization header
 	noCS           bool          // the signed manifest lists no ninjascript/*.cs
@@ -112,6 +113,7 @@ type box struct {
 	activateIDs []Identity
 	rollbackIDs []Identity
 	rollbackAtt []int // the job's attempts on disk at each RollbackTo call
+	ackAges     []int64 // every ack age the worker observed, in order
 }
 
 // rig is one worker on one box.
@@ -655,7 +657,7 @@ func (b *box) serveApp(w http.ResponseWriter, r *http.Request) {
 // resent every 5 s (received = the last 5 s tick; age = now − received).
 func (b *box) ack() *AckView {
 	b.mu.Lock()
-	connected, build, stale, ackJob, lag := b.addonConnected, b.addonBuild, b.ackStale, b.ackJob, b.ackLag
+	connected, build, stale, ackJob, lag, wall := b.addonConnected, b.addonBuild, b.ackStale, b.ackJob, b.ackLag, b.wallStep
 	b.mu.Unlock()
 	if !connected {
 		return nil
@@ -663,7 +665,12 @@ func (b *box) ack() *AckView {
 	st := store.ReadMaintenanceHold(b.data)
 	now := b.clock.Now().UTC()
 	recv := now.Truncate(5 * time.Second).Add(-lag)
-	a := &AckView{Received: recv.Format(time.RFC3339Nano), AgeMs: now.Sub(recv).Milliseconds(), BuildID: build, AcceptSeq: 1}
+	// wallStep shifts ONLY the rendered wall time (the thing the old code
+	// compared); AgeMs keeps measuring the monotonic age of the SAME ack.
+	a := &AckView{Received: recv.Add(wall).Format(time.RFC3339Nano), AgeMs: now.Sub(recv).Milliseconds(), BuildID: build, AcceptSeq: 1}
+	b.mu.Lock()
+	b.ackAges = append(b.ackAges, a.AgeMs) // the age sequence the worker OBSERVED
+	b.mu.Unlock()
 	if st.Held && !st.Corrupt {
 		a.Held, a.JobID = true, st.Hold.JobID
 	}
