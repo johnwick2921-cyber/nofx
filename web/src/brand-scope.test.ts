@@ -21,6 +21,17 @@
 //     absent NT8 identity as n/a via helloProcessPair (nt8_pid/assembly_mvid;
 //     runbook 2026-09-23-addon-m21-f5.md C5, L7). Additive; no identifier
 //     renamed.
+// Bar-feed baselines advanced 2026-09-25 for W117 PR-A execution-evidence
+// (fix/w117-a-exec-evidence, PR #218; re-pinned after the CTO's frontend gate
+// found the red at HEAD cb025d64 — the wave changed both files and never
+// re-pinned, class 110 again). Deltas against the PR base 0fb0f980, +63 −38:
+//   provider/ninjatrader/tcp_framing.go  sha256 09344e8b… — F1 c66e2d5e
+//     (entry receipt fences: EntryReceipt/ReadOnlyReceipt bookkeeping and the
+//     readLoop note) + F2 e3af23ec (ordered execution dispatch frame fields).
+//   provider/ninjatrader/tcp_server.go   sha256 92bcd868… — F1's GetPositions
+//     fence and F2's ordered-execution dispatch: OrderedHandled guards around
+//     the order fan-out, the handleFill extraction, installNTOrderedExecutions.
+//   No identifier renamed, no guard removed; every removed line re-issued.
 // Bar-feed baselines advanced 2026-09-10 for two owner-dispatched waves that
 // touched the protected files without renaming an identifier:
 //   provider/ninjatrader/tcp_server.go  @ a53359ce (fix/contract-roll: the
