@@ -2089,11 +2089,15 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 			// — a guard, not a fix for a measured failure.
 			lastErr = fmt.Errorf("%s", kernel.FragmentReason)
 			forceReauthor = true
-			// P9 (WAVE 1a-plan, #190) — record AFTER bookkeeping: bookkeeping
-			// rewrites prevReason to THIS attempt's defect, so recording first
-			// logged the PREVIOUS attempt's reason ("was repairing" lied).
+			// Skeptic F5 (2026-09-24, reverses P9): 'was repairing' names the
+			// defect the repair was AIMED at — the PREVIOUS attempt's reason,
+			// captured BEFORE bookkeeping rewrites prevReason to THIS attempt's
+			// defect. P9 recorded after the rewrite, so the field printed the
+			// FragmentReason twice and the diagnosis was lost. The W2 A1/A2
+			// site (:2340/:2346) already does it this way.
+			repairing := prevReason
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
-			at.recordRepairOutcome(raw, lastErr, prevReason)
+			at.recordRepairOutcome(raw, lastErr, repairing)
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			continue
@@ -2108,11 +2112,12 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 			if modeLabel == "repair" {
 				forceReauthor = true // 3.6 — a malformed repair falls back to one full re-author
 			}
+			// Skeptic F5 — same order as the fragment site: capture the defect
+			// being repaired BEFORE bookkeeping rewrites the pointer.
+			repairing := prevReason
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			if modeLabel == "repair" {
-				// P9 — same as the fragment site: record after bookkeeping
-				// rewrote prevReason to this attempt's defect.
-				at.recordRepairOutcome(raw, perr, prevReason)
+				at.recordRepairOutcome(raw, perr, repairing)
 			}
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
