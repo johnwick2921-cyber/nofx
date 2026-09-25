@@ -91,11 +91,11 @@ type box struct {
 	rollbackFail   bool
 	badToken       bool // the app refuses the token (401)
 	verdictMissing bool
-	holdWriteLies  bool   // the hold write lands on disk, then errs (U1 item 9)
-	holdWriteFails bool   // the hold write errs before anything lands
-	ackStale       bool   // the AddOn's last ack is 20 s old
-	ackJob         string // the AddOn acks this job id instead of the hold's
-	exe            string // /proc/<MainPID>/exe, when not the install's binary
+	holdWriteLies  bool          // the hold write lands on disk, then errs (U1 item 9)
+	holdWriteFails bool          // the hold write errs before anything lands
+	ackStale       bool          // the AddOn's last ack is 20 s old
+	ackJob         string        // the AddOn acks this job id instead of the hold's
+	exe            string        // /proc/<MainPID>/exe, when not the install's binary
 	healthRev      string        // /api/health serves this revision instead of the running sha
 	ackLag         time.Duration // the AddOn's last ack is this much older than the 5 s tick (age stays consistent)
 	maintJob       string        // /api/maintenance names this job instead of the hold's
