@@ -267,3 +267,61 @@ func TestStaleJobAtStartIsRecoveryNeededNeverResumed(t *testing.T) {
 		t.Fatalf("stale park: %s, activate ran %d times", j.State, p.callCount("activate"))
 	}
 }
+
+// PIN (R-i; verifier D2 + mutants A49/A50): ready is re-proven before EVERY
+// step that changes something — the backup, the AddOn step, the activate on
+// the normal path, AND the activate re-run after a crash inside activated
+// (the resume path never passes through advance's R-i). The box stops being
+// ready at the named boundary; the change never happens, the job goes to
+// recovery_needed with this job's hold kept, and nothing is killed.
+func TestReadinessIsReprovedBeforeEveryChange(t *testing.T) {
+	for _, tc := range []struct {
+		at      string // the boundary where the box stops being ready
+		crash   bool   // crash there and restart a FRESH worker (the resume path)
+		never   string // the call that must not run
+		atState updaterjob.State
+	}{
+		{at: "backup_done/started", never: "backup", atState: updaterjob.StateBackupDone},
+		{at: "nt8_skipped/done", never: "activate", atState: updaterjob.StateNT8Skipped},
+		{at: "activated/started", crash: true, never: "activate", atState: updaterjob.StateActivated},
+	} {
+		t.Run(tc.at, func(t *testing.T) {
+			r := newRig(t)
+			r.w.crash = func(q string) {
+				if q != tc.at {
+					return
+				}
+				r.mu.Lock()
+				r.flat = false
+				r.mu.Unlock()
+				if tc.crash {
+					panic(crashPanic{q})
+				}
+			}
+			crashed := r.runCrashing(t)
+			if crashed != tc.crash {
+				t.Fatalf("crashed=%v, want %v", crashed, tc.crash)
+			}
+			if tc.crash {
+				r.restart(t)
+			}
+			r.noViolations(t)
+			j := r.job()
+			if n := r.callCount(tc.never); n != 0 {
+				t.Fatalf("the box was not ready from %s, yet %s ran %d times (job %s/%s)", tc.at, tc.never, n, j.State, j.Phase)
+			}
+			if r.callCount("activate") != 0 || r.callCount("rollback") != 0 {
+				t.Fatalf("a not-ready box was changed: calls %v", r.calls)
+			}
+			if j.State != updaterjob.StateRecoveryNeeded || !strings.Contains(j.RecoveryReason, "ready") {
+				t.Fatalf("job ended %s (reason %q), want recovery_needed: ready not re-proven", j.State, j.RecoveryReason)
+			}
+			if prev := j.Transitions[len(j.Transitions)-2].State; prev != tc.atState {
+				t.Fatalf("recovery_needed entered from %s, want from %s", prev, tc.atState)
+			}
+			if s, _ := ReadHoldFor(r.data, boxJobID); s != HoldOurs {
+				t.Fatalf("the hold is %s, want this job's (kept at recovery_needed)", s)
+			}
+		})
+	}
+}

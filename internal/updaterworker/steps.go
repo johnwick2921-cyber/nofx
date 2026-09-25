@@ -390,14 +390,25 @@ func (w *Worker) stepNT8(ctx context.Context, j updaterjob.Job) stepResult {
 
 // stepActivate is the point of no return. On a resume INSIDE it (attempts >
 // 1) the identity on disk may be the process the first run already killed:
-// the CURRENT identity is re-read and persisted, with a new kill instant,
-// BEFORE the re-run (C3: all three halves reinstalled, at most one extra
-// restart).
-func (w *Worker) stepActivate(j updaterjob.Job) stepResult {
+// ready is re-proven first (R-i — the resume never passes through advance's
+// re-proof; verifier D2), then the CURRENT identity is re-read and persisted,
+// with a new kill instant, BEFORE the re-run (C3: all three halves
+// reinstalled, at most one extra restart). A re-proof that fails kills
+// nothing: recovery_needed, the hold kept.
+func (w *Worker) stepActivate(ctx context.Context, j updaterjob.Job) stepResult {
 	if j.Release == nil || j.Install == nil || j.IdentityBefore == nil {
 		return stepResult{err: errors.New("activate without its inputs")}
 	}
 	if j.Attempts > 1 {
+		if err := w.reprove(ctx, j); err != nil {
+			if errors.Is(err, errMoved) || ctx.Err() != nil {
+				return stepResult{abort: err}
+			}
+			start := w.host.Now()
+			why := "ready not re-proven before the resumed activate: " + err.Error()
+			return stepResult{receipts: []Receipt{w.receipt("activate", start, map[string]string{"resumed": "true", "killed": "none"}, errors.New(why))},
+				err: errors.New(why), failTo: updaterjob.StateRecoveryNeeded, reason: clipText(why)}
+		}
 		id, err := w.lib.CurrentIdentity()
 		if err != nil {
 			start := w.host.Now()

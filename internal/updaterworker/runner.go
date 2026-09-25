@@ -160,7 +160,7 @@ func (w *Worker) step(ctx context.Context, j updaterjob.Job) stepResult {
 	case updaterjob.StateNT8Skipped, updaterjob.StateNT8Updated:
 		return w.stepNT8(ctx, j)
 	case updaterjob.StateActivated:
-		return w.stepActivate(j)
+		return w.stepActivate(ctx, j)
 	case updaterjob.StateBooted:
 		return w.stepWatch(j)
 	case updaterjob.StateBootVerified:
