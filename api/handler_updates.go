@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"nofx/auth"
 	"nofx/config"
 	"nofx/internal/updateauth"
+	"nofx/internal/updaterjob"
 	"nofx/internal/updaterwire"
 	"nofx/logger"
 	"nofx/trader"
@@ -96,6 +98,8 @@ func updateVerifierName(v updateauth.Verifier) string {
 	switch v.(type) {
 	case updateauth.StubVerifier:
 		return "stub"
+	case verdictVerifier:
+		return "verdict-file"
 	case nil:
 		return "n/a"
 	}
@@ -114,7 +118,30 @@ func (s *Server) configureUpdater() {
 		return
 	}
 	s.updaterOn = true
+	s.updateVerifier = verdictVerifier{}
 	logger.Infof("📦 updater glue: on · verifier=%s · worker=%s", updateVerifierName(s.updateVerifier), probeUpdaterWorker(trader.MaintenanceDataDir()))
+}
+
+// verdictVerifier (knob ON) is the install gate's real verifier: a release is
+// verified iff the worker's attended `fetch` wrote its verdict file —
+// <data>/updater/verdicts/<release_id>.json, written ONCE, after every
+// signature and digest check, by internal/updaterworker (which the app never
+// links). The app only READS it, through updaterjob.ReadVerdict: a private
+// regular file, exactly one JSON object, the id asked for, every field
+// computed. The data dir is the one the maintenance hold already resolves
+// (trader.MaintenanceDataDir) — no second resolver. Absent, unreadable,
+// malformed or naming another release ⇒ ErrNoVerifiedManifest, M3's 422.
+type verdictVerifier struct{}
+
+func (verdictVerifier) VerifiedManifest(releaseID string) (updateauth.Manifest, error) {
+	v, err := updaterjob.ReadVerdict(trader.MaintenanceDataDir(), releaseID)
+	if err != nil || v.ReleaseID != releaseID {
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			logger.Errorf("🔒 [updates] verdict for %q refused: %v", releaseID, err)
+		}
+		return updateauth.Manifest{}, updateauth.ErrNoVerifiedManifest
+	}
+	return updateauth.Manifest{ReleaseID: v.ReleaseID}, nil
 }
 
 // probeUpdaterWorker dials the worker socket and hangs up without a frame
