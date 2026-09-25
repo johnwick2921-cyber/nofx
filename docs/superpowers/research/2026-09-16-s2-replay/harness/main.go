@@ -20,13 +20,13 @@ import (
 	"sort"
 	"time"
 
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
 	"nofx/kernel"
 	"nofx/market"
 	"nofx/store"
+	"nofx/store/sqlitedriver" // the ONE sqlite registration site (DS-102 fold, CTO 1790305899255)
 )
 
 const (
@@ -40,7 +40,7 @@ const (
 func main() {
 	now := mustTime(time.Parse("2006-01-02 15:04", levelDate+" "+nowHourMin))
 	dsn := fmt.Sprintf("file:%s?mode=ro", dbPath)
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	db, err := gorm.Open(sqlitedriver.GormDialector(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		panic(err)
 	}

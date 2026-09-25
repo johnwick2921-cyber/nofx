@@ -7514,7 +7514,6 @@ That is the shape worth naming: a dry run proves the steps it REACHES. Code afte
 
 **Probe:** for every procedure with a rehearsal mode, list the steps the rehearsal never reaches and ask what tests them. If the answer is "nothing", they are exercised first in production. Either the rehearsal must reach them (a seam, a fixture, a `--force-through` for the safe parts) or they must be moved into code a unit test can call — the second is usually right, because a step that only a live cutover can exercise is a step nobody can afford to debug.
 
-
 ## CLASS 269 — a cross-process hold specified as an in-process call
 
 **Found:** 2026-09-24, WAVE 3b-B brief (CTO ruling 1790258770876) [A]. The M4 dispatch specified the updater's maintenance hold as `EntryBarrier.Hold(ctx)`. That barrier is an unexported package-level value in the TRADING APP (`trader/maintenance_gate.go:21 var maintenanceBarrier EntryBarrier`); the updater worker is a SEPARATE binary. Had the worker imported `trader`, it would have received its own inert copy of the barrier: every worker test green, and the app still trading.
@@ -7568,3 +7567,6 @@ That is the shape: a spec says "call X" where X's value lives in another process
 **Probe:** for every "P is inside/outside D" check: (a) is it an ELEMENT compare (`<D>/..x` is INSIDE)? (b) are symlinks resolved on BOTH sides first, and for a path not yet created, is the deepest existing ancestor resolved and a dangling symlink among the rest refused — and every Lstat error other than not-exist
 refuses, pinned by a `PathWithin` table test? (c) is a trust anchor opened without following a symlinked PARENT (`O_NOFOLLOW` guards only the last element)? (d) is there ONE helper per repo, and does the census cover var-declared and alias-imported
 `filepath.Rel`? Every check-then-write by path string is a same-UID TOCTOU limit: name it.
+## CLASS NN (assigned at merge) — REQUEST MODEL SELECTION MUST NOT MUTATE SHARED AGENT
+
+Two authenticated chats must retain their own selected model credentials through all follow-up calls and summaries. Shared history/flow locks stay shared without copying mutexes. Missing user configuration must not select another owner's default credentials. Exercise both HTTP identity and concurrent model selection.

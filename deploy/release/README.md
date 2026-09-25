@@ -45,11 +45,13 @@ repository, in a log, or on a developer machine.
 
 ## Known limit
 
-The content pass skips files ≥ 2 MB — in practice the binary — because scanning
+The content pass skips files ≥ 4 MB — in practice the binary — because scanning
 it byte-wise on every release buys little against a deny-list that already
-refuses the shapes secrets arrive in. `gitleaks` covers what the content pass
-skips, and in CI gitleaks is **required** (`GITLEAKS_REQUIRED=1`), so the gap
-exists only in a local run, where the NOTE says so.
+refuses the shapes secrets arrive in. The bound is what the code enforces
+(`find -size -5M`, i.e. ≤ 4 MiB after find's round-up) and covers the shipped JS
+bundle. `gitleaks` covers what the content pass skips, and in CI gitleaks is
+**required** (`GITLEAKS_REQUIRED=1`), so the gap exists only in a local run,
+where the NOTE says so.
 
 ## Open owner decision
 
@@ -78,7 +80,11 @@ produces the bundle or the frontend image must supply it. Adding a new one?
 | `.github/workflows/pr-checks.yml` | step `env:` from the PR head sha |
 | `.github/workflows/pr-checks-run.yml` | step `env:` (note: `continue-on-error` hides a failure here) |
 | `docker/Dockerfile.frontend` | `ARG` + `ENV` above `RUN npm run build` — the image cannot be built without `--build-arg` |
-| `.github/workflows/pr-docker-check.yml`, `docker-build.yml` | `build-args:` on the frontend image build |
+| `.github/workflows/pr-docker-check.yml`, `.github/workflows/docker-build.yml` | `build-args:` on the frontend image build |
 | `docker-compose.yml` | `args:` with `${VITE_GUIDE_BUILT_REV:?…}` — compose refuses rather than build unstamped |
 | `.github/workflows/pr-docker-compose-healthcheck.yml` | job-level `env:` — it builds via `docker compose up` |
+| `Makefile` (`make build-frontend`) | from `git rev-parse HEAD` — dev builds carry the tree sha |
+| `INSTALL.md` (documented fresh-install command) | from `git rev-parse HEAD` |
+| `CONTRIBUTING.md` (documented local-build commands) | from `git rev-parse HEAD` |
+| `deploy/cutover.sh` | instructs the human: build with `VITE_GUIDE_BUILT_REV=$NEW_SHA`; refuses to proceed otherwise |
 | the manual boot | `cd web && VITE_GUIDE_BUILT_REV=<sha> npm run build`, verified by finding the sha in `web/dist/assets/*.js` |
