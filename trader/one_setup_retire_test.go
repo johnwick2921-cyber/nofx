@@ -132,3 +132,105 @@ func TestOneSetupRetireIsInertWhenOff(t *testing.T) {
 		t.Fatal("OFF must leave a pre-boot authorization exactly as today's book would")
 	}
 }
+
+// F13 (port of #117 2dc94a19) — AN UNKNOWN OR UNWRITABLE PERMISSION CANNOT
+// PLACE AN OLD AUTHORIZATION. A retire pass that fails must stop the placement
+// pass — never let an inherited armed row (or any later row) place without a
+// CURRENT permission verdict.
+func TestUnknownOneSetupVerdictCannotPlaceOldAuthorization(t *testing.T) {
+	t.Run("missing verdict", func(t *testing.T) {
+		now := time.Date(2026, time.September, 11, 15, 0, 0, 0, time.UTC)
+		cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}}
+		cfg.RiskControl.MinRiskRewardRatio = 2
+		structuralTestPolicy(&cfg, .5)
+		at, st, _, _ := shadowWireHarnessAt(t, cfg, now)
+		live := kernel.PlanDoc{Bias: kernel.PlanBias{Direction: "long", Conviction: "low", FlipCondition: "n/a"},
+			Levels: []kernel.PlanLevel{{Price: 100, Label: "PDL", Grade: "A", Instruction: "fade"}},
+			Scenarios: []kernel.PlanScenario{
+				{ID: "S1", Trigger: "t", Condition: "reject", Direction: "long", TargetChain: []float64{110}, Invalid: "i", Quality: "B",
+					Confirm: &kernel.PlanConfirm{Rule: "touch", RefPrice: 100, Side: "above"},
+					Arm:     &kernel.PlanArmSpec{Enabled: true, Entry: 100, Stop: 95, Target: 110}},
+			},
+			NoTrade: []string{}, DeathCondition: "n/a",
+		}
+		structuralTestMap(&live, structuralTestZone{100, 95.5, 100, "PDL"}, structuralTestZone{110, 110, 111, "target"})
+		blob, _ := json.Marshal(live)
+		pid := shadowPlanAtTime(t, at, st, string(blob), now)
+		row := store.ArmedOrderDB{TraderID: at.id, PlanID: pid, Version: 1, Session: "X", Scenario: "S1",
+			Side: "long", EntryPx: 100, StopPx: 95, TargetPx: 110, State: store.StateArmed, BootID: "999-old"}
+		if err := st.ArmedOrders().UpsertArm(&row); err != nil {
+			t.Fatal(err)
+		}
+		at.oneSetupFactsForTest = func(time.Time) oneSetupTestFacts { panic("synthetic unavailable permission facts") }
+		prev := market.FuturesBarsProvider
+		market.FuturesBarsProvider = func(string, string, int) []market.Kline { return shadowBarsNearAt(100, now) }
+		t.Cleanup(func() { market.FuturesBarsProvider = prev })
+
+		at.maybeManageArmedOrdersAt(nil, now)
+
+		if err := st.GormDB().First(&row, row.ID).Error; err != nil {
+			t.Fatal(err)
+		}
+		if row.State != store.StateCancelled {
+			t.Fatalf("an authorization with no current verdict was not retired: %s", row.State)
+		}
+		if !strings.Contains(row.StateReason, "level=unknown") || !strings.Contains(row.StateReason, "permission=unknown") {
+			t.Fatalf("the retirement must name the unavailable verdict: %q", row.StateReason)
+		}
+	})
+
+	t.Run("retirement write fails", func(t *testing.T) {
+		now := time.Date(2026, time.September, 11, 15, 0, 0, 0, time.UTC)
+		cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}}
+		cfg.RiskControl.MinRiskRewardRatio = 2
+		structuralTestPolicy(&cfg, .5)
+		at, st, sigs, _ := shadowWireHarnessAt(t, cfg, now)
+		live := kernel.PlanDoc{Bias: kernel.PlanBias{Direction: "long", Conviction: "low", FlipCondition: "n/a"},
+			Levels: []kernel.PlanLevel{{Price: 100, Label: "PDL", Grade: "A", Instruction: "fade"}, {Price: 92, Label: "SWG-L", Grade: "B", Instruction: "fade"}},
+			Scenarios: []kernel.PlanScenario{
+				{ID: "S1", Trigger: "t", Condition: "reject", Direction: "long", TargetChain: []float64{110}, Invalid: "i", Quality: "B",
+					Confirm: &kernel.PlanConfirm{Rule: "touch", RefPrice: 100, Side: "above"},
+					Arm:     &kernel.PlanArmSpec{Enabled: true, Entry: 100, Stop: 95, Target: 110}},
+				{ID: "S2", Trigger: "t", Condition: "reject", Direction: "long", TargetChain: []float64{120}, Invalid: "i", Quality: "B",
+					Confirm: &kernel.PlanConfirm{Rule: "touch", RefPrice: 92, Side: "above"},
+					Arm:     &kernel.PlanArmSpec{Enabled: true, Entry: 92, Stop: 87, Target: 104}},
+			},
+			NoTrade: []string{}, DeathCondition: "n/a",
+		}
+		structuralTestMap(&live, structuralTestZone{100, 95.5, 100, "PDL"}, structuralTestZone{92, 87.5, 92, "SWG-L"}, structuralTestZone{110, 110, 111, "target"})
+		blob, _ := json.Marshal(live)
+		pid := shadowPlanAtTime(t, at, st, string(blob), now)
+		for _, r := range []store.ArmedOrderDB{
+			{TraderID: at.id, PlanID: pid, Version: 1, Session: "X", Scenario: "S1", Side: "long", EntryPx: 100, StopPx: 95, TargetPx: 110, State: store.StateArmed, BootID: "999-old"},
+			{TraderID: at.id, PlanID: pid, Version: 1, Session: "X", Scenario: "S2", Side: "long", EntryPx: 92, StopPx: 87, TargetPx: 104, State: store.StateArmed, BootID: "999-old"},
+		} {
+			row := r
+			if err := st.ArmedOrders().UpsertArm(&row); err != nil {
+				t.Fatal(err)
+			}
+		}
+		// The declined row's retirement write ABORTS: today the pass continues
+		// and the allowed row still places — the defect F13 exists for.
+		if err := st.GormDB().Exec("CREATE TRIGGER fail_unknown_retire BEFORE UPDATE OF state ON armed_orders WHEN NEW.state = 'cancelled' BEGIN SELECT RAISE(ABORT, 'fixture'); END").Error; err != nil {
+			t.Fatal(err)
+		}
+		at.oneSetupFactsForTest = func(now time.Time) oneSetupTestFacts {
+			a, b := *structuralTestIdentity(100, "PDL").ID, *structuralTestIdentity(92, "SWG-L").ID
+			return oneSetupTestFacts{Price: 100, BandPts: 50, Candidates: []kernel.MapCandidate{
+				{ID: &a, Identity: kernel.PlanLevel{ID: &a, Price: 100}, Price: 100, Names: []string{"PDL"}, Grade: "A", Distance: 0},
+				{ID: &b, Identity: kernel.PlanLevel{ID: &b, Price: 92}, Price: 92, Names: []string{"SWG-L"}, Grade: "B", Distance: -8},
+			}, Permission: map[string]kernel.FadeVerdict{"S1": {Evaluated: true, Permitted: false}, "S2": {Evaluated: true, Permitted: true}}}
+		}
+		prev := market.FuturesBarsProvider
+		market.FuturesBarsProvider = func(string, string, int) []market.Kline { return shadowBarsNearAt(100, now) }
+		t.Cleanup(func() { market.FuturesBarsProvider = prev })
+
+		at.maybeManageArmedOrdersAt(nil, now)
+
+		select {
+		case s := <-sigs:
+			t.Fatalf("a placement reached the wire while the retire pass could not write: %+v", s)
+		case <-time.After(300 * time.Millisecond):
+		}
+	})
+}

@@ -396,7 +396,12 @@ func (at *AutoTrader) maybeManageArmedOrdersAtOpts(snap map[string]kernel.Struct
 	// THE GAP THE FIRST BOOT FOUND (owner ruling 2026-09-11): an authorization
 	// whose scenario is currently declined is retired here, before D4's slot
 	// check and before the placement pass — never placed. OFF → no-op.
-	at.oneSetupRetireDeclined(osCycle, plan, ledger, now)
+	if _, err := at.oneSetupRetireDeclined(osCycle, plan, ledger, now); err != nil {
+		// F13: a retirement that cannot write means inherited arms may place
+		// without a CURRENT permission verdict — no new placement this cycle.
+		at.logWarnf("🎯 one setup retirement unavailable — no new placement this cycle: %v", err)
+		return
+	}
 	// W-EXEC-TRUTH W0 (G1) — the legs THIS pass's authoring gates admitted.
 	// The placement below places only these: a leg a gate refused this pass
 	// (daily force-flat, invalidation, strict, R:R, min-SL, HTF veto, quality,
