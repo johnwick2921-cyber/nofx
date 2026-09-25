@@ -5,7 +5,8 @@ package updaterworker
 // (and the nt8 rule, the resume and the boot check, through facts) call. It is
 // a thin adapter over U3's own functions and nothing else:
 //
-//	Verdict(id)  updaterjob.ReadVerdict(<data dir>, id)          (the app-side reader)
+//	Verdict(id)  updaterjob.ReadVerdict(<data dir>, id)          (the app-side reader),
+//	             refused unless its release_dir is <ReleaseRoot(install)>/<source_sha> NOW
 //	Rehash(v)    RehashRelease(<v as the verdict file>)
 //	Reverify(v)  ReverifyRelease(<v as the verdict file>, <install>/deploy/release_allowed_signers)
 //
@@ -32,20 +33,34 @@ func NewReleaseReverifier(t Target) (Reverifier, error) {
 	if !filepath.IsAbs(t.DataDir) || !filepath.IsAbs(t.InstallDir) {
 		return nil, fmt.Errorf("updaterworker: re-proof: data dir %q and install dir %q must be absolute", t.DataDir, t.InstallDir)
 	}
-	return releaseReverifier{dataDir: t.DataDir, allowedSigners: ReleaseAllowedSignersPath(t.InstallDir)}, nil
+	return releaseReverifier{installDir: t.InstallDir, dataDir: t.DataDir, allowedSigners: ReleaseAllowedSignersPath(t.InstallDir)}, nil
 }
 
 // releaseReverifier is the production Reverifier (see the file comment).
 type releaseReverifier struct {
+	installDir     string // the installation (the release root must be outside it)
 	dataDir        string // the installation's data dir (the verdicts live under it)
 	allowedSigners string // <install>/deploy/release_allowed_signers
 }
 
-// Verdict is updaterjob.ReadVerdict's file for releaseID, as the mirror.
+// Verdict is updaterjob.ReadVerdict's file for releaseID, as the mirror —
+// and only while it is a verdict for the CURRENT release root (U4F defect 6,
+// a fail-closed default named for the CTO): the release root is re-checked
+// NOW (ReleaseRoot: set, absolute, its own resolved path, outside the
+// install) and the verdict's release_dir must be exactly <that root>/<its
+// source sha>. A release fetched under a root the operator no longer names
+// is refused, so no step resolves it (brief row 3: Resolve(<RELEASE_DIR>/<sha>)).
 func (r releaseReverifier) Verdict(releaseID string) (Verdict, error) {
 	v, err := updaterjob.ReadVerdict(r.dataDir, releaseID)
 	if err != nil {
 		return Verdict{}, err
+	}
+	root, err := ReleaseRoot(r.installDir)
+	if err != nil {
+		return Verdict{}, fmt.Errorf("release %s: %w", releaseID, err)
+	}
+	if want := filepath.Join(root, v.SourceSHA); v.ReleaseDir != want {
+		return Verdict{}, fmt.Errorf("%w: the verdict for %s names the release dir %s, not %s under the current NOFX_RELEASE_DIR — re-fetch it there", ErrReleaseRoot, releaseID, v.ReleaseDir, want)
 	}
 	return mirrorVerdict(v), nil
 }
