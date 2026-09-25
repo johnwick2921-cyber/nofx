@@ -513,9 +513,40 @@ func (s *Server) handleUpdatesInstall(c *gin.Context) {
 	c.JSON(http.StatusAccepted, gin.H{"job_id": g.JobID})
 }
 
-// handleUpdatesJob — GET /api/updates/jobs/:id and /jobs/:id/receipt. M3 has
-// no jobs (no worker): every id is unknown ⇒ 404. It never touches the
-// filesystem, so no id — however shaped — can reach a path.
+// handleUpdatesJob — GET /api/updates/jobs/:id and /jobs/:id/receipt.
+//
+// Knob OFF (M3): no jobs — every id is unknown ⇒ the literal 404, before any
+// filesystem access, so no id however shaped can reach a path.
+//
+// Knob ON: the id must pass updaterwire.ValidJobID (the ONE id rule the wire
+// and the job file share) before anything else; then the WORKER's job file
+// is read with updaterjob.Read (private dirs, a safe regular file, the strict
+// decoder, the file-name binding) and projected — updaterjob.View for the
+// job, updaterjob.Receipts for /receipt. Every miss is the SAME 404 body:
+// absent is silent; a corrupt file or an unsafe dir is logged at ERROR
+// server-side and still answers 404, so the response is never a filesystem
+// oracle and never carries a byte of the file.
 func (s *Server) handleUpdatesJob(c *gin.Context) {
-	c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+	if !s.updaterOn {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	id := c.Param("id")
+	if !updaterwire.ValidJobID(id) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	j, err := updaterjob.Read(trader.MaintenanceDataDir(), id)
+	if err != nil {
+		if !errors.Is(err, updaterjob.ErrNotFound) {
+			logger.Errorf("🔒 [updates] job %s unreadable — answered 404: %v", id, err)
+		}
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	if strings.HasSuffix(c.FullPath(), "/receipt") {
+		c.JSON(http.StatusOK, updaterjob.Receipts(j))
+		return
+	}
+	c.JSON(http.StatusOK, updaterjob.View(j))
 }
