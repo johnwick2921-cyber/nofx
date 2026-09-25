@@ -908,6 +908,14 @@ func (c *StrategyConfig) UnmarshalJSON(data []byte) error {
 // list). Additive + defaults-off: a nil *DayPlanConfig (absent day_plan) leaves
 // an existing strategy byte-identical, and PlanEnabled=false is the master
 // switch even when the block is present. Lives at ROOT of StrategyConfig.
+// PictureHtf default timing knobs (DEFAULTS-SANE 2026-09-24). The shipped
+// defaults are engineering floors the REAL pipeline can meet (2-minute trader
+// cadence, hour-boundary frame storms measured 09-23/24), not research optima.
+const (
+	PictureHtfDefaultEntryWindowSec = 90
+	PictureHtfDefaultFreshnessSec   = 15
+)
+
 // PictureHtfConfig (W-PICTURE-HTF, 2026-09-19) — the named SIM entry mode's
 // knobs. The explicit defaults are ENGINEERING DEFAULTS chosen to translate the
 // owner's two pictures into repeatable rules; they are not research-proven
@@ -917,8 +925,8 @@ type PictureHtfConfig struct {
 	TickSize       float64 `json:"tick_size,omitempty"`        // default 0.25 (MNQ)
 	PivotWindow    int     `json:"pivot_window,omitempty"`     // default 120 completed 4H candles
 	SwingLookback  int     `json:"swing_lookback,omitempty"`   // default 24 completed 5m candles
-	EntryWindowSec int     `json:"entry_window_sec,omitempty"` // default 10s from the new 5m interval start
-	FreshnessSec   int     `json:"freshness_sec,omitempty"`    // default 2s max data age at evaluation
+	EntryWindowSec int     `json:"entry_window_sec,omitempty"` // default 90s from the new 5m interval start
+	FreshnessSec   int     `json:"freshness_sec,omitempty"`    // default 15s max data age at evaluation
 	MinRR          float64 `json:"min_rr,omitempty"`           // 0 = the strategy's configured min R:R
 }
 
@@ -940,10 +948,10 @@ func PictureHtfResolved(c *PictureHtfConfig) PictureHtfConfig {
 		out.SwingLookback = 24
 	}
 	if out.EntryWindowSec <= 0 {
-		out.EntryWindowSec = 10
+		out.EntryWindowSec = PictureHtfDefaultEntryWindowSec
 	}
 	if out.FreshnessSec <= 0 {
-		out.FreshnessSec = 2
+		out.FreshnessSec = PictureHtfDefaultFreshnessSec
 	}
 	return out
 }
