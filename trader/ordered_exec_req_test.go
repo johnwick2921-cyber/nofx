@@ -255,27 +255,11 @@ func TestOneOrderUpdateAppliesExactlyOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = srv.Stop() })
-	var c net.Conn
-	for i := 0; i < 100 && c == nil; i++ {
-		cc, err := net.Dial("tcp", srv.ListenAddrForTest().String())
-		if err == nil {
-			deadline := time.Now().Add(20 * time.Millisecond)
-			for time.Now().Before(deadline) && !srv.IsConnected() {
-				time.Sleep(2 * time.Millisecond)
-			}
-			if srv.IsConnected() {
-				c = cc
-			} else {
-				_ = cc.Close()
-			}
-		} else if cc != nil {
-			_ = cc.Close()
-		}
-		time.Sleep(5 * time.Millisecond)
+	c, err := net.Dial("tcp", srv.ListenAddrForTest().String())
+	if err != nil {
+		t.Fatalf("dial: %v", err)
 	}
-	if c == nil {
-		t.Fatal("fake client never connected")
-	}
+	waitAddonRegistered(t, srv) // CTO M7 — the producer runs only after the accept loop registered this client
 	t.Cleanup(func() { _ = c.Close() })
 	if err := ntwire.WriteFrame(c, ntwire.FrameHello, ntwire.HelloPayload{ProtocolVersion: ntwire.ProtocolVersion, Source: "vltrader-addon"}); err != nil {
 		t.Fatal(err)
@@ -352,27 +336,11 @@ func TestStopUnregistersThenSecondRunInstallsCleanly(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = srv.Stop() })
-	var c net.Conn
-	for i := 0; i < 100 && c == nil; i++ {
-		cc, err := net.Dial("tcp", srv.ListenAddrForTest().String())
-		if err == nil {
-			deadline := time.Now().Add(20 * time.Millisecond)
-			for time.Now().Before(deadline) && !srv.IsConnected() {
-				time.Sleep(2 * time.Millisecond)
-			}
-			if srv.IsConnected() {
-				c = cc
-			} else {
-				_ = cc.Close()
-			}
-		} else if cc != nil {
-			_ = cc.Close()
-		}
-		time.Sleep(5 * time.Millisecond)
+	c, err := net.Dial("tcp", srv.ListenAddrForTest().String())
+	if err != nil {
+		t.Fatalf("dial: %v", err)
 	}
-	if c == nil {
-		t.Fatal("fake client never connected")
-	}
+	waitAddonRegistered(t, srv) // CTO M7 — the producer runs only after the accept loop registered this client
 	t.Cleanup(func() { _ = c.Close() })
 	if err := ntwire.WriteFrame(c, ntwire.FrameHello, ntwire.HelloPayload{ProtocolVersion: ntwire.ProtocolVersion, Source: "vltrader-addon"}); err != nil {
 		t.Fatal(err)
