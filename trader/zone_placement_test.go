@@ -505,8 +505,16 @@ func TestZoneRestCap(t *testing.T) {
 		t.Fatalf("31 min must cancel exactly the policy limit %s: %+v", sid, cancels)
 	}
 	row := r.row("S1")
-	if row.State != store.StateCancelPending || !strings.Contains(row.StateReason, "zone rest expired") {
-		t.Fatalf("the rest-capped row must be cancel_pending 'zone rest expired': %+v", row)
+	// WAVE PLANNER B1 — with zone_place_within_pts ON (the shipped default)
+	// the expiry returns the row to armed-unplaced (re-placeable), not
+	// cancel_pending. The wire cancel above stands; the placement stamp is
+	// cleared so the next pass can place it again within the bound.
+	if row.State != store.StateArmed || !strings.Contains(row.StateReason, "zone rest expired") ||
+		row.SignalID != "" || row.PlacedAtMs != nil {
+		t.Fatalf("the rest-capped row must reset to armed-unplaced 'zone rest expired': %+v", row)
+	}
+	if row.PlacementSeq != 1 {
+		t.Fatalf("the reset mints the next placement seq (0 authored +1), got %d: %+v", row.PlacementSeq, row)
 	}
 	var lg store.ArmedOrderDB
 	if err := r.st.GormDB().First(&lg, legacy.ID).Error; err != nil {

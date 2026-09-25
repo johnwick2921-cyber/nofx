@@ -1802,6 +1802,46 @@ func plannerRejectHeader(history []string, live []string) string {
 	return b.String()
 }
 
+// plannerReadLine (WAVE PLANNER B3) is the ONE per-read line: session,
+// attempts, each reject's item class (the shared kernel classifier), the
+// read→publish latency and the final lifecycle. n/a when the read never
+// published a born-check (no_trade / fail-closed reads record none).
+func plannerReadLine(session string, attempts int, rejectReasons []string, readMs, publishMs *int64, lifecycle string) string {
+	classes := make([]string, 0, len(rejectReasons))
+	for _, r := range rejectReasons {
+		classes = append(classes, kernel.PlannerRejectItemClass(r))
+	}
+	classesPart := "none"
+	if len(classes) > 0 {
+		classesPart = strings.Join(classes, ",")
+	}
+	latency := "n/a"
+	if readMs != nil && publishMs != nil {
+		latency = fmt.Sprintf("%dms", *publishMs-*readMs)
+	}
+	return fmt.Sprintf("🧭 planner read: session=%s attempts=%d reject_classes=%s read→publish=%s lifecycle=%s",
+		session, attempts, classesPart, latency, lifecycle)
+}
+
+// logPlannerReadLine (WAVE PLANNER B3) emits the ONE 🧭 per-read line and
+// records its counters — read total + per-class rejects, counted from the
+// read's own recorded history, never inferred from row counts.
+func (at *AutoTrader) logPlannerReadLine(session string, attempts int, rejectReasons []string, readMs, publishMs *int64, lifecycle string) {
+	at.logInfof("%s", plannerReadLine(session, attempts, rejectReasons, readMs, publishMs, lifecycle))
+	if at.store == nil {
+		return
+	}
+	_, _ = store.IncSystemCounter(at.store, "planner:read")
+	seen := map[string]bool{}
+	for _, r := range rejectReasons {
+		c := kernel.PlannerRejectItemClass(r)
+		if !seen[c] {
+			seen[c] = true
+			_, _ = store.IncSystemCounter(at.store, "planner:read_reject_"+c)
+		}
+	}
+}
+
 // plannerRejectTail repeats the same cumulative list at the end — the model
 // reads a 6.6k-token prompt; the correction appears at both ends of it.
 func plannerRejectTail(history []string, live []string) string {
@@ -2006,7 +2046,9 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 	resendIdentical := ""        // class 41 M0: the exact prompt a provider-failed attempt sent
 	resendAfterWatchdog := false // the prior attempt died on a watchdog close
 	resendStart := time.Time{}
+	lastAttempt := 0                            // WAVE PLANNER B3 — the final attempt count, recorded by the read line
 	for attempt := 1; attempt <= 3; attempt++ { // 1 + ≤2 retries
+		lastAttempt = attempt
 		researchTrace.Finish(lastErr)
 		userPrompt := prompt
 		modeLabel := "author"
@@ -2532,6 +2574,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 			} else {
 				at.logWarnf("🗓️ wake re-read failed for %s %s (benign — active plan kept): %v", tradeDate, session, lastErr)
 			}
+			at.logPlannerReadLine(session, lastAttempt, rejectHistory, nil, nil, "kept_active")
 			return 0, "kept_active", nil
 		}
 		// P7 — the fail-closed doc still carries the map: levels from the current
@@ -2616,6 +2659,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 	at.recordPlanIdentity(at.store.Plan().ResolvePlanID(tradeDate, session, at.id), version, identityWarnings, authoredAt)
 	researchTrace.Published(at.store.Plan().ResolvePlanID(tradeDate, session, at.id), version, string(docJSON))
 	at.logInfof("🗓️ PLAN written %s %s v%d (model %s, lifecycle %s, prompt %s, ai_config %s)", tradeDate, session, version, modelID, lifecycle, promptHash, aiConfigHash)
+	at.logPlannerReadLine(session, lastAttempt, rejectHistory, bornCheck.ReadClockPtr(), bornCheck.PublishClockPtr(), lifecycle)
 	// W-EXEC-TRUTH W5 (CTO 1790191033566) — the AI read that supersedes a
 	// version carrying LIVE Picture scenarios re-appends each of them to the
 	// version just written: the same scenario value (same id, same machine
