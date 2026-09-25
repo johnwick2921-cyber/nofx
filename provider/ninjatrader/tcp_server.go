@@ -197,6 +197,12 @@ type TCPServer struct {
 	// reload) cannot forget which flat snapshots predate an entry.
 	entryReceipts map[string]*entryReceiptState
 
+	// W117 F2 — receive-order execution. executionOwners holds the ONE
+	// durable consumer per (symbol, account); the read goroutine dispatches
+	// order/fill/close evidence to it BEFORE advisory channel fanout.
+	executionMu     sync.Mutex
+	executionOwners map[string]*OrderedExecutionHandlers
+
 	// Plan 4 Stage 4 — available accounts discovered by the C# AddOn
 	// (accounts_list frame). Emitted on connect and on account change.
 	// Thread-safe, read by the /api/accounts handler, written by readLoop.
@@ -2035,6 +2041,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			if fill.Status == "rejected" {
 				s.retirePending(fill.Seq, fill.SignalID)
 			}
+			s.dispatchOrderedFill(&fill) // W117 F2 — durable consumer first, in receive order
 			select {
 			case s.fillCh <- fill:
 			default:
@@ -2058,6 +2065,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 				(strings.EqualFold(oup.State, "partfilled") || ClassifyOrderState(oup.State) == LivenessTerminal) {
 				s.NoteEntryExecution(oup.Symbol, oup.Account, oup.SignalID, oup.Quantity)
 			}
+			s.dispatchOrderedOrder(&oup) // W117 F2 — durable consumer first, in receive order
 			select {
 			case s.orderUpdCh <- oup:
 			default:
@@ -2316,6 +2324,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 				continue
 			}
 			s.retirePending(p.Seq, p.SignalID)
+			s.dispatchOrderedClose(&p) // W117 F2 — durable consumer first, in receive order
 			select {
 			case s.closeCh <- p:
 			default:
