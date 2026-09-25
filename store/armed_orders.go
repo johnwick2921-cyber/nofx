@@ -591,15 +591,15 @@ func (s *ArmedOrderStore) SettleNeverSent(signalID, reason string) (int64, error
 // entry that BECAME a position; its fill evidence may arrive LATE (after the
 // armed pass already moved on), and no later writer may move it out of
 // 'filled' — not the armed pass's RequestCancel, not an invalidation, not a
-// re-placement. The WHERE clause is the CAS: the update only fires when the
-// row is NOT filled, so a filled row stays filled no matter which goroutine
-// writes. (SetState to 'filled' on an already-filled row is an idempotent
-// no-op by the same clause.)
+// re-placement. The WHERE clause is the CAS: the update fires when the row is
+// NOT filled (any transition) OR when the TARGET is 'filled' — same-state
+// reason updates stay legal (lineage stamps, stamp_pending clears), so a
+// filled row stays filled no matter which goroutine writes.
 func (s *ArmedOrderStore) SetState(id int64, state, reason string) error {
 	if s == nil || s.db == nil {
 		return nil
 	}
-	return s.db.Model(&ArmedOrderDB{}).Where("id = ? AND state <> ?", id, StateFilled).
+	return s.db.Model(&ArmedOrderDB{}).Where("id = ? AND (state <> ? OR ? = ?)", id, StateFilled, state, StateFilled).
 		Updates(map[string]any{"state": state, "state_reason": reasonKeepingWithdraw(reason)}).Error
 }
 
