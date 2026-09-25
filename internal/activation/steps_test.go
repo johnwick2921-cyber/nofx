@@ -168,6 +168,43 @@ func TestActivateInstallsAllThreeHalvesBeforeKilling(t *testing.T) {
 	}
 }
 
+// A staging/install failure leaves the RUNNING bot untouched: Activate must
+// refuse (non-zero) without killing and without routing to rollback. The v6
+// shell ran `cp ... || { rollback; die }`, SIGKILLing a healthy bot for a
+// cutover that never started (preboot finding [24]). The library pins the
+// safe shape at the production call site.
+func TestActivateInstallFailureNeverTouchesTheRunningBot(t *testing.T) {
+	killed := false
+	rel, prev := twoReleases(t)
+	// Make the FIRST install half fail deterministically: the temp file that
+	// atomicCopy creates beside the destination cannot be created in a
+	// read-only directory.
+	if err := os.Chmod(prev.Dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(prev.Dir, 0o755) }) // TempDir cleanup needs write back
+	withSystem(t, &system{
+		ReadStat: func(pid int) (string, error) { return statLine(pid, 111111), nil },
+		Kill:     func(pid int) error { killed = true; return nil },
+		MainPID:  func() (int, error) { return 4244, nil },
+		Now:      time.Now,
+		Sleep:    func(time.Duration) {},
+	})
+	_, rc, err := Activate(rel, prev, Identity{PID: 4242, StartTicks: 111111})
+	if err == nil {
+		t.Fatal("Activate succeeded with a failing install half")
+	}
+	if killed {
+		t.Fatal("a staging failure KILLED the healthy bot — nothing had moved")
+	}
+	if _, ok := rc.Evidence["killed"]; ok {
+		t.Fatal("receipt claims a kill that must not have happened")
+	}
+	if !strings.Contains(err.Error(), "install") {
+		t.Fatalf("refusal does not name the install failure: %v", err)
+	}
+}
+
 // twoReleases builds a "new" release dir and a "current install" dir.
 func twoReleases(t *testing.T) (rel, prev Release) {
 	t.Helper()
