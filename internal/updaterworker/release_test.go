@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"go/parser"
 	"go/token"
 	"io/fs"
@@ -154,6 +155,44 @@ func dirNames(t *testing.T, dir string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// PIN (#206 review fold, release.go:855): a verdict-link dir fsync failure
+// (EIO after os.Link) must NOT refuse the fetch — the old code ran
+// os.RemoveAll(final) and reported "refused" while the linked verdict stayed
+// published, leaving a verdict that names a deleted release dir: the app-side
+// gate reported the release verified, and every re-fetch refused with
+// ErrVerdictExists until a hand delete. Now it is success with a warning:
+// the verdict and the release dir both exist, the re-fetch is refused
+// CONSISTENTLY (a verdict names a dir), and the warning is logged.
+func TestFetchSucceedsWhenTheVerdictLinkDirFsyncFails(t *testing.T) {
+	r := buildRelease(t, releaseOpts{})
+	e := newFetchEnv(t)
+	cfg := e.cfg(r)
+	var warnings []string
+	cfg.Logf = func(format string, a ...any) { warnings = append(warnings, fmt.Sprintf(format, a...)) }
+	prev := verdictDirSync
+	verdictDirSync = func(dir string) error { return errors.New("injected: fsync of the verdicts dir failed (EIO)") }
+	t.Cleanup(func() { verdictDirSync = prev })
+
+	v, err := FetchRelease(cfg)
+	if err != nil {
+		t.Fatalf("FetchRelease refused a good release because its verdict link fsync failed: %v", err)
+	}
+	// Both halves exist: the verdict names a present release dir.
+	if _, lerr := os.Lstat(e.verdictPath()); lerr != nil {
+		t.Fatalf("the verdict is missing after the warned success: %v", lerr)
+	}
+	if fi, lerr := os.Lstat(e.releaseDirOf(t, v)); lerr != nil || !fi.IsDir() {
+		t.Fatalf("the release dir is missing after the warned success: %v", lerr)
+	}
+	if len(warnings) == 0 || !strings.Contains(warnings[0], "fsync") {
+		t.Fatalf("the warning was not logged: %v", warnings)
+	}
+	// The re-fetch refusal is now CONSISTENT: a verdict names a dir.
+	if _, err := FetchRelease(e.cfg(r)); err == nil || !errors.Is(err, ErrVerdictExists) {
+		t.Fatalf("re-fetch = %v, want ErrVerdictExists", err)
+	}
 }
 
 // assertNothingLanded: a refused fetch leaves no verdict (not even the
@@ -713,7 +752,7 @@ func TestVerdictWrittenOnlyAfterEveryCheck(t *testing.T) {
 			HashAlg: "sha512", ManifestSHA256: strings.Repeat("a", 64), Artifacts: 0, // uncomputed
 			VerifiedAt: testNow.Format(time.RFC3339Nano),
 		}
-		if err := writeVerdict(e.dataDir, e.verdictPath(), bad); !errors.Is(err, ErrVerdictWrite) || !errors.Is(err, updaterjob.ErrVerdict) {
+		if _, err := writeVerdict(e.dataDir, e.verdictPath(), bad); !errors.Is(err, ErrVerdictWrite) || !errors.Is(err, updaterjob.ErrVerdict) {
 			t.Fatalf("writeVerdict(artifacts=0) = %v, want ErrVerdictWrite wrapping updaterjob.ErrVerdict", err)
 		}
 		if _, err := os.Lstat(filepath.Join(e.dataDir, "updater")); !errors.Is(err, fs.ErrNotExist) {

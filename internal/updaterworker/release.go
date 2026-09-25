@@ -141,6 +141,7 @@ type FetchConfig struct {
 	AllowedSigners string           // <installDir>/deploy/release_allowed_signers
 	DataDir        string           // the installation's data dir (absolute)
 	Now            func() time.Time // nil ⇒ time.Now
+	Logf           func(string, ...any) // nil ⇒ no warning line (a verdict-link dir-fsync warning)
 }
 
 // activationManifest is activation.Manifest's JSON, exactly.
@@ -305,13 +306,23 @@ func FetchRelease(cfg FetchConfig) (updaterjob.Verdict, error) {
 	_ = syncDir(cfg.ReleaseRoot)
 	fetchAfterRename()
 
-	// 10. the verdict — last, and only now
-	if err := writeVerdict(cfg.DataDir, vpath, v); err != nil {
+	// 10. the verdict — last, and only now. A verdict-link dir-fsync failure
+	// is a WARNING, not a refusal (#206 review fold): the verdict's content
+	// was fsynced before the link and the link itself is atomic, so both the
+	// verdict and the release dir exist — refusing here would RemoveAll the
+	// release dir and leave a published verdict naming nothing (the old
+	// behaviour: operator told "refused", app-side gate reports verified,
+	// every re-fetch refused with ErrVerdictExists until a hand delete).
+	warn, err := writeVerdict(cfg.DataDir, vpath, v)
+	if err != nil {
 		// no release dir survives without its verdict
 		_ = os.RemoveAll(final)
 		_ = syncDir(cfg.ReleaseRoot)
 		_ = ClearFetchPending(cfg.ReleaseRoot, m.SourceSHA)
 		return updaterjob.Verdict{}, err
+	}
+	if warn != nil && cfg.Logf != nil {
+		cfg.Logf("verdict %s: %v", vpath, warn)
 	}
 	// The verdict is written: a marker that survives this clear names a
 	// finished fetch, and the next recovery removes it (a verdict names the dir).
@@ -808,29 +819,33 @@ func readActivationManifest(root *os.Root) (activationManifest, error) {
 // verdicts/ are private dirs of this uid (created 0700 when absent, refused
 // when loose), the bytes are fsynced in a temp file, and link(2) publishes
 // them only if no verdict exists — a second writer gets ErrVerdictExists.
-func writeVerdict(dataDir, vpath string, v updaterjob.Verdict) error {
+// verdictDirSync is a TEST SEAM, syncDir in production: the directory fsync
+// that makes the verdict LINK durable.
+var verdictDirSync = syncDir
+
+func writeVerdict(dataDir, vpath string, v updaterjob.Verdict) (warn, err error) {
 	// never write a verdict the app-side reader would refuse
 	if err := v.Check(); err != nil {
-		return fmt.Errorf("%w: %w", ErrVerdictWrite, err)
+		return nil, fmt.Errorf("%w: %w", ErrVerdictWrite, err)
 	}
 	updaterDir := filepath.Join(filepath.Clean(dataDir), updaterwire.UpdaterDirName)
 	vdir := filepath.Dir(vpath)
 	for _, d := range []string{updaterDir, vdir} {
 		if err := os.Mkdir(d, 0o700); err != nil && !errors.Is(err, fs.ErrExist) {
-			return fmt.Errorf("%w: %s: %w", ErrVerdictWrite, d, err)
+			return nil, fmt.Errorf("%w: %s: %w", ErrVerdictWrite, d, err)
 		}
 		if err := updaterwire.CheckPrivateDir(d, os.Geteuid()); err != nil {
-			return fmt.Errorf("%w: %w", ErrVerdictWrite, err)
+			return nil, fmt.Errorf("%w: %w", ErrVerdictWrite, err)
 		}
 	}
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrVerdictWrite, err)
+		return nil, fmt.Errorf("%w: %w", ErrVerdictWrite, err)
 	}
 	b = append(b, '\n')
 	tmp, err := os.CreateTemp(vdir, ".verdict-*")
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrVerdictWrite, err)
+		return nil, fmt.Errorf("%w: %w", ErrVerdictWrite, err)
 	}
 	defer os.Remove(tmp.Name())
 	_, err = tmp.Write(b)
@@ -844,15 +859,20 @@ func writeVerdict(dataDir, vpath string, v updaterjob.Verdict) error {
 		err = cerr
 	}
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrVerdictWrite, err)
+		return nil, fmt.Errorf("%w: %w", ErrVerdictWrite, err)
 	}
 	if err := os.Link(tmp.Name(), vpath); err != nil {
 		if errors.Is(err, fs.ErrExist) {
-			return fmt.Errorf("%w: %s", ErrVerdictExists, vpath)
+			return nil, fmt.Errorf("%w: %s", ErrVerdictExists, vpath)
 		}
-		return fmt.Errorf("%w: %w", ErrVerdictWrite, err)
+		return nil, fmt.Errorf("%w: %w", ErrVerdictWrite, err)
 	}
-	return syncDir(vdir)
+	if err := verdictDirSync(vdir); err != nil {
+		// The verdict IS linked; only the link's durability fsync failed.
+		// Success with a warning (the caller keeps the release dir).
+		return fmt.Errorf("linked but the verdicts dir fsync failed: %w", err), nil
+	}
+	return nil, nil
 }
 
 // ── small helpers ─────────────────────────────────────────────────────────────
