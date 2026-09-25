@@ -75,6 +75,11 @@ func TestDryRunWholeStateMachine(t *testing.T) {
 		{name: "park+resume", opts: []rigOpt{withCSChanged()}, final: updaterjob.StateComplete},
 		{name: "watch-timeout rollback", setup: func(r *rig, _ *updaterwire.Client) { r.watchFail[boxNew] = true }, final: updaterjob.StateRolledBack},
 		{name: "rollback fails", setup: func(r *rig, _ *updaterwire.Client) { r.watchFail[boxNew], r.rollbackFail = true, true }, final: updaterjob.StateRecoveryNeeded},
+		// #206 review fold: the binary and RELEASE halves restore fine, the dist
+		// half fails — the relaunch boots the old binary serving the FAILED
+		// release's bundle. Only the dist proof can see it; before the fold
+		// this ended rolled_back with the hold cleared.
+		{name: "rollback fails at restore dist", setup: func(r *rig, _ *updaterwire.Client) { r.watchFail[boxNew], r.rollbackDistFail = true, true }, final: updaterjob.StateRecoveryNeeded},
 		{name: "cancel", setup: func(r *rig, c *updaterwire.Client) {
 			r.w.crash = func(q string) {
 				if q == "preflight_ok/started" {
@@ -118,6 +123,9 @@ func TestDryRunWholeStateMachine(t *testing.T) {
 			r.noViolations(t)
 			if j.State != p.final || j.Phase != updaterjob.PhaseDone {
 				t.Fatalf("ended %s/%s, want %s/done", j.State, j.Phase, p.final)
+			}
+			if p.name == "rollback fails at restore dist" && !strings.Contains(j.Error, "served UI") {
+				t.Fatalf("the dist half must be the proven failure: %q", j.Error)
 			}
 			if p.final == updaterjob.StateRecoveryNeeded {
 				if s, _ := ReadHoldFor(r.data, boxJobID); s != HoldOurs {

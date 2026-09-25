@@ -154,6 +154,10 @@ func TestBootVerifyRefusesARefusedBootLine(t *testing.T) {
 		{name: "OK only BEFORE the offset (the previous boot)", before: ok, wantErr: "no \"BOOT INTEGRITY OK — rev " + sha[:12] + "\""},
 		{name: "OK for another sha", after: strings.ReplaceAll(ok, sha[:12], boxOld[:12]), wantErr: "no \"BOOT INTEGRITY OK"},
 		{name: "a +dirty binary", after: strings.Replace(ok, sha[:12]+" ·", sha[:12]+" +dirty ·", 1), wantErr: "no \"BOOT INTEGRITY OK"},
+		// The RELEASE half (#206 review fold): an OK line whose "expected"
+		// names another rev is not this install's boot line — boot integrity
+		// only passes when the binary rev equals the RELEASE marker's.
+		{name: "an OK line whose expected names another rev", after: strings.Replace(ok, " expected "+sha[:12], " expected "+boxOld[:12], 1), wantErr: "no \"BOOT INTEGRITY OK"},
 		// The #206 anchor negatives: the spoofed lines are not the app's boot
 		// line — the refused spoof must not fail the scan, and the forged OK
 		// must not satisfy it.

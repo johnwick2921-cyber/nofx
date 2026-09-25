@@ -528,8 +528,10 @@ func (w *Worker) stepBootVerify(ctx context.Context, j updaterjob.Job) stepResul
 // with since = the persisted rollback kill instant (a RollbackTo error after
 // the files were restored may still boot the old build through
 // Restart=on-failure), then the OK-line scan and health prefix for the old
-// sha. Anything unproven is recovery_needed: the worker stops, the hold
-// stays.
+// sha, then the DIST half: the served UI must hash to the snapshot's
+// index.html (a RollbackTo that failed at restore dist leaves the failed
+// release's bundle served). Anything unproven is recovery_needed: the worker
+// stops, the hold stays.
 func (w *Worker) stepRollback(ctx context.Context, j updaterjob.Job) stepResult {
 	if j.Snapshot == nil || j.Install == nil || j.RollbackWatchSince == nil || j.RollbackLogOffset == nil {
 		return stepResult{err: errors.New("rollback without its inputs (snapshot, install, rollback watch)"), reason: "rollback without its inputs"}
@@ -585,6 +587,28 @@ func (w *Worker) stepRollback(ctx context.Context, j updaterjob.Job) stepResult 
 			verr = fmt.Errorf("health serves %q, not the old %s", h, snap.SHA)
 		default:
 			ev["health_revision"] = h
+		}
+	}
+	if verr == nil {
+		// The DIST half (#206 review fold): RollbackTo that failed at
+		// "restore dist" left the failed release's bundle served while the
+		// binary and RELEASE halves above are proven fine — the job used to
+		// end rolled_back and clear the hold on a mixed install. The served
+		// UI must hash to the SNAPSHOT's index.html.
+		expIndex, derr := os.ReadFile(filepath.Join(snap.Dist, "index.html"))
+		switch {
+		case derr != nil:
+			verr = fmt.Errorf("the snapshot's dist: %w", derr)
+		default:
+			got, gerr := w.app.Index(ctx)
+			switch {
+			case gerr != nil:
+				verr = fmt.Errorf("served UI: %w", gerr)
+			case sha256Of(got) != sha256Of(expIndex):
+				verr = fmt.Errorf("the served UI hashes to %s, the snapshot's index.html is %s", sha256Of(got), sha256Of(expIndex))
+			default:
+				ev["index_sha256"] = sha256Of(expIndex)
+			}
 		}
 	}
 	if rerr != nil {

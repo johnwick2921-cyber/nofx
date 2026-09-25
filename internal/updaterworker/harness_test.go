@@ -89,6 +89,7 @@ type box struct {
 	refuseBoot     map[string]bool
 	watchFail      map[string]bool
 	rollbackFail   bool
+	rollbackDistFail bool // RollbackTo restores binary+RELEASE, fails at dist, no kill of its own
 	badToken       bool // the app refuses the token (401)
 	verdictMissing bool
 	holdWriteLies  bool          // the hold write lands on disk, then errs (U1 item 9)
@@ -481,11 +482,30 @@ func (f *fakeLib) RollbackTo(prev, install Release, id Identity) (Identity, Rece
 	f.b.mu.Lock()
 	f.b.rollbackIDs = append(f.b.rollbackIDs, id)
 	f.b.rollbackArg = append(f.b.rollbackArg, [2]Release{prev, install})
-	fail := f.b.rollbackFail
+	fail, distFail := f.b.rollbackFail, f.b.rollbackDistFail
 	f.b.mu.Unlock()
 	if fail {
 		err := errors.New("restore binary: rename: read-only file system")
 		return Identity{}, f.rc("rollback", err, map[string]string{"restore": prev.SHA}), err
+	}
+	if distFail {
+		// The #206 review fold scenario: the binary and RELEASE are restored,
+		// the dist restore FAILS, and the systemd unit relaunches onto the
+		// restored old binary before RollbackTo returns (its own kill never
+		// runs — activation.RollbackTo errors out of atomicSwapDir). The
+		// install now serves the FAILED release's bundle on the old binary.
+		if err := copyFile(prev.Binary, install.Binary); err != nil {
+			return Identity{}, f.rc("rollback", err, nil), err
+		}
+		if err := copyFile(prev.ReleaseFile, install.ReleaseFile); err != nil {
+			return Identity{}, f.rc("rollback", err, nil), err
+		}
+		next, err := f.b.kill(id) // Restart=on-failure relaunch
+		if err != nil {
+			return Identity{}, f.rc("rollback", err, nil), err
+		}
+		err = errors.New("restore dist: injected partial restore")
+		return next, f.rc("rollback", err, map[string]string{"restore": prev.SHA}), err
 	}
 	if err := installHalves(prev, install); err != nil {
 		return Identity{}, f.rc("rollback", err, nil), err

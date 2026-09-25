@@ -50,10 +50,14 @@ const (
 	bootKeyPrefix  = "🔐 "
 )
 
-// isBootOKLine: the app's OWN OK boot line, by shape.
+// isBootOKLine: the app's OWN OK boot line, by shape. The "expected <sha12>"
+// field is the RELEASE half: boot integrity passes only when the binary's rev
+// equals the RELEASE marker's, and the OK line quotes it — an OK line that
+// does not expect this sha is not this install's line.
 func isBootOKLine(ln, sha12 string) bool {
 	return strings.Contains(ln, bootOKCaller) && strings.Contains(ln, bootCallerFile) &&
-		strings.Contains(ln, bootKeyPrefix) && strings.Contains(ln, bootOKPrefix+sha12+" ·")
+		strings.Contains(ln, bootKeyPrefix) && strings.Contains(ln, bootOKPrefix+sha12+" ·") &&
+		strings.Contains(ln, " expected "+sha12)
 }
 
 // isBootRefusedLine: the app's OWN REFUSED boot line, by shape.
