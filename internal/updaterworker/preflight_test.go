@@ -27,6 +27,14 @@ func TestPreflightRefusalsNeverHold(t *testing.T) {
 		{"C20: the calendar differs", func(r *rig) {
 			writeFile(r.t, filepath.Join(r.inst, calendarFile), `[{"time":"2026-10-01T12:30:00Z","title":"owner edit"}]`+"\n")
 		}, "calendar_static_t1.json differs"},
+		// U4 re-verify note 4 (mutant M18b): the release carries a calendar
+		// the install lacks — it cannot be compared, so it refuses (and the
+		// worker never copies the template itself)
+		{"C20: the release has a calendar the install lacks", func(r *rig) {
+			if err := os.Remove(filepath.Join(r.inst, calendarFile)); err != nil {
+				r.t.Fatal(err)
+			}
+		}, "cannot be compared with the release's"},
 		{"the install binary is dirty", func(r *rig) {
 			writeFile(r.t, filepath.Join(r.inst, "nofx-bin"), "NOFXBIN rev="+boxOld+" modified=true\n")
 		}, "modified=true"},
