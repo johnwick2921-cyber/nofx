@@ -490,7 +490,7 @@ func (w *Worker) stepBootVerify(ctx context.Context, j updaterjob.Job) stepResul
 			if err != nil || t.Before(since) {
 				return "addon_ack: waiting for the AddOn to ack the new process", nil
 			}
-			ev["acked_build_id"] = m.AddonAck.BuildID
+			ev["acked_build_id"], ev["acked_at"] = m.AddonAck.BuildID, m.AddonAck.Received
 			if m.AddonAck.BuildID != f.AddonBuildID {
 				return fmt.Sprintf("addon_ack: the AddOn runs build %q, the release is %q", m.AddonAck.BuildID, f.AddonBuildID), nil
 			}
