@@ -2,10 +2,12 @@ package updaterworker
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"nofx/internal/updaterjob"
 )
@@ -104,7 +106,7 @@ func TestRollbackFailureIsRecoveryNeededAndStops(t *testing.T) {
 			t.Fatalf("recovery text uses %s:\n%s", bad, text)
 		}
 	}
-	for _, want := range []string{`kill -9 "$(systemctl show -p MainPID --value nofx)"`, j.Snapshot.Binary, "BOOT INTEGRITY OK — rev " + boxOld[:12],
+	for _, want := range []string{`systemctl show -p MainPID --value nofx`, j.Snapshot.Binary, "BOOT INTEGRITY OK — rev " + boxOld[:12],
 		"maintenance-hold --install-dir " + r.inst + " clear --job " + boxJobID, j.BackupPath} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("recovery text lacks %q:\n%s", want, text)
@@ -114,4 +116,115 @@ func TestRollbackFailureIsRecoveryNeededAndStops(t *testing.T) {
 		t.Fatalf("the hold is not cleared LAST:\n%s", text)
 	}
 	t.Logf("recovery text:\n%s", text)
+}
+
+// PIN (verifier D3): the recovery text's restart never becomes "kill -9 0"
+// (MainPID is 0 for a unit that is not running — exactly when recovery is
+// needed — and kill -9 0 signals the operator's whole process group). The
+// restart line is RUN here under sh with a stub systemctl and a kill
+// function that only records: MainPID 0 and an empty MainPID kill nothing;
+// MainPID 4242 kills exactly 4242.
+func TestRecoveryRestartNeverKillsTheProcessGroup(t *testing.T) {
+	r := newRig(t)
+	r.watchFail[boxNew] = true
+	r.rollbackFail = true
+	j := r.runToEnd(t)
+	text := RecoveryText(j, r.cfg.Target)
+	var line string
+	for _, l := range strings.Split(text, "\n") {
+		if strings.Contains(l, "systemctl show -p MainPID --value nofx") {
+			line = strings.TrimSpace(l)
+		}
+	}
+	if line == "" {
+		t.Fatalf("no restart line:\n%s", text)
+	}
+	for _, tc := range []struct{ mainPID, want string }{{"0", ""}, {"", ""}, {"1", ""}, {"4242", "KILL -9 4242"}} {
+		stub := t.TempDir()
+		writeFile(t, filepath.Join(stub, "systemctl"), "#!/bin/sh\necho '"+tc.mainPID+"'\n")
+		if err := os.Chmod(filepath.Join(stub, "systemctl"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command("/bin/sh", "-c", `kill() { echo "KILL $*"; }; `+line)
+		cmd.Env = []string{"PATH=" + stub + ":/usr/bin:/bin"}
+		out, _ := cmd.CombinedOutput()
+		var kills []string
+		for _, l := range strings.Split(string(out), "\n") {
+			if strings.HasPrefix(l, "KILL") {
+				kills = append(kills, l)
+			}
+		}
+		got := strings.Join(kills, ";")
+		if got != tc.want {
+			t.Fatalf("MainPID %q: the restart line ran %q, want %q\nline: %s\noutput: %s", tc.mainPID, got, tc.want, line, out)
+		}
+	}
+}
+
+// PIN (verifier D3, low): the steps follow what the job PROVED. A job that
+// never reached the activate installed nothing; one whose release was proven
+// (boot_verified done) must never be rolled back from the snapshot; only an
+// unproven activate restores it. Each case is a real job file (a stale crash
+// swept to recovery_needed at start, or a failed rollback).
+func TestRecoveryTextFollowsWhatTheJobProved(t *testing.T) {
+	staleAt := func(t *testing.T, point string) (*rig, updaterjob.Job) {
+		r := newRig(t)
+		r.w.crash = func(q string) {
+			if q == point {
+				panic(crashPanic{q})
+			}
+		}
+		if !r.runCrashing(t) {
+			t.Fatalf("no crash at %s", point)
+		}
+		r.clock.Advance(31 * time.Minute)
+		r.w = r.newWorker()
+		if _, err := r.w.sweep(); err != nil {
+			t.Fatal(err)
+		}
+		j := r.job()
+		if j.State != updaterjob.StateRecoveryNeeded {
+			t.Fatalf("stale job at %s is %s", point, j.State)
+		}
+		return r, j
+	}
+	restore := func(j updaterjob.Job) string { return "cp -p " + j.Snapshot.Binary }
+	for _, tc := range []struct {
+		name        string
+		build       func(t *testing.T) (*rig, updaterjob.Job)
+		wantRestore bool
+		prove       string
+		say         string
+	}{
+		{"never activated", func(t *testing.T) (*rig, updaterjob.Job) { return staleAt(t, "nt8_skipped/done") }, false, boxOld, "Nothing was installed"},
+		{"release proven", func(t *testing.T) (*rig, updaterjob.Job) { return staleAt(t, "boot_verified/done") }, false, boxNew, "Do NOT restore the snapshot"},
+		{"release proven, complete started", func(t *testing.T) (*rig, updaterjob.Job) { return staleAt(t, "complete/started") }, false, boxNew, "Do NOT restore the snapshot"},
+		{"activate unproven", func(t *testing.T) (*rig, updaterjob.Job) { return staleAt(t, "activated/effect") }, true, boxOld, "Restore the pre-update install"},
+		{"rollback failed", func(t *testing.T) (*rig, updaterjob.Job) {
+			r := newRig(t)
+			r.watchFail[boxNew] = true
+			r.rollbackFail = true
+			return r, r.runToEnd(t)
+		}, true, boxOld, "Restore the pre-update install"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, j := tc.build(t)
+			if j.Snapshot == nil {
+				t.Fatalf("no snapshot recorded (history %v)", states(j))
+			}
+			text := RecoveryText(j, r.cfg.Target)
+			if got := strings.Contains(text, restore(j)); got != tc.wantRestore {
+				t.Fatalf("restore-from-snapshot in the text = %v, want %v (history %v):\n%s", got, tc.wantRestore, states(j), text)
+			}
+			if !strings.Contains(text, "BOOT INTEGRITY OK — rev "+tc.prove[:12]) || !strings.Contains(text, "revision must be "+tc.prove[:12]) {
+				t.Fatalf("the text does not prove %s:\n%s", tc.prove[:12], text)
+			}
+			if !strings.Contains(text, tc.say) {
+				t.Fatalf("the text lacks %q:\n%s", tc.say, text)
+			}
+			if strings.Index(text, "clear --job") < strings.Index(text, "MainPID") {
+				t.Fatalf("the hold is not cleared LAST:\n%s", text)
+			}
+		})
+	}
 }
