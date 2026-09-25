@@ -52,7 +52,7 @@ func TestPlannerRejectBookkeepingRewritesPrevReason(t *testing.T) {
 	yes := true
 	at := mkTrader("ninjatrader", &yes, "5m")
 	prev := "schema: missing condition (attempt 1 defect)"
-	at.plannerRejectBookkeeping(2, "2026-09-23", "NY", "h", "prompt", fmt.Errorf("fragment: partial plan document"), &prev)
+	at.plannerRejectBookkeeping(2, "2026-09-23", "NY", "h", "prompt", "fragment raw", fmt.Errorf("fragment: partial plan document"), &prev)
 	if prev != "fragment: partial plan document" {
 		t.Fatalf("bookkeeping must rewrite prevReason to this attempt's defect, got %q", prev)
 	}

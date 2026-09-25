@@ -39,6 +39,22 @@ const dayPlan: KnobSpec[] = [
     perSession: 'No.',
   },
   {
+    label: 'Planner contract (A3)',
+    where: 'Strategy → Day Plan → Planner contract switch (advanced).',
+    what:
+      'WAVE PLANNER A3 (2026-09-25): the prompt, the validator and the executor are ONE contract — breakdown/breakup entries must wait for the tape\'s confirming close, planned_order is legal only on reject / fvg_entry / sweep_reclaim leg 0, every scenario\'s economics must carry nonzero risk, and a REJECT fade\'s stop is composed by the executor from the frozen zone (edge − buffer).',
+    trader:
+      'ON by default (nil). Turning it OFF restores the pre-A3 prompt text byte-for-byte — the machine still refuses the same violations; only the prompt\'s contract wording changes.',
+    consumer:
+      'store/strategy.go PlannerContractOn · kernel/planner_prompt.go (contract fragments) · kernel/class45_feeds_forward.go (stop-floor qualification)',
+    range: 'switch (ON/OFF)',
+    systemDefault: 'ON · nil = ON',
+    recommended:
+      '⭐ leave ON — the contract wording is the machine\'s ground truth. OFF exists only to prove the prompt change is byte-reversible.',
+    whenToTouch: 'Never in normal trading. OFF is a diagnostic position for A/B studies of planner wording.',
+    perSession: 'No.',
+  },
+  {
     label: 'One setup — minimum grade',
     where: 'Strategy → Day Plan → one_setup_min_grade',
     what: 'The lowest merged-candidate grade the best level near price may carry (A+ | A | B | C). The best level is chosen grade-first, distance-second among candidates inside the reachability band; a scenario on a lower-graded level than the best is declined level_not_best.',
@@ -291,6 +307,21 @@ const dayPlan: KnobSpec[] = [
     recommended:
       '⭐ 30 — the W3 default; there is no fill evidence yet to argue another number.',
     whenToTouch: 'After the receipts (rest duration per fill) exist.',
+    perSession: 'No — strategy-level.',
+  },
+  {
+    label: 'Zone placement reach (PLANNER B1)',
+    where: 'Strategy → Day Plan → zone_place_within_pts (API/config field)',
+    what: 'The distance bound (points) that decides whether an armed market_in_zone arm may place: a row whose zone is farther than this from the eval price stays armed-unplaced (no rest clock, nothing on the wire) and places on a later pass once price comes within the bound; inside and short_of_zone verdicts are unchanged. With the bound ON, a rest-cap expiry (zone_rest_max_min) no longer dismantles the arm — the resting order is cancelled on request (cancel_pending, signal kept) and only once the broker book confirms it does the row return to armed-unplaced (re-placeable) so it can try again when price is near; a failed cancel send is retried and a fill during the wait attributes to the row. 0 turns the whole reach contract OFF and restores the legacy behaviour byte-for-byte (a far arm places at once and an expiry dismantles the arm).',
+    trader:
+      'The bound is the existing armed placement band (25 pts on MNQ, the same distance a legacy limit waits for). A zone the market walked away from is not left resting 148 points away.',
+    consumer:
+      'store/resolve_source.go ResolveZonePlaceWithinPts · trader/zone_placement.go (placeZoneRow beyond-proximity gate + zoneRestCap reset) · 🎛 entry law boot line',
+    range: '0 = OFF (legacy). unset → 25 (the armed placement band).',
+    systemDefault: '25 (ON)',
+    recommended:
+      '⭐ 25 — the same bound legacy limit placement already uses; no evidence yet to argue another number.',
+    whenToTouch: 'After the receipts (placements vs distance per fill) exist.',
     perSession: 'No — strategy-level.',
   },
   {
