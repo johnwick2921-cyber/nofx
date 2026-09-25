@@ -3,7 +3,7 @@
 // button disabled with its exact text while the review is open.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 const mocks = vi.hoisted(() => ({
   health: vi.fn(),
@@ -111,6 +111,69 @@ describe('UpdatesPage', () => {
     mocks.job.mockResolvedValue({ error: 'not found', status: 404 })
     render(<UpdatesPage />)
     await waitFor(() => expect(screen.getByText(/not found/)).toBeTruthy())
+  })
+
+  it('renders the job timestamps the guide promises, one row per state', async () => {
+    mocks.maintenance.mockResolvedValue(heldMaintenance)
+    mocks.job.mockResolvedValue({
+      job_id: 'job-7',
+      state: 'complete',
+      timestamps: {
+        downloaded: '2026-09-24T07:00:00Z',
+        complete: '2026-09-24T08:00:00Z',
+      },
+    })
+    render(<UpdatesPage />)
+    await waitFor(() =>
+      expect(screen.getByText('2026-09-24T08:00:00Z')).toBeTruthy()
+    )
+    expect(screen.getByText('2026-09-24T07:00:00Z')).toBeTruthy()
+    // "complete" now appears twice: the state row AND the timestamp row's
+    // label — both are the guide's promise (state + one timestamp per state).
+    expect(screen.getAllByText('complete').length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByTestId('job-timestamps')).toBeTruthy()
+  })
+
+  it('keeps polling the last job id after the hold clears (no frozen snapshot)', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      mocks.maintenance
+        .mockResolvedValueOnce(heldMaintenance) // first poll: held, names job-7
+        .mockResolvedValue({
+          held: false,
+          state: 'clear',
+          in_flight_sends: 0,
+          drained: true,
+          addon_ack: null,
+        })
+      mocks.job
+        .mockResolvedValueOnce({
+          job_id: 'job-7',
+          state: 'maintenance_held',
+          timestamps: { maintenance_held: '2026-09-24T06:00:00Z' },
+        })
+        .mockResolvedValue({
+          job_id: 'job-7',
+          state: 'rolled_back',
+          timestamps: { rolled_back: '2026-09-24T09:00:00Z' },
+        })
+      render(<UpdatesPage />)
+      await waitFor(() =>
+        expect(screen.getByText('2026-09-24T06:00:00Z')).toBeTruthy()
+      )
+      // the hold clears on the next maintenance poll; the page keeps polling
+      // the remembered id and reaches the terminal state.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000) // maintenance poll: hold clears
+        await vi.advanceTimersByTimeAsync(10_000) // job poll: rolled_back
+      })
+      expect(screen.getByText('2026-09-24T09:00:00Z')).toBeTruthy()
+      expect(mocks.job.mock.calls[mocks.job.mock.calls.length - 1][0]).toBe(
+        'job-7'
+      )
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('install stays disabled with the exact review text and never POSTs', async () => {

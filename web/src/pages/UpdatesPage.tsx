@@ -107,20 +107,37 @@ export default function UpdatesPage() {
     return () => window.clearInterval(id)
   }, [poll])
 
-  // Job fetch: only when the API names a job. Absent job = "no update job".
+  // Job fetch: while the API names a job, AND after the hold clears — the
+  // LAST id the API named keeps being polled, so the terminal state
+  // (complete / rolled_back) is the last thing shown, never a frozen
+  // snapshot of the moment the hold appeared (#206 review fold). Absent job
+  // = "no update job".
+  const [lastJobID, setLastJobID] = useState<string | null>(null)
+  const polledJobID = maintenance?.job_id ?? lastJobID
   useEffect(() => {
-    const jobId = maintenance?.job_id
-    if (!jobId) {
+    if (!polledJobID) {
       setJob(null)
       return
     }
     let alive = true
-    updatesApi.job(jobId).then((j) => {
-      if (alive) setJob(j)
-    })
+    const fetch = () => {
+      updatesApi.job(polledJobID).then((j) => {
+        if (alive) setJob(j)
+      })
+    }
+    fetch()
+    const id = window.setInterval(fetch, POLL_MS)
     return () => {
       alive = false
+      window.clearInterval(id)
     }
+  }, [polledJobID])
+
+  // Remember the id the API named: it stays the polled id once the hold
+  // clears (the job route reads the worker's own job file, which outlives
+  // the hold).
+  useEffect(() => {
+    if (maintenance?.job_id) setLastJobID(maintenance.job_id)
   }, [maintenance?.job_id])
 
   // Panel E — resolve PivotWindow, the trader id and the trader's futures
@@ -385,6 +402,16 @@ export default function UpdatesPage() {
             )}
             {job?.blocker && (
               <Row label={up('jobBlocker', language)} value={job.blocker} />
+            )}
+            {job?.timestamps && Object.keys(job.timestamps).length > 0 && (
+              <div
+                className="mt-3 border-t border-zinc-800 pt-3 space-y-1.5"
+                data-testid="job-timestamps"
+              >
+                {Object.entries(job.timestamps).map(([state, at]) => (
+                  <Row key={state} label={state} value={at} />
+                ))}
+              </div>
             )}
             {job?.receipt_url && (
               <a
