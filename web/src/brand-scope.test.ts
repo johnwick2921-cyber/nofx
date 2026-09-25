@@ -21,6 +21,11 @@
 //     absent NT8 identity as n/a via helloProcessPair (nt8_pid/assembly_mvid;
 //     runbook 2026-09-23-addon-m21-f5.md C5, L7). Additive; no identifier
 //     renamed.
+// Bar-feed baseline advanced 2026-09-25 for DS-105 DEFAULTS-SANE (#212 fold):
+//   provider/ninjatrader/tcp_server.go — the live-sink age bound's name is
+//     exported for the Picture floor pins (liveFrameMaxAgeMs → LiveFrameMaxAgeMs
+//     in bar_live_sink.go; tcp_server.go only re-qualifies its WARN field, one
+//     identifier renamed, no guard touched).
 // Bar-feed baselines advanced 2026-09-10 for two owner-dispatched waves that
 // touched the protected files without renaming an identifier:
 //   provider/ninjatrader/tcp_server.go  @ a53359ce (fix/contract-roll: the
@@ -143,6 +148,12 @@
 //   The bar-feed guards this pin protects are byte-untouched by both deltas:
 //   SubscribeBarsHistoryFor, the bars_history_request write, and the
 //   bars_history_data / _error fan-out.
+// Wire baseline advanced 2026-09-25 for W117 slice B (fix/w117-b-cancel-truth,
+// port of #117 2f4db4f3): tcp_server.go's history-delivery send now holds
+// histSubMu through the nonblocking channel send (teardown closes the channel
+// under the write lock, so the read lock must span lookup + delivery). The
+// bars_history_data / _error fan-out guards themselves are byte-untouched;
+// only the lock release point moved. No identifier renamed.
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'

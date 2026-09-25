@@ -1808,6 +1808,46 @@ func plannerRejectHeader(history []string, live []string) string {
 	return b.String()
 }
 
+// plannerReadLine (WAVE PLANNER B3) is the ONE per-read line: session,
+// attempts, each reject's item class (the shared kernel classifier), the
+// read→publish latency and the final lifecycle. n/a when the read never
+// published a born-check (no_trade / fail-closed reads record none).
+func plannerReadLine(session string, attempts int, rejectReasons []string, readMs, publishMs *int64, lifecycle string) string {
+	classes := make([]string, 0, len(rejectReasons))
+	for _, r := range rejectReasons {
+		classes = append(classes, kernel.PlannerRejectItemClass(r))
+	}
+	classesPart := "none"
+	if len(classes) > 0 {
+		classesPart = strings.Join(classes, ",")
+	}
+	latency := "n/a"
+	if readMs != nil && publishMs != nil {
+		latency = fmt.Sprintf("%dms", *publishMs-*readMs)
+	}
+	return fmt.Sprintf("🧭 planner read: session=%s attempts=%d reject_classes=%s read→publish=%s lifecycle=%s",
+		session, attempts, classesPart, latency, lifecycle)
+}
+
+// logPlannerReadLine (WAVE PLANNER B3) emits the ONE 🧭 per-read line and
+// records its counters — read total + per-class rejects, counted from the
+// read's own recorded history, never inferred from row counts.
+func (at *AutoTrader) logPlannerReadLine(session string, attempts int, rejectReasons []string, readMs, publishMs *int64, lifecycle string) {
+	at.logInfof("%s", plannerReadLine(session, attempts, rejectReasons, readMs, publishMs, lifecycle))
+	if at.store == nil {
+		return
+	}
+	_, _ = store.IncSystemCounter(at.store, "planner:read")
+	seen := map[string]bool{}
+	for _, r := range rejectReasons {
+		c := kernel.PlannerRejectItemClass(r)
+		if !seen[c] {
+			seen[c] = true
+			_, _ = store.IncSystemCounter(at.store, "planner:read_reject_"+c)
+		}
+	}
+}
+
 // plannerRejectTail repeats the same cumulative list at the end — the model
 // reads a 6.6k-token prompt; the correction appears at both ends of it.
 func plannerRejectTail(history []string, live []string) string {
@@ -1850,9 +1890,11 @@ func clampLine(s string, n int) string {
 
 // plannerRejectBookkeeping (planner-speed wave 1.4/3.4, 2026-08-31) runs at
 // every reject site: persists the rejected attempt's verbatim prompt + reason
-// for the offline A/B, and bumps the whack-a-mole counter when attempt N
-// repeats attempt N-1's defect.
-func (at *AutoTrader) plannerRejectBookkeeping(attempt int, tradeDate, session, hash, userPrompt string, rejectErr error, prevReason *string, factsJSON ...string) {
+// for the offline A/B, bumps the whack-a-mole counter when attempt N repeats
+// attempt N-1's defect, and (WAVE PLANNER B2 follow-up) persists the AI's RAW
+// answer so a future replay can re-check the same text the live attempt
+// produced.
+func (at *AutoTrader) plannerRejectBookkeeping(attempt int, tradeDate, session, hash, userPrompt, raw string, rejectErr error, prevReason *string, factsJSON ...string) {
 	if rejectErr == nil {
 		return
 	}
@@ -1868,7 +1910,7 @@ func (at *AutoTrader) plannerRejectBookkeeping(attempt int, tradeDate, session, 
 		if len(factsJSON) > 0 {
 			fj = factsJSON[0]
 		}
-		if serr := at.store.PlannerRejected().SaveRejectedPromptWithFacts(at.id, tradeDate, session, hash, attempt, rejectErr.Error(), userPrompt, fj); serr != nil {
+		if serr := at.store.PlannerRejected().SaveRejectedPromptWithFacts(at.id, tradeDate, session, hash, attempt, rejectErr.Error(), userPrompt, raw, fj); serr != nil {
 			at.logWarnf("🧾 rejected-prompt persist failed: %v", serr)
 		}
 	}
@@ -1890,6 +1932,38 @@ func samePlannerDefect(a, b string) bool {
 
 // resolvePlannerRetryMode delegates to the kernel resolver (RETRY_MODE env).
 func resolvePlannerRetryMode() string { return kernel.ResolvePlannerRetryMode() }
+
+// bornCheckRefused reports the born-dead / flip-met class from the stored
+// check record — outcome invalidated = a scenario's authored condition
+// breached between read and publish, subject death|flip met = a structured
+// line already crossed. It reads the SAME verdicts the refusal error was
+// built from, so it can never disagree with the refusal. DS-106's
+// kernel.PlannerRejectItemClass will supersede this classification when #213
+// lands; the A6 wiring keys off this until then.
+func bornCheckRefused(check *kernel.BornCheck) bool {
+	if check == nil {
+		return false
+	}
+	for _, v := range check.Verdicts {
+		switch v.Outcome {
+		case "invalidated":
+			return true
+		case "met":
+			if v.Subject == "death" || v.Subject == "flip" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// plannerFreshTapeOn resolves the A6 knob at the retry loop: nil config or nil
+// knob = ON (shipped default); an explicit false reproduces today's blind
+// retry byte-identically.
+func (at *AutoTrader) plannerFreshTapeOn() bool {
+	cfg := at.dayPlanCfg()
+	return cfg == nil || cfg.PlannerFreshTapeEnabled()
+}
 
 // plannerStreamIdle delegates to the kernel resolver (AI_PLAN_STREAM_IDLE_SECS).
 func plannerStreamIdle() time.Duration {
@@ -2000,6 +2074,12 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 	liveConditions := kernel.ResolvedLiveConditions(baseCond, sessCond, kernel.ShadowConditionsEnv())
 
 	var lastErr error
+	// A6 (planner-born-dead wave): when an attempt is refused born-dead /
+	// flip-met, attempt N+1 re-sights the model on the COMPLETED tape between
+	// the read clock and the refusal (kernel.PlannerFreshTape), behind the
+	// planner_fresh_tape knob (nil = ON). OFF = today's blind retry.
+	prevBornDead := false
+	var prevPublishAt time.Time
 	// RETRY-APPEND-REJECT-REASON (owner ruling 2026-08-31): attempt N≥2 carries
 	// the PREVIOUS attempt's validator reason VERBATIM in the prompt tail — the
 	// 2026-08-31 LONDON read burned attempts 1+2 on the IDENTICAL split-arm
@@ -2017,7 +2097,9 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 	resendIdentical := ""        // class 41 M0: the exact prompt a provider-failed attempt sent
 	resendAfterWatchdog := false // the prior attempt died on a watchdog close
 	resendStart := time.Time{}
+	lastAttempt := 0                            // WAVE PLANNER B3 — the final attempt count, recorded by the read line
 	for attempt := 1; attempt <= 3; attempt++ { // 1 + ≤2 retries
+		lastAttempt = attempt
 		researchTrace.Finish(lastErr)
 		userPrompt := prompt
 		modeLabel := "author"
@@ -2048,6 +2130,16 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 				}
 			}
 			at.logInfof("🧩 planner attempt %d/3 %s: prompt ~%d tokens (full-author ~%d tokens)", attempt, modeLabel, estimatePromptTokens(userPrompt), estimatePromptTokens(prompt))
+		}
+		// A6 — after a born-dead / flip-met refusal, attempt N+1 carries the
+		// fresh completed tape between the read clock and the refusal, so the
+		// re-author reads the market that exists now instead of the stale read.
+		if attempt >= 2 && prevBornDead && at.plannerFreshTapeOn() {
+			var tape []market.Kline
+			if market.FuturesBarsProvider != nil {
+				tape = market.FuturesBarsProvider(at.futuresSymbol(), "1m", kernel.AISVPBarCount)
+			}
+			userPrompt += "\n\n" + kernel.PlannerFreshTape(tape, facts.ReadAt, prevPublishAt, lastErr.Error())
 		}
 		researchTrace.Begin(attempt, modeLabel, userPrompt)
 		raw, err := call(userPrompt)
@@ -2082,7 +2174,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 		if err != nil {
 			lastErr = err
 			at.logWarnf("📐 planner attempt %d/3 failed: %v", attempt, err)
-			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastRaw, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			continue
@@ -2098,9 +2190,10 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 			// captured BEFORE bookkeeping rewrites prevReason to THIS attempt's
 			// defect. P9 recorded after the rewrite, so the field printed the
 			// FragmentReason twice and the diagnosis was lost. The W2 A1/A2
-			// site (:2340/:2346) already does it this way.
+			// site (:2340/:2346) already does it this way. (#213 keeps the raw
+			// answer in the bookkeeping — both behaviours, neither dropped.)
 			repairing := prevReason
-			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastRaw, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			at.recordRepairOutcome(raw, lastErr, repairing)
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
@@ -2118,8 +2211,9 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 			}
 			// Skeptic F5 — same order as the fragment site: capture the defect
 			// being repaired BEFORE bookkeeping rewrites the pointer.
+			// (#213 keeps the raw answer in the bookkeeping — both behaviours.)
 			repairing := prevReason
-			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastRaw, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			if modeLabel == "repair" {
 				at.recordRepairOutcome(raw, perr, repairing)
 			}
@@ -2165,7 +2259,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 		// the evaluator and ignored by the re-planner.
 		if requiredBias != "" && strings.ToLower(strings.TrimSpace(d.Bias.Direction)) != requiredBias {
 			lastErr = fmt.Errorf("prior plan flip already fired → bias %s is MANDATORY, got %q — the flip cannot be re-written away", requiredBias, d.Bias.Direction)
-			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastRaw, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, lastErr)
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
@@ -2178,7 +2272,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 		// was 29290.5 — the flip anchor rode a phantom label.
 		if mis := kernel.MislabeledStructuralLevels(d, machineLabels); len(mis) > 0 {
 			lastErr = fmt.Errorf("level label provenance: %s — copy the machine table's label for these prices", strings.Join(mis, "; "))
-			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastRaw, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, lastErr)
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
@@ -2190,7 +2284,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 		// reachable targets. Everything else fails → retry → fail-closed.
 		if verr := kernel.ValidatePlanDocWithFactsMachine(d, facts, machineLabels, maxLevels, scenarioCap); verr != nil {
 			lastErr = verr
-			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastRaw, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
@@ -2268,7 +2362,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 			}
 			if verr := kernel.ValidateFvgEntryScenarios(d, fvgBars, at.futuresSymbol(), origin, time.Now()); verr != nil {
 				lastErr = verr
-				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
+				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastRaw, lastErr, &prevReason, FactsSnapshotJSON(facts))
 				rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 				rejectHistory = addDistinctReject(rejectHistory, lastErr)
 				at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
@@ -2290,7 +2384,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 			bdScope := kernel.ResolveVoidScope(at.futuresSymbol(), time.Now())
 			if verr := kernel.ValidateBreakdownContinueScenarios(d, bdScope, kernel.StaleConfirmATR5m(bdScope.Bars), facts.Price, time.Now().UnixMilli()); verr != nil {
 				lastErr = verr
-				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
+				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastRaw, lastErr, &prevReason, FactsSnapshotJSON(facts))
 				rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 				rejectHistory = addDistinctReject(rejectHistory, lastErr)
 				at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
@@ -2347,8 +2441,17 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 		if verr != nil {
 			lastErr = verr
 			repairing := prevReason
+			if check != nil && bornCheckRefused(check) {
+				// A6 — the market moved during the read: remember the class and
+				// the refusal clock so attempt N+1 carries the fresh tape, and
+				// record the read→publish latency on the refusal line (B3 reads
+				// it; the counters themselves stay in B3's lane).
+				prevBornDead = true
+				prevPublishAt = authoredAt
+				at.logWarnf("📐 planner attempt %d/3 born-dead/flip-met refusal: read→publish latency %s — attempt %d re-sights on the fresh tape", attempt, authoredAt.Sub(facts.ReadAt), attempt+1)
+			}
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
-			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, verr, &prevReason, FactsSnapshotJSON(facts))
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastRaw, verr, &prevReason, FactsSnapshotJSON(facts))
 			rejectBlock = plannerRejectBlock(verr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, verr)
 			if modeLabel == "repair" {
@@ -2361,7 +2464,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 		// existing attempts; attempt 3 failing → the existing fail-closed path.
 		if verr := at.scenarioWriteTruth(d, facts); verr != nil {
 			lastErr = verr
-			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastRaw, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
@@ -2402,7 +2505,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 		if len(feas) > 0 {
 			if attempt < plannerMaxAttempts {
 				lastErr = fmt.Errorf("%s", writeTimeFeasibilityHint(feas))
-				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
+				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastRaw, lastErr, &prevReason, FactsSnapshotJSON(facts))
 				rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 				rejectHistory = addDistinctReject(rejectHistory, lastErr)
 				at.logWarnf("📐 planner attempt %d/%d write-time feasibility: %v", attempt, plannerMaxAttempts, lastErr)
@@ -2562,6 +2665,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 			} else {
 				at.logWarnf("🗓️ wake re-read failed for %s %s (benign — active plan kept): %v", tradeDate, session, lastErr)
 			}
+			at.logPlannerReadLine(session, lastAttempt, rejectHistory, nil, nil, "kept_active")
 			return 0, "kept_active", nil
 		}
 		// P7 — the fail-closed doc still carries the map: levels from the current
@@ -2646,6 +2750,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 	at.recordPlanIdentity(at.store.Plan().ResolvePlanID(tradeDate, session, at.id), version, identityWarnings, doc, authoredAt)
 	researchTrace.Published(at.store.Plan().ResolvePlanID(tradeDate, session, at.id), version, string(docJSON))
 	at.logInfof("🗓️ PLAN written %s %s v%d (model %s, lifecycle %s, prompt %s, ai_config %s)", tradeDate, session, version, modelID, lifecycle, promptHash, aiConfigHash)
+	at.logPlannerReadLine(session, lastAttempt, rejectHistory, bornCheck.ReadClockPtr(), bornCheck.PublishClockPtr(), lifecycle)
 	// W-EXEC-TRUTH W5 (CTO 1790191033566) — the AI read that supersedes a
 	// version carrying LIVE Picture scenarios re-appends each of them to the
 	// version just written: the same scenario value (same id, same machine
@@ -3157,6 +3262,8 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(now time.Time, session, tradeD
 		DATR:                   dATR,
 		ATR5m:                  kernel.StaleConfirmATR5m(bars),
 		GeometryRefIDs:         at.dayPlanCfg().GeometryRefIDsEnabled(), // W-GEOMETRY-REFUSAL (b1)
+		PlannerContractOn:      at.dayPlanCfg().PlannerContractOn(),     // WAVE PLANNER A3 (nil=ON)
+		MinTargetRR:            at.armMinRRFor(nil),                     // A2 min_tgt column = the SAME floor the arm seam judges (canon 28)
 		Regime:                 regime,
 		Levels:                 scored,
 		Pool:                   pool,
