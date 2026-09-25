@@ -21,9 +21,9 @@
 //	Library     the activation library (103's internal/activation at #201 head
 //	            afd60391) — mirrored here EXACTLY; the real adapter
 //	            (library_activation.go) is written after #201 merges to dev
-//	Reverifier  the release re-proof (U3's RehashRelease / ReverifyRelease /
-//	            ReadReleaseVerdict) — U3 is not on this base; its adapter is
-//	            written at the fold
+//	Reverifier  the release re-proof (U3's updaterjob.ReadVerdict /
+//	            RehashRelease / ReverifyRelease) — the production adapter is
+//	            reverifier.go (NewReleaseReverifier)
 //	AppReader   the running bot's loopback views (app_http.go is the real one)
 //	Host        clock, sleeps, the main-tree lock check, build info, /proc
 //
@@ -95,17 +95,25 @@ type Library interface {
 	CurrentIdentity() (Identity, error)
 }
 
-// ── the release re-proof seam (U3; adapter at the fold) ─────────────────────
+// ── the release re-proof seam (U3; the adapter is reverifier.go) ────────────
 
-// Verdict is the subset of U3's verdict file (<data>/updater/verdicts/<release_id>.json,
-// written by the attended `nofx-updater fetch`) the job reads.
+// Verdict mirrors U3's verdict file (updaterjob.Verdict, <data>/updater/verdicts/<release_id>.json,
+// written by the attended `nofx-updater fetch`) field for field: names, types,
+// order AND json tags. The ONE mapping between the two is reverifier.go's
+// mirrorVerdict / Verdict.file — a plain Go struct conversion the compiler
+// refuses the day the field lists drift; a conversion ignores tags, so
+// TestVerdictMirrorIsTheVerdictFile pins those.
 type Verdict struct {
-	ReleaseID         string
-	SourceSHA         string
-	ReleaseDir        string
-	ManifestSHA256    string
-	SignerFingerprint string
-	Artifacts         int
+	Schema            int    `json:"schema"`
+	ReleaseID         string `json:"release_id"`
+	SourceSHA         string `json:"source_sha"`
+	ReleaseDir        string `json:"release_dir"`
+	Signer            string `json:"signer"`
+	SignerFingerprint string `json:"signer_fingerprint"`
+	HashAlg           string `json:"hashalg"`
+	ManifestSHA256    string `json:"manifest_sha256"`
+	Artifacts         int    `json:"artifacts"`
+	VerifiedAt        string `json:"verified_at"` // RFC3339Nano, UTC
 }
 
 // ReleaseFacts is what a re-verification proved from the SIGNED manifest.
@@ -128,12 +136,12 @@ type ReleaseFacts struct {
 // Reverifier re-proves a release the attended fetch verified. The job's
 // downloaded and verified states call it; it never trusts the verdict file
 // alone (a guarantee nobody re-checks silently lapses). The production adapter
-// delegates to U3's functions (named per method); it lands at the U3 fold.
+// (reverifier.go, NewReleaseReverifier) delegates to U3's functions.
 type Reverifier interface {
-	// Verdict reads the verdict file (U3 ReadReleaseVerdict).
+	// Verdict reads the verdict file (updaterjob.ReadVerdict).
 	Verdict(releaseID string) (Verdict, error)
 	// Rehash re-hashes every signed artifact of the materialized release
-	// (U3 RehashRelease(v.ReleaseDir, v.ManifestSHA256)); returns the count.
+	// (U3 RehashRelease(v)); returns the count.
 	Rehash(v Verdict) (int, error)
 	// Reverify re-verifies the SSHSIG over the signed manifest against the
 	// installation's allowed-signers file NOW (U3 ReverifyRelease) and binds
