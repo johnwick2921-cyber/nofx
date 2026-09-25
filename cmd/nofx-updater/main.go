@@ -119,8 +119,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 // serve refuses, in order: the process checks (root, the bot's cgroup, TZ),
 // a missing cutover token, an adapter that has not landed, no home for the
-// backups, and the start sweep (more than one unfinished job). Only then does
-// it listen, print its start line (READ; n/a when absent) and serve until
+// backups, the worker lock (a second serve writes nothing), and the start
+// sweep (more than one unfinished job). Only then does it print its start line (READ; n/a when absent) and serve until
 // SIGINT/SIGTERM.
 func serve(t updaterworker.Target, stderr io.Writer) int {
 	if err := checkProcess(); err != nil {
@@ -160,6 +160,15 @@ func serve(t updaterworker.Target, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "nofx-updater serve:", err)
 		return 2
 	}
+	// The worker lock FIRST (verifier D1): Listen takes the single-worker
+	// flock, and only its holder may run the start sweep or the runner — a
+	// second serve that is refused here has written nothing to any job.
+	ln, err := wireserver.Listen(path, logf)
+	if err != nil {
+		fmt.Fprintln(stderr, "nofx-updater serve:", err)
+		return 2
+	}
+	defer ln.Close()
 	ctx, stop := serveContext()
 	defer stop()
 	rep, err := w.Start(ctx)
@@ -167,12 +176,6 @@ func serve(t updaterworker.Target, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "nofx-updater serve:", err)
 		return 2
 	}
-	ln, err := wireserver.Listen(path, logf)
-	if err != nil {
-		fmt.Fprintln(stderr, "nofx-updater serve:", err)
-		return 2
-	}
-	defer ln.Close()
 	fmt.Fprintf(stderr, "🔧 nofx-updater: serving %s · install %s · data %s · active=%s · recovery_needed=%s · stale_at_start=%s\n",
 		path, t.InstallDir, t.DataDir, na(rep.Active), na(strings.Join(rep.Recovery, ",")), na(strings.Join(rep.StaleAtStart, ",")))
 	done := make(chan error, 1)

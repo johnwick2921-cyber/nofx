@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,7 +39,29 @@ func install(t *testing.T) (string, string) {
 	if err := os.WriteFile(filepath.Join(root, "data", "data.db"), []byte("SQLite format 3\x00"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	// D8 (verifier): the temp install names its OWN API port — a closed
+	// loopback port — so the production HTTPApp can never target the live
+	// bot's :8080, even on a path that one day sends a request.
+	port := closedPort(t)
+	if err := os.WriteFile(filepath.Join(root, ".env"), []byte(fmt.Sprintf("API_SERVER_PORT=%d\n", port)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if tg, err := updaterworker.ResolveTarget(root); err != nil || tg.Port != port || tg.Port == 8080 {
+		t.Fatalf("temp install target = %+v, %v; want port %d (never 8080)", tg, err, port)
+	}
 	return root, filepath.Join(root, "data")
+}
+
+// closedPort is a loopback port nothing listens on (bound, then released).
+func closedPort(t *testing.T) int {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+	return port
 }
 
 func runCLI(t *testing.T, stdin io.Reader, args ...string) (int, string, string) {
@@ -306,3 +330,70 @@ func (s *syncBuffer) String() string {
 }
 
 func fileExists(p string) bool { _, err := os.Lstat(p); return err == nil }
+
+// PIN (verifier D1): a second serve that cannot take the worker lock writes
+// NOTHING to the running worker's job — the lock is taken BEFORE the start
+// sweep and before the runner exists. Two cases: a job the sweep would mark
+// stale (a synchronous write) and a fresh job the runner would advance (the
+// test's serve context is never cancelled by serve, so a runner started by
+// the refused serve would keep going and be seen).
+func TestASecondServeWithoutTheWorkerLockWritesNothing(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		age  time.Duration
+	}{{"stale", 31 * time.Minute}, {"fresh", 0}} {
+		t.Run(tc.name, func(t *testing.T) {
+			inst, data := install(t)
+			t.Setenv(updaterworker.CutoverTokenEnv, "tok-second-serve-never-printed-3d")
+			t.Setenv("HOME", t.TempDir())
+			checkProcess = func() error { return nil }
+			newLibrary = func() (updaterworker.Library, error) { return testLib{}, nil }
+			newReverifier = func(updaterworker.Target) (updaterworker.Reverifier, error) { return testRel{}, nil }
+			ctx, cancel := context.WithCancel(context.Background())
+			serveContext = func() (context.Context, context.CancelFunc) { return ctx, func() {} }
+			t.Cleanup(func() {
+				cancel()
+				checkProcess = updaterworker.CheckProcess
+				newLibrary = func() (updaterworker.Library, error) { return nil, updaterworker.ErrNotWired }
+				newReverifier = func(updaterworker.Target) (updaterworker.Reverifier, error) { return nil, updaterworker.ErrNotWired }
+				serveContext = func() (context.Context, context.CancelFunc) { return context.WithCancel(context.Background()) }
+			})
+			j, err := updaterjob.New(testJob, "v1.2.0", time.Now().Add(-tc.age))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := updaterjob.Write(data, j); err != nil {
+				t.Fatal(err)
+			}
+			jobFile, err := updaterjob.Path(data, testJob)
+			if err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.ReadFile(jobFile)
+			if err != nil {
+				t.Fatalf("job file: %v", err)
+			}
+			// the FIRST worker: holds the socket and its lock
+			path, err := updaterwire.SocketPath(data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ln, err := wireserver.Listen(path, func(string, ...any) {})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { ln.Close() })
+			rc, _, errs := runCLI(t, nil, "--install-dir", inst, "serve")
+			if rc != 2 || !strings.Contains(errs, "already in use") {
+				t.Fatalf("second serve = %d %q, want refused: the worker socket is in use", rc, errs)
+			}
+			for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+				after, err := os.ReadFile(jobFile)
+				if err != nil || !bytes.Equal(after, before) {
+					k, _ := updaterjob.Read(data, testJob)
+					t.Fatalf("the refused second serve wrote the running worker's job: now %s/%s attempts %d (%v)", k.State, k.Phase, k.Attempts, err)
+				}
+			}
+		})
+	}
+}
