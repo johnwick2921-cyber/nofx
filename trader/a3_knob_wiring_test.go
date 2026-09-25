@@ -53,7 +53,7 @@ func TestA3PlannerContractKnobAtTheProductionAssembly(t *testing.T) {
 	// OFF: explicit strategy knob false threads through line 3118 to the prompt.
 	off := false
 	at.config.StrategyConfig.DayPlan.PlannerContract = &off
-	inOff := at.assemblePlannerInputWithCtx("ASIA", "2026-09-07", "", nil)
+	inOff := at.assemblePlannerInputWithCtx(time.Now(), "ASIA", "2026-09-07", "", nil)
 	if inOff.PlannerContractOn {
 		t.Fatal("strategy planner_contract=false must thread OFF through the assembly")
 	}
@@ -69,7 +69,7 @@ func TestA3PlannerContractKnobAtTheProductionAssembly(t *testing.T) {
 	if !at.dayPlanCfg().PlannerContractOn() {
 		t.Fatal("nil knob must resolve ON (shipped default)")
 	}
-	inOn := at.assemblePlannerInputWithCtx("ASIA", "2026-09-07", "", nil)
+	inOn := at.assemblePlannerInputWithCtx(time.Now(), "ASIA", "2026-09-07", "", nil)
 	if !inOn.PlannerContractOn {
 		t.Fatal("nil knob must thread ON through the assembly")
 	}
