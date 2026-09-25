@@ -1,13 +1,18 @@
 package updateauth
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"go/ast"
 	"go/constant"
+	"go/importer"
 	"go/parser"
 	"go/token"
 	"go/types"
+	"io"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"sort"
@@ -16,8 +21,6 @@ import (
 	"testing"
 	"unicode"
 	"unicode/utf8"
-
-	"golang.org/x/tools/go/packages"
 
 	"nofx/internal/censuswalk"
 )
@@ -357,10 +360,11 @@ func updateAuthOffenders(root string) (offenders []string, scanned int, err erro
 		return nil, 0, err
 	}
 	// DS-105 CENSUS-AUTH [13]: the compiler's constant VALUES for every file
-	// go/packages can type-check under root (types.Info.Types[..].Value) —
-	// this is what folds a constant assembled from fragments in a SIBLING
-	// file or in ANOTHER package. Files/packages without an entry fall back
-	// to the per-file name-based fold below (old behaviour, unchanged).
+	// the toolchain (go list + go/importer + go/types) can type-check under
+	// root (types.Info.Types[..].Value) — this is what folds a constant
+	// assembled from fragments in a SIBLING file or in ANOTHER package.
+	// Files/packages without an entry fall back to the per-file name-based
+	// fold below (old behaviour, unchanged).
 	fileTypes := constTypeInfo(root)
 	for _, file := range files {
 		rel := file.Rel
@@ -920,29 +924,106 @@ type constTypeFile struct {
 	info *types.Info
 }
 
-// constTypeInfo type-checks the module at root with go/packages and returns,
-// keyed by cleaned absolute filename, the parsed file and its *types.Info for
-// every non-test compiled file. Packages go/packages cannot type-check
-// (missing deps, type errors it refuses to carry) have no entry — the caller
-// falls back to its per-file name-based fold.
+// constTypeInfo type-checks the module at root with the TOOLCHAIN ITSELF and
+// no third-party package — CTO ruling on #207: a test-only census may not add
+// a module dependency to the production go.mod. It mirrors the pattern #208
+// shipped in store/knob_method_readers_test.go: go list -e -json -deps -export
+// over the walked dirs yields each package's real compiled file set and the
+// deps' export data; importer.ForCompiler resolves imports to ONE package
+// object per import path; types.Config{Importer}.Check type-checks each
+// package. It returns, keyed by cleaned absolute filename, the parsed file and
+// its *types.Info for every non-test compiled file the compiler type-checked.
+// Packages the compiler cannot type-check (missing deps, type errors, build
+// constraints excluding every file) have no entry — the caller falls back to
+// its per-file name-based fold.
 func constTypeInfo(root string) map[string]*constTypeFile {
 	out := map[string]*constTypeFile{}
-	cfg := &packages.Config{
-		Mode:  packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo,
-		Dir:   root,
-		Tests: false,
-	}
-	pkgs, err := packages.Load(cfg, "./...")
+	fs, err := censuswalk.NonTestGoFiles(root)
 	if err != nil {
 		return out
 	}
-	for _, p := range pkgs {
-		if p.TypesInfo == nil {
+	dirs := map[string]bool{}
+	for _, f := range fs {
+		dirs[filepath.Dir(f.Path)] = true
+	}
+	patterns := make([]string, 0, len(dirs))
+	for d := range dirs {
+		rel, rerr := filepath.Rel(root, d)
+		if rerr != nil {
+			return out
+		}
+		patterns = append(patterns, "./"+filepath.ToSlash(rel))
+	}
+	sort.Strings(patterns)
+	cmd := exec.Command("go", append([]string{"list", "-e", "-json", "-deps", "-export", "--"}, patterns...)...)
+	cmd.Dir = root
+	raw, err := cmd.CombinedOutput()
+	if err != nil {
+		return out
+	}
+	pkgFiles := map[string][]string{}
+	exportOf := map[string]string{}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	for dec.More() {
+		var p struct {
+			ImportPath string
+			Dir        string
+			Export     string
+			GoFiles    []string
+			Error      *struct {
+				Err string
+			}
+		}
+		if derr := dec.Decode(&p); derr != nil {
+			return out
+		}
+		if p.Error != nil {
+			// Build constraints exclude every file, or the package does not
+			// compile — the compiler cannot type-check it (fallback).
 			continue
 		}
-		for _, sf := range p.Syntax {
-			pos := p.Fset.PositionFor(sf.Pos(), false)
-			out[filepath.Clean(pos.Filename)] = &constTypeFile{f: sf, info: p.TypesInfo}
+		if p.Export != "" {
+			exportOf[p.ImportPath] = p.Export
+		}
+		if dirs[p.Dir] && len(p.GoFiles) > 0 {
+			files := make([]string, 0, len(p.GoFiles))
+			for _, f := range p.GoFiles {
+				files = append(files, filepath.Join(p.Dir, f))
+			}
+			pkgFiles[p.ImportPath] = files
+		}
+	}
+	fset := token.NewFileSet()
+	lookup := func(path string) (io.ReadCloser, error) {
+		e, ok := exportOf[path]
+		if !ok {
+			return nil, errors.New("no export data for " + strconv.Quote(path))
+		}
+		return os.Open(e)
+	}
+	imp := importer.ForCompiler(fset, "gc", lookup)
+	for importPath, files := range pkgFiles {
+		parsed := make([]*ast.File, 0, len(files))
+		ok := true
+		for _, f := range files {
+			af, perr := parser.ParseFile(fset, f, nil, parser.ParseComments)
+			if perr != nil {
+				ok = false // the caller's own census parse reports this file
+				break
+			}
+			parsed = append(parsed, af)
+		}
+		if !ok {
+			continue
+		}
+		info := &types.Info{Types: map[ast.Expr]types.TypeAndValue{}}
+		cfg := &types.Config{Importer: imp}
+		if _, cerr := cfg.Check(importPath, fset, parsed, info); cerr != nil {
+			continue // the compiler cannot type-check this package (fallback)
+		}
+		for _, af := range parsed {
+			pos := fset.PositionFor(af.Pos(), false)
+			out[filepath.Clean(pos.Filename)] = &constTypeFile{f: af, info: info}
 		}
 	}
 	return out
@@ -957,8 +1038,8 @@ func constTypeInfo(root string) map[string]*constTypeFile {
 // declared in SIBLING files of the package and exported constants of another
 // package (a SelectorExpr) fold, scope-correct — the old per-file name env
 // never saw either, so a cross-file compile-time constant spelled
-// updater/device.key with every rule green. Without info (a package
-// go/packages could not type-check) the fold falls back to names bound in
+// updater/device.key with every rule green. Without info (a package the
+// compiler could not type-check) the fold falls back to names bound in
 // the file (const, var, :=, =) by NAME, not by scope, each name to ONE
 // value: the last binding the fold passes saw — a name re-bound to a second
 // constant is then in WHAT THIS CANNOT PROVE, beside run-time construction.
