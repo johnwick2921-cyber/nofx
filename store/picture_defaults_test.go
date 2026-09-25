@@ -15,11 +15,17 @@ func TestPictureHtfResolvedDefaultsAreSane(t *testing.T) {
 	}
 	for name, c := range cases {
 		out := PictureHtfResolved(c)
-		if out.EntryWindowSec != PictureHtfDefaultEntryWindowSec {
-			t.Fatalf("%s: entry window default = %d, want %d", name, out.EntryWindowSec, PictureHtfDefaultEntryWindowSec)
+		// Mechanism only: a zero knob resolves to a POSITIVE default. The
+		// defaults' SANITY is pinned by FLOOR tests in the trader package,
+		// derived from production constants (trader cadence + pass latency;
+		// the live sink's own frame-age bound) — comparing the resolver to
+		// its own constant here is a tautology that passes at ANY value
+		// (CTO #212 fold).
+		if out.EntryWindowSec <= 0 {
+			t.Fatalf("%s: entry window default = %d, want > 0", name, out.EntryWindowSec)
 		}
-		if out.FreshnessSec != PictureHtfDefaultFreshnessSec {
-			t.Fatalf("%s: freshness default = %d, want %d", name, out.FreshnessSec, PictureHtfDefaultFreshnessSec)
+		if out.FreshnessSec <= 0 {
+			t.Fatalf("%s: freshness default = %d, want > 0", name, out.FreshnessSec)
 		}
 	}
 }
