@@ -195,6 +195,42 @@ func (w *Worker) stepPreflight(ctx context.Context, j updaterjob.Job) stepResult
 	return stepResult{receipts: receipts, err: err, failTo: failTo, reason: reason}
 }
 
+// proveCurrentBinary re-proves, right before a kill, what preflight proved
+// ONCE (#206 review fold, runner.go:275): the unit's current MainPID runs the
+// install's binary at the install's path, the install binary carries a build
+// THIS JOB can legitimately be at — the pre-activate install, or the release
+// (a resumed attempt whose first run crashed AFTER the swap legitimately
+// finds the release installed) — and health serves the installed binary.
+// Preflight binds the process; a park-hour restart or a hotfix deploy can
+// silently replace it, and the kill (start-ticks-guarded to hit the unit's
+// CURRENT process) would then signal something nobody proved.
+func (w *Worker) proveCurrentBinary(ctx context.Context, j updaterjob.Job, id Identity) error {
+	inst := *j.Install
+	exe, err := w.host.ExeOf(id.PID)
+	if err != nil || !sameBinary(exe, inst.Binary) {
+		return fmt.Errorf("the unit's main process (pid %d) runs %q, not the install's %s", id.PID, exe, inst.Binary)
+	}
+	rev, mod, err := w.host.BuildInfo(inst.Binary)
+	if err != nil {
+		return fmt.Errorf("the install binary's build info before the kill: %w", err)
+	}
+	release := "n/a"
+	if j.Release != nil {
+		release = j.Release.SHA
+	}
+	if mod != "false" || (rev != inst.SHA && rev != release) {
+		return fmt.Errorf("the install binary is now %s (modified=%s), neither the install's %s nor the release's %s", rev, orNA(mod), inst.SHA, release)
+	}
+	h, err := w.app.Health(ctx)
+	if err != nil {
+		return fmt.Errorf("health before the kill: %w", err)
+	}
+	if !revisionsAgree(h, rev) {
+		return fmt.Errorf("health serves %q, not the installed binary's %s (before the kill)", h, rev)
+	}
+	return nil
+}
+
 // stepHold writes THIS job's hold through the census-admitted writer. A write
 // that errs with our hold on disk is recovery_needed, never "refused" (U1
 // verifier item 9: refused means nothing was held).
@@ -454,6 +490,13 @@ func (w *Worker) stepActivate(ctx context.Context, j updaterjob.Job) stepResult 
 		}
 		j = k
 	}
+	// R-i + the process re-proof (#206 review fold, runner.go:275): the kill
+	// must hit a process that is STILL the one preflight proved.
+	if err := w.proveCurrentBinary(ctx, j, *j.IdentityBefore); err != nil {
+		start := w.host.Now()
+		return stepResult{receipts: []Receipt{w.receipt("activate", start, map[string]string{"killed": "none"}, err)},
+			err: err, failTo: updaterjob.StateRecoveryNeeded, reason: clipText("activate refused: " + err.Error())}
+	}
 	next, rc, err := w.lib.Activate(*j.Release, *j.Install, *j.IdentityBefore)
 	res := stepResult{receipts: []Receipt{rc}, err: err}
 	if err == nil {
@@ -591,6 +634,11 @@ func (w *Worker) stepRollback(ctx context.Context, j updaterjob.Job) stepResult 
 	var kill Identity
 	if j.IdentityRollback != nil {
 		kill = *j.IdentityRollback
+	}
+	// The rollback's kill re-proves the process too (#206 review fold,
+	// runner.go:275) — a hotfix during the rollback window is the same gap.
+	if err := w.proveCurrentBinary(ctx, j, kill); err != nil {
+		return stepResult{err: err, reason: clipText("rollback refused: " + err.Error())}
 	}
 	snap, inst := *j.Snapshot, *j.Install
 	next, rrc, rerr := w.lib.RollbackTo(snap, inst, kill)
