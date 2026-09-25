@@ -295,3 +295,116 @@ func TestOverlayRefsFrom(t *testing.T) {
 		t.Fatalf("refs = %+v", got)
 	}
 }
+
+// TestMachineScenariosPreservedSemanticCompare (WAVE 1a-plan P14, #193 N3) —
+// the comparison is SEMANTIC: the same evidence in a different key order is
+// not an alteration; an actually-changed value is.
+func TestMachineScenariosPreservedSemanticCompare(t *testing.T) {
+	mk := func(evidence string) PlanDoc {
+		return PlanDoc{Scenarios: []PlanScenario{{
+			ID: "P1", Source: ScenarioSourcePicture,
+			Machine: &PlanMachineSource{Rule: "picture", RuleVer: 1, Ref: "r1",
+				EligibleFromMs: 1, EligibleUntilMs: 2, Evidence: json.RawMessage(evidence)},
+		}}}
+	}
+	before := mk(`{"a":1,"b":{"x":1,"y":2}}`)
+	reordered := mk(`{"b":{"y":2,"x":1},"a":1}`)
+	if err := MachineScenariosPreserved(before, reordered); err != nil {
+		t.Fatalf("key-order-only difference must NOT be an alteration (the 409 bug), got %v", err)
+	}
+	changed := mk(`{"a":1,"b":{"x":3,"y":2}}`)
+	if err := MachineScenariosPreserved(before, changed); err == nil {
+		t.Fatal("a changed evidence value MUST be refused")
+	}
+}
+
+// TestOwnerOverlayFoldPreservesMachineRunEpoch (skeptic F1, 2026-09-24) —
+// P1's machine run_epoch is int64 UnixNano (~1.79e18, above float64's 2^53
+// exactness). ApplyPatchStrict's plain interface{} decode rounded it to the
+// nearest ~128ns on re-marshal, so EVERY fold after an owner edit served the
+// ROUNDED epoch and the placement gate refused the recorded Picture entry
+// with the false reason 'recorded by a previous run (reload)'. Pin: the fold
+// serves the epoch byte-exact, and the same fold's D18 guard accepts the
+// owner edit. RED = drop UseNumber (decode through plain interface{}).
+func TestOwnerOverlayFoldPreservesMachineRunEpoch(t *testing.T) {
+	const recorded int64 = 1790208803235123457 // odd, > 2^53
+	sc := pictureScenarioFixture("P1", "opp-epoch")
+	sc.Machine.RunEpoch = recorded
+	doc := selfCheckPlanDoc()
+	doc.Scenarios = append(doc.Scenarios, sc)
+	base := planJSON(t, doc)
+
+	got, err := ResolvePlanFinal(base, []OverlayRef{
+		{Version: 1, Origin: "owner", Patch: `[{"op":"replace","path":"/reasoning","value":"owner note"}]`},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.UserApplied) != 1 {
+		t.Fatalf("the owner edit must be accepted, applied = %v (fold err %v)", got.UserApplied, got.FoldErr)
+	}
+	var folded *PlanScenario
+	for i := range got.Doc.Scenarios {
+		if got.Doc.Scenarios[i].ID == "P1" {
+			folded = &got.Doc.Scenarios[i]
+			break
+		}
+	}
+	if folded == nil || folded.Machine == nil {
+		t.Fatalf("P1 lost from the folded doc: %s", planJSON(t, got.Doc))
+	}
+	if folded.Machine.RunEpoch != recorded {
+		t.Fatalf("folded run_epoch = %d, want the recorded %d (a rounded epoch reads as a previous run)", folded.Machine.RunEpoch, recorded)
+	}
+	// The same fold feeds MachineScenariosPreserved (the D18 semantic guard):
+	// the owner edit must NOT be refused as an alteration of the machine record.
+	var before PlanDoc
+	if err := json.Unmarshal(base, &before); err != nil {
+		t.Fatal(err)
+	}
+	if err := MachineScenariosPreserved(before, got.Doc); err != nil {
+		t.Fatalf("owner edit read as a machine alteration: %v", err)
+	}
+}
+
+// TestOwnerReplaceRunEpochRefusedAtD18 (skeptic F1 compare half, CTO
+// follow-up 2026-09-24) — the F1 pin above proves the fold PRESERVES the
+// epoch when the owner edits something else. This one proves the refusal
+// when the owner edits the epoch ITSELF: a patch that does
+//   replace /scenarios/<i>/machine/run_epoch  →  recorded+1
+// must be REFUSED by the D18 door — the exact chain
+// machineScenarioEditRefusal runs (api/handler_plan.go:1146):
+// ResolvePlanFinal folds the owner patch, then
+// MachineScenariosPreserved(cur, merged) must see the +1.
+// RED: drop UseNumber from canonicalScenarioJSON (the compare half of F1).
+// recorded and recorded+1 are ~1.79e18, where float64's ULP is 256, so a
+// plain interface{} decode rounds BOTH to the same double and the compare
+// sees no alteration — this pin fails.
+func TestOwnerReplaceRunEpochRefusedAtD18(t *testing.T) {
+	const recorded int64 = 1790208803235123457 // odd, > 2^53
+	sc := pictureScenarioFixture("P1", "opp-epoch-edit")
+	sc.Machine.RunEpoch = recorded
+	doc := selfCheckPlanDoc()
+	doc.Scenarios = append(doc.Scenarios, sc) // P1 sits at /scenarios/1
+	base := planJSON(t, doc)
+
+	patch := `[{"op":"replace","path":"/scenarios/1/machine/run_epoch","value":1790208803235123458}]`
+	got, err := ResolvePlanFinal(base, []OverlayRef{
+		{Version: 1, Origin: "owner", Patch: patch},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.UserApplied) != 1 {
+		t.Fatalf("the fold must APPLY the owner patch (the refusal is D18, not the fold): applied=%v foldErr=%v", got.UserApplied, got.FoldErr)
+	}
+	var before PlanDoc
+	if err := json.Unmarshal(base, &before); err != nil {
+		t.Fatal(err)
+	}
+	if err := MachineScenariosPreserved(before, got.Doc); err == nil {
+		t.Fatal("an owner replace of machine/run_epoch +1 MUST be refused by the D18 door")
+	} else if !strings.Contains(err.Error(), "an edit may not alter machine scenario") {
+		t.Fatalf("the refusal must name the machine-alteration rule, got: %v", err)
+	}
+}
