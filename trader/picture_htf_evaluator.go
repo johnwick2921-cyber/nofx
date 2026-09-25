@@ -49,9 +49,6 @@ type PictureHtfEvaluator struct {
 	// H1 close series for the advisory momentum stall (last three closes).
 	h1Closes []float64
 
-	// capWarned dedupes the once-per-state "mode unavailable" log.
-	capWarned bool
-
 	// foreignFrames counts live frames whose contract is definitely NOT the
 	// one this trader is on. READ by the accessor; never inferred.
 	foreignFrames int64
@@ -70,6 +67,11 @@ type PictureHtfEvaluator struct {
 	// that STARTED the evaluation is no longer the one that would send
 	// (W4/D25). READ.
 	staleTraderSends int64
+
+	// watchReasons counts every silent "decided not to act" decision in
+	// evaluateLocked (DEFAULTS-SANE 2026-09-24): one counter per
+	// (stage,reason), a WARN on first occurrence, then DEBUG. Under e.mu.
+	watchReasons map[string]int64
 
 	// holdRefusedKey dedupes the maintenance-hold refusal (count + WARN) to
 	// once per opportunity rather than once per frame.
@@ -96,11 +98,56 @@ func (e *PictureHtfEvaluator) ownsSymbol(symbol string) bool {
 
 // NewPictureHtfEvaluator builds the evaluator from the resolved strategy knob.
 func NewPictureHtfEvaluator(at *AutoTrader, cfg store.PictureHtfConfig) *PictureHtfEvaluator {
-	return &PictureHtfEvaluator{at: at, cfg: cfg, enabled: cfg.Enabled}
+	return &PictureHtfEvaluator{at: at, cfg: cfg, enabled: cfg.Enabled, watchReasons: make(map[string]int64)}
 }
 
 // Enabled reports the resolved mode switch.
 func (e *PictureHtfEvaluator) Enabled() bool { return e != nil && e.enabled }
+
+// WatchReasonTotal returns the total number of counted silent decisions.
+func (e *PictureHtfEvaluator) WatchReasonTotal() int64 {
+	if e == nil {
+		return 0
+	}
+	var n int64
+	for _, c := range e.watchReasons {
+		n += c
+	}
+	return n
+}
+
+// WatchReasonCounts returns a copy of the per-(stage,reason) counts.
+func (e *PictureHtfEvaluator) WatchReasonCounts() map[string]int64 {
+	if e == nil || e.watchReasons == nil {
+		return map[string]int64{}
+	}
+	out := make(map[string]int64, len(e.watchReasons))
+	for k, v := range e.watchReasons {
+		out[k] = v
+	}
+	return out
+}
+
+// noteSilent counts one "decided not to act" decision (DEFAULTS-SANE step 4).
+// The FIRST occurrence of a (stage,reason) logs a WARN; later occurrences log
+// DEBUG — so tomorrow's log always says why Picture did nothing, without
+// spamming one WARN per frame. Called under e.mu.
+func (e *PictureHtfEvaluator) noteSilent(stage, reason string) {
+	if e == nil {
+		return
+	}
+	if e.watchReasons == nil {
+		e.watchReasons = make(map[string]int64)
+	}
+	key := stage + "|" + reason
+	n := e.watchReasons[key] + 1
+	e.watchReasons[key] = n
+	if n == 1 {
+		logger.Warnf("picture-htf: %s — %s (first occurrence; counted)", stage, reason)
+	} else {
+		logger.Debugf("picture-htf: %s — %s (count %d)", stage, reason, n)
+	}
+}
 
 // pictureHtfSubmitSeam is the hand-off seam: since W5 the production wiring
 // (trader/picture_plan_source.go init) records the claimed opportunity as a Day
@@ -466,16 +513,13 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 	// send on behalf of a trader that no longer exists.
 	startGen := pictureTraderGenerationOf(e.at)
 	if !pictureHtfCapabilityProven(e.at) {
-		if !e.capWarned {
-			e.capWarned = true
-			logger.Warnf("picture-htf: mode unavailable — AddOn evidence missing (need build ≥ %s; F5-compile + full NT8 restart with the new AddOn)", ntwire.MinAddonBuildPictureHtf)
-		}
+		e.noteSilent("watching", fmt.Sprintf("mode unavailable — AddOn evidence missing (need build ≥ %s)", ntwire.MinAddonBuildPictureHtf))
 		return EvaluateResult{Stage: "watching", Reason: "mode unavailable — AddOn evidence missing"}
 	}
-	e.capWarned = false
 	if dep := e.rebuildLevels(symbol, nowMs); !dep.OK() {
 		// D21: no level and no trade until the history is provably deep
 		// enough. The reason carries the counts that were READ.
+		e.noteSilent("watching", "level depth: "+dep.Reason())
 		return EvaluateResult{Stage: "watching", Reason: dep.Reason()}
 	}
 
@@ -500,6 +544,7 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 
 	// --- H1 breakout over the last two completed H1 candles ---
 	if len(h1) < 2 || e.lastH1CloseEval == 0 {
+		e.noteSilent("watching", "waiting for two completed H1 closes")
 		return EvaluateResult{Stage: "watching", Momentum: stall}
 	}
 	prev, cur := h1[len(h1)-2], h1[len(h1)-1]
@@ -516,6 +561,7 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 	// least one more candle, which is exactly what the margin is for.
 	breakDep, breakBars := e.depth4H(symbol, cur.OpenTime)
 	if !breakDep.OK() {
+		e.noteSilent("watching", "break depth: "+breakDep.Reason())
 		return EvaluateResult{Stage: "watching", Reason: breakDep.Reason(), Momentum: stall}
 	}
 	breakLevels := kernel.ActiveLevels(
@@ -523,12 +569,14 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 		cur.OpenTime)
 	breakVerdict := kernel.H1CloseBreak(breakLevels, prev, cur, e.cfg.TickSize)
 	if !breakVerdict.Fired {
+		e.noteSilent("watching", "no H1 close break of the 4H body pivot")
 		return EvaluateResult{Stage: "watching", Momentum: stall}
 	}
 
 	// --- Eligibility: the following 5m interval + freshness ---
 	fiveM := e.bars(symbol, "5m", e.cfg.SwingLookback+4, nowMs)
 	if len(fiveM) == 0 {
+		e.noteSilent("watching", "no 5m bars")
 		return EvaluateResult{Stage: "watching", Momentum: stall}
 	}
 	newest5m := fiveM[len(fiveM)-1]
@@ -542,6 +590,7 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 	windowMs := int64(e.cfg.EntryWindowSec) * 1000
 	if elapsed < 0 {
 		// The next interval has not begun — wait for its boundary frame.
+		e.noteSilent("watching", "waiting for the next 5m boundary")
 		return EvaluateResult{Stage: "watching", Momentum: stall}
 	}
 	level := breakLevels[breakVerdict.LevelIdx]
@@ -562,6 +611,7 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 	// unmasked it, so the wait is explicit.
 	boundaryClose := intervalStart - 1
 	if e.freshest5mClose < boundaryClose {
+		e.noteSilent("watching", fmt.Sprintf("awaiting the completed 5m close at %d", boundaryClose))
 		return EvaluateResult{Stage: "watching", Momentum: stall,
 			Reason: fmt.Sprintf("awaiting the completed 5m close at %d", boundaryClose)}
 	}
@@ -569,10 +619,12 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 	// candle delivered after the window shut was never actionable, so it is
 	// not an opportunity we refused; no durable row is written for it.
 	if !e.freshest5mAt.IsZero() && e.freshest5mAt.UnixMilli() > intervalStart+windowMs {
+		e.noteSilent("watching", "the completed 5m close arrived after the entry window — never actionable")
 		return EvaluateResult{Stage: "watching", Momentum: stall,
 			Reason: "the completed 5m close arrived after the entry window — never actionable"}
 	}
 	if elapsed > windowMs {
+		e.noteSilent("expired", fmt.Sprintf("entry window passed (%dms > %dms)", elapsed, windowMs))
 		return e.refuse(oppKey, "expired", fmt.Sprintf("entry window passed (%dms > %dms)", elapsed, windowMs), stall)
 	}
 	// ARRIVAL-ORDER INDEPENDENCE: the first 5m frame of the interval has not
@@ -582,6 +634,7 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 	// (A 4h/1h frame landing just before the 5m boundary frame must not kill
 	// the setup.)
 	if e.freshest5mAt.IsZero() {
+		e.noteSilent("watching", "awaiting the first 5m frame of the interval")
 		return EvaluateResult{Stage: "watching", Reason: "awaiting the first 5m frame of the interval", Momentum: stall}
 	}
 	// D23: three clocks, separately measured, and the limit binds the WORST of
@@ -589,6 +642,7 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 	// "how long did this frame sit in our own queue". Either alone leaves a
 	// hole: fresh data delivered late, or a prompt delivery of stale data.
 	if age, clock := e.staleBy(nowMs, now); age > int64(e.cfg.FreshnessSec)*1000 {
+		e.noteSilent("expired", fmt.Sprintf("%s age %dms exceeds the freshness limit (%ds) — a late frame cannot enter", clock, age, e.cfg.FreshnessSec))
 		return e.refuse(oppKey, "expired",
 			fmt.Sprintf("%s age %dms exceeds the freshness limit (%ds) — a late frame cannot enter", clock, age, e.cfg.FreshnessSec), stall)
 	}
@@ -596,6 +650,7 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 	// --- Geometry: structural stop + opposing-zone target ---
 	stopPx, ok := kernel.StructuralSwing5M(fiveM, breakVerdict.Direction, e.cfg.SwingLookback, cur.CloseTime)
 	if !ok {
+		e.noteSilent("refused", "no confirmed 5m swing stop before the H1 close — no trade")
 		return e.refuse(oppKey, "refused", "no confirmed 5m swing stop before the H1 close — no trade", stall)
 	}
 	stopPx -= e.cfg.TickSize
@@ -605,6 +660,7 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 	entryRef := newest5m.Close
 	targetPx, ok := kernel.NearestOpposingZone(kernel.ActiveLevels(e.levels, nowMs), entryRef, breakVerdict.Direction, nowMs)
 	if !ok {
+		e.noteSilent("refused", "no eligible opposing 4H zone — no trade")
 		return e.refuse(oppKey, "refused", "no eligible opposing 4H zone — no trade", stall)
 	}
 	risk := absF(entryRef - stopPx)
@@ -618,9 +674,11 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 	// with no strategy config there is no floor, so the opportunity refuses.
 	minRR, floorOK := e.at.pictureMinRR(e.cfg.MinRR)
 	if !floorOK {
+		e.noteSilent("refused", "no R:R floor resolvable (no strategy config) — fail-closed")
 		return e.refuse(oppKey, "refused", "no R:R floor resolvable (no strategy config) — fail-closed", stall)
 	}
 	if rr < minRR {
+		e.noteSilent("refused", fmt.Sprintf("nearest opposing zone offers %.2fR; the configured minimum is %.2fR — the nearer zone is never skipped", rr, minRR))
 		return e.refuse(oppKey, "refused", fmt.Sprintf("nearest opposing zone offers %.2fR; the configured minimum is %.2fR — the nearer zone is never skipped", rr, minRR), stall)
 	}
 
@@ -667,16 +725,19 @@ func (e *PictureHtfEvaluator) evaluateLocked(symbol string, now time.Time) Evalu
 	e.pendingAdmission = adm
 	_, fresh, err := e.at.store.PictureHtfClaim(row)
 	if err != nil {
+		e.noteSilent("watching", "store claim failed: "+err.Error())
 		return EvaluateResult{Stage: "watching", Reason: "store claim failed: " + err.Error(), OppKey: oppKey, Momentum: stall}
 	}
 	if !fresh {
 		// Duplicate frame/restart — the opportunity already exists (a refused
 		// row counts as an existing opportunity; the claim is durable).
+		e.noteSilent("watching", "opportunity already claimed")
 		return EvaluateResult{Stage: "watching", Reason: "opportunity already claimed", OppKey: oppKey, Momentum: stall}
 	}
 	signalID := fmt.Sprintf("picture-htf-%d", nowMs)
 	won, err := e.at.store.PictureHtfClaimSubmission(oppKey, signalID)
 	if err != nil || !won {
+		e.noteSilent("watching", "submission ownership lost")
 		return EvaluateResult{Stage: "watching", Reason: "submission ownership lost", OppKey: oppKey, Momentum: stall}
 	}
 	// W-EXEC-TRUTH W0 defect 2: the claim id rides into the send, whose ledger
