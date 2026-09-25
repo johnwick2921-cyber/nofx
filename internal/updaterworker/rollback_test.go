@@ -124,7 +124,15 @@ func TestRollbackFailureIsRecoveryNeededAndStops(t *testing.T) {
 // needed — and kill -9 0 signals the operator's whole process group). The
 // restart line is RUN here under sh with a stub systemctl and a kill
 // function that only records: MainPID 0 and an empty MainPID kill nothing;
-// MainPID 4242 kills exactly 4242.
+// a live MainPID is killed exactly once, by pid.
+//
+// U4 re-verify note 6: running the REAL line must never be able to signal a
+// real process, even if the line drifts. So the "live" MainPID is 4194305 —
+// above Linux's pid_max ceiling (4194304), a pid no process can hold — a
+// recording stub `kill` EXECUTABLE sits first in PATH (it catches an
+// `env kill` / `exec kill` drift the shell function cannot), and the line
+// may name neither `command kill` (bypasses the function for the builtin)
+// nor `/bin/kill` / `/usr/bin/kill` (bypasses both).
 func TestRecoveryRestartNeverKillsTheProcessGroup(t *testing.T) {
 	r := newRig(t)
 	r.watchFail[boxNew] = true
@@ -140,17 +148,31 @@ func TestRecoveryRestartNeverKillsTheProcessGroup(t *testing.T) {
 	if line == "" {
 		t.Fatalf("no restart line:\n%s", text)
 	}
-	for _, tc := range []struct{ mainPID, want string }{{"0", ""}, {"", ""}, {"1", ""}, {"4242", "KILL -9 4242"}} {
+	for _, bypass := range []string{"command kill", "/bin/kill", "/usr/bin/kill", "env kill", "exec kill"} {
+		if strings.Contains(line, bypass) {
+			t.Fatalf("the restart line names %q, which bypasses the recording kill in this test:\n%s", bypass, line)
+		}
+	}
+	const impossiblePID = "4194305" // > pid_max's ceiling (4194304): no process can hold it
+	for _, tc := range []struct{ mainPID, want string }{{"0", ""}, {"", ""}, {"1", ""}, {impossiblePID, "KILL -9 " + impossiblePID}} {
 		stub := t.TempDir()
-		writeFile(t, filepath.Join(stub, "systemctl"), "#!/bin/sh\necho '"+tc.mainPID+"'\n")
-		if err := os.Chmod(filepath.Join(stub, "systemctl"), 0o755); err != nil {
-			t.Fatal(err)
+		for name, body := range map[string]string{
+			"systemctl": "#!/bin/sh\necho '" + tc.mainPID + "'\n",
+			"kill":      "#!/bin/sh\necho \"KILL-EXE $*\"\n", // records; never signals
+		} {
+			writeFile(t, filepath.Join(stub, name), body)
+			if err := os.Chmod(filepath.Join(stub, name), 0o755); err != nil {
+				t.Fatal(err)
+			}
 		}
 		cmd := exec.Command("/bin/sh", "-c", `kill() { echo "KILL $*"; }; `+line)
 		cmd.Env = []string{"PATH=" + stub + ":/usr/bin:/bin"}
 		out, _ := cmd.CombinedOutput()
 		var kills []string
 		for _, l := range strings.Split(string(out), "\n") {
+			if strings.HasPrefix(l, "KILL-EXE") {
+				t.Fatalf("MainPID %q: the restart line ran a kill EXECUTABLE from PATH (%q), not the shell's kill\nline: %s", tc.mainPID, l, line)
+			}
 			if strings.HasPrefix(l, "KILL") {
 				kills = append(kills, l)
 			}
