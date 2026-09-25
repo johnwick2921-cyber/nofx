@@ -250,6 +250,36 @@ describe('UpdatesPage', () => {
     await waitFor(() => expect(screen.getByText('Blocked')).toBeTruthy())
   })
 
+  it('install_enabled=true but worker_listening=false blocks the button with the exact reason', async () => {
+    mocks.updatesStatus.mockResolvedValue({
+      status: {
+        enrolled: true,
+        manifest_verifier: 'configured',
+        install_enabled: true,
+        worker_listening: false,
+      },
+    })
+    render(<UpdatesPage />)
+    await waitFor(() => expect(screen.getByText('Blocked')).toBeTruthy())
+    // the exact reason the CTO ruling names — never a generic message
+    expect(screen.getByText('updater worker not running')).toBeTruthy()
+    expect(screen.getByTestId('update-button')).toBeTruthy()
+  })
+
+  it('install_enabled=true and worker_listening=true does not block the button', async () => {
+    mocks.updatesStatus.mockResolvedValue({
+      status: {
+        enrolled: true,
+        manifest_verifier: 'configured',
+        install_enabled: true,
+        worker_listening: true,
+      },
+    })
+    render(<UpdatesPage />)
+    await waitFor(() => expect(screen.getByText('Update now')).toBeTruthy())
+    expect(screen.queryByText('updater worker not running')).toBeNull()
+  })
+
   it('gate legs render with each leg’s exact detail text', async () => {
     mocks.installationGate.mockResolvedValue({
       ready: false,

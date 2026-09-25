@@ -20,9 +20,12 @@ import (
 // wantGlueVerifier is the verifier the knob-ON server must hold and name.
 const wantGlueVerifier = "verifier=verdict-file"
 
-// M3's bytes at 8d189a1e (golden literals; captured, not re-derived).
+// M3's bytes at 8d189a1e (golden literals; captured, not re-derived), with
+// the status body as the CTO ruled it for #206: worker_listening is always
+// present and measured at request time (false with no worker listening) —
+// the knob still toggles install_enabled, byte for byte.
 const (
-	m3StatusBody   = `{"enrolled":true,"install_enabled":false,"manifest_verifier":"stub"}`
+	m3StatusBody   = `{"enrolled":true,"install_enabled":false,"manifest_verifier":"stub","worker_listening":false}`
 	m3Install422   = `{"error":"release not verified"}`
 	m3NotFoundBody = `{"error":"not found"}`
 	m3JSONType     = "application/json; charset=utf-8"

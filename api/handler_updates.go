@@ -67,6 +67,12 @@ const UpdateHeader = "X-NOFX-Update"
 // maxUpdateInstallBody caps the install body (a Grant is ~200 bytes).
 const maxUpdateInstallBody = 4096
 
+// workerProbeTimeout is the dial bound on the status route's request-time
+// worker probe: worker_listening is measured within 250 ms, so a status call
+// can never stall on a half-dead socket (CTO ruling on #206 — a measured
+// value, never inferred).
+const workerProbeTimeout = 250 * time.Millisecond
+
 var errForbiddenBody = gin.H{"error": "forbidden"}
 
 // UpdateStarter hands a fully authorized, verified install to the updater
@@ -498,10 +504,23 @@ func (s *Server) handleUpdatesStatus(c *gin.Context) {
 	if stub {
 		verifier = "stub"
 	}
+	enabled := !stub && s.updateStart != nil
+	// worker_listening is MEASURED at request time, never inferred: a
+	// bounded dial of the worker socket (the listener treats a frameless
+	// close as a clean EOF). No dial when install is not enabled — a
+	// configuration-only answer carries false, never a guess.
+	workerListening := false
+	if enabled {
+		if wc, err := updaterwire.DialWorkerBounded(trader.MaintenanceDataDir(), workerProbeTimeout); err == nil {
+			_ = wc.Close()
+			workerListening = true
+		}
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"enrolled":          true,
 		"manifest_verifier": verifier,
-		"install_enabled":   !stub && s.updateStart != nil,
+		"install_enabled":   enabled,
+		"worker_listening":  workerListening,
 	})
 }
 

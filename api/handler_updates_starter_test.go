@@ -13,7 +13,9 @@ package api
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"testing"
@@ -167,9 +169,12 @@ func walkTestJob(t *testing.T, dataDir, jobID, releaseID string, to ...updaterjo
 	return got
 }
 
-// With the knob ON the status reports what the server now holds — the same
-// three keys (the M3 key-set pin), install enabled because a real verifier
-// and a starter are wired.
+// With the knob ON the status reports what the server now holds — the four
+// keys (the M3 key-set plus worker_listening), install enabled because a real
+// verifier and a starter are wired, and worker_listening MEASURED: the route
+// dials the worker socket at request time with a 250 ms bound, so with no
+// worker running it is false (a measured value, never inferred — CTO ruling
+// on #206).
 func TestUpdatesStatusWithTheKnobOn(t *testing.T) {
 	t.Setenv(updaterKnobEnv, "1")
 	e := newUpdEnv(t)
@@ -183,10 +188,52 @@ func TestUpdatesStatusWithTheKnobOn(t *testing.T) {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	if strings.Join(keys, ",") != "enrolled,install_enabled,manifest_verifier" {
+	if strings.Join(keys, ",") != "enrolled,install_enabled,manifest_verifier,worker_listening" {
 		t.Fatalf("knob ON: GET /api/updates keys = %v", keys)
 	}
-	if w.Body.String() != `{"enrolled":true,"install_enabled":true,"manifest_verifier":"configured"}` {
-		t.Fatalf("knob ON: GET /api/updates = %s", w.Body.String())
+	if m["enrolled"] != true || m["install_enabled"] != true || m["manifest_verifier"] != "configured" {
+		t.Fatalf("knob ON: GET /api/updates = %v", m)
+	}
+	if m["worker_listening"] != false {
+		t.Fatalf("no worker is listening in this test, yet worker_listening = %v (a measured value, never inferred)", m["worker_listening"])
+	}
+}
+
+// The true half of the ruling: a worker socket that accepts the bounded dial
+// makes worker_listening true — the route measured it at request time.
+func TestUpdatesStatusWorkerListeningTrueWithAWorker(t *testing.T) {
+	t.Setenv(updaterKnobEnv, "1")
+	e := newUpdEnv(t)
+	path, err := updaterwire.SocketPath(e.dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln, err := net.Listen("unix", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o600); err != nil { // CheckSocketFile: owner-only perms
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close(); os.Remove(path) })
+	go func() { // the worker's listener: accept the probe and let it hang up
+		for {
+			c, aerr := ln.Accept()
+			if aerr != nil {
+				return
+			}
+			c.Close() // a frameless close is a clean EOF for the prober
+		}
+	}()
+	w := e.do("GET", "/api/updates", "")
+	var m map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["worker_listening"] != true {
+		t.Fatalf("a worker is listening, yet worker_listening = %v: %s", m["worker_listening"], w.Body.String())
+	}
+	if m["install_enabled"] != true {
+		t.Fatalf("install_enabled = %v alongside the listening worker", m["install_enabled"])
 	}
 }

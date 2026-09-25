@@ -249,6 +249,7 @@ export default function UpdatesPage() {
   let buttonState: UpdateButtonState = 'update-now'
   if (checking) buttonState = 'checking'
   else if (status?.install_enabled === false) buttonState = 'blocked'
+  else if (status?.worker_listening === false) buttonState = 'blocked'
   else if (check?.checked) buttonState = 'up-to-date'
   else if (installError) buttonState = 'retry'
 
@@ -271,9 +272,15 @@ export default function UpdatesPage() {
 
   // The install action exists but is unreachable while M3's adversarial review
   // is open (INSTALL_AUTHZ_UNDER_REVIEW ships ON): the disabled button carries
-  // the exact text and no install POST can fire.
+  // the exact text and no install POST can fire. #206's ruling: BOTH
+  // install_enabled (configuration) AND worker_listening (measured) must be
+  // true, and the exact reason is shown when the worker is not running.
+  const workerDown =
+    status?.install_enabled === true && status?.worker_listening === false
   const installDisabled =
-    INSTALL_AUTHZ_UNDER_REVIEW || status?.install_enabled !== true
+    INSTALL_AUTHZ_UNDER_REVIEW ||
+    status?.install_enabled !== true ||
+    status?.worker_listening !== true
 
   const askReloadHistory = useCallback(() => {
     setHistoryReply(null)
@@ -364,6 +371,15 @@ export default function UpdatesPage() {
           <p className="mt-2 text-xs text-amber-400 flex items-center gap-1.5">
             <ShieldAlert size={13} />
             {up('installUnderReview', language)}
+          </p>
+        )}
+        {workerDown && (
+          <p
+            className="mt-2 text-xs text-amber-400 flex items-center gap-1.5"
+            data-testid="worker-not-running"
+          >
+            <ShieldAlert size={13} />
+            {up('workerNotRunning', language)}
           </p>
         )}
         {installError && (

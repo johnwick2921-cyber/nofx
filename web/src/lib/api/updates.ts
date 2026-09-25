@@ -88,8 +88,11 @@ export interface InstallationGate {
   note: string
 }
 
-// ── GET /api/updates (api/handler_updates.go:213 handleUpdatesStatus) ──
-// The M3 payload carries exactly {enrolled, manifest_verifier, install_enabled}.
+// ── GET /api/updates (api/handler_updates.go:495 handleUpdatesStatus) ──
+// The M3 payload carried exactly {enrolled, manifest_verifier, install_enabled};
+// #206's ruling adds worker_listening — MEASURED by the route at request time
+// (a 250 ms bounded dial of the worker socket), never inferred. The UI gates
+// Install on BOTH flags being true and shows the exact reason otherwise.
 // update_available / install_state are OPTIONAL and ABSENT today — they are the
 // fields a later server rev would add for the badge's 'Update available' /
 // 'Installing' states. The badge shows Unknown whenever the API does not
@@ -98,6 +101,7 @@ export interface UpdatesStatus {
   enrolled: boolean
   manifest_verifier: string
   install_enabled: boolean
+  worker_listening?: boolean
   update_available?: boolean
   install_state?: string
 }
