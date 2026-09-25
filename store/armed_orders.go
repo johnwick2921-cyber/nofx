@@ -730,6 +730,31 @@ func (s *ArmedOrderStore) ApplyPlacementReceipt(traderID, signalID, state, reaso
 	return q.Updates(map[string]any{"state": state, "state_reason": reasonKeepingWithdraw(reason)}).Error
 }
 
+// ResetToArmedUnplaced (WAVE PLANNER B1) returns a row whose resting order
+// was cancelled by the zone rest cap to armed-unplaced: state=armed, the
+// placement stamp cleared (signal_id, eval_price, eval_bar_ms, placed_at_ms)
+// and placement_seq+1 — the next broker placement is a NEW seq under the D5
+// append-only rule. The wire cancel is the CALLER's, sent BEFORE this write;
+// until the broker's book confirms it the placement slot guard refuses, so a
+// re-place cannot double-book the old order.
+func (s *ArmedOrderStore) ResetToArmedUnplaced(id int64, reason string) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	return s.db.Model(&ArmedOrderDB{}).Where("id = ?", id).Updates(map[string]any{
+		"state":                  StateArmed,
+		"state_reason":           reasonKeepingWithdraw(reason),
+		"signal_id":              "",
+		"eval_price":             nil,
+		"eval_bar_ms":            nil,
+		"placed_at_ms":           nil,
+		"placement_seq":          gorm.Expr("placement_seq + 1"),
+		"cancel_requested_at_ms": 0,
+		"cancel_attempts":        0,
+		"cancel_attempts_boot":   "",
+	}).Error
+}
+
 // RequestCancel moves a row to cancel_pending and records that a cancel was
 // SENT. It never writes 'cancelled': that word now means the broker's book
 // stopped listing the order, and only ConfirmCancel may say it.

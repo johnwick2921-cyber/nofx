@@ -988,6 +988,12 @@ type DayPlanConfig struct {
 	// break → next-5m entry through the shared execution gate) and the AI
 	// provides commentary + momentum context instead of authoring fade entries.
 	PictureHtf *PictureHtfConfig `json:"picture_htf,omitempty"`
+	// PlannerContract (WAVE PLANNER A3, 2026-09-25) — the prompt, the
+	// validator and the executor are ONE contract: confirming-close authorship,
+	// planned_order entry policy, nonzero-risk economics, the REJECT composed-stop
+	// exception. *bool: nil = ON (the shipped default); an explicit false renders
+	// the pre-A3 prompt bytes (pinned by TestW3PlannerPromptLegacyPolicyByteIdentical).
+	PlannerContract *bool `json:"planner_contract,omitempty"`
 	// OneSetupMinGrade — the lowest merged-candidate grade the best level may
 	// carry ("A+" | "A" | "B" | "C"); empty = B [O].
 	OneSetupMinGrade string `json:"one_setup_min_grade,omitempty"`
@@ -1165,6 +1171,13 @@ type DayPlanConfig struct {
 	// minutes (from placed_at_ms) is cancelled "zone rest expired" by the
 	// executor. nil/≤0 = 30 (ResolveZoneRestMaxMin).
 	ZoneRestMaxMin *int `json:"zone_rest_max_min,omitempty"`
+	// ZonePlaceWithinPts — WAVE PLANNER B1: a market_in_zone arm whose zone is
+	// farther than this many points from the eval price stays armed-unplaced
+	// and places when price comes within the bound; a rest-cap expiry returns
+	// the row to armed-unplaced instead of dismantling it. nil = 25 (the armed
+	// placement band, ResolveZonePlaceWithinPts — ON); 0 = OFF = legacy
+	// behaviour, byte-identical.
+	ZonePlaceWithinPts *float64 `json:"zone_place_within_pts,omitempty"`
 	// MinHoldMin — the floor (minutes) on the RESOLVED hold of an armed
 	// market_in_zone time_hold scenario, refused below it at write (new
 	// authoring only). nil/≤0 = 3 (ResolveMinHoldMin).
@@ -2827,4 +2840,13 @@ func (c *StrategyConfig) getEffectiveTimeframeCount() int {
 		count++
 	}
 	return count
+}
+
+// PlannerContractOn (WAVE PLANNER A3): nil = ON (shipped default); explicit
+// false renders the pre-A3 prompt bytes.
+func (c *DayPlanConfig) PlannerContractOn() bool {
+	if c == nil || c.PlannerContract == nil {
+		return true
+	}
+	return *c.PlannerContract
 }
