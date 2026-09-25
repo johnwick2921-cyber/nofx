@@ -104,6 +104,7 @@ type box struct {
 	rollbackArg [][2]Release
 	activateIDs []Identity
 	rollbackIDs []Identity
+	rollbackAtt []int // the job's attempts on disk at each RollbackTo call
 }
 
 // rig is one worker on one box.
@@ -465,6 +466,11 @@ func (f *fakeLib) Watch(rel Release, id Identity, opts WatchOpts) (Receipt, erro
 
 func (f *fakeLib) RollbackTo(prev, install Release, id Identity) (Identity, Receipt, error) {
 	f.b.expect("rollback", true, updaterjob.StateRollingBack)
+	if j, err := updaterjob.Read(f.b.data, boxJobID); err == nil {
+		f.b.mu.Lock()
+		f.b.rollbackAtt = append(f.b.rollbackAtt, j.Attempts)
+		f.b.mu.Unlock()
+	}
 	f.b.mu.Lock()
 	f.b.rollbackIDs = append(f.b.rollbackIDs, id)
 	f.b.rollbackArg = append(f.b.rollbackArg, [2]Release{prev, install})
