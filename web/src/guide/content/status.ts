@@ -17,6 +17,11 @@ export const status: GuideSection = {
       kind: 'p',
       text: 'Overview shows Market Chart beside Account Equity on wide screens and stacks them on narrow screens. The futures Planner, including Desk, follows both charts. Switching to Decisions hides Overview without unmounting Planner: its polling and local state continue. Entry, Mark and Value remain available in the horizontally scrollable position table on phones. The mobile market selector uses the same market choices as the desktop pills. While the first Desk read is pending, DESK shows Loading; this is not a claim that any fact is current. The Desk toggle announces whether the rows are expanded or collapsed.',
     },
+    { kind: 'h', text: 'Open-order chart truth' },
+    {
+      kind: 'p',
+      text: "On the market chart, the open-order price-line strip is trader-bound: the dashboard's selected account is not applied to that endpoint, and the strip says so. A failed or malformed open-order refresh is UNKNOWN — the previous lines are retained and marked stale with the snapshot timestamp — never silently cleared as zero orders. Only a successful, validated snapshot may clear or repaint the lines, and a confirmed empty snapshot shows 0 orders. Changing symbol, interval, or account discards the pending snapshot and waits for a fresh one.",
+    },
     { kind: 'h', text: 'Research snapshot recorder' },
     {
       kind: 'p',
