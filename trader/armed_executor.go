@@ -1451,8 +1451,19 @@ func (at *AutoTrader) runArmedPlacementAt(bars []market.Kline, sinceMs int64, no
 					at.refuseSlot(r, g, "limit", now)
 					continue
 				}
-				sid, perr := nt.PlaceLimitEntry(at.futuresSymbol(), side, 1, r.EntryPx, r.StopPx, r.TargetPx, func(sid string) error { return ledger.BeginPlacement(r.ID, sid) })
+				registered := false
+				sid, perr := nt.PlaceLimitEntry(at.futuresSymbol(), side, 1, r.EntryPx, r.StopPx, r.TargetPx, func(sid string) error {
+					err := ledger.BeginPlacement(r.ID, sid)
+					registered = err == nil
+					return err
+				})
 				recordResearchPlacement(r, sid, "limit", r.EntryPx, r.StopPx, r.TargetPx, perr)
+				if registered {
+					// Registration commits this pass even when transmission fails;
+					// reconciliation owns the pending attempt, not another arm.
+					placedThisPass = true
+					at.cancelOtherArmsInPlan(ledger, rows, r, now)
+				}
 				if perr != nil {
 					if ntTrader.IsMaintenanceHold(perr) {
 						at.refuseMaintenanceHold(r, perr.Error(), "limit", now, perr)
