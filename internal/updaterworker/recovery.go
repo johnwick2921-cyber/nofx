@@ -69,7 +69,12 @@ func RecoveryText(j updaterjob.Job, t Target) string {
 			p("%d. Restore the pre-update install from this job's snapshot (copy to a temp name, then mv -f over the live one):", step)
 			p("     cp -p %s %s.recovery.tmp && mv -f %s.recovery.tmp %s", s.Binary, in.Binary, in.Binary, in.Binary)
 			p("     cp -p %s %s.recovery.tmp && mv -f %s.recovery.tmp %s", s.ReleaseFile, in.ReleaseFile, in.ReleaseFile, in.ReleaseFile)
-			p("     rm -rf %s.recovery.tmp && cp -a %s %s.recovery.tmp && mv %s %s.failed.%s && mv %s.recovery.tmp %s",
+			// The failed dist is moved aside under a UNIQUE name (job id +
+			// a nanosecond timestamp), never deleted — it is the evidence —
+			// and mv -T refuses to move it INTO an existing directory, so a
+			// repeat run can never nest the live dist in an earlier leftover
+			// (U4 re-verify note 7, TestRecoveryRestoreIsSafeToRunTwice).
+			p("     rm -rf %s.recovery.tmp && cp -a %s %s.recovery.tmp && mv -T %s %s.failed.%s.$(date +%%Y%%m%%dT%%H%%M%%S.%%N) && mv -T %s.recovery.tmp %s",
 				in.Dist, s.Dist, in.Dist, in.Dist, in.Dist, j.JobID, in.Dist, in.Dist)
 		} else {
 			p("%d. The activate ran but this job recorded no snapshot of the install: the install cannot be restored from it — stop and restore it by hand.", step)
