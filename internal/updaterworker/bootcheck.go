@@ -23,13 +23,44 @@ import (
 //     after the rev excludes the " +dirty" form, which is never a release);
 //   - NO "BOOT INTEGRITY REFUSED" line may follow the offset, for any rev
 //     (stricter than "for it": a refused boot after our kill is ours to own).
+//
+// Both matches are ANCHORED to the boot line's own logger shape (#206 review
+// fold): the compactFormatter renders "MM-DD HH:MM:SS [LEVEL] caller msg"
+// (logger/logger.go), main.go prints the OK line at INFO and the REFUSED line
+// at ERROR, the caller is "<build-dir>/main.go:<line>", and the message starts
+// with the 🔐 prefix. A substring anywhere in the file is NOT the boot line:
+// before this anchor, any local process could print a WARN carrying the text
+// "BOOT INTEGRITY REFUSED" inside a client-supplied path and force a good
+// install into rollback.
 
 const (
 	bootOKPrefix  = "BOOT INTEGRITY OK — rev "
 	bootRefused   = "BOOT INTEGRITY REFUSED"
 	maxBootScan   = 64 << 20
 	bootLineShort = 12 // kernel/boot_integrity.go prints rev[:12]
+
+	// The compactFormatter renders "<caller> <msg>" where caller is
+	// "<build-dir>/main.go:<line>" — the directory the binary was BUILT in,
+	// which varies (live logs show clone-build/main.go, nofx-clean/main.go,
+	// nofx/main.go [A: read from data/nofx_2026-09-23.log]). The stable shape
+	// is the level, "/main.go:" and the 🔐 prefix.
+	bootOKCaller   = "[INFO] "
+	bootBadCaller  = "[ERRO] "
+	bootCallerFile = "/main.go:"
+	bootKeyPrefix  = "🔐 "
 )
+
+// isBootOKLine: the app's OWN OK boot line, by shape.
+func isBootOKLine(ln, sha12 string) bool {
+	return strings.Contains(ln, bootOKCaller) && strings.Contains(ln, bootCallerFile) &&
+		strings.Contains(ln, bootKeyPrefix) && strings.Contains(ln, bootOKPrefix+sha12+" ·")
+}
+
+// isBootRefusedLine: the app's OWN REFUSED boot line, by shape.
+func isBootRefusedLine(ln string) bool {
+	return strings.Contains(ln, bootBadCaller) && strings.Contains(ln, bootCallerFile) &&
+		strings.Contains(ln, bootKeyPrefix) && strings.Contains(ln, bootRefused)
+}
 
 // verifyBootLine scans path from off. ev gets the READ facts.
 func verifyBootLine(path string, off int64, sha string, ev map[string]string) error {
@@ -61,10 +92,10 @@ func verifyBootLine(path string, off int64, sha string, ev map[string]string) er
 	ok := 0
 	for sc.Scan() {
 		ln := sc.Text()
-		if strings.Contains(ln, bootRefused) {
+		if isBootRefusedLine(ln) {
 			return fmt.Errorf("boot check: a REFUSED boot line follows the kill: %q", clipText(strings.TrimSpace(ln)))
 		}
-		if strings.Contains(ln, want) {
+		if isBootOKLine(ln, sha[:bootLineShort]) {
 			ok++
 		}
 	}

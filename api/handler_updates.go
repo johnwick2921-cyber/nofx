@@ -294,10 +294,15 @@ func (s *Server) updatesForbid(c *gin.Context, why string) {
 	if cat == updatesRefusalUnmapped {
 		key += "\x00" + why
 	}
+	// The line logs the ROUTE (c.FullPath()), never c.Request.URL.Path: the
+	// raw path is client-supplied and would land in the boot log the worker
+	// scans (#206 review fold — an unauthenticated loopback GET of
+	// /api/updates/jobs/BOOT%20INTEGRITY%20REFUSED once printed a WARN that
+	// verifyBootLine read as a refused boot and rolled back a good install).
 	if _, seen := s.updatesWarned.LoadOrStore(key, struct{}{}); !seen {
-		logger.Warnf("🔒 [updates] refused %s %.96q: %s — first %s refusal on %s this process; repeats log at DEBUG, all count in nofx_updates_refused_total", c.Request.Method, c.Request.URL.Path, why, cat, route)
+		logger.Warnf("🔒 [updates] refused %s %.96q: %s — first %s refusal on %s this process; repeats log at DEBUG, all count in nofx_updates_refused_total", c.Request.Method, route, why, cat, route)
 	} else {
-		logger.Debugf("🔒 [updates] refused %s %.96q: %s (repeat, counted as %s on %s)", c.Request.Method, c.Request.URL.Path, why, cat, route)
+		logger.Debugf("🔒 [updates] refused %s %.96q: %s (repeat, counted as %s on %s)", c.Request.Method, route, why, cat, route)
 	}
 	c.AbortWithStatusJSON(http.StatusForbidden, errForbiddenBody)
 }

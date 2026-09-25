@@ -137,16 +137,30 @@ func TestBootVerifyRefusesARefusedBootLine(t *testing.T) {
 	// the scan itself, over a real log file
 	sha := boxNew
 	ok := "09-24 10:00:06 [INFO] main/main.go:322 🔐 BOOT INTEGRITY OK — rev " + sha[:12] + " · built x · expected " + sha[:12] + " · goldens PASS\n"
+	refused := "09-24 10:00:08 [ERRO] main/main.go:317 🔐 BOOT INTEGRITY REFUSED — rev " + sha[:12] + " · built x · expected " + sha[:12] + " · goldens FAIL\n"
+	// The shapes that must NOT be read as the app's boot line (the #206 fold
+	// anchor): a WARN from the updates gate whose CLIENT-SUPPLIED path carries
+	// the refused text (any loopback process can print it), and a forged OK
+	// carried the same way.
+	spoofRefused := `09-24 10:00:07 [WARN] api/handler_updates.go:298 🔒 [updates] refused GET "/api/updates/jobs/BOOT INTEGRITY REFUSED": update header missing or wrong — first update_header refusal on /api/updates/jobs/:id this process; repeats log at DEBUG, all count in nofx_updates_refused_total` + "\n"
+	spoofOK := `09-24 10:00:07 [WARN] api/handler_updates.go:298 🔒 [updates] refused GET "/api/updates/jobs/BOOT INTEGRITY OK — rev ` + sha[:12] + ` ·": update header missing or wrong — first update_header refusal on /api/updates/jobs/:id this process; repeats log at DEBUG, all count in nofx_updates_refused_total` + "\n"
 	for _, c := range []struct {
 		name, before, after string
 		wantErr             string
 	}{
 		{name: "OK after the offset", after: ok},
-		{name: "REFUSED after the offset", after: strings.Replace(ok, "OK", "REFUSED", 1), wantErr: "REFUSED boot line"},
-		{name: "OK then a REFUSED for another rev", after: ok + strings.Replace(strings.Replace(ok, "OK", "REFUSED", 1), sha[:12], boxOld[:12], 1), wantErr: "REFUSED boot line"},
+		{name: "REFUSED after the offset", after: refused, wantErr: "REFUSED boot line"},
+		{name: "OK then a REFUSED for another rev", after: ok + strings.Replace(refused, sha[:12], boxOld[:12], 1), wantErr: "REFUSED boot line"},
 		{name: "OK only BEFORE the offset (the previous boot)", before: ok, wantErr: "no \"BOOT INTEGRITY OK — rev " + sha[:12] + "\""},
 		{name: "OK for another sha", after: strings.ReplaceAll(ok, sha[:12], boxOld[:12]), wantErr: "no \"BOOT INTEGRITY OK"},
 		{name: "a +dirty binary", after: strings.Replace(ok, sha[:12]+" ·", sha[:12]+" +dirty ·", 1), wantErr: "no \"BOOT INTEGRITY OK"},
+		// The #206 anchor negatives: the spoofed lines are not the app's boot
+		// line — the refused spoof must not fail the scan, and the forged OK
+		// must not satisfy it.
+		{name: "a spoofed REFUSED inside a client path does not fail", after: ok + spoofRefused},
+		{name: "a spoofed REFUSED at INFO is not the boot line", after: ok + strings.Replace(refused, "[ERRO]", "[INFO]", 1)},
+		{name: "a forged OK inside a client path does not satisfy", after: spoofOK, wantErr: "no \"BOOT INTEGRITY OK"},
+		{name: "a forged OK from a non-main caller does not satisfy", after: strings.Replace(ok, "main/main.go:322", "api/handler_updates.go:298", 1), wantErr: "no \"BOOT INTEGRITY OK"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			p := filepath.Join(t.TempDir(), "nofx_2026-09-24.log")
