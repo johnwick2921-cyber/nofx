@@ -64,7 +64,7 @@ fi
 # runs is the one that answers here. The manifest records what the operator
 # asserted; verify decides whether the binary agrees.
 STAGE_DIR="$(mktemp -d -t nofx-cutover.XXXXXX)"
-trap 'rm -rf "$STAGE_DIR"; [ -n "${ACTIVATE:-}" ] && [ -z "${NOFX_ACTIVATE_BIN:-}" ] && rm -f "$ACTIVATE"' EXIT
+trap 'rm -rf "$STAGE_DIR"; [ -n "${ACTIVATE:-}" ] && [ -z "${NOFX_ACTIVATE_BIN:-}" ] && rm -f "$ACTIVATE"; rm -f "${TOKEN_HDR:-}"' EXIT
 [ -f "$NEW_BIN" ] || die "new binary $NEW_BIN not found"
 cp "$NEW_BIN" "$STAGE_DIR/nofx-bin" || die "cannot stage $NEW_BIN"
 NEW_MD5="$(md5sum "$STAGE_DIR/nofx-bin" | cut -d' ' -f1)"
@@ -94,18 +94,78 @@ OLD_SHORT="${OLD_SHA:0:12}"
 RELEASES="${NOFX_RELEASE_DIR:-$INSTALL/releases}"
 say "current: rev=$OLD_SHORT  releases → $RELEASES"
 
-# --- THE FLAT GATE (class 33) -------------------------------------------------
-# Nothing is touched until every leg passes. An unevaluable leg is a FAILURE.
-# The token comes from the environment and is never echoed, never logged, and
-# never accepted as an argument.
+# --- reconcile OLD_SHA with what is ACTUALLY running -------------------------
+# The disk binary alone is not the running build: a crashed staging leaves a
+# never-proven file on disk while the old process keeps serving. Reconcile the
+# way back against BOTH /api/health (the running process's own revision) and
+# the RELEASE marker. A mismatch, or neither consultable, refuses the cutover.
+HEALTH_URL="${NOFX_HEALTH_URL:-http://127.0.0.1:8080/api/health}"
+HEALTH_REV="$(curl -s --max-time 5 "$HEALTH_URL" 2>/dev/null \
+  | sed -n 's/.*"revision"[[:space:]]*:[[:space:]]*"\([0-9a-fA-F]*\)".*/\1/p' | tr 'A-F' 'a-f')"
+RELEASE_REV="$([ -f "$INSTALL/RELEASE" ] && tr -d '[:space:]' < "$INSTALL/RELEASE" 2>/dev/null | tr 'A-F' 'a-f')"
+rev12() { v="$1"; if [ ${#v} -ge 12 ]; then printf '%s' "${v:0:12}"; else printf '%s' "$v"; fi; }
+OLD12="$(rev12 "$OLD_SHA")"
+if [ -n "$HEALTH_REV" ] && [ "$(rev12 "$HEALTH_REV")" != "$OLD12" ]; then
+  die "OLD_SHA mismatch: disk=$OLD_SHORT but the RUNNING process reports $(rev12 "$HEALTH_REV") via /api/health — refusing a cutover whose way back is not the running build"
+fi
+if [ -n "$RELEASE_REV" ] && [ "$(rev12 "$RELEASE_REV")" != "$OLD12" ]; then
+  die "OLD_SHA mismatch: disk=$OLD_SHORT but $INSTALL/RELEASE says $(rev12 "$RELEASE_REV") — refusing a cutover whose way back is not what the marker names"
+fi
+if [ -z "$HEALTH_REV" ] && [ -z "$RELEASE_REV" ]; then
+  die "cannot reconcile OLD_SHA=$OLD_SHORT — neither /api/health nor $INSTALL/RELEASE answered; refusing a cutover with no proof of what is running"
+fi
+say "current reconciled: disk=$OLD_SHORT health=$(rev12 "${HEALTH_REV:-}") release=$(rev12 "${RELEASE_REV:-}")"
+
+# --- THE INSTALLATION GATE (W-ONE-BUTTON M2) -------------------------------
+# Nothing is touched until every REQUIRED leg passes. The payload's overall
+# "ready" verdict is NEVER trusted: it folds in legs like addon_census that can
+# never pass on a bot that has not been held, so a green gate could still hide
+# a trader holding a position (finding [1]). Every leg is printed; a required
+# leg that is absent, unevaluable or failing refuses the cutover. The token
+# comes from the environment and is never echoed, never logged, and never
+# accepted as an argument.
 [ -n "${NOFX_CUTOVER_TOKEN:-}" ] || die "cutover gate needs a token — set NOFX_CUTOVER_TOKEN (never pass it on the command line)"
-GATE="$(curl -s --max-time 10 -H "Authorization: Bearer ${NOFX_CUTOVER_TOKEN}" \
-         http://127.0.0.1:8080/api/cutover-gate 2>/dev/null || true)"
-[ -n "$GATE" ] || die "the cutover gate did not answer; refusing to kill a trader whose state is unknown"
-printf '%s\n' "$GATE" | sed 's/^/    gate: /'
-printf '%s' "$GATE" | grep -qi '"ready"[[:space:]]*:[[:space:]]*true' \
-  || die "the cutover gate is NOT ready — a leg failed above. An unevaluable leg counts as a failure (A5)"
-say "flat gate READY — every leg passed"
+GATE_URL="${NOFX_GATE_URL:-http://127.0.0.1:8080/api/installation-gate}"
+# The token never rides ANY process's argv ([25]/[29]): it is written to a 0600
+# header file and handed to curl as -H @file, so ps and /proc/<pid>/cmdline show
+# only the file path for the call's lifetime, and the file is removed on every
+# exit path.
+TOKEN_HDR="$(mktemp -t nofx-cutover-hdr.XXXXXX)" || die "cannot create the token header file; refusing"
+( umask 077; printf 'Authorization: Bearer %s' "$NOFX_CUTOVER_TOKEN" > "$TOKEN_HDR" ) \
+  || { rm -f "$TOKEN_HDR"; die "cannot write the token header file; refusing"; }
+GATE="$(curl -s --max-time 10 -H "@$TOKEN_HDR" "$GATE_URL" 2>/dev/null || true)"
+rm -f "$TOKEN_HDR"
+[ -n "$GATE" ] || die "the installation gate did not answer; refusing to kill a trader whose state is unknown"
+LEGS="$(printf '%s' "$GATE" | jq -r '.legs[]? | "\(.name)\t\(.pass)"' 2>/dev/null)" \
+  || die "the installation gate answered something that is not a gate payload; refusing a cutover over unreadable state"
+[ -n "$LEGS" ] || die "the installation gate payload names no legs; refusing a cutover over unreadable state"
+printf '%s\n' "$LEGS" | sed 's/^/    leg: /'
+
+require_legs() { # $1 = name or glob; every matching leg must pass, one must exist
+  found=0; bad=""
+  while IFS=$'\t' read -r name pass; do
+    case "$name" in
+      $1)
+        found=$((found+1))
+        [ "$pass" = "true" ] || bad="$bad $name"
+        ;;
+    esac
+  done <<LEGS_EOF
+$LEGS
+LEGS_EOF
+  [ "$found" -gt 0 ] || die "the installation gate names no $1 leg; refusing (an unevaluable leg is a failure)"
+  [ -z "$bad" ] || die "failing installation-gate legs:$bad — refusing the cutover"
+}
+
+require_legs 'trader_cutover:*'
+require_legs 'ledger_exposure'
+require_legs 'planner_in_flight'
+require_legs 'traders_nt8'
+# addon_census_prehold lands with #206; require it the moment the payload has it.
+if printf '%s\n' "$LEGS" | cut -f1 | grep -qx 'addon_census_prehold'; then
+  require_legs 'addon_census_prehold'
+fi
+say "installation gate READY — every required leg passed"
 
 if [ "$DRY" -eq 1 ]; then
   plan "back up $INSTALL/data/data.db with nofx-activate backup (online copy + integrity_check)"
@@ -115,8 +175,12 @@ if [ "$DRY" -eq 1 ]; then
   plan "  MainPID only if /proc/<pid>/stat field 22 still matches (a recycled pid is refused)"
   plan "run: nofx-activate watch -release $RELEASES/$NEW_SHA -log <the NEWEST data/nofx_*.log>"
   plan "  GREEN needs BOTH a boot line newer than the kill AND /api/health reporting $SHORT"
-  plan "on ANY failure: nofx-activate rollback -prev $RELEASES/$OLD_SHA, restoring all three"
-  plan "  halves, and prove $OLD_SHORT came back"
+  plan "on ANY failure BEFORE anything moved (verify, gate, staging, backup):"
+  plan "  REFUSE and stop — the running bot is NOT touched and NO rollback runs"
+  plan "  (a healthy bot must never be restarted for a cutover that never started)"
+  plan "on a failure AFTER nofx-activate began installing: nofx-activate rollback"
+  plan "  -prev $RELEASES/$OLD_SHA, restoring all three halves, and prove $OLD_SHORT"
+  plan "  came back"
   say "dry run complete — nothing was killed, swapped or written"
   exit 0
 fi

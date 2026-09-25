@@ -209,10 +209,6 @@ func futureIatCensus(root string) (minters, iatSites map[string]int, offenders [
 		}
 		ast.Inspect(f, func(n ast.Node) bool {
 			switch x := n.(type) {
-			case *ast.CallExpr:
-				if isSel(x.Fun, jwtName, "NewWithClaims") || isSel(x.Fun, jwtName, "New") {
-					minters[rel]++
-				}
 			case *ast.KeyValueExpr:
 				if k, ok := x.Key.(*ast.Ident); ok && (k.Name == "IssuedAt" || k.Name == "NotBefore") {
 					check(k.Name, x.Value)
@@ -231,6 +227,11 @@ func futureIatCensus(root string) (minters, iatSites map[string]int, offenders [
 			}
 			return true
 		})
+		// DS-105 CENSUS-AUTH [14]: count every minting SHAPE — a NewWithClaims/
+		// New call, a reference to either held as a value, and a jwt.Token
+		// composite literal (type-based; see jwtMintShapes) — so a minter
+		// outside auth/auth.go signToken cannot dodge the census by spelling.
+		jwtMintShapes(f, jwtName, func() { minters[rel]++ })
 	}
 	return minters, iatSites, offenders, scanned, nil
 }

@@ -470,18 +470,78 @@ func TestCutoverInstallsTheNewBinaryItWasGiven(t *testing.T) {
 	}
 }
 
-func TestCutoverRefusesWithoutAPassingFlatGate(t *testing.T) {
+func TestCutoverRefusesWithoutAPassingInstallationGate(t *testing.T) {
 	sh := repoFile(t, "deploy/cutover.sh")
 	// P1-b: v1 SIGKILLed the trader with no check for an open position, a
 	// non-terminal armed row, or an in-flight send (class 33 legs 1-5).
+	// Finding [1] (preboot 4c05158b): /api/cutover-gate answers for ONE trader
+	// (newest created_at), so the old script gated every OTHER trader out of
+	// existence before the kill. The fold: /api/installation-gate, whose legs
+	// the script REQUIRES by name — and whose overall "ready" verdict it must
+	// NEVER trust (addon_census can never pass on a never-held bot).
 	if !strings.Contains(sh, "NOFX_CUTOVER_TOKEN") || !strings.Contains(sh, "cutover gate needs a token") {
 		t.Fatalf("no token must REFUSE, and the token must never be a command-line argument")
 	}
-	if !strings.Contains(sh, "/api/cutover-gate") {
-		t.Fatalf("the flat gate must be asked before the kill")
+	if !strings.Contains(sh, "/api/installation-gate") {
+		t.Fatalf("the installation gate must be asked before the kill")
 	}
-	if !strings.Contains(sh, "the cutover gate is NOT ready") {
-		t.Fatalf("a failing leg must refuse the cutover")
+	if strings.Contains(sh, "/api/cutover-gate") {
+		t.Fatalf("the one-trader cutover gate must NOT be consulted — it cannot fail for any trader but the newest (finding [1])")
+	}
+	if !strings.Contains(sh, "require_legs 'trader_cutover:*'") ||
+		!strings.Contains(sh, "require_legs 'ledger_exposure'") ||
+		!strings.Contains(sh, "require_legs 'planner_in_flight'") ||
+		!strings.Contains(sh, "require_legs 'traders_nt8'") {
+		t.Fatalf("every trader's cutover legs + ledger_exposure + planner_in_flight + traders_nt8 must be REQUIRED by name")
+	}
+	if !strings.Contains(sh, "addon_census_prehold") {
+		t.Fatalf("addon_census_prehold must be required whenever the payload has it (#206 adds the leg)")
+	}
+	if !strings.Contains(sh, "NEVER trusted") {
+		t.Fatalf("the overall ready verdict must be declared untrusted, or a green gate hides a failing non-required leg")
+	}
+	if !strings.Contains(sh, "failing installation-gate legs:") {
+		t.Fatalf("a failing required leg must refuse the cutover and be named")
+	}
+}
+
+func TestCutoverTokenNeverRidesAProcessArgv(t *testing.T) {
+	sh := repoFile(t, "deploy/cutover.sh")
+	// Findings [25]/[29]: the token was interpolated into curl's -H header, i.e.
+	// argv, readable by any UID via ps//proc/<pid>/cmdline for the call's
+	// lifetime — while the script's own refusal text says "never pass it on the
+	// command line". The fold: a 0600 header file, curl -H @file, removed on
+	// every exit path.
+	if strings.Contains(sh, "Authorization: Bearer ${NOFX_CUTOVER_TOKEN}") {
+		t.Fatalf("the token must never be interpolated into curl's argv — it rides a header FILE")
+	}
+	if !strings.Contains(sh, `-H "@$TOKEN_HDR"`) {
+		t.Fatalf("curl must receive the header via -H @file")
+	}
+	if !strings.Contains(sh, "umask 077") {
+		t.Fatalf("the token header file must be written 0600")
+	}
+	if !strings.Contains(sh, `rm -f "${TOKEN_HDR:-}"`) {
+		t.Fatalf("the token header file must be removed on every exit path (trap)")
+	}
+}
+
+func TestCutoverNeverInstructsRollbackForAPreInstallFailure(t *testing.T) {
+	sh := repoFile(t, "deploy/cutover.sh")
+	// Finding [24]: v6 ran `cp ... || { rollback; die }` — a staging failure
+	// BEFORE anything was live invoked rollback(), which SIGKILLs a healthy
+	// bot and re-proves the old rev for a cutover that never started. The
+	// plan must split the failure space: before anything moved, REFUSE with
+	// no restart and NO rollback; only after the install began may the
+	// rollback command be named.
+	if strings.Contains(sh, "on ANY failure: nofx-activate rollback") {
+		t.Fatalf("a pre-install failure must NOT route to rollback — nothing was touched, the healthy bot must not be restarted (finding [24])")
+	}
+	if !strings.Contains(sh, "NO rollback runs") {
+		t.Fatalf("the plan must say a pre-install failure REFUSES with NO rollback")
+	}
+	if !strings.Contains(sh, "failure AFTER nofx-activate began installing") {
+		t.Fatalf("rollback must be named only for a failure AFTER the install began")
 	}
 }
 

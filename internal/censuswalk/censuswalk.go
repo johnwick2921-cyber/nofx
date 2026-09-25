@@ -113,6 +113,16 @@ func NonTestGoFiles(root string) ([]File, error) {
 			}
 			return nil
 		}
+		// CTO CENSUS-GUARDS 1790306266164 [32]: WalkDir does not descend into
+		// a symlinked dir, but the toolchain compiles THROUGH the link — a
+		// package there would be invisible to every census using this walk.
+		// Refuse it loudly instead of silently skipping it.
+		if d.Type()&fs.ModeSymlink != 0 {
+			if fi, serr := os.Stat(p); serr == nil && fi.IsDir() {
+				target, _ := os.Readlink(p)
+				return fmt.Errorf("symlinked package directory %s -> %s: the census walk refuses symlinked dirs — the toolchain compiles through them but the walk does not descend; move the package into the tree", p, target)
+			}
+		}
 		if !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
 			return nil
 		}
