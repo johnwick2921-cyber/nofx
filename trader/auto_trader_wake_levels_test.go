@@ -367,21 +367,18 @@ func TestMaybeWakePlannerFoldsOverlaySeatedLevel(t *testing.T) {
 	if at.lastLevelWakeKey == "" {
 		t.Fatal("the owner overlay's seated Demand level must wake the planner through the fold")
 	}
-	// Skeptic F10: the deferred drain alone is NOT a join here — the goroutine
-	// evaluates priorPlanLevelLines (store reads) BEFORE it claims, so the
-	// drain can run while the claim maps are empty and return, and the seam
-	// resets (provider restore, store close) land while the read is still
-	// ahead. Wait until the claim was SEEN and the stream closed again: the
-	// read ran to completion before the test returns, and the drain below
-	// then has nothing left to wait for (or joins a real claim).
-	seenOpen := false
+	// T2 join (CTO 2026-09-25): the deferred drain alone is NOT a join here —
+	// the goroutine evaluates priorPlanLevelLines (store reads) BEFORE it
+	// claims, so the drain can run while the claim maps are empty and return
+	// with the read still ahead. Wait until the claim APPEARS — the read is
+	// then past the pre-claim work and holds the claim until completion — and
+	// let the deferred drainReReads join the release. The old seenOpen+closed
+	// observation raced: a fast read opened and closed between polls and the
+	// test failed with 'never ran to completion' on a completed read.
 	if !waitFor(t, 10*time.Second, func() bool {
 		_, open := anyPlannerStreamOpen()
-		if open {
-			seenOpen = true
-		}
-		return seenOpen && !open
+		return open
 	}) {
-		t.Fatal("the fired wake's read never ran to completion before the seam resets (the join must see the claim)")
+		t.Fatal("the fired wake's read never started — no planner stream claim appeared (a wall-clock gate refused it: check session/clock/seam)")
 	}
 }
