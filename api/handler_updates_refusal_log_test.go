@@ -6,7 +6,8 @@ package api
 // (and one log_events row) per minute per tab, forever. Now: ONE WARN per
 // (route, category) per process, then DEBUG; every refusal, first or
 // repeat, is COUNTED in nofx_updates_refused_total{route,category} — never
-// silent, and a pair that never refused has no series (no fabricated 0).
+// silent, and a pair that never refused has no series (no fabricated 0 —
+// pinned in a fresh process: TestUpdatesRefusalSeriesIsAbsentUntilTheFirstRefusal).
 // "category" comes from a CLOSED mapping of the refusal reason, never the
 // free text. Driven at the production call site: the gin routes through
 // updatesGate (and the install handler's own refusals).
@@ -17,6 +18,8 @@ import (
 	"go/token"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -26,17 +29,46 @@ import (
 	"nofx/config"
 	"nofx/logger"
 
-	dto "github.com/prometheus/client_model/go"
 	"github.com/sirupsen/logrus"
 )
 
-func refusedCount(t *testing.T, route, category string) float64 {
+// scrapeRefused reads nofx_updates_refused_total off the PRODUCTION /metrics
+// route (the promhttp handler NewServer mounts) — never through
+// WithLabelValues, which would itself create the series it is asked about.
+// It returns every series as "route\x00category" → value.
+func scrapeRefused(t *testing.T, e *updEnv) map[string]float64 {
 	t.Helper()
-	var m dto.Metric
-	if err := updatesRefusedTotal.WithLabelValues(route, category).Write(&m); err != nil {
-		t.Fatal(err)
+	r := httptest.NewRequest("GET", "/metrics", nil)
+	r.RemoteAddr, r.Host = "127.0.0.1:52000", "127.0.0.1:8080"
+	w := httptest.NewRecorder()
+	e.s.router.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /metrics = %d", w.Code)
 	}
-	return m.GetCounter().GetValue()
+	line := regexp.MustCompile(`^nofx_updates_refused_total\{category="([^"]*)",route="([^"]*)"\} (\S+)$`)
+	out := map[string]float64{}
+	for _, l := range strings.Split(w.Body.String(), "\n") {
+		if !strings.HasPrefix(l, "nofx_updates_refused_total") {
+			continue
+		}
+		m := line.FindStringSubmatch(l)
+		if m == nil {
+			t.Fatalf("/metrics series in an unexpected shape: %q", l)
+		}
+		v, err := strconv.ParseFloat(m[3], 64)
+		if err != nil {
+			t.Fatalf("/metrics value %q: %v", m[3], err)
+		}
+		out[m[2]+"\x00"+m[1]] = v
+	}
+	return out
+}
+
+// refusedCount is one series' value from the scrape; an ABSENT series reads
+// as 0 here (a delta baseline) — whether it is absent is asserted on its own.
+func refusedCount(t *testing.T, e *updEnv, route, category string) float64 {
+	t.Helper()
+	return scrapeRefused(t, e)[route+"\x00"+category]
 }
 
 func warnLines(s, needle string) int {
@@ -55,7 +87,7 @@ func TestUpdatesRefusalWarnsOncePerRouteAndCategoryThenCounts(t *testing.T) {
 	noHeader := func(r *http.Request) { r.Header.Del(UpdateHeader) }
 	const headerWhy = ": update header missing or wrong"
 
-	before := refusedCount(t, "/api/updates", "update_header")
+	before := refusedCount(t, e, "/api/updates", "update_header")
 	mark := len(logs())
 	for i := 0; i < 2; i++ { // the badge's poll, twice
 		if w := e.do("GET", "/api/updates", "", noHeader); w.Code != http.StatusForbidden || w.Body.String() != forbiddenBody {
@@ -66,7 +98,7 @@ func TestUpdatesRefusalWarnsOncePerRouteAndCategoryThenCounts(t *testing.T) {
 	if n := warnLines(tail, headerWhy); n != 1 {
 		t.Fatalf("two refusals of one (route, category) wrote %d WARN lines, want exactly 1:\n%s", n, tail)
 	}
-	if d := refusedCount(t, "/api/updates", "update_header") - before; d != 2 {
+	if d := refusedCount(t, e, "/api/updates", "update_header") - before; d != 2 {
 		t.Fatalf("nofx_updates_refused_total{route=/api/updates,category=update_header} rose by %v, want 2 (every refusal counted)", d)
 	}
 
@@ -100,7 +132,7 @@ func TestUpdatesRefusalWarnsOncePerRouteAndCategoryThenCounts(t *testing.T) {
 	g := e.grant(updRelease)
 	bad := g
 	bad.HMAC = strings.Repeat("b", 64)
-	before = refusedCount(t, "/api/updates/install", "install_mac")
+	before = refusedCount(t, e, "/api/updates/install", "install_mac")
 	mark = len(logs())
 	e.do("POST", "/api/updates/install", grantBody(bad))
 	bad.JobID = strings.Repeat("c", 32)
@@ -108,7 +140,7 @@ func TestUpdatesRefusalWarnsOncePerRouteAndCategoryThenCounts(t *testing.T) {
 	if n := warnLines(logs()[mark:], ": install: MAC mismatch"); n != 1 {
 		t.Fatalf("two MAC refusals: %d WARN lines, want 1:\n%s", n, logs()[mark:])
 	}
-	if d := refusedCount(t, "/api/updates/install", "install_mac") - before; d != 2 {
+	if d := refusedCount(t, e, "/api/updates/install", "install_mac") - before; d != 2 {
 		t.Fatalf("install_mac rose by %v, want 2", d)
 	}
 
@@ -137,6 +169,40 @@ func TestUpdatesRefusalWarnsOncePerRouteAndCategoryThenCounts(t *testing.T) {
 	}
 	if regexp.MustCompile(`nofx_updates_refused_total\{[^}]*(aaaaaaaa|bbbbbbbb)`).MatchString(body) {
 		t.Fatal("/metrics carries a client-supplied id in a label")
+	}
+}
+
+// "A pair that never refused has no series" — pinned in a FRESH process.
+// The counter is package-global and the test binary shares it, so an earlier
+// test's refusals would already have created series; the pin therefore
+// re-runs itself as a child of the test binary (only this test, nothing
+// before it), where no refusal has ever happened. There it scrapes the
+// production /metrics: NO nofx_updates_refused_total series at all before
+// the first refusal (a series pre-created at registration — a fabricated 0 —
+// fails here), then one refusal ⇒ exactly that one pair, at 1, and every
+// other pair still absent.
+func TestUpdatesRefusalSeriesIsAbsentUntilTheFirstRefusal(t *testing.T) {
+	const childEnv = "NOFX_TEST_REFUSAL_SERIES_CHILD"
+	if os.Getenv(childEnv) != "1" {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestUpdatesRefusalSeriesIsAbsentUntilTheFirstRefusal$", "-test.count=1", "-test.v")
+		cmd.Env = append(os.Environ(), childEnv+"=1")
+		out, err := cmd.CombinedOutput()
+		if err != nil || !strings.Contains(string(out), "--- PASS: TestUpdatesRefusalSeriesIsAbsentUntilTheFirstRefusal") {
+			t.Fatalf("the fresh-process pin failed (%v):\n%s", err, out)
+		}
+		return
+	}
+	e := newUpdEnv(t)
+	if got := scrapeRefused(t, e); len(got) != 0 {
+		t.Fatalf("before any refusal /metrics already carries %d nofx_updates_refused_total series (%v) — a pair that never refused must have NO series, never a fabricated 0", len(got), got)
+	}
+	noHeader := func(r *http.Request) { r.Header.Del(UpdateHeader) }
+	if w := e.do("GET", "/api/updates", "", noHeader); w.Code != http.StatusForbidden {
+		t.Fatalf("GET /api/updates without the header = %d, want 403", w.Code)
+	}
+	got := scrapeRefused(t, e)
+	if len(got) != 1 || got["/api/updates\x00update_header"] != 1 {
+		t.Fatalf("after ONE refusal /metrics carries %v, want exactly {/api/updates, update_header} = 1", got)
 	}
 }
 
