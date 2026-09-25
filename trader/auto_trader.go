@@ -435,10 +435,13 @@ type AutoTrader struct {
 	// self-backoff clock (see maybeRereadAfterFlip). Per trader on purpose:
 	// a process-global map keyed by plan id let one trader's (or one test's)
 	// failed launch hold another's retry.
-	flipRereadLaunchAt sync.Map
-	lastAIBalanceDay   string // P5 daily balance poll throttle (AI_BALANCE_WARN)
-	isRunning          bool
-	isRunningMutex     sync.RWMutex // Mutex to protect isRunning flag
+	flipRereadLaunchAt  sync.Map
+	lastAIBalanceDay    string // P5 daily balance poll throttle (AI_BALANCE_WARN)
+	isRunning           bool
+	isRunningMutex      sync.RWMutex // Mutex to protect isRunning flag
+	limitFlattenMu      sync.Mutex   // W117-F F6: serializes delayed exits with Stop
+	limitFlattenStopped bool
+	limitFlattens       map[int64]*pendingLimitFlatten
 	// pictureGen (W4/D25) opens on every registerPictureHtf and closes on
 	// unregisterPictureHtf. An evaluation records the generation it began
 	// under and re-checks it immediately before the wire, so a frame in
@@ -903,6 +906,11 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 	// was a stub returning empty, so the leg passed VACUOUSLY at every cutover
 	// 35 → 41. Wired HERE (not lazily) so the dead-man watchdog's own
 	// GetOpenOrders probe has a source from the first cycle.
+	// WAVE 1a-plan N5 — the CSV transport takes the same maintenance
+	// permit (only entry sends); wired at construction like the TCP path.
+	if csv, ok := at.trader.(*ntTrader.Trader); ok {
+		wireNT8MaintenanceCSV(csv)
+	}
 	if nt, ok := at.trader.(*ntTrader.TCPTrader); ok {
 		nt.SetOpenOrdersSource(at.ledgerOpenOrders)
 		// THE LEDGER'S EAR FOR A REFUSAL (2026-09-07). Every entry-reject path
@@ -920,6 +928,9 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 
 // Run runs the automatic trading main loop
 func (at *AutoTrader) Run() error {
+	at.limitFlattenMu.Lock()
+	at.limitFlattenStopped = false
+	at.limitFlattenMu.Unlock()
 	at.isRunningMutex.Lock()
 	at.isRunning = true
 	at.isRunningMutex.Unlock()
@@ -1111,6 +1122,7 @@ func (at *AutoTrader) Run() error {
 
 // Stop stops the automatic trading
 func (at *AutoTrader) Stop() {
+	at.stopLimitFlattens()
 	at.isRunningMutex.Lock()
 	if !at.isRunning {
 		at.isRunningMutex.Unlock()
