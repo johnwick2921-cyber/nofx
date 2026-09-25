@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"nofx/internal/updaterworker/releasefixture"
 )
 
 // ── SSHSIG, cross-checked against the REAL ssh-keygen ─────────────────────────
@@ -26,30 +28,18 @@ import (
 // the tool (sha256 hashalg, a wildcard principal), the test proves the tool
 // accepts the fixture and we refuse it.
 
+// The ssh-keygen helpers live in internal/updaterworker/releasefixture
+// (moved there unchanged by U4N); these are their package-local names.
+
 // sshKeygen returns the real tool or skips the test with the reason.
-func sshKeygen(t *testing.T) string {
-	t.Helper()
-	p, err := exec.LookPath("ssh-keygen")
-	if err != nil {
-		t.Skip("ssh-keygen is absent on this box — the SSHSIG tests sign and cross-verify with the REAL tool (OpenSSH >= 8.1), never a Go re-implementation")
-	}
-	return p
-}
+func sshKeygen(t *testing.T) string { t.Helper(); return releasefixture.SSHKeygen(t) }
 
 // keygenEnv keeps an ssh-agent and the user's ~/.ssh out of every run.
-func keygenEnv(t *testing.T) []string {
-	return []string{"PATH=" + os.Getenv("PATH"), "HOME=" + t.TempDir(), "LC_ALL=C"}
-}
+func keygenEnv(t *testing.T) []string { return releasefixture.KeygenEnv(t) }
 
 func runKeygen(t *testing.T, args ...string) []byte {
 	t.Helper()
-	cmd := exec.Command(sshKeygen(t), args...)
-	cmd.Env = keygenEnv(t)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("ssh-keygen %v: %v\n%s", args, err, out)
-	}
-	return out
+	return releasefixture.RunKeygen(t, args...)
 }
 
 type testSigner struct {
@@ -57,54 +47,32 @@ type testSigner struct {
 	pub  string // "ssh-ed25519 AAAA… comment" — the .pub line
 }
 
+func (s testSigner) fixture() releasefixture.Signer {
+	return releasefixture.Signer{Priv: s.priv, Pub: s.pub}
+}
+
 func newTestSigner(t *testing.T, dir, name string) testSigner {
 	t.Helper()
-	priv := filepath.Join(dir, name)
-	runKeygen(t, "-q", "-t", "ed25519", "-N", "", "-C", "nofx-test-"+name, "-f", priv)
-	pub, err := os.ReadFile(priv + ".pub")
-	if err != nil {
-		t.Fatal(err)
-	}
-	return testSigner{priv: priv, pub: strings.TrimSpace(string(pub))}
+	s := releasefixture.NewSigner(t, dir, name)
+	return testSigner{priv: s.Priv, pub: s.Pub}
 }
 
 // fingerprint is `ssh-keygen -l -E sha256 -f <pub>`'s second field.
 func (s testSigner) fingerprint(t *testing.T) string {
 	t.Helper()
-	f := strings.Fields(string(runKeygen(t, "-l", "-E", "sha256", "-f", s.priv+".pub")))
-	if len(f) < 2 || !strings.HasPrefix(f[1], "SHA256:") {
-		t.Fatalf("ssh-keygen -l printed %q", f)
-	}
-	return f[1]
+	return s.fixture().Fingerprint(t)
 }
 
 // sign signs the file at msgPath with `ssh-keygen -Y sign` and returns the
 // armored signature it wrote to msgPath.sig.
 func (s testSigner) sign(t *testing.T, msgPath, namespace string, extra ...string) []byte {
 	t.Helper()
-	_ = os.Remove(msgPath + ".sig")
-	args := append([]string{"-Y", "sign", "-f", s.priv, "-n", namespace}, extra...)
-	runKeygen(t, append(args, msgPath)...)
-	sig, err := os.ReadFile(msgPath + ".sig")
-	if err != nil {
-		t.Fatal(err)
-	}
-	return sig
+	return s.fixture().Sign(t, msgPath, namespace, extra...)
 }
 
 func writeAllowedSigners(t *testing.T, dir string, lines ...string) string {
 	t.Helper()
-	p := filepath.Join(dir, fmt.Sprintf("allowed_signers_%d", len(lines)))
-	for i := 0; ; i++ {
-		if _, err := os.Lstat(p); errors.Is(err, fs.ErrNotExist) {
-			break
-		}
-		p = filepath.Join(dir, fmt.Sprintf("allowed_signers_%d_%d", len(lines), i))
-	}
-	if err := os.WriteFile(p, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return p
+	return releasefixture.WriteAllowedSigners(t, dir, lines...)
 }
 
 // keygenVerify is release.yml's verification, verbatim in form.

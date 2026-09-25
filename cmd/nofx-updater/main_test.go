@@ -9,16 +9,19 @@ import (
 	"io/fs"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"nofx/internal/installpath"
 	"nofx/internal/updaterjob"
 	"nofx/internal/updaterwire"
 	"nofx/internal/updaterwire/wireserver"
 	"nofx/internal/updaterworker"
+	"nofx/internal/updaterworker/releasefixture"
 )
 
 const testJob = "job-u4-cli0abcd"
@@ -140,8 +143,11 @@ func TestServeAndFetchRefuseUntilTheAdaptersLand(t *testing.T) {
 		})
 	}
 	newLibrary, newReverifier = notWired, updaterworker.NewReleaseReverifier
+	// fetch is wired (U4N item B) but, with no inbox configured, refuses
+	// before it reads or writes anything (TestFetchRefusesWithoutItsInputs)
+	t.Setenv(releaseInboxEnv, "")
 	rc, _, errs := runCLI(t, nil, "--install-dir", inst, "fetch", "v1.2.0")
-	if rc != 2 || !strings.Contains(errs, "not wired yet") {
+	if rc != 2 || !strings.Contains(errs, releaseInboxEnv+" is not set") {
 		t.Fatalf("fetch = %d %q", rc, errs)
 	}
 	if _, err := os.Stat(filepath.Join(data, "updater")); !os.IsNotExist(err) {
@@ -428,5 +434,187 @@ func TestASecondServeWithoutTheWorkerLockWritesNothing(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// fetchRig is a temp installation whose deploy/release_allowed_signers trusts
+// r's signer, a local inbox holding r's archive as <release_id>.tar.gz
+// (release.yml's asset name), and a release root OUTSIDE the install — the
+// three environment knobs set the way the operator sets them.
+type fetchRig struct {
+	inst, data, inbox, root string
+	r                       releasefixture.Release
+}
+
+const fetchID = "v0.0.2-u4n"
+
+var fetchSHA = strings.Repeat("d4e5f6a7", 5) // 40 lowercase hex
+
+func newFetchRig(t *testing.T) fetchRig {
+	t.Helper()
+	r := releasefixture.Build(t, fetchID, fetchSHA, releasefixture.Opts{})
+	inst, data := install(t)
+	signers, err := os.ReadFile(r.Signers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(inst, "deploy"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(updaterworker.ReleaseAllowedSignersPath(inst), signers, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	base := t.TempDir()
+	f := fetchRig{inst: inst, data: data, inbox: filepath.Join(base, "inbox"), root: filepath.Join(base, "releases"), r: r}
+	for _, d := range []string{f.inbox, f.root} {
+		if err := os.Mkdir(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	arch, err := os.ReadFile(r.Archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(f.inbox, fetchID+".tar.gz"), arch, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f.env(t, f.inbox, f.root)
+	return f
+}
+
+// env sets NOFX_RELEASE_INBOX and NOFX_RELEASE_DIR ("" unsets) and resets the
+// one release-dir resolver (a sync.Once in production).
+func (f fetchRig) env(t *testing.T, inbox, root string) {
+	t.Helper()
+	t.Setenv(releaseInboxEnv, inbox)
+	t.Setenv("NOFX_RELEASE_DIR", root)
+	installpath.ResetReleaseDirForTest()
+	t.Cleanup(installpath.ResetReleaseDirForTest)
+}
+
+// PIN (U4N item B): `nofx-updater fetch <release_id>` — the production entry —
+// verifies a REAL archive (3a's package.sh + manifest.sh, the real ssh-keygen
+// signature, tar) from the local inbox against the INSTALL's allowed-signers,
+// materializes it under NOFX_RELEASE_DIR/<source_sha>, writes the verdict
+// into the installation's data dir, and prints the release id and source sha
+// (never a key). The wired re-proof adapter then re-proves what it wrote.
+func TestFetchVerifiesALocalReleaseEndToEnd(t *testing.T) {
+	f := newFetchRig(t)
+	rc, out, errs := runCLI(t, nil, "--install-dir", f.inst, "fetch", fetchID)
+	if rc != 0 {
+		t.Fatalf("fetch = %d %q %q", rc, out, errs)
+	}
+	if !strings.Contains(out, "release "+fetchID+" verified: source "+fetchSHA+" ·") {
+		t.Fatalf("fetch printed %q; want the release id %s and source sha %s", out, fetchID, fetchSHA)
+	}
+	pub := strings.Fields(f.r.Signer.Pub)[1]
+	if strings.Contains(out+errs, pub) || strings.Contains(out+errs, "ssh-ed25519") || strings.Contains(out+errs, "PRIVATE KEY") {
+		t.Fatalf("fetch printed key material: %q %q", out, errs)
+	}
+	v, err := updaterjob.ReadVerdict(f.data, fetchID)
+	if err != nil {
+		t.Fatalf("no verdict in the installation's data dir: %v", err)
+	}
+	if v.SourceSHA != fetchSHA || v.ReleaseDir != filepath.Join(f.root, fetchSHA) || v.SignerFingerprint != f.r.FP {
+		t.Fatalf("verdict = %+v; want source %s at %s signed by %s", v, fetchSHA, filepath.Join(f.root, fetchSHA), f.r.FP)
+	}
+	tg, err := updaterworker.ResolveTarget(f.inst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rel, err := newReverifier(tg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mv, err := rel.Verdict(fetchID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, err := rel.Rehash(mv); err != nil || n != v.Artifacts {
+		t.Fatalf("re-proof Rehash = %d, %v", n, err)
+	}
+	if facts, err := rel.Reverify(mv); err != nil || facts.SourceSHA != fetchSHA || facts.AddonBuildID != releasefixture.BuildID {
+		t.Fatalf("re-proof Reverify = %+v, %v", facts, err)
+	}
+	// written once: a second fetch of the same id refuses and changes nothing
+	before, _ := os.ReadFile(filepath.Join(f.data, "updater", "verdicts", fetchID+".json"))
+	if rc, _, errs := runCLI(t, nil, "--install-dir", f.inst, "fetch", fetchID); rc == 0 || !strings.Contains(errs, "already exists") {
+		t.Fatalf("second fetch = %d %q", rc, errs)
+	}
+	if after, _ := os.ReadFile(filepath.Join(f.data, "updater", "verdicts", fetchID+".json")); !bytes.Equal(before, after) {
+		t.Fatal("a refused second fetch rewrote the verdict")
+	}
+}
+
+// PIN (U4N item B): fetch refuses — and writes NO verdict and NO release dir —
+// without its knobs (C9: a local inbox, never a network source; the release
+// root the one resolver reads), with a release root inside the install, a
+// relative knob, no trust anchor in the install (C7), no archive in the
+// inbox, or a forged release id.
+func TestFetchRefusesWithoutItsInputs(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		setup func(t *testing.T, f *fetchRig) []string // returns the fetch operands
+		want  string
+	}{
+		{"no inbox", func(t *testing.T, f *fetchRig) []string { f.env(t, "", f.root); return []string{fetchID} }, releaseInboxEnv + " is not set"},
+		{"relative inbox", func(t *testing.T, f *fetchRig) []string { f.env(t, "inbox", f.root); return []string{fetchID} }, "must be an absolute path"},
+		{"no release dir", func(t *testing.T, f *fetchRig) []string { f.env(t, f.inbox, ""); return []string{fetchID} }, "NOFX_RELEASE_DIR is not set"},
+		{"relative release dir", func(t *testing.T, f *fetchRig) []string { f.env(t, f.inbox, "releases"); return []string{fetchID} }, "must be an absolute path"},
+		{"release dir inside the install", func(t *testing.T, f *fetchRig) []string {
+			in := filepath.Join(f.inst, "releases")
+			if err := os.Mkdir(in, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			f.root = in
+			f.env(t, f.inbox, in)
+			return []string{fetchID}
+		}, "outside the install"},
+		{"no allowed-signers in the install", func(t *testing.T, f *fetchRig) []string {
+			if err := os.Remove(updaterworker.ReleaseAllowedSignersPath(f.inst)); err != nil {
+				t.Fatal(err)
+			}
+			return []string{fetchID}
+		}, "no allowed-signers file"},
+		{"no archive in the inbox", func(t *testing.T, f *fetchRig) []string {
+			if err := os.Remove(filepath.Join(f.inbox, fetchID+".tar.gz")); err != nil {
+				t.Fatal(err)
+			}
+			return []string{fetchID}
+		}, "is not a regular file"},
+		{"forged release id", func(t *testing.T, f *fetchRig) []string { return []string{"../" + fetchID} }, "invalid release id"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := newFetchRig(t)
+			ops := c.setup(t, &f)
+			rc, out, errs := runCLI(t, nil, append([]string{"--install-dir", f.inst, "fetch"}, ops...)...)
+			if rc == 0 || !strings.Contains(errs, c.want) || out != "" {
+				t.Fatalf("fetch = %d %q %q; want refused with %q", rc, out, errs, c.want)
+			}
+			if _, err := os.Lstat(filepath.Join(f.data, "updater", "verdicts", fetchID+".json")); !os.IsNotExist(err) {
+				t.Fatalf("a refused fetch left a verdict (%v)", err)
+			}
+			if ents, _ := os.ReadDir(f.root); len(ents) != 0 {
+				t.Fatalf("a refused fetch left %d entries in the release root", len(ents))
+			}
+		})
+	}
+}
+
+// PIN (U4N item B): the release fixture is TEST support — the production
+// binary's dependency graph never contains it (nor the testing package).
+func TestTheUpdaterBinaryNeverLinksTheReleaseFixture(t *testing.T) {
+	out, err := exec.Command("go", "list", "-deps", "nofx/cmd/nofx-updater").CombinedOutput()
+	if err != nil {
+		t.Fatalf("go list: %v\n%s", err, out)
+	}
+	deps := "\n" + string(out)
+	if !strings.Contains(deps, "\nnofx/internal/updaterworker\n") {
+		t.Fatalf("the dependency listing is not the updater's (no nofx/internal/updaterworker):\n%s", out)
+	}
+	for _, bad := range []string{"\nnofx/internal/updaterworker/releasefixture\n", "\ntesting\n"} {
+		if strings.Contains(deps, bad) {
+			t.Fatalf("nofx-updater links %q", strings.TrimSpace(bad))
+		}
 	}
 }

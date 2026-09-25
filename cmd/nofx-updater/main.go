@@ -12,6 +12,9 @@
 // admitted hold.go does), never mints a token (serve reads the operator's
 // NOFX_CUTOVER_TOKEN from its environment) and never runs a step itself.
 //
+// fetch is wired (U4N item B): it only verifies a LOCAL archive into the
+// release root and writes its verdict — it installs nothing.
+//
 // L4: serve REFUSES until both production adapters are wired — the release
 // re-proof is (U4N); the activation library adapter is not (see newLibrary) —
 // so today nothing here can change the installation
@@ -32,6 +35,7 @@ import (
 	"strings"
 	"syscall"
 
+	"nofx/internal/installpath"
 	"nofx/internal/updaterjob"
 	"nofx/internal/updaterwire"
 	"nofx/internal/updaterwire/wireserver"
@@ -64,6 +68,11 @@ var (
 	newLibrary    = func() (updaterworker.Library, error) { return nil, updaterworker.ErrNotWired }
 	newReverifier = updaterworker.NewReleaseReverifier
 )
+
+// releaseInboxEnv names the local inbox the owner fills with release assets
+// (`gh release download`); fetch reads <inbox>/<release_id>.tar.gz. There is
+// no network source in v1 (brief C9).
+const releaseInboxEnv = "NOFX_RELEASE_INBOX"
 
 func main() { os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)) }
 
@@ -106,8 +115,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	case "serve":
 		return serve(t, stderr)
 	case "fetch":
-		fmt.Fprintf(stderr, "nofx-updater fetch %s: not wired yet — the release fetch (U3's FetchRelease) lands at the U3 fold; refusing, nothing was written\n", operands[0])
-		return 2
+		return fetch(t, operands[0], stdout, stderr)
 	case "status":
 		if len(operands) == 0 {
 			return statusWorker(t, stdout, stderr)
@@ -193,6 +201,56 @@ func serve(t updaterworker.Target, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "nofx-updater serve:", err)
 		return 1
 	}
+}
+
+// fetch is the ATTENDED pre-fetch (brief C9): it verifies the local archive
+// <$NOFX_RELEASE_INBOX>/<release_id>.tar.gz against the INSTALL's
+// deploy/release_allowed_signers (C6/C7: absent ⇒ refused), materializes it
+// under $NOFX_RELEASE_DIR/<source_sha> (the one release-dir resolver,
+// installpath.ReleaseDir; never inside the install) and writes the verdict
+// into the installation's data dir — U3's FetchRelease does all of it, in
+// its order. No network code; nothing is written on a refusal. It prints the
+// verdict's release id and source sha, never a key.
+func fetch(t updaterworker.Target, releaseID string, stdout, stderr io.Writer) int {
+	refuse := func(format string, a ...any) int {
+		fmt.Fprintf(stderr, "nofx-updater fetch: "+format+"; nothing was written\n", a...)
+		return 2
+	}
+	if !updaterwire.ValidReleaseID(releaseID) {
+		return refuse("invalid release id %q", releaseID)
+	}
+	inbox := strings.TrimSpace(os.Getenv(releaseInboxEnv))
+	if inbox == "" {
+		return refuse("%s is not set (the local inbox holding %s.tar.gz — there is no network fetch)", releaseInboxEnv, releaseID)
+	}
+	if !filepath.IsAbs(inbox) {
+		return refuse("%s=%q must be an absolute path", releaseInboxEnv, inbox)
+	}
+	root := installpath.ReleaseDir()
+	if root == "" {
+		return refuse("NOFX_RELEASE_DIR is not set (the release root the release is materialized under)")
+	}
+	if !filepath.IsAbs(root) {
+		return refuse("NOFX_RELEASE_DIR=%q must be an absolute path", root)
+	}
+	root = filepath.Clean(root)
+	if rel, err := filepath.Rel(t.InstallDir, root); err != nil || rel == "." || !strings.HasPrefix(rel, "..") {
+		return refuse("NOFX_RELEASE_DIR=%s must be outside the install %s", root, t.InstallDir)
+	}
+	v, err := updaterworker.FetchRelease(updaterworker.FetchConfig{
+		Archive:        filepath.Join(inbox, releaseID+".tar.gz"),
+		ReleaseID:      releaseID,
+		ReleaseRoot:    root,
+		AllowedSigners: updaterworker.ReleaseAllowedSignersPath(t.InstallDir),
+		DataDir:        t.DataDir,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "nofx-updater fetch %s: refused: %v\n", releaseID, err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "release %s verified: source %s · release dir %s · verdict written to %s\n",
+		v.ReleaseID, v.SourceSHA, v.ReleaseDir, filepath.Join(t.DataDir, updaterwire.UpdaterDirName, "verdicts"))
+	return 0
 }
 
 // statusWorker asks the running worker (status with no job id).
