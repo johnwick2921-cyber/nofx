@@ -1011,14 +1011,17 @@ func waitGroupBounded(t *testing.T, wg *sync.WaitGroup, d time.Duration) {
 
 // ── S6 E→book ──────────────────────────────────────────────────────────────
 
-// S6 (WAVE 1a-plan T3): the BOOK itself holds a working entry — a raw NT8
-// order snapshot, no ledger row, no position — and the CONVERSATIONAL door
-// (agent chat → trader.OpenLong → placeEntry) must be refused by the latch's
-// BOOK leg as working_entry_or_position, the leg the other sequences reach
-// through the ledger/queue. No signal frame; the refusal names the reason.
-// (The gate-block class is one_entry_latch:working_entry_or_position, counted
-// under the wire trader's id — this fixture does not stamp one, so no counter
-// is asserted; the matrix's latch_book row pins the same leg on the wire.)
+// S6 (WAVE 1a-plan T3; skeptic F9 drives the door): the BOOK itself holds a
+// working entry — a raw NT8 order snapshot, no ledger row, no position — and
+// the CONVERSATIONAL door's PRODUCTION call site (agent chat execute_trade →
+// OpenManualEntryAt → AdmitManualEntryBracketAt → admitEntry(admitAgent) →
+// sendManualEntry → executeOpenLong → OpenWithBracket) must be refused by the
+// latch's BOOK leg as working_entry_or_position, the leg the other sequences
+// reach through the ledger/queue. No signal frame; the refusal names the
+// reason. (The gate-block class is one_entry_latch:working_entry_or_position,
+// counted under the wire trader's id — this fixture does not stamp one, so no
+// counter is asserted; the matrix's latch_book row pins the same leg on the
+// wire.)
 func TestDupS6AgentChatOpenWhileBookWorkingIsRefused(t *testing.T) {
 	w := newDupWire(t)
 	l := w.main()
@@ -1026,14 +1029,10 @@ func TestDupS6AgentChatOpenWhileBookWorkingIsRefused(t *testing.T) {
 		{OrderID: "book-working-1", Symbol: "MNQ", Action: "buy", Type: "limit", LimitPrice: 100, Quantity: 1, Filled: 0, State: "Working"},
 	}}, time.Now())
 
-	// The conversational door's own preconditions: SL/TP before placeEntry.
-	if err := l.nt.SetStopLoss("MNQ", "long", 1, 99); err != nil {
-		t.Fatal(err)
-	}
-	if err := l.nt.SetTakeProfit("MNQ", "long", 1, 106); err != nil {
-		t.Fatal(err)
-	}
-	_, err := l.nt.OpenLong("MNQ", 1, 1)
+	// The door carries its own bracket (agent/trade.go sets no SL/TP maps).
+	// Live ≈ 101.5: stop 99 (distance 2.5 ≥ the ATR floor) and target 106.5
+	// (R:R = 5.0/2.5 = 2.0, at the dup harness's 2.00 floor).
+	_, err := l.at.OpenManualEntryAt("MNQ", "open_long", 1, 1, 99, 106.5, time.Now())
 	w.expectFrames("S6 (book working)", 0)
 	if err == nil || !strings.Contains(err.Error(), "working_entry_or_position") {
 		t.Fatalf("S6: the agent-chat open must be refused by the latch BOOK leg: %v", err)

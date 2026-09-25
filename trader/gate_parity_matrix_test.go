@@ -3,6 +3,7 @@ package trader
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
@@ -31,6 +32,9 @@ import (
 //	D_picture_scenario  a Picture scenario (source picture, P1) in the plan
 //	                  → maybeManageArmedOrdersAt → runArmedPlacementAt → armAdmitted → admitEntry(arm, Source picture)
 //	D_picture_send    runArmedPlacementAt (the send point) for the P1 row → armAdmitted → admitEntry(arm, Source picture)
+//	E_agent_chat      OpenManualEntryAt (the agent chat door's production call
+//	                  site) → AdmitManualEntryBracketAt → admitEntry(agent) →
+//	                  sendManualEntry → executeOpenLong → OpenWithBracket
 //
 // W5 retired C_picture_send: Picture has no send of its own. Its order is the
 // P scenario the hand-off records, placed by the SHARED armed executor, so the
@@ -58,9 +62,13 @@ const (
 	parityC     = "C_picture"
 	parityD     = "D_picture_scenario"
 	parityDSend = "D_picture_send"
-	// parityE (WAVE 1a-plan T3) — the conversational door: agent chat
-	// execute_trade → trader.OpenLong → TCPTrader.placeEntry, judged by the
-	// SAME one-entry latch every other producer's send rides.
+	// parityE (WAVE 1a-plan T3; skeptic F9) — the conversational door's
+	// PRODUCTION call site: agent chat execute_trade → OpenManualEntryAt →
+	// AdmitManualEntryBracketAt → admitEntry(admitAgent) → sendManualEntry →
+	// executeOpenLong → the broker's OpenWithBracket (the bracket rides the
+	// entry signal — nothing is ever pre-set on the shared SL/TP maps;
+	// agent/trade.go sets neither). Judged by the same one-entry latch every
+	// producer's send rides.
 	parityE = "E_agent_chat"
 )
 
@@ -306,7 +314,10 @@ func (r *parityRig) clock() time.Time {
 
 // parityAgentChatRig is the E rig: the decision rig's wire with the one-entry
 // latch wired exactly as production wires it (wireNT8EntryLatch) and an empty,
-// fresh book seeded at link-up — the conversational door's own positive control.
+// fresh book seeded at link-up — the conversational door's own positive
+// control. A FIXED clock (parityBaseB, the arm fixture's) and a bar provider
+// supply the live price and ATR5m the agent door's bracket gate
+// (agentBracketRefusal) fails CLOSED without.
 func parityAgentChatRig(t *testing.T, id, template string) *parityRig {
 	t.Helper()
 	r := parityDecisionRig(t, id, template)
@@ -316,6 +327,11 @@ func parityAgentChatRig(t *testing.T, id, template string) *parityRig {
 	} else {
 		t.Fatal("fixture: the parity wire must carry order snapshots for the latch book")
 	}
+	r.now = parityBaseB
+	// The decision rig leaves FuturesBarsProvider nil; the agent door's bracket
+	// gate refuses "live price unknown" without one (W1b E9 fail-closed).
+	market.FuturesBarsProvider = func(string, string, int) []market.Kline { return shadowBarsNearAt(100, r.now) }
+	t.Cleanup(func() { market.FuturesBarsProvider = nil })
 	r.path = parityE
 	return r
 }
@@ -608,6 +624,15 @@ func parityTripLastEntry(r *parityRig) {
 		paritySessionOffset(r, "PM", 720)
 	case parityB, parityBSend, parityD, parityDSend:
 		paritySessionOffset(r, "TEST", 900) // TEST ends 23:59 → cutoff 08:59 CT; the clock is 10:00 CT
+	case parityE:
+		// The agent door's last-entry check is the same step as the decision
+		// path's, gated on day_plan. The E rig's store has no TEST session (the
+		// decision rig never seeds one — only shadowPlanAtTime does), so the
+		// trip installs it: the offset puts the fixed clock (10:00 CT) past
+		// the 08:59 cutoff.
+		r.at.config.StrategyConfig.DayPlan.PlanEnabled = true
+		parityWriteRegistry(r, kernel.SessionDef{Name: "TEST", WindowStartCT: "00:00", WindowEndCT: "23:59", ReadCT: "00:00", FlatCT: "23:59", Enabled: true})
+		paritySessionOffset(r, "TEST", 900)
 	default:
 		paritySessionOffset(r, kernel.SessionNY, 60) // NY ends 14:45 → cutoff 13:45 CT; the clock is 14:00 CT
 	}
@@ -684,12 +709,19 @@ func parityTable() []parityRow {
 	add(parityRow{gate: "day_plan_off", path: parityD, via: parityViaProducerHead, trip: parityTripDayPlanOff})
 	add(parityRow{gate: "day_plan_off", path: parityDSend, via: parityViaAdmit, class: "day_plan_off", trip: parityTripDayPlanOff})
 
-	// WAVE 1a-plan T3 (ADD rows only): the conversational door. The latch book
-	// row's refusal counts class one_entry_latch:working_entry_or_position under
-	// the wire trader's id (this fixture does not stamp one), so via is
-	// producer_head — no counter asserted, the refusal TEXT is.
+	// WAVE 1a-plan T3 (ADD rows only; skeptic F9 drives the door): the
+	// conversational door. The latch book row's refusal counts class
+	// one_entry_latch:working_entry_or_position under the wire trader's id
+	// (this fixture does not stamp one), so via is producer_head — no counter
+	// asserted, the refusal TEXT is.
 	add(parityRow{gate: "positive", path: parityE})
 	add(parityRow{gate: "latch_book", path: parityE, via: parityViaProducerHead, text: "working_entry_or_position", trip: parityTripLatchBook})
+	// The admitAgent path shares the decision path's gates (consecutive_loss,
+	// session_gate, plan_mode share the admitDecision || admitAgent branch);
+	// the Picture-only steps (trader_stopped, day_plan_off, cme_closed,
+	// no_trade_band, reentry_cooldown) are N/A with their reasons.
+	add(parityRow{gate: "trader_stopped", path: parityE, na: "the admission chain's trader_stopped step is Picture-only (admitChain); the agent door carries no runCycle check of its own"})
+	add(parityRow{gate: "day_plan_off", path: parityE, na: parityNADayPlanA})
 
 	// The shared system/owner gates — every path, through admitEntry.
 	shared := []struct {
@@ -705,7 +737,7 @@ func parityTable() []parityRow {
 		{"approval_required", "approval_required", "approval_required", parityTripApproval},
 	}
 	for _, g := range shared {
-		for _, p := range []string{parityA, parityB, parityBSend, parityC, parityD, parityDSend} {
+		for _, p := range []string{parityA, parityB, parityBSend, parityC, parityD, parityDSend, parityE} {
 			text := g.text
 			if p == parityB || p == parityBSend || p == parityD || p == parityDSend {
 				text = "" // armAdmitted discards the refusal text; the arm path is judged by the wire and the counter
@@ -714,15 +746,17 @@ func parityTable() []parityRow {
 		}
 	}
 
-	// maintenance_hold — admitEntry on A; an earlier hold check on B and C.
+	// maintenance_hold — admitEntry on A and E; an earlier hold check on B and C.
 	add(parityRow{gate: "maintenance_hold", path: parityA, via: parityViaAdmit, class: "maintenance_hold", text: "maintenance_hold: ", trip: parityTripHold})
+	add(parityRow{gate: "maintenance_hold", path: parityE, via: parityViaAdmit, class: "maintenance_hold", text: "maintenance_hold: ", trip: parityTripHold})
 	for _, p := range []string{parityB, parityBSend, parityD, parityDSend} {
 		add(parityRow{gate: "maintenance_hold", path: p, via: parityViaHoldPrecheck, class: "maintenance_hold", trip: parityTripHold})
 	}
 	add(parityRow{gate: "maintenance_hold", path: parityC, via: parityViaHoldPrecheck, class: "maintenance_hold", text: "maintenance hold", trip: parityTripHold})
 
-	// consecutive_loss — A: consecutiveLossHaltedAt; B/C: sessionRiskGateAt.
+	// consecutive_loss — A/E: consecutiveLossHaltedAt; B/C: sessionRiskGateAt.
 	add(parityRow{gate: "consecutive_loss", path: parityA, via: parityViaAdmit, class: "consecutive_loss", text: "consecutive_loss_halt: 1 consecutive losing trades", trip: parityTripBreaker})
+	add(parityRow{gate: "consecutive_loss", path: parityE, via: parityViaAdmit, class: "consecutive_loss", text: "consecutive_loss_halt: 1 consecutive losing trades", trip: parityTripBreaker})
 	for _, p := range []string{parityB, parityD} {
 		add(parityRow{gate: "consecutive_loss", path: p, via: parityViaPassHead, class: "consecutive_loss", trip: parityTripBreaker})
 	}
@@ -734,6 +768,7 @@ func parityTable() []parityRow {
 	// no_trade_band — the session-risk band (arm/picture).
 	lunch := 2*time.Hour + 15*time.Minute // 12:15 CT
 	add(parityRow{gate: "no_trade_band", path: parityA, na: parityNABandA})
+	add(parityRow{gate: "no_trade_band", path: parityE, na: parityNABandA})
 	for _, p := range []string{parityB, parityD} {
 		add(parityRow{gate: "no_trade_band", path: p, via: parityViaPassHead, class: "no_trade_band", offset: lunch})
 	}
@@ -746,12 +781,14 @@ func parityTable() []parityRow {
 	for _, p := range []string{parityA, parityC} {
 		add(parityRow{gate: "last_entry", path: p, via: parityViaAdmit, class: "last_entry", text: "last_entry_cutoff: past last-entry", trip: parityTripLastEntry})
 	}
+	add(parityRow{gate: "last_entry", path: parityE, via: parityViaAdmit, class: "last_entry", text: "last_entry_cutoff: past last-entry", trip: parityTripLastEntry})
 	for _, p := range []string{parityB, parityBSend, parityD, parityDSend} {
 		add(parityRow{gate: "last_entry", path: p, via: parityViaAdmit, class: "last_entry", trip: parityTripLastEntry})
 	}
 
-	// session_gate — decision only.
+	// session_gate — decision/agent only.
 	add(parityRow{gate: "session_gate", path: parityA, via: parityViaAdmit, class: "session_gate", text: "session_gate: outside all session windows", trip: parityTripSessionGate})
+	add(parityRow{gate: "session_gate", path: parityE, via: parityViaAdmit, class: "session_gate", text: "session_gate: outside all session windows", trip: parityTripSessionGate})
 	for _, p := range []string{parityB, parityBSend, parityC, parityD, parityDSend} {
 		add(parityRow{gate: "session_gate", path: p, na: parityNASessionGateBC})
 	}
@@ -760,15 +797,17 @@ func parityTable() []parityRow {
 	fridayClose := 6*time.Hour + 30*time.Minute // Friday 16:30 CT
 	saturday := 5 * 24 * time.Hour              // Monday 14:00 CT → Saturday 14:00 CT
 	add(parityRow{gate: "cme_closed", path: parityA, na: parityNACMEA})
+	add(parityRow{gate: "cme_closed", path: parityE, na: parityNACMEA})
 	for _, p := range []string{parityB, parityBSend, parityD, parityDSend} {
 		add(parityRow{gate: "cme_closed", path: p, via: parityViaAdmit, class: "cme_closed", offset: fridayClose})
 	}
 	add(parityRow{gate: "cme_closed", path: parityC, via: parityViaAdmit, class: "cme_closed", text: "cme_closed: weekend", offset: saturday})
 
-	// plan_mode — refuses on the decision path only. W5: strict no longer
+	// plan_mode — refuses on the decision/agent path only. W5: strict no longer
 	// refuses Picture — its opportunity enters as a Day Plan scenario (C
 	// admits), and that scenario is a cited, armed plan scenario (D admits).
 	add(parityRow{gate: "plan_mode", path: parityA, via: parityViaAdmit, class: "plan_mode", text: "plan_mode: no active plan (strict mode restricts to the plan)", trip: parityTripPlanMode})
+	add(parityRow{gate: "plan_mode", path: parityE, via: parityViaAdmit, class: "plan_mode", text: "plan_mode: no active plan (strict mode restricts to the plan)", trip: parityTripPlanMode})
 	add(parityRow{gate: "plan_mode", path: parityB, na: parityNAPlanModeB})
 	add(parityRow{gate: "plan_mode", path: parityBSend, na: parityNAPlanModeB})
 	add(parityRow{gate: "plan_mode", path: parityC, admits: true, trip: parityTripStrict})
@@ -777,13 +816,16 @@ func parityTable() []parityRow {
 
 	// reentry_cooldown — arm/picture only.
 	add(parityRow{gate: "reentry_cooldown", path: parityA, na: parityNAReentryA})
+	add(parityRow{gate: "reentry_cooldown", path: parityE, na: parityNAReentryA})
 	for _, p := range []string{parityB, parityBSend, parityD, parityDSend} {
 		add(parityRow{gate: "reentry_cooldown", path: p, via: parityViaAdmit, class: "reentry_cooldown", trip: parityTripReentry})
 	}
 	add(parityRow{gate: "reentry_cooldown", path: parityC, via: parityViaAdmit, class: "reentry_cooldown", text: "reentry_cooldown: stop-loss long exit", trip: parityTripReentry})
 
-	// entry_gate — A: entryGateForDecisionAt; B, D: at authoring + G1; C: pictureEntryGate.
+	// entry_gate — A/E: entryGateForDecisionAt (E: agentBracketRefusal first);
+	// B, D: at authoring + G1; C: pictureEntryGate.
 	add(parityRow{gate: "entry_gate", path: parityA, via: parityViaAdmit, class: "entry_gate", text: "entry_gate: refused: daily_force_flat — parity: daily loss limit hit (new entries blocked on the decision path", trip: parityTripForceFlat})
+	add(parityRow{gate: "entry_gate", path: parityE, via: parityViaAdmit, class: "entry_gate", text: "entry_gate: refused: daily_force_flat — parity: daily loss limit hit", trip: parityTripForceFlat})
 	for _, p := range []string{parityB, parityD} {
 		add(parityRow{gate: "entry_gate", path: p, via: parityViaG1, class: "arm_not_admitted", trip: parityTripForceFlat})
 	}
@@ -935,21 +977,24 @@ func parityDrive(r *parityRig, row parityRow, expectPass bool) parityOutcome {
 		return parityOutcome{passed: len(r.env.submits) > before, clean: res.Stage == store.PictureStagePlanned, text: res.Reason, detail: "stage=" + res.Stage + " reason=" + res.Reason}
 
 	case parityE:
-		// The conversational door: OpenLong → placeEntry → the one-entry
-		// latch → the wire. A send we expect is a signal frame; a refusal
-		// must send nothing (sentinel barrier).
+		// The conversational door's PRODUCTION call site (skeptic F9):
+		// OpenManualEntryAt → AdmitManualEntryBracketAt → admitEntry(admitAgent)
+		// → sendManualEntry → executeOpenLong → the broker's OpenWithBracket
+		// (the bracket rides the entry signal — nothing is pre-set on the
+		// shared SL/TP maps; agent/trade.go sets neither). A send we expect is
+		// a signal frame; a refusal must send nothing (sentinel barrier) and
+		// carry the gate's text in ManualEntryRefusal.Reason.
 		if row.trip != nil {
 			row.trip(r)
 		}
-		// The door's own preconditions, verbatim from the agent path:
-		// SL/TP must be set before placeEntry (agent/trade.go sets both).
-		if err := r.w.nt.SetStopLoss("MNQ", "long", 1, 90); err != nil {
-			return parityOutcome{passed: false, text: parityErr(err), detail: "sl err=" + parityErr(err)}
+		// The bracket must pass the agent door's own entry gate: live ≈
+		// 101.95 (the tape's last close), stop distance 4.70 ≥ the ATR5m floor
+		// (~3.75), R:R = (116.25−101.95)/4.70 ≈ 3.04 ≥ the 3.00 floor.
+		res, err := r.at.OpenManualEntryAt("MNQ", "open_long", 1, 1, 97.25, 116.25, r.clock())
+		var ref *ManualEntryRefusal
+		if errors.As(err, &ref) {
+			return parityOutcome{passed: sent(), clean: false, text: ref.Reason, detail: "err=" + parityErr(err)}
 		}
-		if err := r.w.nt.SetTakeProfit("MNQ", "long", 1, 110); err != nil {
-			return parityOutcome{passed: false, text: parityErr(err), detail: "tp err=" + parityErr(err)}
-		}
-		res, err := r.w.nt.OpenLong("MNQ", 1, 1)
 		clean := err == nil && res != nil
 		return parityOutcome{passed: sent(), clean: clean, text: parityErr(err), detail: "err=" + parityErr(err)}
 	}
