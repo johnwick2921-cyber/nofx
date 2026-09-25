@@ -1244,7 +1244,13 @@ func (t *TCPTrader) GetPositions() ([]map[string]interface{}, error) {
 	// reflects positions opened MANUALLY in NT8 (the AddOn emits a `positions`
 	// snapshot on select / connect / PositionUpdate).
 	acct := t.boundAccount
-	if snap, ok := t.server.PositionsFor(acct); ok {
+	if snap, received, entryAfter, ok := t.server.PositionsForExecutionReceipt(acct, t.symbol); ok &&
+		(entryAfter.IsZero() || received.After(entryAfter)) {
+		// W117 F1 — a snapshot received at-or-before the latest entry receipt
+		// is stale: an adapter replacement that forgot an entry would read the
+		// pre-entry flat snapshot as truth and double-open. Only a snapshot
+		// NEWER than the entry receipt serves as NT8 truth; otherwise fall to
+		// the fill-derived cache below (which knows the entry).
 		// NT8-truth uPnL: the account_balance frame carries the account's LIVE
 		// unrealized P&L. When exactly ONE position is open, that total IS this
 		// position's uPnL — use it (and derive the mark) so the displayed P&L
