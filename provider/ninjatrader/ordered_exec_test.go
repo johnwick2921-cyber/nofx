@@ -92,7 +92,7 @@ func TestOrderedWorkerAppliesFramesInReceiveOrder(t *testing.T) {
 			t.Fatalf("write %s: %v", f.ft, err)
 		}
 		if f.ft == FrameOrderUpdate && f.any.(OrderUpdatePayload).SignalID != "sig-3" {
-			if err := WriteFrame(w.conn, FrameOrderSnapshot, OrderSnapshotPayload{BuildID: "test", Account: "Sim101"}); err != nil {
+			if err := WriteFrame(w.conn, FrameOrderSnapshot, OrderSnapshotPayload{BuildID: "test", Account: "Sim101", Orders: []NT8Order{}}); err != nil {
 				t.Fatalf("write snapshot: %v", err)
 			}
 		}
