@@ -106,6 +106,12 @@ func TestReleaseReverifierRefuses(t *testing.T) {
 				t.Fatal(err)
 			}
 		}, reverify, ErrNoAllowedSigners},
+		// U4F defect 3: the directory holding the trust anchor must be a
+		// REAL directory — a symlinked <install>/deploy is never followed,
+		// even to a file that would verify (probe P4).
+		"the install's deploy/ is a symlink to a copy of itself": {func(t *testing.T, tg Target, v *Verdict) {
+			symlinkDeployElsewhere(t, tg.InstallDir)
+		}, reverify, ErrAllowedSignersUnsafe},
 		"the install's allowed-signers names another key": {func(t *testing.T, tg Target, v *Verdict) {
 			writeFile(t, ReleaseAllowedSignersPath(tg.InstallDir), "release "+foreign.pub+"\n")
 		}, reverify, ErrSigForeignKey},
@@ -158,5 +164,20 @@ func TestVerdictMirrorIsTheVerdictFile(t *testing.T) {
 		SignerFingerprint: "SHA256:x", HashAlg: "sha512", ManifestSHA256: strings.Repeat("a", 64), Artifacts: 3, VerifiedAt: "t"}
 	if got := mirrorVerdict(fv).file(); got != fv {
 		t.Fatalf("round trip = %+v, want %+v", got, fv)
+	}
+}
+
+// symlinkDeployElsewhere moves <install>/deploy OUT of the install and leaves a
+// symlink to it in its place: the file it points at is the same trust anchor,
+// so only a refusal of the symlinked directory can fail the re-proof.
+func symlinkDeployElsewhere(t *testing.T, installDir string) {
+	t.Helper()
+	deploy := filepath.Join(installDir, "deploy")
+	elsewhere := filepath.Join(t.TempDir(), "deploy-elsewhere")
+	if err := os.Rename(deploy, elsewhere); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(elsewhere, deploy); err != nil {
+		t.Fatal(err)
 	}
 }
