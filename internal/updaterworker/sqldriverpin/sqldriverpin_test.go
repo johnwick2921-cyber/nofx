@@ -1,13 +1,14 @@
-// Package sqldriverpin holds ONE pin, in a test-only package that links
-// NOTHING of the worker set on purpose: the failure it guards is an init-time
+// Package sqldriverpin holds the D4 pins, in a test-only package that links
+// NOTHING of the worker set on purpose: the failure they guard is an init-time
 // panic ("sql: Register called twice for driver sqlite"), and a pin living in
 // a test binary that links the worker set would die of that panic before it
 // could say which binary links which two drivers. From here the toolchain is
-// asked, and the answer names them.
+// asked (and the real binary is built and run), and the answer names them.
 package sqldriverpin_test
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -72,20 +73,10 @@ func TestNoBinaryLinkingTheWorkerSetRegistersADuplicateSQLDriver(t *testing.T) {
 	}
 }
 
-// goList runs the toolchain that built this test (GOTOOLCHAIN=local, offline,
-// read-only go.mod — the census environment of internal/censuswalk) and
-// returns the import paths it prints.
+// goList runs `go <args>` (goCommand) and returns the import paths it prints.
 func goList(t *testing.T, root string, args ...string) map[string]bool {
 	t.Helper()
-	bin := filepath.Join(runtime.GOROOT(), "bin", "go")
-	env := append(os.Environ(), "GOPROXY=off", "GOFLAGS=-mod=readonly", "GOWORK=off")
-	if _, err := os.Stat(bin); err == nil {
-		env = append(env, "GOTOOLCHAIN=local")
-	} else {
-		bin = "go"
-	}
-	cmd := exec.Command(bin, args...)
-	cmd.Dir, cmd.Env = root, env
+	cmd := goCommand(root, args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -99,4 +90,60 @@ func goList(t *testing.T, root string, args ...string) map[string]bool {
 		}
 	}
 	return deps
+}
+
+// PIN (D4, the build smoke): the nofx-updater binary, built exactly as an
+// operator builds it (go build -o <dir>/nofx-updater ./cmd/nofx-updater), gets
+// through init and answers its no-argument usage: exit 2, the usage line on
+// stderr, nothing on stdout, no panic. No argument means run() prints the
+// usage BEFORE it resolves an install, reads an env or opens anything — the
+// run touches nothing (cmd/nofx-updater/main.go run: len(rest) == 0).
+func TestUpdaterBinaryInitsWithoutPanic(t *testing.T) {
+	root, err := filepath.Abs("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(t.TempDir(), "nofx-updater")
+	goBuild(t, root, "build", "-o", bin, "./cmd/nofx-updater")
+	cmd := exec.Command(bin)
+	cmd.Dir = t.TempDir()
+	cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + t.TempDir()} // no token, no install, no inherited knobs
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	err = cmd.Run()
+	var ee *exec.ExitError
+	code := 0
+	if errors.As(err, &ee) {
+		code = ee.ExitCode()
+	} else if err != nil {
+		t.Fatalf("running %s: %v", bin, err)
+	}
+	const usage = "usage: nofx-updater [--install-dir d] serve | fetch <release_id> | status [<job>] | resume <job> | recovery <job>\n"
+	if strings.Contains(stderr.String(), "panic:") || code != 2 || stderr.String() != usage || stdout.Len() != 0 {
+		t.Fatalf("the built nofx-updater did not init cleanly: exit %d\nstdout %q\nstderr:\n%s", code, stdout.String(), stderr.String())
+	}
+}
+
+// goBuild runs the go command in the census environment and fails on an error.
+func goBuild(t *testing.T, root string, args ...string) {
+	t.Helper()
+	if out, err := goCommand(root, args...).CombinedOutput(); err != nil {
+		t.Fatalf("go %s: %v\n%s", strings.Join(args, " "), err, out)
+	}
+}
+
+// goCommand is the toolchain that built this test (GOTOOLCHAIN=local), else
+// the go on PATH, offline with a read-only go.mod — internal/censuswalk's
+// census environment (its goCommand is unexported).
+func goCommand(root string, args ...string) *exec.Cmd {
+	bin := filepath.Join(runtime.GOROOT(), "bin", "go")
+	env := append(os.Environ(), "GOPROXY=off", "GOFLAGS=-mod=readonly", "GOWORK=off")
+	if _, err := os.Stat(bin); err == nil {
+		env = append(env, "GOTOOLCHAIN=local")
+	} else {
+		bin = "go"
+	}
+	cmd := exec.Command(bin, args...)
+	cmd.Dir, cmd.Env = root, env
+	return cmd
 }
