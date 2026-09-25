@@ -73,7 +73,11 @@ func RecoveryText(j updaterjob.Job, t Target) string {
 			// a nanosecond timestamp), never deleted — it is the evidence —
 			// and mv -T refuses to move it INTO an existing directory, so a
 			// repeat run can never nest the live dist in an earlier leftover
-			// (U4 re-verify note 7, TestRecoveryRestoreIsSafeToRunTwice).
+			// (U4 re-verify note 7, TestRecoveryRestoreIsSafeToRunTwice). The
+			// SECOND mv's -T is the same guard for a <dist> re-created between
+			// the two moves: it refuses rather than nest the snapshot copy in
+			// it (U4F verify note 1,
+			// TestRecoveryRestoreRefusesADistRecreatedBetweenTheTwoMoves).
 			p("     rm -rf %s.recovery.tmp && cp -a %s %s.recovery.tmp && mv -T %s %s.failed.%s.$(date +%%Y%%m%%dT%%H%%M%%S.%%N) && mv -T %s.recovery.tmp %s",
 				in.Dist, s.Dist, in.Dist, in.Dist, in.Dist, j.JobID, in.Dist, in.Dist)
 			// A crash BETWEEN the two mv's leaves no live dist; a re-run then
