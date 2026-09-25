@@ -946,6 +946,18 @@ func TestReadVerdictRefusesWhatFetchNeverWrites(t *testing.T) {
 		}, false},
 		"release_dir is relative":             {editField("release_dir", testSHA), false},
 		"signer_fingerprint is only a prefix": {editField("signer_fingerprint", "SHA256:"), false},
+		// CTO ruling 1790279155144 (2): the file at <id>.json names ANOTHER
+		// release id — a verdict that is complete and in range (Check passes;
+		// the fixture proves it), so only ReadVerdict's id comparison
+		// (verdict.go "v.ReleaseID != releaseID") can refuse it.
+		"the verdict names another release id": {func(t *testing.T, e fetchEnv, raw []byte) []byte {
+			b := editField("release_id", "v0.0.2-u3")(t, e, raw)
+			var v updaterjob.Verdict
+			if err := json.Unmarshal(b, &v); err != nil || v.Check() != nil || v.ReleaseID == testReleaseID {
+				t.Fatalf("fixture: the re-named verdict must be complete and name another id: %+v, %v, Check=%v", v, err, v.Check())
+			}
+			return b
+		}, false},
 	} {
 		t.Run(name, func(t *testing.T) {
 			e := newFetchEnv(t)
