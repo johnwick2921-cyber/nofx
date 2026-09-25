@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"net"
 	"net/http"
@@ -119,6 +120,7 @@ func (s *Server) configureUpdater() {
 	}
 	s.updaterOn = true
 	s.updateVerifier = verdictVerifier{}
+	s.updateStart = socketStarter
 	logger.Infof("📦 updater glue: on · verifier=%s · worker=%s", updateVerifierName(s.updateVerifier), probeUpdaterWorker(trader.MaintenanceDataDir()))
 }
 
@@ -142,6 +144,44 @@ func (verdictVerifier) VerifiedManifest(releaseID string) (updateauth.Manifest, 
 		return updateauth.Manifest{}, updateauth.ErrNoVerifiedManifest
 	}
 	return updateauth.Manifest{ReleaseID: v.ReleaseID}, nil
+}
+
+// socketStarter (knob ON) hands a fully authorized, verified install to the
+// worker over its unix socket — the API never runs a step itself. It sends
+// exactly install{release_id, job_id} and accepts only:
+//   - OK with state "requested" (the worker wrote the job file), or
+//   - a re-send: OK with the job's OWN state, where the job file (read with
+//     updaterjob.Read) exists, names THIS release and holds that very
+//     non-terminal state.
+//
+// Anything else — no socket, a refusal, a different state — is an error and
+// so M3's 503. The error never carries the grant (only ids and the worker's
+// validated error text).
+func socketStarter(g updateauth.Grant, _ updateauth.Manifest) error {
+	dataDir := trader.MaintenanceDataDir()
+	c, err := updaterwire.DialWorker(dataDir)
+	if err != nil {
+		return fmt.Errorf("updater worker unreachable (job %s): %w", g.JobID, err)
+	}
+	defer c.Close()
+	resp, err := c.Do(updaterwire.NewInstall(g.ReleaseID, g.JobID))
+	if err != nil {
+		return fmt.Errorf("updater worker install (job %s): %w", g.JobID, err)
+	}
+	if !resp.OK {
+		return fmt.Errorf("updater worker refused job %s: %s", g.JobID, resp.Error)
+	}
+	if resp.State == string(updaterjob.StateRequested) {
+		return nil
+	}
+	j, err := updaterjob.Read(dataDir, g.JobID)
+	if err != nil {
+		return fmt.Errorf("updater worker answered state %q for job %s and its job file does not read: %w", resp.State, g.JobID, err)
+	}
+	if j.ReleaseID != g.ReleaseID || string(j.State) != resp.State || updaterjob.IsTerminal(j.State) {
+		return fmt.Errorf("updater worker answered state %q for job %s; its job file holds %s for release %q", resp.State, g.JobID, j.State, j.ReleaseID)
+	}
+	return nil
 }
 
 // probeUpdaterWorker dials the worker socket and hangs up without a frame
