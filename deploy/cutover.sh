@@ -94,6 +94,27 @@ OLD_SHORT="${OLD_SHA:0:12}"
 RELEASES="${NOFX_RELEASE_DIR:-$INSTALL/releases}"
 say "current: rev=$OLD_SHORT  releases → $RELEASES"
 
+# --- reconcile OLD_SHA with what is ACTUALLY running -------------------------
+# The disk binary alone is not the running build: a crashed staging leaves a
+# never-proven file on disk while the old process keeps serving. Reconcile the
+# way back against BOTH /api/health (the running process's own revision) and
+# the RELEASE marker. A mismatch, or neither consultable, refuses the cutover.
+HEALTH_REV="$(curl -s --max-time 5 http://127.0.0.1:8080/api/health 2>/dev/null \
+  | sed -n 's/.*"revision"[[:space:]]*:[[:space:]]*"\([0-9a-fA-F]*\)".*/\1/p' | tr 'A-F' 'a-f')"
+RELEASE_REV="$(tr -d '[:space:]' < "$INSTALL/RELEASE" 2>/dev/null | tr 'A-F' 'a-f')"
+rev12() { v="$1"; if [ ${#v} -ge 12 ]; then printf '%s' "${v:0:12}"; else printf '%s' "$v"; fi; }
+OLD12="$(rev12 "$OLD_SHA")"
+if [ -n "$HEALTH_REV" ] && [ "$(rev12 "$HEALTH_REV")" != "$OLD12" ]; then
+  die "OLD_SHA mismatch: disk=$OLD_SHORT but the RUNNING process reports $(rev12 "$HEALTH_REV") via /api/health — refusing a cutover whose way back is not the running build"
+fi
+if [ -n "$RELEASE_REV" ] && [ "$(rev12 "$RELEASE_REV")" != "$OLD12" ]; then
+  die "OLD_SHA mismatch: disk=$OLD_SHORT but $INSTALL/RELEASE says $(rev12 "$RELEASE_REV") — refusing a cutover whose way back is not what the marker names"
+fi
+if [ -z "$HEALTH_REV" ] && [ -z "$RELEASE_REV" ]; then
+  die "cannot reconcile OLD_SHA=$OLD_SHORT — neither /api/health nor $INSTALL/RELEASE answered; refusing a cutover with no proof of what is running"
+fi
+say "current reconciled: disk=$OLD_SHORT health=$(rev12 "${HEALTH_REV:-}") release=$(rev12 "${RELEASE_REV:-}")"
+
 # --- THE FLAT GATE (class 33) -------------------------------------------------
 # Nothing is touched until every leg passes. An unevaluable leg is a FAILURE.
 # The token comes from the environment and is never echoed, never logged, and
