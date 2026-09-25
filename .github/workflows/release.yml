@@ -24,6 +24,10 @@ on:
       tag:
         description: 'existing tag to release'
         required: true
+      rollback_from:
+        description: 'optional 40-hex sha of the last released commit to prove rollback against (default: previous v* tag)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -53,20 +57,31 @@ jobs:
       - name: Prove each rollback pair
         id: pairs
         env:
-          # First pair, per the dispatch. Add pairs here as they are proven.
-          PAIRS: '0e490e44:662c79bd'
+          # The pair is DERIVED, never authored: new = the tag being released
+          # (read from refs/tags), old = the last released sha (a 40-hex
+          # ROLLBACK_FROM input, else the highest v* tag below it). Unprovable
+          # ⇒ [] — an uncomputed pair is absent, never fabricated (canon 49/53).
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          ROLLBACK_FROM: ${{ github.event.inputs.rollback_from }}
         run: |
           set -uo pipefail
           sudo apt-get install -y -q sqlite3 >/dev/null 2>&1 || true
-          out='['; sep=''
-          for pair in $PAIRS; do
-            old="${pair%%:*}"; new="${pair##*:}"
-            if bash deploy/release/db-compat.sh "$old" "$new"; then tested=true; else tested=false; fi
-            out="${out}${sep}{\"to_release\":\"${old}\",\"tested\":${tested}}"; sep=','
-          done
-          out="${out}]"
-          echo "json=$out" >> "$GITHUB_OUTPUT"
-          echo "$out"
+          TAG="${TAG:-${GITHUB_REF_NAME:-}}"
+          NEW="$(git rev-parse "refs/tags/${TAG}^{}" 2>/dev/null || true)"
+          printf '%s' "$NEW" | grep -Eqx '[0-9a-f]{40}' || NEW=""
+          OLD="${ROLLBACK_FROM:-}"
+          printf '%s' "$OLD" | grep -Eqx '[0-9a-f]{40}' || OLD=""
+          if [ -z "$OLD" ]; then
+            OLD="$(git for-each-ref --sort=-v:refname --format='%(refname:short) %(objectname)' 'refs/tags/v*' | awk -v cur="$TAG" -v new="$NEW" '$1 != cur && $2 != new { print $2; exit }')"
+          fi
+          if [ -z "$NEW" ] || [ -z "$OLD" ]; then
+            echo '[]'
+            echo 'json=[]' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if bash deploy/release/db-compat.sh "$OLD" "$NEW"; then tested=true; else tested=false; fi
+          echo "[{\"to_release\":\"${OLD}\",\"tested\":${tested}}]"
+          echo "json=[{\"to_release\":\"${OLD}\",\"tested\":${tested}}]" >> "$GITHUB_OUTPUT"
 
   release:
     needs: [dbcompat]
@@ -83,6 +98,11 @@ jobs:
 
       - name: Resolve the source sha (40 hex, READ)
         id: src
+        env:
+          # The tag input is USER-INFLUENCED: it rides env:, where bash reads
+          # it as DATA. Spliced raw into a run: body it would execute beside
+          # the signing key (PR B [11]).
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
           SHA="$(git rev-parse HEAD)"
@@ -92,7 +112,7 @@ jobs:
           # from, not the tag — 'gh release create dev --verify-tag' would be
           # the result. Take the input when dispatched, and refuse anything
           # that is not a v-tag either way.
-          REL_ID="${{ github.event.inputs.tag }}"
+          REL_ID="${TAG:-${GITHUB_REF_NAME}}"
           [ -n "$REL_ID" ] || REL_ID="${GITHUB_REF_NAME}"
           case "$REL_ID" in v*) : ;; *) echo "REFUSED: release id '$REL_ID' is not a v* tag"; exit 1 ;; esac
           echo "release_id=$REL_ID" >> "$GITHUB_OUTPUT"
@@ -167,6 +187,9 @@ jobs:
           # rollback. A pair it could not prove is carried as tested:false —
           # never omitted silently and never asserted true (R2).
           ROLLBACK_PAIRS: ${{ needs.dbcompat.outputs.rollback_pairs }}
+          # user-influenced value (the tag) travels via env:, never spliced
+          # into the run body (PR B [11]).
+          RELEASE_ID: ${{ steps.src.outputs.release_id }}
         run: |
           set -euo pipefail
           # WRITE OUTSIDE THE STAGE, MOVE IN AFTER ENUMERATION.
@@ -176,7 +199,7 @@ jobs:
           # refuses (correctly: an entry carrying the sha256 of the empty
           # string matches nothing that ships). Every tag failed on a guard
           # that was right. The guard stays; the caller is the bug.
-          bash deploy/release/manifest.sh /tmp/stage "${{ steps.src.outputs.sha }}" "${{ steps.src.outputs.release_id }}" > /tmp/manifest.json
+          bash deploy/release/manifest.sh /tmp/stage "${{ steps.src.outputs.sha }}" "$RELEASE_ID" > /tmp/manifest.json
           python3 -c "import json,sys; json.load(open('/tmp/manifest.json'))"
           mv /tmp/manifest.json /tmp/stage/manifest.json
 
@@ -190,6 +213,10 @@ jobs:
           # requires, and a 0644 key file is refused outright.
           printf '%s\n' "$RELEASE_SIGNING_KEY" > /tmp/sign.key
           chmod 600 /tmp/sign.key
+          # A FAILED sign must never leave the key on the runner: the trap
+          # shreds it on every exit path (set -e included), not just the
+          # success line below (PR B [30]).
+          trap 'shred -u /tmp/sign.key 2>/dev/null || true' EXIT
           ssh-keygen -Y sign -f /tmp/sign.key -n release /tmp/stage/manifest.json
           shred -u /tmp/sign.key
           # Verify with the COMMITTED public key, so a signature that the
@@ -199,18 +226,25 @@ jobs:
             -s /tmp/stage/manifest.json.sig < /tmp/stage/manifest.json
 
       - name: Archive, then scan the ARCHIVE too
+        env:
+          # user-influenced value (the tag) travels via env:, never spliced
+          # into the run body (PR B [11]).
+          RELEASE_ID: ${{ steps.src.outputs.release_id }}
         run: |
           set -euo pipefail
-          tar -C /tmp/stage -czf "/tmp/${{ steps.src.outputs.release_id }}.tar.gz" .
-          mkdir -p /tmp/verify && tar -C /tmp/verify -xzf "/tmp/${{ steps.src.outputs.release_id }}.tar.gz"
+          tar -C /tmp/stage -czf "/tmp/${RELEASE_ID}.tar.gz" .
+          mkdir -p /tmp/verify && tar -C /tmp/verify -xzf "/tmp/${RELEASE_ID}.tar.gz"
           bash deploy/release/secret-scan.sh /tmp/verify
 
       - name: Upload to the release
         env:
+          # user-influenced value (the tag) travels via env:, never spliced
+          # into the run body (PR B [11]).
+          RELEASE_ID: ${{ steps.src.outputs.release_id }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release create "${{ steps.src.outputs.release_id }}" \
+          gh release create "$RELEASE_ID" \
             --repo "$RELEASE_REPO" --verify-tag --notes-file docs/superpowers/plans/2026-09-22-one-button-m4-design-notes.md \
-            "/tmp/${{ steps.src.outputs.release_id }}.tar.gz" \
+            "/tmp/${RELEASE_ID}.tar.gz" \
             /tmp/stage/manifest.json /tmp/stage/manifest.json.sig
