@@ -4,12 +4,14 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"nofx/auth"
 	"nofx/config"
 	"nofx/internal/updateauth"
+	"nofx/internal/updaterwire"
 	"nofx/logger"
 	"nofx/trader"
 
@@ -78,6 +80,53 @@ func (s *Server) SetUpdateVerifier(v updateauth.Verifier) {
 
 // SetUpdateStarter installs the M4 worker hand-off. nil = none (503).
 func (s *Server) SetUpdateStarter(f UpdateStarter) { s.updateStart = f }
+
+// ── W-ONE-BUTTON M4 3b-B U5b — the updater glue knob ────────────────────
+//
+// NOFX_UPDATER=1 (exactly "1"; anything else, or unset, is OFF) wires the
+// M4 worker behind the M3 routes. OFF is M3 byte for byte — the stub
+// verifier, no starter, the job routes' literal 404 before any filesystem
+// access, and no boot line (TestUpdatesKnobOffIsByteIdentical pins M3's
+// bytes as literals).
+const updaterKnobEnv = "NOFX_UPDATER"
+
+// updateVerifierName is the name the boot line READS off the verifier the
+// server holds (never a literal the line asserts about itself).
+func updateVerifierName(v updateauth.Verifier) string {
+	switch v.(type) {
+	case updateauth.StubVerifier:
+		return "stub"
+	case nil:
+		return "n/a"
+	}
+	return "n/a"
+}
+
+// configureUpdater reads the knob ONCE, at NewServer (main sets the data
+// dir first: main.go SetMaintenanceDataDir precedes api.NewServer). OFF:
+// nothing — no field set, no line. ON: the glue is wired and ONE line is
+// printed whose every value is read: the verifier's name off the verifier
+// the server now holds, and "dial ok" only when the worker socket actually
+// dialled (a worker is started by hand, attended — not dialling at boot is
+// not knowing yet, so n/a, never "down").
+func (s *Server) configureUpdater() {
+	if os.Getenv(updaterKnobEnv) != "1" {
+		return
+	}
+	s.updaterOn = true
+	logger.Infof("📦 updater glue: on · verifier=%s · worker=%s", updateVerifierName(s.updateVerifier), probeUpdaterWorker(trader.MaintenanceDataDir()))
+}
+
+// probeUpdaterWorker dials the worker socket and hangs up without a frame
+// (the listener treats a frameless close as a clean EOF).
+func probeUpdaterWorker(dataDir string) string {
+	c, err := updaterwire.DialWorker(dataDir)
+	if err != nil {
+		return "n/a"
+	}
+	_ = c.Close()
+	return "dial ok"
+}
 
 func (s *Server) updatesClock() time.Time {
 	if s.updatesNow != nil {
