@@ -594,7 +594,7 @@ func BuildPlannerPrompt(in PlannerInput) string {
 		if in.GeometryRefIDs {
 			EnsureReferenceLevelIDs(candidates)
 		}
-		mb := RenderIdentityMapBlock(candidates, in.Price)
+		mb := RenderIdentityMapBlockContract(candidates, in.Price, in.PlannerContractOn)
 		if in.Zones != nil {
 			mb = RenderScoredReferenceBlock(candidates, in.Price)
 		}
