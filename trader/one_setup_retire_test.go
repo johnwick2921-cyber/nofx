@@ -8,6 +8,7 @@ import (
 
 	"nofx/kernel"
 	"nofx/market"
+	ntwire "nofx/provider/ninjatrader"
 	"nofx/store"
 )
 
@@ -179,58 +180,98 @@ func TestUnknownOneSetupVerdictCannotPlaceOldAuthorization(t *testing.T) {
 		}
 	})
 
-	t.Run("retirement write fails", func(t *testing.T) {
-		now := time.Date(2026, time.September, 11, 15, 0, 0, 0, time.UTC)
-		cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}}
-		cfg.RiskControl.MinRiskRewardRatio = 2
-		structuralTestPolicy(&cfg, .5)
-		at, st, sigs, _ := shadowWireHarnessAt(t, cfg, now)
-		live := kernel.PlanDoc{Bias: kernel.PlanBias{Direction: "long", Conviction: "low", FlipCondition: "n/a"},
-			Levels: []kernel.PlanLevel{{Price: 100, Label: "PDL", Grade: "A", Instruction: "fade"}, {Price: 92, Label: "SWG-L", Grade: "B", Instruction: "fade"}},
-			Scenarios: []kernel.PlanScenario{
-				{ID: "S1", Trigger: "t", Condition: "reject", Direction: "long", TargetChain: []float64{110}, Invalid: "i", Quality: "B",
-					Confirm: &kernel.PlanConfirm{Rule: "touch", RefPrice: 100, Side: "above"},
-					Arm:     &kernel.PlanArmSpec{Enabled: true, Entry: 100, Stop: 95, Target: 110}},
-				{ID: "S2", Trigger: "t", Condition: "reject", Direction: "long", TargetChain: []float64{120}, Invalid: "i", Quality: "B",
-					Confirm: &kernel.PlanConfirm{Rule: "touch", RefPrice: 92, Side: "above"},
-					Arm:     &kernel.PlanArmSpec{Enabled: true, Entry: 92, Stop: 87, Target: 104}},
-			},
-			NoTrade: []string{}, DeathCondition: "n/a",
-		}
-		structuralTestMap(&live, structuralTestZone{100, 95.5, 100, "PDL"}, structuralTestZone{92, 87.5, 92, "SWG-L"}, structuralTestZone{110, 110, 111, "target"})
-		blob, _ := json.Marshal(live)
-		pid := shadowPlanAtTime(t, at, st, string(blob), now)
-		for _, r := range []store.ArmedOrderDB{
-			{TraderID: at.id, PlanID: pid, Version: 1, Session: "X", Scenario: "S1", Side: "long", EntryPx: 100, StopPx: 95, TargetPx: 110, State: store.StateArmed, BootID: "999-old"},
-			{TraderID: at.id, PlanID: pid, Version: 1, Session: "X", Scenario: "S2", Side: "long", EntryPx: 92, StopPx: 87, TargetPx: 104, State: store.StateArmed, BootID: "999-old"},
-		} {
-			row := r
-			if err := st.ArmedOrders().UpsertArm(&row); err != nil {
+	t.Run("retirement write fails: positive control places without the trigger", func(t *testing.T) {
+		at, st, sigs, pid, now := f13RetireWriteFixture(t, false)
+		// POSITIVE CONTROL (CTO F13-verify): identical setup WITHOUT the abort
+		// trigger — the allowed S2 arm MUST reach the wire, so the negative case
+		// below cannot pass vacuously on a fixture where nothing places.
+		at.maybeManageArmedOrdersAt(nil, now)
+		select {
+		case sig := <-sigs:
+			if sig.LimitPrice != 100 || sig.TakeProfit != 110 {
+				t.Fatalf("positive control placed the wrong arm: %+v", sig)
+			}
+		case <-time.After(time.Second):
+			var rows []store.ArmedOrderDB
+			if err := st.GormDB().Where("plan_id = ?", pid).Find(&rows).Error; err != nil {
 				t.Fatal(err)
 			}
+			t.Fatalf("positive control: S2 must place when the retire pass can write; rows=%+v", rows)
 		}
-		// The declined row's retirement write ABORTS: today the pass continues
-		// and the allowed row still places — the defect F13 exists for.
+	})
+
+	t.Run("retirement write fails", func(t *testing.T) {
+		at, _, sigs, _, now := f13RetireWriteFixture(t, true)
+		buf := captureTraderLog(t)
+		at.maybeManageArmedOrdersAt(nil, now)
+		select {
+		case sig := <-sigs:
+			t.Fatalf("a placement reached the wire while the retire pass could not write: %+v", sig)
+		case <-time.After(300 * time.Millisecond):
+		}
+		// The pass must surface the retirement failure — today the whole pass
+		// refuses and logs it; either F13 mutant (error swallowed, or the pass
+		// ignoring the error) must fail this assertion AND the one above.
+		if !strings.Contains(buf.String(), "one setup retirement unavailable") {
+			t.Fatalf("the pass must log the retirement failure; got logs:\n%s", buf.String())
+		}
+	})
+
+}
+
+// f13RetireWriteFixture builds the shared F13 error-path fixture: S1 (allowed,
+// pre-boot armed, at the BEST level PDL@100 — the one-setup cycle only
+// admits the best level) and S2 (declined, pre-boot armed, level_not_best
+// SWG-L@92) in one plan. withTrigger installs the fail_unknown_retire
+// SQLite trigger that makes the DECLINED row's retirement write ABORT.
+// Geometry identical to TestOneSetupDeclinedPreBootAuthorizationRetired-
+// NeverPlaced (S1 places there, MinRR 2).
+func f13RetireWriteFixture(t *testing.T, withTrigger bool) (*AutoTrader, *store.Store, chan ntwire.SignalPayload, string, time.Time) {
+	t.Helper()
+	now := time.Date(2026, time.September, 11, 15, 0, 0, 0, time.UTC)
+	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}}
+	cfg.RiskControl.MinRiskRewardRatio = 2
+	structuralTestPolicy(&cfg, .5)
+	at, st, sigs, _ := shadowWireHarnessAt(t, cfg, now)
+	live := kernel.PlanDoc{Bias: kernel.PlanBias{Direction: "long", Conviction: "low", FlipCondition: "n/a"},
+		Levels: []kernel.PlanLevel{{Price: 100, Label: "PDL", Grade: "A", Instruction: "fade"}, {Price: 92, Label: "SWG-L", Grade: "B", Instruction: "fade"}},
+		Scenarios: []kernel.PlanScenario{
+			{ID: "S1", Trigger: "t", Condition: "reject", Direction: "long", TargetChain: []float64{110}, Invalid: "i", Quality: "B",
+				Confirm: &kernel.PlanConfirm{Rule: "touch", RefPrice: 100, Side: "above"},
+				Arm:     &kernel.PlanArmSpec{Enabled: true, Entry: 100, Stop: 95, Target: 110}},
+			{ID: "S2", Trigger: "t", Condition: "reject", Direction: "long", TargetChain: []float64{120}, Invalid: "i", Quality: "B",
+				Confirm: &kernel.PlanConfirm{Rule: "touch", RefPrice: 92, Side: "above"},
+				Arm:     &kernel.PlanArmSpec{Enabled: true, Entry: 92, Stop: 87, Target: 104}},
+		},
+		NoTrade: []string{}, DeathCondition: "n/a",
+	}
+	structuralTestMap(&live, structuralTestZone{100, 95.5, 100, "PDL"}, structuralTestZone{92, 87.5, 92, "SWG-L"}, structuralTestZone{110, 110, 111, "target"})
+	blob, _ := json.Marshal(live)
+	pid := shadowPlanAtTime(t, at, st, string(blob), now)
+	for _, r := range []store.ArmedOrderDB{
+		{TraderID: at.id, PlanID: pid, Version: 1, Session: "X", Scenario: "S1", Side: "long", EntryPx: 100, StopPx: 95, TargetPx: 110, State: store.StateArmed, BootID: "999-old"},
+		{TraderID: at.id, PlanID: pid, Version: 1, Session: "X", Scenario: "S2", Side: "long", EntryPx: 92, StopPx: 87, TargetPx: 104, State: store.StateArmed, BootID: "999-old"},
+	} {
+		row := r
+		if err := st.ArmedOrders().UpsertArm(&row); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if withTrigger {
+		// The declined row's retirement write ABORTS — the F13 error path.
 		if err := st.GormDB().Exec("CREATE TRIGGER fail_unknown_retire BEFORE UPDATE OF state ON armed_orders WHEN NEW.state = 'cancelled' BEGIN SELECT RAISE(ABORT, 'fixture'); END").Error; err != nil {
 			t.Fatal(err)
 		}
-		at.oneSetupFactsForTest = func(now time.Time) oneSetupTestFacts {
-			a, b := *structuralTestIdentity(100, "PDL").ID, *structuralTestIdentity(92, "SWG-L").ID
-			return oneSetupTestFacts{Price: 100, BandPts: 50, Candidates: []kernel.MapCandidate{
-				{ID: &a, Identity: kernel.PlanLevel{ID: &a, Price: 100}, Price: 100, Names: []string{"PDL"}, Grade: "A", Distance: 0},
-				{ID: &b, Identity: kernel.PlanLevel{ID: &b, Price: 92}, Price: 92, Names: []string{"SWG-L"}, Grade: "B", Distance: -8},
-			}, Permission: map[string]kernel.FadeVerdict{"S1": {Evaluated: true, Permitted: false}, "S2": {Evaluated: true, Permitted: true}}}
-		}
-		prev := market.FuturesBarsProvider
-		market.FuturesBarsProvider = func(string, string, int) []market.Kline { return shadowBarsNearAt(100, now) }
-		t.Cleanup(func() { market.FuturesBarsProvider = prev })
-
-		at.maybeManageArmedOrdersAt(nil, now)
-
-		select {
-		case s := <-sigs:
-			t.Fatalf("a placement reached the wire while the retire pass could not write: %+v", s)
-		case <-time.After(300 * time.Millisecond):
-		}
-	})
+	}
+	at.oneSetupFactsForTest = func(now time.Time) oneSetupTestFacts {
+		a, b := *structuralTestIdentity(100, "PDL").ID, *structuralTestIdentity(92, "SWG-L").ID
+		return oneSetupTestFacts{Price: 100, BandPts: 50, Candidates: []kernel.MapCandidate{
+			{ID: &a, Identity: kernel.PlanLevel{ID: &a, Price: 100}, Price: 100, Names: []string{"PDL"}, Grade: "A", Distance: 0},
+			{ID: &b, Identity: kernel.PlanLevel{ID: &b, Price: 92}, Price: 92, Names: []string{"SWG-L"}, Grade: "B", Distance: -8},
+		}, Permission: map[string]kernel.FadeVerdict{"S1": {Evaluated: true, Permitted: true}, "S2": {Evaluated: true, Permitted: false}}}
+	}
+	prev := market.FuturesBarsProvider
+	market.FuturesBarsProvider = func(string, string, int) []market.Kline { return shadowBarsNearAt(100, now) }
+	t.Cleanup(func() { market.FuturesBarsProvider = prev })
+	return at, st, sigs, pid, now
 }
