@@ -439,6 +439,12 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 			row.EvalPrice, row.EvalBarMs, row.PlacedAtMs = nil, nil, nil
 			row.FilledAtMs, row.FillSlippageTicks = nil, nil
 			row.LastVerdict, row.LastVerdictMs = "", nil
+			// F23 (port of #117 12b2b33c): this successor is a NEW
+			// authorization by THIS process — stamp the boot and the armed-under
+			// version before the early create, or the row reads as an orphan of
+			// a dead process.
+			row.BootID = ProcessBootID()
+			row.ArmedUnderVersion = row.Version
 			return s.db.Create(row).Error
 		}
 		if existing.State == "armed" {
@@ -724,6 +730,31 @@ func (s *ArmedOrderStore) ApplyPlacementReceipt(traderID, signalID, state, reaso
 	return q.Updates(map[string]any{"state": state, "state_reason": reasonKeepingWithdraw(reason)}).Error
 }
 
+// ResetToArmedUnplaced (WAVE PLANNER B1) returns a row whose resting order
+// was cancelled by the zone rest cap to armed-unplaced: state=armed, the
+// placement stamp cleared (signal_id, eval_price, eval_bar_ms, placed_at_ms)
+// and placement_seq+1 — the next broker placement is a NEW seq under the D5
+// append-only rule. The wire cancel is the CALLER's, sent BEFORE this write;
+// until the broker's book confirms it the placement slot guard refuses, so a
+// re-place cannot double-book the old order.
+func (s *ArmedOrderStore) ResetToArmedUnplaced(id int64, reason string) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	return s.db.Model(&ArmedOrderDB{}).Where("id = ?", id).Updates(map[string]any{
+		"state":                  StateArmed,
+		"state_reason":           reasonKeepingWithdraw(reason),
+		"signal_id":              "",
+		"eval_price":             nil,
+		"eval_bar_ms":            nil,
+		"placed_at_ms":           nil,
+		"placement_seq":          gorm.Expr("placement_seq + 1"),
+		"cancel_requested_at_ms": 0,
+		"cancel_attempts":        0,
+		"cancel_attempts_boot":   "",
+	}).Error
+}
+
 // RequestCancel moves a row to cancel_pending and records that a cancel was
 // SENT. It never writes 'cancelled': that word now means the broker's book
 // stopped listing the order, and only ConfirmCancel may say it.
@@ -761,15 +792,40 @@ func (s *ArmedOrderStore) RequestCancel(id int64, reason string, nowMs int64) er
 // ConfirmCancel is the ONLY way a row becomes 'cancelled' through the cancel
 // path, and it requires the id of the snapshot whose book no longer listed the
 // order. A caller with no snapshot cannot call it — which is the point.
+//
+// F8 (port of #117 234b0262): a confirmation is not a write — it is a state
+// transition with broker evidence. No persisted snapshot id refuses; a row that
+// is not cancel_pending refuses; an unavailable store is an error, never a
+// silent success; and the transition is a transaction, so a row that changed
+// under the caller is refused, not overwritten.
 func (s *ArmedOrderStore) ConfirmCancel(id int64, snapshotID int64, reason string) error {
 	if s == nil || s.db == nil {
-		return nil
+		return fmt.Errorf("armed order store unavailable")
 	}
-	return s.db.Model(&ArmedOrderDB{}).Where("id = ?", id).Updates(map[string]any{
-		"state":                      StateCancelled,
-		"state_reason":               reasonKeepingWithdraw(reason),
-		"cancel_settled_snapshot_id": snapshotID,
-	}).Error
+	if snapshotID <= 0 {
+		return fmt.Errorf("cancel confirmation requires a persisted snapshot id")
+	}
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var row ArmedOrderDB
+		if err := tx.First(&row, id).Error; err != nil {
+			return err
+		}
+		if row.State != StateCancelPending {
+			return fmt.Errorf("arm %d is %s, not cancel_pending", id, row.State)
+		}
+		res := tx.Model(&ArmedOrderDB{}).Where("id = ? AND state = ?", id, StateCancelPending).Updates(map[string]any{
+			"state":                      StateCancelled,
+			"state_reason":               reasonKeepingWithdraw(reason),
+			"cancel_settled_snapshot_id": snapshotID,
+		})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected != 1 {
+			return fmt.Errorf("arm %d changed during cancel confirmation", id)
+		}
+		return nil
+	})
 }
 
 // ListCancelPending returns this trader's rows awaiting confirmation, oldest

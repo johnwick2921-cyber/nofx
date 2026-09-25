@@ -17,6 +17,11 @@ export const status: GuideSection = {
       kind: 'p',
       text: 'Overview shows Market Chart beside Account Equity on wide screens and stacks them on narrow screens. The futures Planner, including Desk, follows both charts. Switching to Decisions hides Overview without unmounting Planner: its polling and local state continue. Entry, Mark and Value remain available in the horizontally scrollable position table on phones. The mobile market selector uses the same market choices as the desktop pills. While the first Desk read is pending, DESK shows Loading; this is not a claim that any fact is current. The Desk toggle announces whether the rows are expanded or collapsed.',
     },
+    { kind: 'h', text: 'Open-order chart truth' },
+    {
+      kind: 'p',
+      text: "On the market chart, the open-order price-line strip is trader-bound: the dashboard's selected account is not applied to that endpoint, and the strip says so. A failed or malformed open-order refresh is UNKNOWN — the previous lines are retained and marked stale with the snapshot timestamp — never silently cleared as zero orders. Only a successful, validated snapshot may clear or repaint the lines, and a confirmed empty snapshot shows 0 orders. Changing symbol, interval, or account discards the pending snapshot and waits for a fresh one.",
+    },
     { kind: 'h', text: 'Research snapshot recorder' },
     {
       kind: 'p',
@@ -84,7 +89,7 @@ export const status: GuideSection = {
     { kind: 'h', text: 'The update hold (maintenance)' },
     {
       kind: 'p',
-      text: "When an update is about to replace the bot or the NinjaTrader AddOn, it first puts the whole installation on HOLD. The hold is one file (data/updater/hold.json). While it is present, no NEW entry is sent from anywhere: the AI's opens, armed orders, Picture HTF entries and new planner reads are all refused, and the NinjaTrader AddOn refuses new entries too. Everything that protects or closes a position keeps working: stops, targets, breakeven and trailing moves, cancels and closes. An arm that could not be placed stays armed and places once the hold clears. A Picture HTF opportunity seen during the hold is refused for good, because its entry window is only seconds long. A file that exists but cannot be read counts as held.",
+      text: "When an update is about to replace the bot or the NinjaTrader AddOn, it first puts the whole installation on HOLD. The hold is one file (data/updater/hold.json). While it is present, no NEW entry is sent from anywhere: the AI's opens, armed orders, Picture HTF entries and new planner reads are all refused, and the NinjaTrader AddOn refuses new entries too. Everything that protects or closes a position keeps working: stops, targets, breakeven and trailing moves, cancels and closes. An arm that could not be placed stays armed and places once the hold clears. A Picture HTF opportunity seen during the hold is refused for good, because its entry window is short (360s by default). A file that exists but cannot be read counts as held.",
     },
     {
       kind: 'p',
@@ -121,23 +126,23 @@ export const status: GuideSection = {
     { kind: 'h', text: 'What happens when the bot updates itself' },
     {
       kind: 'p',
-      text: "An update is performed as a sequence of steps, and each one hands back a receipt saying what it actually did — not what it intended to do. The receipt records the values the step READ: the revision stamped into the new program, the checksum of the file, whether the database copy opened. If a step refuses, it still gives you its receipt, because the moment a step fails is the moment you most need to know what it saw.",
+      text: 'An update is performed as a sequence of steps, and each one hands back a receipt saying what it actually did — not what it intended to do. The receipt records the values the step READ: the revision stamped into the new program, the checksum of the file, whether the database copy opened. If a step refuses, it still gives you its receipt, because the moment a step fails is the moment you most need to know what it saw.',
     },
     {
       kind: 'p',
-      text: "Nothing is swapped until the new program has been proven to BE the version it claims. If it carries no build stamp at all, the refusal says so and tells you the cause — a program built in the wrong kind of folder carries no stamp, and that is a different problem from having the wrong program. Two different causes never share one message, because a message that names the wrong cause sends you to fix something that is not broken.",
+      text: 'Nothing is swapped until the new program has been proven to BE the version it claims. If it carries no build stamp at all, the refusal says so and tells you the cause — a program built in the wrong kind of folder carries no stamp, and that is a different problem from having the wrong program. Two different causes never share one message, because a message that names the wrong cause sends you to fix something that is not broken.',
     },
     {
       kind: 'p',
-      text: "Then the database is copied while the bot is still running, and the copy is OPENED and checked before the update continues. A backup nobody has opened is just a file, and the moment you need it is the worst possible moment to discover that. Only after that do the three pieces of an installation move together — the program, the screens you are reading now, and the marker that records which version is live. All three or none: an update that swapped only the program would leave these screens describing a different build than the one taking your trades.",
+      text: 'Then the database is copied while the bot is still running, and the copy is OPENED and checked before the update continues. A backup nobody has opened is just a file, and the moment you need it is the worst possible moment to discover that. Only after that do the three pieces of an installation move together — the program, the screens you are reading now, and the marker that records which version is live. All three or none: an update that swapped only the program would leave these screens describing a different build than the one taking your trades.',
     },
     {
       kind: 'p',
-      text: "Restarting is deliberate about WHICH program it stops. It identifies the running bot by more than its process number, because numbers get reused, and stopping the wrong thing because it inherited a number is exactly the accident worth preventing. If it cannot confirm the bot is still the one it measured, it refuses and changes nothing.",
+      text: 'Restarting is deliberate about WHICH program it stops. It identifies the running bot by more than its process number, because numbers get reused, and stopping the wrong thing because it inherited a number is exactly the accident worth preventing. If it cannot confirm the bot is still the one it measured, it refuses and changes nothing.',
     },
     {
       kind: 'p',
-      text: "Afterwards the new version has to prove itself twice: it must write a fresh start-up line NEWER than the restart, and it must report the expected version when asked directly. An old line from a previous start does not count — that line was written by a program that is no longer running and says nothing about the one that is. If either proof is missing, the update rolls back to the previous version and then proves THAT one came back, rather than assuming it did.",
+      text: 'Afterwards the new version has to prove itself twice: it must write a fresh start-up line NEWER than the restart, and it must report the expected version when asked directly. An old line from a previous start does not count — that line was written by a program that is no longer running and says nothing about the one that is. If either proof is missing, the update rolls back to the previous version and then proves THAT one came back, rather than assuming it did.',
     },
     { kind: 'h', text: 'One entry at a time (the entry latch)' },
     {

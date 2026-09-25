@@ -373,6 +373,9 @@ func (w *dupWire) link(at *AutoTrader) *dupLink {
 	s := ntwire.NewTCPServer(nil)
 	s.SetAddrForTest("127.0.0.1:0")
 	s.SetAccountsList([]ntwire.AccountInfo{{Name: "Sim101", IsSim: true}}, "Sim101")
+	// W117-F F7: the bound account's balance frame must be present, exactly as
+	// the live AddOn streams it on connect — GetBalance refuses without one.
+	s.SeedAccountBalanceForTest("Sim101", ntwire.AccountBalancePayload{Account: "Sim101", NetLiquidation: 100000, CashValue: 100000, BuyingPower: 100000})
 	ctx, cancel := context.WithCancel(context.Background())
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -1011,5 +1014,48 @@ func waitGroupBounded(t *testing.T, wg *sync.WaitGroup, d time.Duration) {
 	case <-done:
 	case <-time.After(d):
 		t.Fatalf("the racing producers did not return within %s", d)
+	}
+}
+
+// ── S6 E→book ──────────────────────────────────────────────────────────────
+
+// S6 (WAVE 1a-plan T3; skeptic F9 drives the door): the BOOK itself holds a
+// working entry — a raw NT8 order snapshot, no ledger row, no position — and
+// the CONVERSATIONAL door's PRODUCTION call site (agent chat execute_trade →
+// OpenManualEntryAt → AdmitManualEntryBracketAt → admitEntry(admitAgent) →
+// sendManualEntry → executeOpenLong → OpenWithBracket) must be refused by the
+// latch's BOOK leg as working_entry_or_position, the leg the other sequences
+// reach through the ledger/queue. No signal frame; the refusal names the
+// reason. (The gate-block class is one_entry_latch:working_entry_or_position,
+// counted under the wire trader's id — this fixture does not stamp one, so no
+// counter is asserted; the matrix's latch_book row pins the same leg on the
+// wire.)
+func TestDupS6AgentChatOpenWhileBookWorkingIsRefused(t *testing.T) {
+	w := newDupWire(t)
+	l := w.main()
+	// Fixed mid-session CT instant — never the wall clock: between the TEST
+	// session's last-entry cutoff (23:44 CT) and midnight the entry gates
+	// refuse on the cutoff and this pin fails for the WRONG reason (CI 23:59 CT
+	// job 107948875422).
+	now := time.Date(2026, 9, 24, 10, 0, 0, 0, kernel.CTLocation())
+	// The latch's freshness clock must be the SAME fixed instant, or the book
+	// stamp above reads 14h stale against the wall clock and the latch refuses
+	// on book age instead of the BOOK leg this test pins.
+	l.nt.SetEntryLatchSource(&ntTrader.EntryLatchSource{
+		Book:    l.at.entryLatchBook,
+		Ledgers: l.at.entryLatchLedgers,
+		Now:     func() time.Time { return now },
+	})
+	l.s.OrderSnapshots().PutAt(ntwire.OrderSnapshotPayload{Account: "Sim101", Orders: []ntwire.NT8Order{
+		{OrderID: "book-working-1", Symbol: "MNQ", Action: "buy", Type: "limit", LimitPrice: 100, Quantity: 1, Filled: 0, State: "Working"},
+	}}, now)
+
+	// The door carries its own bracket (agent/trade.go sets no SL/TP maps).
+	// Live ≈ 101.5: stop 99 (distance 2.5 ≥ the ATR floor) and target 106.5
+	// (R:R = 5.0/2.5 = 2.0, at the dup harness's 2.00 floor).
+	_, err := l.at.OpenManualEntryAt("MNQ", "open_long", 1, 1, 99, 106.5, now)
+	w.expectFrames("S6 (book working)", 0)
+	if err == nil || !strings.Contains(err.Error(), "working_entry_or_position") {
+		t.Fatalf("S6: the agent-chat open must be refused by the latch BOOK leg: %v", err)
 	}
 }
