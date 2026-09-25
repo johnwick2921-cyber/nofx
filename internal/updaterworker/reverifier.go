@@ -21,6 +21,7 @@ package updaterworker
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"nofx/internal/updaterjob"
@@ -65,6 +66,18 @@ func (r releaseReverifier) Verdict(releaseID string) (Verdict, error) {
 		vpath, perr := updaterjob.VerdictPath(r.dataDir, releaseID)
 		if perr != nil {
 			return Verdict{}, fmt.Errorf("%w: the verdict for %s names the release dir %s, not %s under the current NOFX_RELEASE_DIR (and its path: %w)", ErrReleaseRoot, releaseID, v.ReleaseDir, want, perr)
+		}
+		// d1 (U4G defect 1): when the moved-TO directory ALREADY EXISTS (the
+		// operator moved the directory, not just the knob), the re-fetch step
+		// refuses "release directory already exists" — ordering the rm first
+		// would leave the operator with no verdict AND an unusable release.
+		// The text must therefore name the move-aside case BEFORE the rm, or
+		// point out that not moving the directory at all keeps the verdict
+		// valid.
+		if _, werr := os.Lstat(want); werr == nil {
+			return Verdict{}, fmt.Errorf("%w: the verdict for %s names the release dir %s, not %s under the current NOFX_RELEASE_DIR, and %s ALREADY EXISTS — "+
+				"to use this release there: (1) move %s aside first (mv it elsewhere), or do not move the release directory at all (this verdict is still valid where it is); (2) then remove the old verdict by hand: rm %s (3) and re-fetch it: nofx-updater --install-dir %s fetch %s",
+				ErrReleaseRoot, releaseID, v.ReleaseDir, want, want, want, vpath, r.installDir, releaseID)
 		}
 		return Verdict{}, fmt.Errorf("%w: the verdict for %s names the release dir %s, not %s under the current NOFX_RELEASE_DIR — "+
 			"to use this release there: (1) remove the old verdict by hand: rm %s (2) then re-fetch it: nofx-updater --install-dir %s fetch %s",

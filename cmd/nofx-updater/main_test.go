@@ -711,6 +711,47 @@ func TestAVerdictIsReprovedOnlyUnderTheCurrentReleaseRoot(t *testing.T) {
 	}
 }
 
+// PIN (U4G defect 1): when the moved-TO release directory ALREADY EXISTS (the
+// operator moved the DIRECTORY, not just the knob), the old text's first step
+// deleted the verdict and its second step then refused "release directory
+// already exists" — the operator was left with no verdict and an unusable
+// release. The text must name the move-aside case BEFORE the rm (or say the
+// directory need not move at all).
+func TestAMovedReleaseDirectoryRefusalOrdersMoveAsideBeforeTheRm(t *testing.T) {
+	f := newFetchRig(t)
+	if rc, out, errs := runCLI(t, nil, "--install-dir", f.inst, "fetch", fetchID); rc != 0 {
+		t.Fatalf("fetch into A = %d %q %q", rc, out, errs)
+	}
+	tg, err := updaterworker.ResolveTarget(f.inst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := t.TempDir()
+	b := filepath.Join(base, "root-b")
+	// MOVE the release root directory itself, so <want> = B/<sha> now exists.
+	if out, err := exec.Command("mv", f.root, b).CombinedOutput(); err != nil {
+		t.Fatalf("mv %s %s: %v %s", f.root, b, err, out)
+	}
+	f.env(t, f.inbox, b)
+	rel, err := newReverifier(tg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = rel.Verdict(fetchID)
+	if err == nil {
+		t.Fatal("Verdict under the moved directory was accepted")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "ALREADY EXISTS") {
+		t.Fatalf("the refusal must name the existing moved-to dir:\n%s", msg)
+	}
+	moveAside := strings.Index(msg, "move ")
+	rmAt := strings.Index(msg, "rm ")
+	if moveAside < 0 || rmAt < moveAside {
+		t.Fatalf("the move-aside case must come BEFORE the rm (move at %d, rm at %d):\n%s", moveAside, rmAt, msg)
+	}
+}
+
 // PIN (U4F verify note 2): the refusal after the operator moved
 // NOFX_RELEASE_DIR names BOTH steps — remove the old verdict by hand (a
 // re-fetch alone refuses: the verdict is written once), then re-fetch — as
