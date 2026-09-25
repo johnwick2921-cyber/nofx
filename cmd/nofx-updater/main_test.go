@@ -418,6 +418,54 @@ func TestServeRefusesABackupRootInsideTheInstall(t *testing.T) {
 			}
 		})
 	}
+	// U4F verify note 4 (probe B): a DANGLING symlink among the not-yet-created
+	// elements is not plain text to append — it would pass as "outside" while
+	// pointing into the install — so every unresolved element is Lstat'ed and
+	// a symlink there refuses (dangling into the install, dangling anywhere,
+	// a loop, and one deeper under the not-yet-created rest).
+	tmp := t.TempDir()
+	for name, mk := range map[string]func() string{
+		"HOME a dangling symlink to <install>/h": func() string {
+			l := filepath.Join(tmp, "dangle")
+			if err := os.Symlink(filepath.Join(inst, "h"), l); err != nil {
+				t.Fatal(err)
+			}
+			return l
+		},
+		"HOME a dangling symlink to nowhere": func() string {
+			l := filepath.Join(tmp, "nowhere")
+			if err := os.Symlink(filepath.Join(tmp, "no", "such", "dir"), l); err != nil {
+				t.Fatal(err)
+			}
+			return l
+		},
+		"HOME a symlink loop": func() string {
+			l := filepath.Join(tmp, "loop")
+			if err := os.Symlink(l, l); err != nil {
+				t.Fatal(err)
+			}
+			return l
+		},
+		"HOME below a dangling symlink to <install>/h": func() string {
+			l := filepath.Join(tmp, "dangle2")
+			if err := os.Symlink(filepath.Join(inst, "h2"), l); err != nil {
+				t.Fatal(err)
+			}
+			return filepath.Join(l, "deeper")
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			home := mk()
+			t.Setenv("HOME", home)
+			rc, out, errs := runCLI(t, nil, "--install-dir", inst, "serve")
+			if rc != 2 || !strings.Contains(errs, "cannot be checked against the install") || out != "" {
+				t.Fatalf("serve with HOME=%s = %d %q %q; want refused: the backup root cannot be checked against the install", home, rc, out, errs)
+			}
+			if _, err := os.Stat(filepath.Join(data, "updater")); !os.IsNotExist(err) {
+				t.Fatalf("a refused serve created %s (%v)", filepath.Join(data, "updater"), err)
+			}
+		})
+	}
 }
 
 type syncBuffer struct {
