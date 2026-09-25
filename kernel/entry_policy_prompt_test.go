@@ -11,9 +11,14 @@ import (
 // builder; trader/auto_trader_planner.go fills the three PlannerInput fields
 // from the store resolvers).
 
-// LEGACY byte-identity: "legacy" renders the pre-W3 prompt exactly — the
-// golden is the knob_prune planner prompt as it stood at the W3 base
-// (e74fce17), copied before any W3 prompt edit.
+// LEGACY byte-identity: "legacy" renders the pre-W3 prompt byte-identically
+// EXCEPT the F6 path_levels contract fix (a6a47385) — the golden is the
+// knob_prune planner prompt as it stood at the W3 base (e74fce17), re-blessed
+// only on F6's two lines: line 49 (the scenario schema example gains F6's
+// anchor-rule insert: sweep_level_id states the two legs are TWO DIFFERENT
+// levels) and line 57 (the Rules line's path_levels example moves from the
+// price-less {level, role} shape to the priced {price, level, level_id} shape
+// the obstacle-chain validator reads). Every other line is the W3 base.
 func TestW3PlannerPromptLegacyPolicyByteIdentical(t *testing.T) {
 	want, err := os.ReadFile("testdata/knob_prune/planner_prompt_legacy_policy.txt")
 	if err != nil {
@@ -21,7 +26,7 @@ func TestW3PlannerPromptLegacyPolicyByteIdentical(t *testing.T) {
 	}
 	got := BuildPlannerPrompt(PlannerInput{MaxLevels: 8, ScenarioCap: 3, EntryPolicyDefault: EntryPolicyDefaultLegacy})
 	if got != string(want) {
-		t.Fatalf("entry_policy_default=legacy must render the pre-W3 prompt byte-identically:\n%s", firstDiff(string(want), got))
+		t.Fatalf("entry_policy_default=legacy must render byte-identically to pre-W3 except the F6 path_levels contract fix (a6a47385, lines 49 + 57):\n%s", firstDiff(string(want), got))
 	}
 }
 
@@ -85,7 +90,7 @@ func TestW3PlannerPromptMarketInZoneDeletesTheOldLaw(t *testing.T) {
 func TestW3PlannerPromptPlannedOrderIsLegacyPlusOneSentence(t *testing.T) {
 	legacy := BuildPlannerPrompt(PlannerInput{MaxLevels: 8, ScenarioCap: 3, EntryPolicyDefault: EntryPolicyDefaultLegacy})
 	po := BuildPlannerPrompt(PlannerInput{MaxLevels: 8, ScenarioCap: 3, EntryPolicyDefault: EntryPolicyPlannedOrder})
-	sentence := resolvePromptEntryPolicy(EntryPolicyPlannedOrder, 0, 0).entryPolicySentence()
+	sentence := resolvePromptEntryPolicy(EntryPolicyPlannedOrder, 0, 0, nil, nil).entryPolicySentence()
 	if sentence == "" || strings.Count(po, sentence) != 1 {
 		t.Fatalf("planned_order must render its sentence once")
 	}
@@ -118,10 +123,29 @@ func TestW3EntryPolicyRowHasTeeth(t *testing.T) {
 	if err := ValidatePromptContracts(legacy + " " + EntryPolicyPromptMarker); err == nil {
 		t.Fatal("the marker without the market_in_zone law must fail the class-38 guard")
 	}
-	miz := plannerOutputContractFor(8, 3, true, true, true, resolvePromptEntryPolicy(EntryPolicyMarketInZone, 0, 0))
+	miz := plannerOutputContractFor(8, 3, true, true, true, resolvePromptEntryPolicy(EntryPolicyMarketInZone, 0, 0, nil, nil), false)
 	for _, frag := range []string{"the zone must contain arm.entry", "an armed time_hold holds at least", "entry_mode=pullback or entry_mode=immediate"} {
 		if err := ValidatePromptContracts(strings.ReplaceAll(miz, frag, "")); err == nil {
 			t.Errorf("dropping %q from the market_in_zone prompt must fail the guard", frag)
 		}
+	}
+}
+
+// TestArmableLineUsesResolvedMaps (WAVE 1a-plan P3, #189 (c)) — with nil maps
+// the armable line renders the shipped defaults; with a RESOLVED demotion the
+// line must name the strategy's own status, never the file default.
+func TestArmableLineUsesResolvedMaps(t *testing.T) {
+	demoted := map[string]string{"reject": ConditionShadow}
+	ep := resolvePromptEntryPolicy(EntryPolicyPlannedOrder, 0, 0, demoted, nil)
+	contract := plannerOutputContractFor(8, 3, false, false, true, ep, false)
+	if !strings.Contains(contract, "acceptance") {
+		t.Fatal("the armable line must still name every condition under planned_order")
+	}
+	// The demotion must be VISIBLE: the shadowed condition is named but marked
+	// shadowed, and a second call with nil maps renders differently.
+	epNil := resolvePromptEntryPolicy(EntryPolicyPlannedOrder, 0, 0, nil, nil)
+	contractNil := plannerOutputContractFor(8, 3, false, false, true, epNil, false)
+	if contract == contractNil {
+		t.Fatal("the resolved demotion must change the armable line (the nil call is the pre-P3 render)")
 	}
 }

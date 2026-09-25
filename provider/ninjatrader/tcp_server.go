@@ -1751,7 +1751,7 @@ func (s *TCPServer) drainBarIngest(ctx context.Context) {
 					staleLiveFrames.Add(1)
 					if n := staleLiveFrames.Load(); n%100 == 1 {
 						s.logger.Warn("picture-htf: bar_update frame refused as a live entry event — too old; cached, not traded",
-							"max_age_ms", liveFrameMaxAgeMs, "refused_total", n, "symbol", msg.symbol, "timeframe", msg.timeframe)
+							"max_age_ms", LiveFrameMaxAgeMs, "refused_total", n, "symbol", msg.symbol, "timeframe", msg.timeframe)
 					}
 				} else {
 					fanOutLiveBars(msg.symbol, msg.timeframe, msg.contract, msg.bars)
@@ -1761,10 +1761,11 @@ func (s *TCPServer) drainBarIngest(ctx context.Context) {
 			// its own goroutine: a slow/failing DB must never stall the drain
 			// (backpressure invariant) or the socket read loop.
 			//
-			// Live bar_update frames carry ONLY the forming bar (NT8 does not
-			// re-emit the just-closed bar at the boundary), so live candidates
-			// come from the cache tail — the cache always holds the final
-			// closed bars. Historical replays persist from the frame batch.
+			// The AddOn DOES re-emit the just-closed bar at the boundary
+			// (VLBarsSubscriptionManager.cs:539-551) and the cache finalises it,
+			// so live candidates come from the cache tail — the cache always
+			// holds the final closed bars. Historical replays persist from the
+			// frame batch.
 			var persistBars []Bar
 			if msg.historical {
 				persistBars = ClosedBarsOnly(msg.bars, msg.timeframe, time.Now().UnixMilli())
@@ -2177,8 +2178,8 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			}
 			s.histSubMu.RLock()
 			ch, ok := s.historyDataSubs[strings.TrimSpace(p.RequestID)]
-			s.histSubMu.RUnlock()
 			if !ok {
+				s.histSubMu.RUnlock()
 				s.logger.Warn("tcp_server: bars_history_data for unknown request id — dropped",
 					"request_id", p.RequestID, "contract", p.Contract, "bars", len(p.Bars))
 				continue
@@ -2189,6 +2190,10 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 				s.logger.Warn("tcp_server: bars_history_data channel full — chunk dropped (importer too slow)",
 					"request_id", p.RequestID, "contract", p.Contract)
 			}
+			// F11 (port of #117 2f4db4f3): teardown closes the channel under the
+			// WRITE lock — hold the read lock through the nonblocking send so the
+			// channel cannot close between lookup and delivery.
+			s.histSubMu.RUnlock()
 
 		case FrameBarsHistoryError:
 			var p BarsHistoryErrorPayload
@@ -2198,8 +2203,8 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			}
 			s.histSubMu.RLock()
 			ch, ok := s.historyErrSubs[strings.TrimSpace(p.RequestID)]
-			s.histSubMu.RUnlock()
 			if !ok {
+				s.histSubMu.RUnlock()
 				s.logger.Warn("tcp_server: bars_history_error for unknown request id — dropped",
 					"request_id", p.RequestID, "contract", p.Contract, "reason", p.Reason)
 				continue
@@ -2208,6 +2213,9 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			case ch <- p:
 			default:
 			}
+			// F11: same lock-hold as the data branch — teardown closes under the
+			// write lock, so the send must stay inside the read lock.
+			s.histSubMu.RUnlock()
 
 		case FrameBarUpdate:
 			// Plan 4.4 Stage 2 — streaming updates. The bars array may

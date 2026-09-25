@@ -10,7 +10,7 @@ in CLAUDE.md).
 
 ## PART 1 — THE BUG CLASSES (name · root cause · probe · law)
 
-Highest occupied class: **268** (2026-09-24). Numbers are assigned AT MERGE and
+*Highest occupied class: **268** (2026-09-24). Numbers are assigned AT MERGE and
 never renumbered; a gap means a wave took a later slot to avoid a collision.*
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
@@ -6725,6 +6725,7 @@ state keyed by a shared id, cleared by a bare Delete (second instance)" below.
 
 **Probe:** for every id a writer mints, find every table keyed on it and ask whether the key's scope (per version, per plan, per chain) is the mint's scope. A key wider than its mint lets two things share one row.
 
+
 ## CLASS 217 — a UI state not backed by an API field
 
 **Found:** 2026-09-24, W-ONE-BUTTON M5 build [A]. The Updates page vocabulary
@@ -7049,7 +7050,6 @@ At HEAD `c4111476` (FOLD-3 + FOLD-10) the NT8 decision path is: `executeOpen*Wit
 **KNOWN LIMIT, named rather than left implied [A]:** with that loopback bind, compose's published `8080:8080` forwards to the container's `eth0`, which the API never answers — so a `docker compose` deployment is DEAD ON ARRIVAL until the owner opts in with `API_SERVER_HOST=0.0.0.0` inside the container, where the container network is the security boundary (`config/config.go:134-140`). This check therefore proves the backend BOOTS and SERVES ON LOOPBACK; it does NOT prove the published port works, and nothing in this repo currently does [B]. Setting that variable is a security-posture decision and belongs to the owner, not to a CI fix.
 
 **Probe:** for every workflow in `.github/workflows/`, name what triggers it and when it last ran GREEN — `gh run list --workflow=<file>` answers both in one line. A workflow with no green run in its history is broken or vestigial; decide which and act, rather than leaving a red name that everyone learns to ignore. Treat "this check has always been red" as a finding, never as context.
-
 ## CLASS 252 — a single-use ledger that forgets by wall clock re-admits a spent id after a clock step-back
 
 **Found:** 2026-09-24 00:46 CT, M3 triage of the stop-snapshot red-team probes (`0c0253db`) [A]. The red team's `TestRT_ClockRollbackAfterPruneReopensReplay` and `TestRTA_ClockRollbackAfterPruneReplaysThroughTheRouter` (in the `ef03e033` wip(STOP)) were kept RED behind `NOFX_M3_OPEN_FINDINGS=1` as `TestConsumeRefusesAReplayAfterAClockRollbackPastRetention` and `TestInstallReplayRefusedAfterAClockStepBackPastRetention`.
@@ -7485,6 +7485,22 @@ bot.go:263:51: b.userID — in a closure built by (*botIdentity).refresh
 
 **Instance 2026-09-24 PR #200 review F6:** a credential epoch in the FUTURE (a clock step-back after a password change) refuses every new sign-in until the clock passes it. That stays fail-closed, and the refusal now says so: "credential epoch is Ns in the future — clock stepped back; sign-in refused until then". The bound is the size of the step. It is pinned at the production router for authMiddleware and, through a gorm hook between the two reads, for the credential guard (`53bc9734`, `fc17a1c9`). The /updates gate's Q8 line has no clock note (a follow-up).
 
+## CLASS 265 — a repair outcome recorded after the bookkeeping that rewrites its reason
+
+**Found:** 2026-09-24, WAVE 1a-plan P9 (issue #190) [A]. `plannerRejectBookkeeping` unconditionally rewrites `*prevReason` to THIS attempt's defect. The repair-outcome line's `"was repairing: %s"` field means the defect the repair was AIMED at — the PREVIOUS attempt's reason (CLASS 38 F6; the W2 A1/A2 site captures `repairing := prevReason` BEFORE bookkeeping at :2340/:2346). P9 re-ordered the fragment and parse sites to record AFTER bookkeeping, so the field repeated this attempt's defect (the FragmentReason, twice) and the diagnosis was lost; this class then codified that inversion. Reversed 2026-09-24 by skeptic F5: both sites capture the reason BEFORE bookkeeping and pass that to `recordRepairOutcome`.
+
+**Fixed:** fragment + parse sites record the pre-bookkeeping reason, mirroring the untouched W2 A1/A2 site. Pinned: `TestRepairWasRepairingNamesThePreviousDefect` (attempt 1 rejected with a known defect, the attempt-2 repair returns a fragment; the line must quote attempt 1's defect — RED with the record-after-bookkeeping order, the P9 inversion) plus `TestPlannerRejectBookkeepingRewritesPrevReason` for the rewrite itself.
+
+**Probe:** when a function takes a pointer it rewrites (`*prevReason`), grep its call sites for consumers of the same variable on either side of the call. A consumer upstream of the writer reads the OLD value; one downstream reads the NEW — the order is part of the contract, not an implementation detail. The order is only "line-read" until a pin drives the call site.
+
+## CLASS 266 — a pin that asserts a recorded event which the fixture never produces
+
+**Found:** 2026-09-24, WAVE 1a-plan P7 [A]. The first `TestZoneAcceptedIdentitySkipsHeuristicDisagreement` fixture built a scenario whose `ReferenceLevelID` never resolved against `IdentityLevels` (the derived reference id needs the identity fields the fixture's `PlanLevel` did not carry). `observeScenarioIdentity` therefore recorded NOTHING, the pin asserted "count == 0", and neutering BOTH predicate branches of `zoneAcceptedIdentity` still left it green — RED could not fire. The pin certified an empty path, not the fix.
+
+**Fixed:** the pin was rebuilt on the E1 fixture (real map candidates → `IdentityLevelsFromCandidates` → a control row that MUST record 1 disagreement with the same levels and anchor, then FVG + seated-Demand rows that MUST record 0). RED: neutering the predicate fails the two zone rows while the control keeps passing.
+
+**Probe:** for every pin that asserts a zero or absence, run a control row that asserts the SAME path produces a nonzero (or a presence) with the fix removed. A pin whose RED is not demonstrated at least once is a comment, not a test.
+
 ## CLASS 267 — a proof whose evidence the system never emits in the form the proof expects
 
 **Found:** 2026-09-24, WAVE 3b-A, by the read-only live evidence the dispatch required — not by any test [A]. `activation.Watch` proves an activation with two legs: a boot line written after the restart, and `/api/health` reporting the new revision. Both compared against the release's FULL 40-hex sha. The live box emits neither in that form:
@@ -7513,6 +7529,36 @@ That is the shape worth naming: a dry run proves the steps it REACHES. Code afte
 **Fixed in 3b-A:** the parse moved into `internal/activation` and reads from the LAST `)` in the line, pinned by a test whose comm is literally `(nofx bin (x))`. `deploy/cutover.sh` v7 delegates rather than carrying its own copy, so the attended boot and the unattended worker share one implementation and one test suite.
 
 **Probe:** for every procedure with a rehearsal mode, list the steps the rehearsal never reaches and ask what tests them. If the answer is "nothing", they are exercised first in production. Either the rehearsal must reach them (a seam, a fixture, a `--force-through` for the safe parts) or they must be moved into code a unit test can call — the second is usually right, because a step that only a live cutover can exercise is a step nobody can afford to debug.
+
+## CLASS NN (assigned at merge) — A RETRY THAT READS THE SAME STALE TAPE IS A BLIND RETRY
+
+A multi-attempt loop whose refusal is caused by the market moving during the read (born-dead, flip-met, tape-window) must re-sight attempt N+1 on the tape that exists now — the completed bars between the read clock and the refusal, bounded, never the forming bar, with the breached condition verbatim. Retrying against the identical stale read burns the attempt budget fail-closed. The refusal check itself is never relaxed to make retries pass.
+
+## CLASS NN (assigned at merge) — UI TRUTH MUST DISTINGUISH UNKNOWN FROM EMPTY, AND STALE WRITES MUST NOT LAND
+
+A failed or malformed snapshot fetch (orders, positions, balances) must render UNKNOWN, never an empty table — only a validated success may clear prior state, and late or out-of-scope responses must be discarded against the request's own view identity (symbol/interval/account). Streamed session writes (SSE chat) must be owned by the session that started them: an old stream's completion or failure must not write into a newer session's store, clear its loading flag, or overwrite its history.
+
+## CLASS NN (assigned at merge) — REQUEST MODEL SELECTION MUST NOT MUTATE SHARED AGENT
+
+Two authenticated chats must retain their own selected model credentials through all follow-up calls and summaries. Shared history/flow locks stay shared without copying mutexes. Missing user configuration must not select another owner's default credentials. Exercise both HTTP identity and concurrent model selection.
+
+
+
+## CLASS NN (assigned at merge) — a selector in a path the ownership middleware's prefix gate does not match
+
+**Found:** 2026-09-25, W117 PR-D, porting #117 576bd75b [A]. `planTraderOwnership` only ran on plan/risk-prefixed routes; a second `trader_id` selector (query array, `/api/traders/:id` path, body on POST/PUT/PATCH/DELETE) on any OTHER protected route named another owner's trader and sailed through with a 200. **Fixed:** the prefix gate is dropped — the selector sweep runs on every protected route; path segments, query values and body fields are all compared against the session owner. Pinned by a production-router test that plants a second selector at every location and demands 403. **Probe:** for every ownership middleware, list the selector LOCATIONS it reads and the routes it GATES; any location outside the gate is a second selector.
+
+## CLASS NN (assigned at merge) — an optimistic-concurrency edit with no revision the server can compare
+
+**Found:** 2026-09-25, W117 PR-D, porting #117 09e24a08 [A]. Overlay saves carried no expected-revision fields, so a stale draft silently superseded newer rows (no 409 existed). **Fixed:** `handlePlanOverlay` requires `expected_plan_id/expected_plan_version/expected_overlay_version` (400 without); `applyPlanOverlay` 409s when the current row or overlay revision moved past them, and appends via `AppendOverlayChecked` with a writer-side revision guard; `plan/today` returns `plan_id` + `overlay_version` for the client to echo; the web client sends the viewed revision and shows the 409 inline. **Probe:** every edit endpoint that touches per-owner persisted state must name the revision the CLIENT viewed and refuse when the stored one has moved — including the client half that echoes it.
+
+## CLASS NN (assigned at merge) — a gap value resolved after dereference
+
+**Found:** 2026-09-25, W117 PR-D, porting #117 a6b88b7d [A]. `handlePlanAskApply` dereferenced `sess.Name` before the ok check, so a session-gap instant (default window closes 14:45, applies at 15:00) panicked the apply route; `handlePlanRealign` shared the inline form. **Fixed:** `planMutationSessionAt` resolves the session BEFORE any dereference, uses the wrap-aware chain trade date (the date plan reads use), refuses the gap as `ok=false`, and keeps the `sessionRunnable` gate; both handlers guard before touching `sess`. **Probe:** for every `thing, ok := lookup()` followed by a use of `thing`, walk the path from a missing lookup — the use must be behind the `ok` check, and a test must plant the MISSING case at the production call site.
+
+## CLASS NN (assigned at merge) — a request-supplied key selects server-side per-owner state
+
+**Found:** 2026-09-25, W117 PR-D, porting #117 e39d2070 [A]. `HandleChat`/`HandleChatStream` read a `user_id` from the caller's request body — a request carrying another owner's numeric key selected THAT owner's persisted conversation history; the authenticated owner's own clear didn't address it. **Fixed:** HTTP conversation identity derives ONLY from the authenticated middleware (`WithStoreUserID`); the caller-supplied key is ignored; a caller census confirms the two chat handlers are mounted exclusively behind the auth middleware (no telegram/agent-door/internal callers exist today). **Probe:** any endpoint that persists or clears per-owner state must derive the owner from the AUTHENTICATED session, never from a request field — grep the body keys for `user_id`-shaped names and prove each is ignored.
 
 ## CLASS NN (assigned at merge) — a cross-process hold specified as an in-process call
 
@@ -7567,6 +7613,3 @@ That is the shape: a spec says "call X" where X's value lives in another process
 **Probe:** for every "P is inside/outside D" check: (a) is it an ELEMENT compare (`<D>/..x` is INSIDE)? (b) are symlinks resolved on BOTH sides first, and for a path not yet created, is the deepest existing ancestor resolved and a dangling symlink among the rest refused — and every Lstat error other than not-exist
 refuses, pinned by a `PathWithin` table test? (c) is a trust anchor opened without following a symlinked PARENT (`O_NOFOLLOW` guards only the last element)? (d) is there ONE helper per repo, and does the census cover var-declared and alias-imported
 `filepath.Rel`? Every check-then-write by path string is a same-UID TOCTOU limit: name it.
-## CLASS NN (assigned at merge) — REQUEST MODEL SELECTION MUST NOT MUTATE SHARED AGENT
-
-Two authenticated chats must retain their own selected model credentials through all follow-up calls and summaries. Shared history/flow locks stay shared without copying mutexes. Missing user configuration must not select another owner's default credentials. Exercise both HTTP identity and concurrent model selection.
