@@ -3,8 +3,10 @@ package updateauth
 import (
 	"errors"
 	"go/ast"
+	"go/constant"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"os"
 	"path"
 	"path/filepath"
@@ -14,6 +16,8 @@ import (
 	"testing"
 	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/tools/go/packages"
 
 	"nofx/internal/censuswalk"
 )
@@ -25,7 +29,11 @@ import (
 //
 //  1. the enrollment/seen file names are spelled ONLY in paths.go — judged on
 //     every string literal AND every constant-folded concatenation run
-//     ("device"+".key", a const + "_ids.json", dir + "/ad" + "min.json"),
+//     ("device"+".key", a const + "_ids.json", dir + "/ad" + "min.json",
+//     and — DS-105 CENSUS-AUTH [13] — a compile-time constant assembled from
+//     fragments in a SIBLING file or another package: constant VALUES are
+//     resolved through the compiler (go/types) where it can type-check the
+//     package, with the per-file name fold as fallback),
 //     and the key file's name may not be spelled even in FRAGMENTS a
 //     variable could join (a path element "device" / "device.*" / "*.key");
 //     a directive the compiler reads is code too, so no //go:embed pattern
@@ -116,13 +124,14 @@ import (
 // imports, the comments the compiler reads (//go:linkname, //go:embed, a cgo
 // preamble behind import "C") and constant strings. These pass:
 //   - RUN TIME: a file that builds the key's path at run time (fmt.Sprintf
-//     with a non-literal, byte arithmetic, a directory listing) or from a
-//     name it re-binds to a second constant (constantStrings folds a name to
-//     one value), and reads the file itself; one that receives the key bytes
+//     with a non-literal, byte arithmetic, a directory listing), and reads
+//     the file itself; one that receives the key bytes
 //     or a path through an interface or a function value handed to it by an
 //     admitted file; one that reaches the updater dir through a package the
 //     census does not relate to it — rule 6 binds only the key LoadDeviceKey
-//     returns.
+//     returns. In a package go/types could NOT type-check, the constant fold
+//     falls back to name-based: a name re-bound to a second constant folds
+//     to one value there.
 //   - COMPILE TIME, in the tree: a data dir configured (DB_PATH) strictly
 //     BELOW a package directory, reached by a //go:embed pattern that names
 //     an ANCESTOR of it — a directory pattern embeds its whole subtree
@@ -347,6 +356,12 @@ func updateAuthOffenders(root string) (offenders []string, scanned int, err erro
 	if err != nil {
 		return nil, 0, err
 	}
+	// DS-105 CENSUS-AUTH [13]: the compiler's constant VALUES for every file
+	// go/packages can type-check under root (types.Info.Types[..].Value) —
+	// this is what folds a constant assembled from fragments in a SIBLING
+	// file or in ANOTHER package. Files/packages without an entry fall back
+	// to the per-file name-based fold below (old behaviour, unchanged).
+	fileTypes := constTypeInfo(root)
 	for _, file := range files {
 		rel := file.Rel
 		// ParseComments: directives live in comments (verifier D2 — mode 0
@@ -465,7 +480,15 @@ func updateAuthOffenders(root string) (offenders []string, scanned int, err erro
 		}
 
 		// 1. literals and constant-folded runs; 4. a path element "updater"
-		for _, v := range constantStrings(f) {
+		// DS-105 CENSUS-AUTH [13]: walk constants over the SAME parsed file
+		// the type info was computed over (types.Info.Types is keyed by AST
+		// node pointer); every other check keeps the census's own parse and
+		// its fset (key-flow positions, holdsKey, …).
+		constF, constInfo := f, (*types.Info)(nil)
+		if tf, ok := fileTypes[filepath.Clean(file.Path)]; ok {
+			constF, constInfo = tf.f, tf.info
+		}
+		for _, v := range constantStrings(constF, constInfo) {
 			if rel != literalHome {
 				for _, name := range fileNames {
 					if strings.Contains(v, name) {
@@ -889,19 +912,57 @@ func embedPatternReachesEnrollment(pattern string) (string, bool) {
 	return "", false
 }
 
+// constTypeFile pairs a package file's type-checked syntax with the
+// *types.Info the checker filled for it (constants resolve via
+// types.Info.Types[..].Value — the COMPILER's value, not literal text).
+type constTypeFile struct {
+	f    *ast.File
+	info *types.Info
+}
+
+// constTypeInfo type-checks the module at root with go/packages and returns,
+// keyed by cleaned absolute filename, the parsed file and its *types.Info for
+// every non-test compiled file. Packages go/packages cannot type-check
+// (missing deps, type errors it refuses to carry) have no entry — the caller
+// falls back to its per-file name-based fold.
+func constTypeInfo(root string) map[string]*constTypeFile {
+	out := map[string]*constTypeFile{}
+	cfg := &packages.Config{
+		Mode:  packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo,
+		Dir:   root,
+		Tests: false,
+	}
+	pkgs, err := packages.Load(cfg, "./...")
+	if err != nil {
+		return out
+	}
+	for _, p := range pkgs {
+		if p.TypesInfo == nil {
+			continue
+		}
+		for _, sf := range p.Syntax {
+			pos := p.Fset.PositionFor(sf.Pos(), false)
+			out[filepath.Clean(pos.Filename)] = &constTypeFile{f: sf, info: p.TypesInfo}
+		}
+	}
+	return out
+}
+
 // constantStrings returns every string the file spells as a constant: each
 // string literal, and each run of adjacent constant operands in every
-// maximal `+` chain (so "device"+".key", a file-local const + "_ids.json" and
-// the "/ad"+"min.json" inside dir+"/ad"+"min.json" all fold). Names bound in
-// the file to a foldable string (const, var, :=, =) fold too — by NAME, not
-// by scope, and each name to ONE value: the last binding the fold passes
-// saw. That is NOT "can only over-report" (the earlier claim, false like
-// rule 6's — census-repair verify #3): `a := "ad"`, then `{ a := "zz" }`,
-// then dir + "/" + a + "min.json" folds to "/zzmin.json" and the admin.json
-// spelling is missed [A, probed 2026-09-24: the same file with one binding
-// of a IS reported]. A name re-bound to a second constant is therefore in
-// WHAT THIS CANNOT PROVE, beside run-time construction.
-func constantStrings(f *ast.File) []string {
+// maximal `+` chain (so "device"+".key", a const + "_ids.json" and the
+// "/ad"+"min.json" inside dir+"/ad"+"min.json" all fold). When info is
+// present (DS-105 CENSUS-AUTH [13]) every fold resolves through the
+// COMPILER's constant values (types.Info.Types[..].Value): constants
+// declared in SIBLING files of the package and exported constants of another
+// package (a SelectorExpr) fold, scope-correct — the old per-file name env
+// never saw either, so a cross-file compile-time constant spelled
+// updater/device.key with every rule green. Without info (a package
+// go/packages could not type-check) the fold falls back to names bound in
+// the file (const, var, :=, =) by NAME, not by scope, each name to ONE
+// value: the last binding the fold passes saw — a name re-bound to a second
+// constant is then in WHAT THIS CANNOT PROVE, beside run-time construction.
+func constantStrings(f *ast.File, info *types.Info) []string {
 	env := map[string]string{}
 	bind := func(names []*ast.Ident, values []ast.Expr) bool {
 		changed := false
@@ -909,7 +970,7 @@ func constantStrings(f *ast.File) []string {
 			return false
 		}
 		for i, n := range names {
-			if v, ok := foldString(values[i], env); ok {
+			if v, ok := foldString(values[i], env, info); ok {
 				if old, had := env[n.Name]; !had || old != v {
 					env[n.Name] = v
 					changed = true
@@ -967,7 +1028,7 @@ func constantStrings(f *ast.File) []string {
 			}
 			run, have := "", false
 			for _, op := range flattenAdd(x) {
-				if v, ok := foldString(op, env); ok {
+				if v, ok := foldString(op, env, info); ok {
 					run, have = run+v, true
 					continue
 				}
@@ -1002,7 +1063,17 @@ func flattenAdd(e ast.Expr) []ast.Expr {
 	return []ast.Expr{e}
 }
 
-func foldString(e ast.Expr, env map[string]string) (string, bool) {
+func foldString(e ast.Expr, env map[string]string, info *types.Info) (string, bool) {
+	// DS-105 CENSUS-AUTH [13]: resolve constant VALUES through the compiler,
+	// not literal text — types.Info.Types[..].Value is scope-correct, sees
+	// sibling files of the package and folds a SelectorExpr into another
+	// package's exported constant. When info is present every fold below
+	// effectively short-circuits here.
+	if info != nil {
+		if tv, ok := info.Types[unparen(e)]; ok && tv.Value != nil && tv.Value.Kind() == constant.String {
+			return constant.StringVal(tv.Value), true
+		}
+	}
 	switch x := unparen(e).(type) {
 	case *ast.BasicLit:
 		if x.Kind == token.STRING {
@@ -1014,8 +1085,8 @@ func foldString(e ast.Expr, env map[string]string) (string, bool) {
 		return v, ok
 	case *ast.BinaryExpr:
 		if x.Op == token.ADD {
-			a, ok1 := foldString(x.X, env)
-			b, ok2 := foldString(x.Y, env)
+			a, ok1 := foldString(x.X, env, info)
+			b, ok2 := foldString(x.Y, env, info)
 			if ok1 && ok2 {
 				return a + b, true
 			}
