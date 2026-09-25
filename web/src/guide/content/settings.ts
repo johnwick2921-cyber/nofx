@@ -39,6 +39,22 @@ const dayPlan: KnobSpec[] = [
     perSession: 'No.',
   },
   {
+    label: 'Planner contract (A3)',
+    where: 'Strategy → Day Plan → Planner contract switch (advanced).',
+    what:
+      'WAVE PLANNER A3 (2026-09-25): the prompt, the validator and the executor are ONE contract — breakdown/breakup entries must wait for the tape\'s confirming close, planned_order is legal only on reject / fvg_entry / sweep_reclaim leg 0, every scenario\'s economics must carry nonzero risk, and a REJECT fade\'s stop is composed by the executor from the frozen zone (edge − buffer).',
+    trader:
+      'ON by default (nil). Turning it OFF restores the pre-A3 prompt text byte-for-byte — the machine still refuses the same violations; only the prompt\'s contract wording changes.',
+    consumer:
+      'store/strategy.go PlannerContractOn · kernel/planner_prompt.go (contract fragments) · kernel/class45_feeds_forward.go (stop-floor qualification)',
+    range: 'switch (ON/OFF)',
+    systemDefault: 'ON · nil = ON',
+    recommended:
+      '⭐ leave ON — the contract wording is the machine\'s ground truth. OFF exists only to prove the prompt change is byte-reversible.',
+    whenToTouch: 'Never in normal trading. OFF is a diagnostic position for A/B studies of planner wording.',
+    perSession: 'No.',
+  },
+  {
     label: 'One setup — minimum grade',
     where: 'Strategy → Day Plan → one_setup_min_grade',
     what: 'The lowest merged-candidate grade the best level near price may carry (A+ | A | B | C). The best level is chosen grade-first, distance-second among candidates inside the reachability band; a scenario on a lower-graded level than the best is declined level_not_best.',
