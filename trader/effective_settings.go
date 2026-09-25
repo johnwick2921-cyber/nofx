@@ -785,6 +785,10 @@ func buildEffectiveResolvers() map[string]effResolver {
 		v, src := store.ResolveZoneRestMaxMin(x.dp())
 		return effResult{value: v, origin: src}
 	})
+	add(dpPath+"zone_place_within_pts", "store.ResolveZonePlaceWithinPts", func(x *effCtx) effResult {
+		v, src := store.ResolveZonePlaceWithinPts(x.dp())
+		return effResult{value: v, origin: src}
+	})
 	add(dpPath+"min_hold_min", "store.ResolveMinHoldMin", func(x *effCtx) effResult {
 		v, src := store.ResolveMinHoldMin(x.dp())
 		return effResult{value: v, origin: src}

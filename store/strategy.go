@@ -1143,6 +1143,13 @@ type DayPlanConfig struct {
 	// minutes (from placed_at_ms) is cancelled "zone rest expired" by the
 	// executor. nil/≤0 = 30 (ResolveZoneRestMaxMin).
 	ZoneRestMaxMin *int `json:"zone_rest_max_min,omitempty"`
+	// ZonePlaceWithinPts — WAVE PLANNER B1: a market_in_zone arm whose zone is
+	// farther than this many points from the eval price stays armed-unplaced
+	// and places when price comes within the bound; a rest-cap expiry returns
+	// the row to armed-unplaced instead of dismantling it. nil = 25 (the armed
+	// placement band, ResolveZonePlaceWithinPts — ON); 0 = OFF = legacy
+	// behaviour, byte-identical.
+	ZonePlaceWithinPts *float64 `json:"zone_place_within_pts,omitempty"`
 	// MinHoldMin — the floor (minutes) on the RESOLVED hold of an armed
 	// market_in_zone time_hold scenario, refused below it at write (new
 	// authoring only). nil/≤0 = 3 (ResolveMinHoldMin).
