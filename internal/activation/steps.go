@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/glebarez/go-sqlite"
+	_ "nofx/store/sqlitedriver"
 )
 
 // Backup takes an ONLINE copy of the database and proves the copy is readable
