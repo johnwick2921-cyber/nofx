@@ -421,8 +421,8 @@ func (b *box) kill(id Identity) (Identity, error) {
 		status, level = "REFUSED", "ERRO" // main.go logs the refused line at ERROR
 	}
 	now := b.clock.Now().In(time.Local)
-	line := fmt.Sprintf("%s [%s] main/main.go:322 🔐 BOOT INTEGRITY %s — rev %s · built 2026-09-24T00:00:00Z · expected %s · goldens PASS\n",
-		now.Format("01-02 15:04:05"), level, status, sha[:12], sha[:12])
+	line := fmt.Sprintf("%s [%s] main/main.go:322 🔐 BOOT INTEGRITY %s — rev %s · pid %d · built 2026-09-24T00:00:00Z · expected %s · goldens PASS\n",
+		now.Format("01-02 15:04:05"), level, status, sha[:12], b.id.PID, sha[:12])
 	logPath := filepath.Join(b.data, "nofx_"+now.Format("2006-01-02")+".log")
 	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {

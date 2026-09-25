@@ -3,6 +3,7 @@ package updaterworker
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -136,13 +137,15 @@ func TestBootVerifyRefusesARefusedBootLine(t *testing.T) {
 
 	// the scan itself, over a real log file
 	sha := boxNew
-	ok := "09-24 10:00:06 [INFO] main/main.go:322 🔐 BOOT INTEGRITY OK — rev " + sha[:12] + " · built x · expected " + sha[:12] + " · goldens PASS\n"
-	refused := "09-24 10:00:08 [ERRO] main/main.go:317 🔐 BOOT INTEGRITY REFUSED — rev " + sha[:12] + " · built x · expected " + sha[:12] + " · goldens FAIL\n"
-	// The shapes that must NOT be read as the app's boot line (the #206 fold
-	// anchor): a WARN from the updates gate whose CLIENT-SUPPLIED path carries
-	// the refused text (any loopback process can print it), and a forged OK
-	// carried the same way.
-	spoofRefused := `09-24 10:00:07 [WARN] api/handler_updates.go:298 🔒 [updates] refused GET "/api/updates/jobs/BOOT INTEGRITY REFUSED": update header missing or wrong — first update_header refusal on /api/updates/jobs/:id this process; repeats log at DEBUG, all count in nofx_updates_refused_total` + "\n"
+	const bootPID = 4242 // the NEW MainPID the worker read after the kill
+	ok := "09-24 10:00:06 [INFO] main/main.go:322 🔐 BOOT INTEGRITY OK — rev " + sha[:12] + " · pid " + strconv.Itoa(bootPID) + " · built x · expected " + sha[:12] + " · goldens PASS\n"
+	refused := "09-24 10:00:08 [ERRO] main/main.go:317 🔐 BOOT INTEGRITY REFUSED — rev " + sha[:12] + " · pid " + strconv.Itoa(bootPID) + " · built x · expected " + sha[:12] + " · goldens FAIL\n"
+	// The CTO's two negative shapes (#206 fold verdict on 88944226): log lines
+	// that ECHO client text carrying the pieces of a boot line. Neither may be
+	// read as the app's boot line.
+	spoofRefusedWarn := `09-24 10:00:07 [WARN] api/handler_other.go:77 request note="x [ERRO] clone-build/main.go:1 🔐 BOOT INTEGRITY REFUSED"` + "\n"
+	spoofRefusedErro := `09-24 10:00:07 [ERRO] api/handler_other.go:77 echo: /main.go: 🔐 BOOT INTEGRITY REFUSED` + "\n"
+	// The same shapes the substring matcher accepted before the anchor fold.
 	spoofOK := `09-24 10:00:07 [WARN] api/handler_updates.go:298 🔒 [updates] refused GET "/api/updates/jobs/BOOT INTEGRITY OK — rev ` + sha[:12] + ` ·": update header missing or wrong — first update_header refusal on /api/updates/jobs/:id this process; repeats log at DEBUG, all count in nofx_updates_refused_total` + "\n"
 	for _, c := range []struct {
 		name, before, after string
@@ -158,13 +161,16 @@ func TestBootVerifyRefusesARefusedBootLine(t *testing.T) {
 		// names another rev is not this install's boot line — boot integrity
 		// only passes when the binary rev equals the RELEASE marker's.
 		{name: "an OK line whose expected names another rev", after: strings.Replace(ok, " expected "+sha[:12], " expected "+boxOld[:12], 1), wantErr: "no \"BOOT INTEGRITY OK"},
-		// The #206 anchor negatives: the spoofed lines are not the app's boot
-		// line — the refused spoof must not fail the scan, and the forged OK
-		// must not satisfy it.
-		{name: "a spoofed REFUSED inside a client path does not fail", after: ok + spoofRefused},
+		// The #206 anchor negatives (the CTO's two lines first): the spoofed
+		// lines are not the app's boot line — a refused spoof must not fail
+		// the scan, and a forged OK must not satisfy it.
+		{name: "the CTO's WARN line echoing a refused boot shape", after: ok + spoofRefusedWarn},
+		{name: "the CTO's ERRO line echoing a refused boot shape", after: ok + spoofRefusedErro},
 		{name: "a spoofed REFUSED at INFO is not the boot line", after: ok + strings.Replace(refused, "[ERRO]", "[INFO]", 1)},
+		{name: "a REFUSED line for another pid is not ours", after: ok + strings.Replace(refused, " pid "+strconv.Itoa(bootPID)+" ", " pid 9999 ", 1)},
 		{name: "a forged OK inside a client path does not satisfy", after: spoofOK, wantErr: "no \"BOOT INTEGRITY OK"},
 		{name: "a forged OK from a non-main caller does not satisfy", after: strings.Replace(ok, "main/main.go:322", "api/handler_updates.go:298", 1), wantErr: "no \"BOOT INTEGRITY OK"},
+		{name: "an OK line for another pid does not satisfy", after: strings.Replace(ok, " pid "+strconv.Itoa(bootPID)+" ", " pid 9999 ", 1), wantErr: "no \"BOOT INTEGRITY OK"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			p := filepath.Join(t.TempDir(), "nofx_2026-09-24.log")
@@ -173,7 +179,7 @@ func TestBootVerifyRefusesARefusedBootLine(t *testing.T) {
 			f, _ := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0)
 			f.WriteString(c.after)
 			f.Close()
-			err := verifyBootLine(p, off, sha, map[string]string{})
+			err := verifyBootLine(p, off, sha, bootPID, map[string]string{})
 			if (err == nil) != (c.wantErr == "") || (err != nil && !strings.Contains(err.Error(), c.wantErr)) {
 				t.Fatalf("verifyBootLine = %v, want %q", err, c.wantErr)
 			}
@@ -181,7 +187,7 @@ func TestBootVerifyRefusesARefusedBootLine(t *testing.T) {
 	}
 	p := filepath.Join(t.TempDir(), "short.log")
 	writeFile(t, p, ok)
-	if err := verifyBootLine(p, 1<<20, sha, map[string]string{}); err == nil || !strings.Contains(err.Error(), "shorter than the offset") {
+	if err := verifyBootLine(p, 1<<20, sha, bootPID, map[string]string{}); err == nil || !strings.Contains(err.Error(), "shorter than the offset") {
 		t.Fatalf("a log shorter than the recorded offset: %v", err)
 	}
 }

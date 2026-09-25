@@ -465,11 +465,11 @@ func (w *Worker) stepWatch(j updaterjob.Job) stepResult {
 func (w *Worker) stepBootVerify(ctx context.Context, j updaterjob.Job) stepResult {
 	start, ev := w.host.Now(), map[string]string{}
 	err := func() error {
-		if j.Release == nil || j.LogOffset == nil || j.WatchSince == nil {
+		if j.Release == nil || j.LogOffset == nil || j.WatchSince == nil || j.IdentityAfter == nil {
 			return errors.New("boot verify without its inputs")
 		}
 		sha := j.Release.SHA
-		if err := verifyBootLine(j.LogPath, *j.LogOffset, sha, ev); err != nil {
+		if err := verifyBootLine(j.LogPath, *j.LogOffset, sha, j.IdentityAfter.PID, ev); err != nil {
 			return err
 		}
 		h, err := w.app.Health(ctx)
@@ -577,7 +577,7 @@ func (w *Worker) stepRollback(ctx context.Context, j updaterjob.Job) stepResult 
 		return stepResult{receipts: receipts, err: errors.New(clipText(why)), reason: clipText(why)}
 	}
 	vstart, ev := w.host.Now(), map[string]string{}
-	verr := verifyBootLine(j.RollbackLogPath, *j.RollbackLogOffset, snap.SHA, ev)
+	verr := verifyBootLine(j.RollbackLogPath, *j.RollbackLogOffset, snap.SHA, watchID.PID, ev)
 	if verr == nil {
 		h, err := w.app.Health(ctx)
 		switch {

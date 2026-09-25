@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -25,13 +26,20 @@ import (
 //     (stricter than "for it": a refused boot after our kill is ours to own).
 //
 // Both matches are ANCHORED to the boot line's own logger shape (#206 review
-// fold): the compactFormatter renders "MM-DD HH:MM:SS [LEVEL] caller msg"
-// (logger/logger.go), main.go prints the OK line at INFO and the REFUSED line
-// at ERROR, the caller is "<build-dir>/main.go:<line>", and the message starts
-// with the 🔐 prefix. A substring anywhere in the file is NOT the boot line:
-// before this anchor, any local process could print a WARN carrying the text
-// "BOOT INTEGRITY REFUSED" inside a client-supplied path and force a good
-// install into rollback.
+// fold, CTO verdict on 88944226): the compactFormatter renders
+// "MM-DD HH:MM:SS [LEVEL] caller msg" (logger/logger.go), main.go prints the
+// OK line at INFO and the REFUSED line at ERROR, the caller is
+// "<build-dir>/main.go:<line>" — the directory the binary was BUILT in, which
+// varies (live logs show clone-build/main.go, nofx-clean/main.go, nofx/main.go
+// [A: read from data/nofx_2026-09-23.log]). The match starts at LINE START
+// with the formatter's exact prefix, the caller must be the FIRST token after
+// the level (attacker text can only appear after it), and the line must carry
+// the NEW MainPID the worker read after the restart (kernel/boot_integrity.go
+// prints "· pid <n>") — a value no request can know in advance, so client text
+// logged with %s (even one carrying a raw newline) cannot forge the boot line.
+// Four strings.Contains anywhere in the line was still a substring matcher:
+// any other log line echoing client text that carries those pieces would force
+// a good install into rollback.
 
 const (
 	bootOKPrefix  = "BOOT INTEGRITY OK — rev "
@@ -39,40 +47,47 @@ const (
 	maxBootScan   = 64 << 20
 	bootLineShort = 12 // kernel/boot_integrity.go prints rev[:12]
 
-	// The compactFormatter renders "<caller> <msg>" where caller is
-	// "<build-dir>/main.go:<line>" — the directory the binary was BUILT in,
-	// which varies (live logs show clone-build/main.go, nofx-clean/main.go,
-	// nofx/main.go [A: read from data/nofx_2026-09-23.log]). The stable shape
-	// is the level, "/main.go:" and the 🔐 prefix.
-	bootOKCaller   = "[INFO] "
-	bootBadCaller  = "[ERRO] "
-	bootCallerFile = "/main.go:"
-	bootKeyPrefix  = "🔐 "
+	// bootShape: ^MM-DD HH:MM:SS [LEVEL] <builddir>/main.go:<line> 🔐 BOOT INTEGRITY
+	bootShape = `^\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[%s\] \S*/main\.go:\d+ 🔐 `
 )
 
-// isBootOKLine: the app's OWN OK boot line, by shape. The "expected <sha12>"
-// field is the RELEASE half: boot integrity passes only when the binary's rev
-// equals the RELEASE marker's, and the OK line quotes it — an OK line that
-// does not expect this sha is not this install's line.
-func isBootOKLine(ln, sha12 string) bool {
-	return strings.Contains(ln, bootOKCaller) && strings.Contains(ln, bootCallerFile) &&
-		strings.Contains(ln, bootKeyPrefix) && strings.Contains(ln, bootOKPrefix+sha12+" ·") &&
-		strings.Contains(ln, " expected "+sha12)
+// bootOKRe is the app's OWN OK boot line: the exact formatter prefix, the
+// caller first after the level, the rev, the pid of the NEW MainPID and the
+// "expected <sha12>" field (the RELEASE half — an OK line that does not
+// expect this sha is not this install's line).
+func bootOKRe(rev12 string, pid int) *regexp.Regexp {
+	return regexp.MustCompile(fmt.Sprintf(bootShape, "INFO") +
+		regexp.QuoteMeta(bootOKPrefix+rev12+" · pid "+strconv.Itoa(pid)+" · built ")+`\S+`+
+		regexp.QuoteMeta(" · expected "+rev12+" ·"))
 }
 
-// isBootRefusedLine: the app's OWN REFUSED boot line, by shape.
-func isBootRefusedLine(ln string) bool {
-	return strings.Contains(ln, bootBadCaller) && strings.Contains(ln, bootCallerFile) &&
-		strings.Contains(ln, bootKeyPrefix) && strings.Contains(ln, bootRefused)
+// bootRefusedRe is the app's OWN REFUSED boot line by shape and pid.
+func bootRefusedRe(pid int) *regexp.Regexp {
+	return regexp.MustCompile(fmt.Sprintf(bootShape, "ERRO") +
+		regexp.QuoteMeta(bootRefused+" — rev ")+`\S+ · pid `+strconv.Itoa(pid)+` `)
 }
 
-// verifyBootLine scans path from off. ev gets the READ facts.
-func verifyBootLine(path string, off int64, sha string, ev map[string]string) error {
+// isBootOKLine: the app's OWN OK boot line, by shape and pid.
+func isBootOKLine(ln, sha12 string, pid int) bool {
+	return bootOKRe(sha12, pid).MatchString(ln)
+}
+
+// isBootRefusedLine: the app's OWN REFUSED boot line, by shape and pid.
+func isBootRefusedLine(ln string, pid int) bool {
+	return bootRefusedRe(pid).MatchString(ln)
+}
+
+// verifyBootLine scans path from off. pid is the NEW MainPID the worker read
+// after the restart — only its boot line counts. ev gets the READ facts.
+func verifyBootLine(path string, off int64, sha string, pid int, ev map[string]string) error {
 	if len(sha) < bootLineShort || !isSHA40(sha) {
 		return fmt.Errorf("boot check: %q is not a release sha", sha)
 	}
 	if off < 0 {
 		return errors.New("boot check: negative log offset")
+	}
+	if pid < 2 {
+		return fmt.Errorf("boot check: the new MainPID %d cannot have written a boot line", pid)
 	}
 	want := bootOKPrefix + sha[:bootLineShort] + " ·"
 	f, err := os.Open(path)
@@ -91,15 +106,16 @@ func verifyBootLine(path string, off int64, sha string, ev map[string]string) er
 		return fmt.Errorf("boot check: %w", err)
 	}
 	ev["log_offset"] = strconv.FormatInt(off, 10)
+	ev["boot_pid"] = strconv.Itoa(pid)
 	sc := bufio.NewScanner(io.LimitReader(f, maxBootScan))
 	sc.Buffer(make([]byte, 64<<10), 1<<20)
 	ok := 0
 	for sc.Scan() {
 		ln := sc.Text()
-		if isBootRefusedLine(ln) {
+		if isBootRefusedLine(ln, pid) {
 			return fmt.Errorf("boot check: a REFUSED boot line follows the kill: %q", clipText(strings.TrimSpace(ln)))
 		}
-		if isBootOKLine(ln, sha[:bootLineShort]) {
+		if isBootOKLine(ln, sha[:bootLineShort], pid) {
 			ok++
 		}
 	}
