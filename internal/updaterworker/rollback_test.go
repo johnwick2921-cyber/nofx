@@ -1,6 +1,7 @@
 package updaterworker
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -226,5 +227,46 @@ func TestRecoveryTextFollowsWhatTheJobProved(t *testing.T) {
 				t.Fatalf("the hold is not cleared LAST:\n%s", text)
 			}
 		})
+	}
+}
+
+// PIN (verifier D6): rolling_back entered by a failure edge runs at once as
+// its FIRST attempt — never counted as a crash retry. So a rollback that
+// crashes inside its effect twice still gets its third run (the attempts cap
+// is about runs of the step, and RollbackTo is called exactly once per run),
+// and the job reads rolled_back.
+func TestAFailureEdgeIntoRollingBackIsItsFirstAttempt(t *testing.T) {
+	r := newRig(t)
+	r.watchFail[boxNew] = true
+	crashes := 0
+	r.w.crash = func(q string) {
+		if q == "rolling_back/effect" && crashes < updaterjob.MaxAttempts-1 {
+			crashes++
+			panic(crashPanic{q})
+		}
+	}
+	if !r.runCrashing(t) {
+		t.Fatal("no crash in the rollback")
+	}
+	for crashes < updaterjob.MaxAttempts-1 {
+		w := r.newWorker()
+		w.crash = r.w.crash
+		r.w = w
+		if _, err := r.w.sweep(); err != nil {
+			t.Fatal(err)
+		}
+		r.runCrashing(t)
+	}
+	j := r.restart(t)
+	r.noViolations(t)
+	want := make([]int, updaterjob.MaxAttempts)
+	for i := range want {
+		want[i] = i + 1
+	}
+	if fmt.Sprint(r.rollbackAtt) != fmt.Sprint(want) {
+		t.Fatalf("RollbackTo ran at attempts %v, want %v (the failure edge is attempt 1)", r.rollbackAtt, want)
+	}
+	if j.State != updaterjob.StateRolledBack {
+		t.Fatalf("job %s (reason %q), want rolled_back after %d crashed runs", j.State, j.RecoveryReason, crashes)
 	}
 }

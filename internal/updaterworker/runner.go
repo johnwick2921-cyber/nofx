@@ -133,10 +133,18 @@ func (w *Worker) execute(ctx context.Context, j updaterjob.Job) error {
 		return ctx.Err() // shutting down: the job stays started; a restart re-runs it
 	}
 	w.boundary(string(j.State) + "/effect")
-	if _, err := w.finish(ctx, j, res); err != nil {
+	k, err := w.finish(ctx, j, res)
+	if err != nil {
 		return err
 	}
 	w.boundary(string(j.State) + "/done")
+	// A failure edge into a STARTED state (rolling_back) runs it now, as its
+	// first attempt — as advance does for a success edge. Left to the drive
+	// loop, it would be taken for a crash inside it and counted as a retry
+	// (verifier D6).
+	if k.State != j.State && k.Phase == updaterjob.PhaseStarted {
+		return w.execute(ctx, k)
+	}
 	return nil
 }
 
