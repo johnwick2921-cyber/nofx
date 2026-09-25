@@ -76,6 +76,15 @@ func esc(p, dir string) bool { r, _ := filepath.Rel(dir, p); return r == ".." }`
 		"a func literal in a package-level var": `package x
 import ("path/filepath"; "strings")
 var in = func(p, dir string) bool { r, _ := filepath.Rel(dir, p); return !strings.HasPrefix(r, "..") }`,
+		"a var-declared Rel result (H1)": `package x
+import ("path/filepath"; "strings")
+func esc(p, dir string) bool {
+	var r, _ = filepath.Rel(dir, p)
+	return r == ".." || strings.HasPrefix(r, "../")
+}`,
+		"an ALIASED Rel import (H3)": `package x
+import fp "path/filepath"
+func esc(p, dir string) bool { r, _ := fp.Rel(dir, p); return r == ".." }`,
 		"a TempDir prefix guard": `package x
 import ("os"; "strings")
 func guard(p string) bool { return strings.HasPrefix(p, os.TempDir()) }`,
@@ -94,14 +103,33 @@ func name(p, dir string) string { r, _ := filepath.Rel(dir, p); return filepath.
 
 // containmentShapes returns the enclosing function name of every
 // containment-by-text shape in src (one entry per function; a package-level
-// declaration — a func literal in a var — is scanned too).
+// declaration — a func literal in a var — is scanned too). The scanner resolves
+// the import NAMES itself (U4G defect 2, H3: `fp "path/filepath"; fp.Rel` is a
+// Rel), and binds Rel results from var declarations too (H1: `var r, _ =
+// filepath.Rel(...)` is not an AssignStmt).
 func containmentShapes(t *testing.T, name, src string) []string {
 	t.Helper()
 	f, err := parser.ParseFile(token.NewFileSet(), name, src, 0)
 	if err != nil {
 		t.Fatalf("parse %s: %v", name, err)
 	}
-	isCall := func(e ast.Expr, pkg, fn string) bool {
+	// the import names for the three packages the shapes name, by PATH.
+	pkgs := map[string]map[string]bool{} // import path → the names it is imported as
+	for _, im := range f.Imports {
+		path, err := strconv.Unquote(im.Path.Value)
+		if err != nil {
+			continue
+		}
+		name := filepath.Base(path)
+		if im.Name != nil {
+			name = im.Name.Name
+		}
+		if pkgs[path] == nil {
+			pkgs[path] = map[string]bool{}
+		}
+		pkgs[path][name] = true
+	}
+	isCall := func(e ast.Expr, pkgPath, fn string) bool {
 		c, ok := e.(*ast.CallExpr)
 		if !ok {
 			return false
@@ -111,7 +139,22 @@ func containmentShapes(t *testing.T, name, src string) []string {
 			return false
 		}
 		x, ok := sel.X.(*ast.Ident)
-		return ok && x.Name == pkg && sel.Sel.Name == fn
+		return ok && sel.Sel.Name == fn && pkgs[pkgPath][x.Name]
+	}
+	relOf := func(e ast.Expr) (string, bool) {
+		c, ok := e.(*ast.CallExpr)
+		if !ok {
+			return "", false
+		}
+		sel, ok := c.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return "", false
+		}
+		x, ok := sel.X.(*ast.Ident)
+		if !ok || sel.Sel.Name != "Rel" || !pkgs["path/filepath"][x.Name] {
+			return "", false
+		}
+		return x.Name + ".Rel", true
 	}
 	dotdot := func(e ast.Expr) bool {
 		l, ok := e.(*ast.BasicLit)
@@ -132,10 +175,26 @@ func containmentShapes(t *testing.T, name, src string) []string {
 			unit, unitName = fd.Body, fd.Name.Name
 		}
 		rel := map[string]bool{} // identifiers bound to a filepath.Rel result
+		bind := func(lhs ast.Expr) {
+			if id, ok := lhs.(*ast.Ident); ok && id.Name != "_" {
+				rel[id.Name] = true
+			}
+		}
 		ast.Inspect(unit, func(n ast.Node) bool {
-			if as, ok := n.(*ast.AssignStmt); ok && len(as.Rhs) == 1 && isCall(as.Rhs[0], "filepath", "Rel") && len(as.Lhs) > 0 {
-				if id, ok := as.Lhs[0].(*ast.Ident); ok && id.Name != "_" {
-					rel[id.Name] = true
+			switch x := n.(type) {
+			case *ast.AssignStmt:
+				if len(x.Rhs) == 1 && len(x.Lhs) > 0 {
+					if _, ok := relOf(x.Rhs[0]); ok {
+						bind(x.Lhs[0])
+					}
+				}
+			case *ast.GenDecl: // H1: a var-declared Rel result
+				for _, spec := range x.Specs {
+					if vs, ok := spec.(*ast.ValueSpec); ok && len(vs.Values) == 1 && len(vs.Names) > 0 {
+						if _, ok := relOf(vs.Values[0]); ok {
+							bind(vs.Names[0])
+						}
+					}
 				}
 			}
 			return true
@@ -144,7 +203,8 @@ func containmentShapes(t *testing.T, name, src string) []string {
 			if id, ok := e.(*ast.Ident); ok {
 				return rel[id.Name]
 			}
-			return isCall(e, "filepath", "Rel")
+			_, ok := relOf(e)
+			return ok
 		}
 		hit := false
 		ast.Inspect(unit, func(n ast.Node) bool {
