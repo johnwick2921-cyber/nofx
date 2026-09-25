@@ -43,7 +43,15 @@ const (
 // preflightFlatLegs: the pre-hold flat probe (C22) — every non-hold leg that
 // can fail on a live position, a working order, an arm or a planner read, or
 // a trader the gate cannot see. trader_cutover:* legs are added by prefix.
-var preflightFlatLegs = []string{"addon_census", "ledger_exposure", "planner_in_flight", "traders_nt8"}
+// The census leg here is addon_census_prehold, NOT addon_census (#206 review
+// fold): the wire sends maintenance frames only while held, so a never-held
+// connection has no census yet and addon_census would refuse every install
+// on a fresh bot process (the normal production path — every activation
+// restarts the bot). The prehold leg passes the no-census STATE, demands a
+// FRESH census when one exists (a stale held:false release ack is evidence of
+// nothing), and fails on every census content violation; drain's
+// addon_census re-checks a fresh census right after the hold.
+var preflightFlatLegs = []string{"addon_census_prehold", "ledger_exposure", "planner_in_flight", "traders_nt8"}
 
 // drainLegs: drained_acked (C11 + ruling 1790258770876) — held, drained, the
 // AddOn acked THIS job, flat, no working orders, nothing in flight.

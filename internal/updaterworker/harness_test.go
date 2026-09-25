@@ -415,12 +415,13 @@ func (b *box) kill(id Identity) (Identity, error) {
 	b.running = sha
 	b.clock.Advance(6 * time.Second) // RestartSec=5 + boot
 	status := "OK"
+	level := "INFO"
 	if b.refuseBoot[sha] {
-		status = "REFUSED"
+		status, level = "REFUSED", "ERRO" // main.go logs the refused line at ERROR
 	}
 	now := b.clock.Now().In(time.Local)
-	line := fmt.Sprintf("%s [INFO] main/main.go:322 🔐 BOOT INTEGRITY %s — rev %s · built 2026-09-24T00:00:00Z · expected %s · goldens PASS\n",
-		now.Format("01-02 15:04:05"), status, sha[:12], sha[:12])
+	line := fmt.Sprintf("%s [%s] main/main.go:322 🔐 BOOT INTEGRITY %s — rev %s · built 2026-09-24T00:00:00Z · expected %s · goldens PASS\n",
+		now.Format("01-02 15:04:05"), level, status, sha[:12], sha[:12])
 	logPath := filepath.Join(b.data, "nofx_"+now.Format("2006-01-02")+".log")
 	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
@@ -681,6 +682,17 @@ func (b *box) gateView() GateView {
 	if st.Held {
 		job = st.Hold.JobID
 	}
+	// The prehold census leg (trader/installation_gate.go): a never-held
+	// connection (no ack) PASSES — the other flat legs vouch for it; an ack
+	// that exists must be fresh AND flat.
+	preholdCensusPass, preholdCensusDetail := true, "no census — never held"
+	if a != nil {
+		if a.AgeMs > ackMaxAgeMs {
+			preholdCensusPass, preholdCensusDetail = false, fmt.Sprintf("census ack is %d ms old (max %d)", a.AgeMs, ackMaxAgeMs)
+		} else {
+			preholdCensusPass, preholdCensusDetail = flat, fmt.Sprintf("flat=%v", flat)
+		}
+	}
 	legs := []GateLeg{
 		{Name: "hold", Pass: st.Held, Detail: "held=" + fmt.Sprint(st.Held)},
 		{Name: "go_drained", Pass: st.Held, Detail: "barrier engaged"},
@@ -690,6 +702,7 @@ func (b *box) gateView() GateView {
 		{Name: "traders_nt8", Pass: true, Detail: "1 NT8 trader"},
 		{Name: "addon_ack", Pass: st.Held && a != nil && a.Held && a.JobID == job, Detail: "ack"},
 		{Name: "addon_census", Pass: flat, Detail: fmt.Sprintf("flat=%v", flat)},
+		{Name: "addon_census_prehold", Pass: preholdCensusPass, Detail: preholdCensusDetail},
 		{Name: "ledger_exposure", Pass: flat, Detail: "arms"},
 		{Name: "trader_cutover:t1", Pass: flat, Detail: "legs 1,2,4"},
 	}

@@ -22,7 +22,7 @@ func TestPreflightRefusalsNeverHold(t *testing.T) {
 		setup func(r *rig)
 		want  string
 	}{
-		{"C22: not flat before the hold", func(r *rig) { r.flat = false }, "addon_census"},
+		{"C22: not flat before the hold", func(r *rig) { r.flat = false }, "addon_census_prehold"},
 		{"C19: the main-tree lock is not held", func(r *rig) { r.lockHeld = false }, "main-tree lock is not held"},
 		{"C20: the calendar differs", func(r *rig) {
 			writeFile(r.t, filepath.Join(r.inst, calendarFile), `[{"time":"2026-10-01T12:30:00Z","title":"owner edit"}]`+"\n")
@@ -67,6 +67,48 @@ func TestPreflightRefusalsNeverHold(t *testing.T) {
 				t.Fatal("the owner's calendar file was changed")
 			}
 		})
+	}
+}
+
+// The preflight leg list must demand the PRE-HOLD census leg, never the drain
+// one: addon_census can never pass before a hold exists (the wire only sends
+// maintenance frames while held), so demanding it refuses every install on a
+// fresh bot process. (#206 review fold.)
+func TestPreflightFlatLegsUseThePreholdCensus(t *testing.T) {
+	found := false
+	for _, n := range preflightFlatLegs {
+		if n == "addon_census" {
+			t.Fatalf("preflight must not demand the drain census leg: %v", preflightFlatLegs)
+		}
+		found = found || n == "addon_census_prehold"
+	}
+	if !found {
+		t.Fatalf("preflight must demand the prehold census leg: %v", preflightFlatLegs)
+	}
+}
+
+// C22 on a FRESH never-held connection (the AddOn sends no maintenance frame
+// before any hold): preflight must PASS when the box is otherwise flat — the
+// normal production path, since every activation restarts the bot. The job
+// then holds and drain (which needs a real ack) fails: recovery_needed with
+// the hold kept, but NOT the preflight refusal the old addon_census demand
+// produced. (#206 review fold.)
+func TestPreflightPassesOnANeverHeldConnection(t *testing.T) {
+	r := newRig(t)
+	r.addonConnected = false // no wire ack at all: this connection never held
+	r.install()
+	if err := r.drive(); err != nil {
+		t.Fatal(err)
+	}
+	j := r.job()
+	if j.State == updaterjob.StateRefused {
+		t.Fatalf("preflight refused a flat never-held connection: %q", j.Error)
+	}
+	if strings.Contains(j.Error, "addon_census") {
+		t.Fatalf("the census must not block preflight on a never-held connection: %q", j.Error)
+	}
+	if r.callCount("hold_write") != 1 {
+		t.Fatalf("preflight must pass and write the hold; hold_write ran %d times (job %s)", r.callCount("hold_write"), j.State)
 	}
 }
 
