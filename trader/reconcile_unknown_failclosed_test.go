@@ -10,6 +10,7 @@ package trader
 import (
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -43,5 +44,45 @@ func TestReconcileBeforeOpenNTKnownFlatProceeds(t *testing.T) {
 	}
 	if flattenSent {
 		t.Fatal("a flat book must not submit a flatten")
+	}
+}
+
+// flattenWaitStub holds an opposite-side position on the FIRST read (the
+// flatten trigger) and errors on every read after — the shape of the CTO's
+// m10 mutant: an UNKNOWN read mid-flatten must never green-light the open.
+type flattenWaitStub struct {
+	stubTrader
+	mu    sync.Mutex
+	calls int
+}
+
+func (s *flattenWaitStub) GetPositions() ([]map[string]interface{}, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.calls++
+	if s.calls == 1 {
+		return []map[string]interface{}{{"symbol": "MNQ", "side": "short", "positionAmt": -1.0}}, nil
+	}
+	return nil, errors.New("NT8 account positions unknown: no account snapshot or confirmed entry fill")
+}
+
+// TestReconcileFlattenWaitNeverDeclaresFlatOnUnknown (CTO 2026-09-25 09:43Z,
+// m10 survivor): the wait-for-flat loop promised "keep waiting, never declare
+// flat on an error" and nothing pinned it. A GetPositions error mid-flatten
+// must NOT green-light the open — the call must refuse at the deadline.
+// RED = the m10 mutant (drop the hErr guard): the loop returns (true, nil)
+// "flattened + confirmed flat" on the FIRST unknown read.
+func TestReconcileFlattenWaitNeverDeclaresFlatOnUnknown(t *testing.T) {
+	stub := &flattenWaitStub{}
+	at := &AutoTrader{id: "recon-wait-unknown", exchange: "ninjatrader", trader: stub}
+	flattenSent, err := at.reconcileBeforeOpenNTReport("MNQ", "long")
+	if !flattenSent {
+		t.Fatal("fixture: the held opposite side must trigger the flatten")
+	}
+	if err == nil {
+		t.Fatal("an UNKNOWN positions read during the flatten wait must refuse at the deadline — the call returned (true, nil) 'flattened + confirmed flat'")
+	}
+	if !strings.Contains(err.Error(), "flatten not confirmed flat") {
+		t.Fatalf("the refusal must be the deadline refusal, got %v", err)
 	}
 }
