@@ -7517,3 +7517,7 @@ That is the shape worth naming: a dry run proves the steps it REACHES. Code afte
 ## CLASS NN (assigned at merge) — UI TRUTH MUST DISTINGUISH UNKNOWN FROM EMPTY, AND STALE WRITES MUST NOT LAND
 
 A failed or malformed snapshot fetch (orders, positions, balances) must render UNKNOWN, never an empty table — only a validated success may clear prior state, and late or out-of-scope responses must be discarded against the request's own view identity (symbol/interval/account). Streamed session writes (SSE chat) must be owned by the session that started them: an old stream's completion or failure must not write into a newer session's store, clear its loading flag, or overwrite its history.
+
+## CLASS NN (assigned at merge) — REQUEST MODEL SELECTION MUST NOT MUTATE SHARED AGENT
+
+Two authenticated chats must retain their own selected model credentials through all follow-up calls and summaries. Shared history/flow locks stay shared without copying mutexes. Missing user configuration must not select another owner's default credentials. Exercise both HTTP identity and concurrent model selection.
