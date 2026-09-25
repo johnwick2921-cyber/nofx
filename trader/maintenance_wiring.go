@@ -11,6 +11,15 @@ import ntTrader "nofx/trader/ninjatrader"
 //	SetEntryHoldCheck     site 4b — the reconnect queue drops held entries
 //	SetMaintenanceSource  site 7  — the AddOn is told the hold over the wire
 //	SetDroppedEntrySink   M-2     — a dropped entry settles what was recorded
+//
+// wireNT8MaintenanceCSV (WAVE 1a-plan N5) installs the same installation
+// maintenance permit on the CSV transport — only its entry sends take it.
+// Kept beside wireNT8Maintenance so the maintenance setter surface stays in
+// this one file (maintenance_wiring_test.go allowlist).
+func wireNT8MaintenanceCSV(csv *ntTrader.Trader) {
+	csv.SetEntryPermit(MaintenanceEntryPermit)
+}
+
 func wireNT8Maintenance(at *AutoTrader, nt *ntTrader.TCPTrader) {
 	nt.SetEntryPermit(MaintenanceEntryPermit)
 	nt.SetEntryHoldCheck(maintenanceQueueHeld)

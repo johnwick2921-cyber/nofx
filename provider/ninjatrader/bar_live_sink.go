@@ -19,9 +19,15 @@ import (
 // socket read loop are never stalled by evaluator work (DB writes only on
 // qualified setups, but the drain-loop non-blocking invariant is absolute).
 
+// liveSinkQueueCap must absorb a normal hour-open burst (one closed frame
+// per subscribed TF plus intrabar frames) even while the sink worker briefly
+// stalls on evaluator work. Measured 09-24 22:00 CT: 101 frames dropped with
+// the old 256 cap (DEFAULTS-SANE).
+const liveSinkQueueCap = 2048
+
 var (
 	liveBarSink   atomic.Value // func(symbol, tf, contract string, bars []Bar, receivedAt time.Time)
-	liveSinkCh    = make(chan liveSinkMsg, 256)
+	liveSinkCh    = make(chan liveSinkMsg, liveSinkQueueCap)
 	liveSinkOnce  sync.Once
 	liveSinkDrops atomic.Int64
 	// W4/D24: frames refused as LIVE ENTRY EVENTS because they reached us long
@@ -31,13 +37,15 @@ var (
 	unagedLiveFrames atomic.Int64
 )
 
-// liveFrameMaxAgeMs bounds how old a bar_update frame may be and still count
-// as a LIVE entry event. It is deliberately far ABOVE the 10s entry window —
-// an ordinary late emission (NT8 emits a closed bar on the first tick of the
-// next bar) must never be refused here — and far BELOW one 5m candle period,
-// so a frame belonging to an earlier interval cannot present itself as news.
-// The frame still reaches the cache; only the entry fan-out is refused.
-const liveFrameMaxAgeMs = 30_000
+// LiveFrameMaxAgeMs bounds how old a bar_update frame may be and still count
+// as a LIVE entry event. It is deliberately far BELOW one 5m candle period,
+// so a frame belonging to an earlier interval cannot present itself as news,
+// and far above an ordinary late emission (NT8 emits a closed bar on the
+// first tick of the next bar). The frame still reaches the cache; only the
+// entry fan-out is refused. The Picture freshness default is pinned to this
+// bound (trader/picture_htf_defaults_test.go): a freshness default stricter
+// than the sink's own admission would refuse frames the pipeline accepted.
+const LiveFrameMaxAgeMs = 30_000
 
 // StaleLiveFrames reports frames refused as live entry events for age.
 func StaleLiveFrames() int64 { return staleLiveFrames.Load() }
@@ -48,7 +56,7 @@ func StaleLiveFrames() int64 { return staleLiveFrames.Load() }
 func UnagedLiveFrames() int64 { return unagedLiveFrames.Load() }
 
 // liveFrameTooOld reports whether the frame's own emission stamp puts it
-// outside liveFrameMaxAgeMs. Reads nothing but the frame: this is the wire
+// outside LiveFrameMaxAgeMs. Reads nothing but the frame: this is the wire
 // boundary and it must not depend on any evaluator.
 func liveFrameTooOld(bars []Bar, nowMs int64) bool {
 	newest := int64(0)
@@ -61,7 +69,7 @@ func liveFrameTooOld(bars []Bar, nowMs int64) bool {
 		unagedLiveFrames.Add(1)
 		return false
 	}
-	return nowMs-newest > liveFrameMaxAgeMs
+	return nowMs-newest > LiveFrameMaxAgeMs
 }
 
 type liveSinkMsg struct {
@@ -106,10 +114,44 @@ func liveSinkLoop() {
 	}
 }
 
+// sinkDropBurst tracks one drop episode so a full-queue storm is WARNed at
+// its START (never silent, even mid-burst) and once at its END with the total
+// count. fanOutLiveBars runs on the TCP read goroutine, but the mutex keeps
+// the tracker safe regardless of caller.
+type sinkDropBurst struct {
+	mu      sync.Mutex
+	count   int64
+	started time.Time
+}
+
+// recordDrop opens or extends the burst. The FIRST drop WARNs immediately.
+func (b *sinkDropBurst) recordDrop() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.count == 0 {
+		b.started = time.Now()
+		logger.Warnf("picture-htf: live sink queue full — drop burst started (self-heals: evaluators rebuild from cache)")
+	}
+	b.count++
+}
+
+// closeBurst ends the burst, returning its count (0 when none). Called on a
+// SUCCESSFUL enqueue — the queue has room again, so the episode is over.
+func (b *sinkDropBurst) closeBurst() (int64, time.Duration) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	n, d := b.count, time.Since(b.started)
+	b.count = 0
+	return n, d
+}
+
+var liveSinkBurstTracker sinkDropBurst
+
 // fanOutLiveBars enqueues LIVE frames for the sink. Non-blocking; on a full
-// queue the pending frame is DROPPED and counted loudly — evaluators rebuild
-// their state from the cache on every event, so a dropped frame only delays
-// an evaluation to the next one (the wall-clock fallback covers the rest).
+// queue the pending frame is DROPPED, counted, and WARNed once per burst —
+// evaluators rebuild their state from the cache on every event, so a dropped
+// frame only delays an evaluation to the next one (the wall-clock fallback
+// covers the rest).
 func fanOutLiveBars(symbol, tf, contract string, bars []Bar) {
 	if len(bars) == 0 {
 		return
@@ -119,11 +161,12 @@ func fanOutLiveBars(symbol, tf, contract string, bars []Bar) {
 	}
 	select {
 	case liveSinkCh <- liveSinkMsg{symbol: symbol, tf: tf, contract: contract, bars: bars, receivedAt: time.Now()}:
+		if n, d := liveSinkBurstTracker.closeBurst(); n > 0 {
+			logger.Warnf("picture-htf: live sink queue drained — %d frame(s) dropped during the burst (%.0fs; self-heals: evaluators rebuild from cache)", n, d.Seconds())
+		}
 	default:
 		liveSinkDrops.Add(1)
-		if liveSinkDrops.Load()%100 == 1 {
-			logger.Warnf("picture-htf: live sink queue full — %d frame(s) dropped (self-heals: evaluators rebuild from cache)", liveSinkDrops.Load())
-		}
+		liveSinkBurstTracker.recordDrop()
 	}
 }
 
