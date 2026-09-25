@@ -570,7 +570,18 @@ func TestFetchRefusesWithoutItsInputs(t *testing.T) {
 			f.env(t, f.inbox, in)
 			return []string{fetchID}
 		}, "outside the install"},
-		{"no allowed-signers in the install", func(t *testing.T, f *fetchRig) []string {
+		// U4F defect 1: containment compares path ELEMENTS — "..rel" is a
+		// directory INSIDE the install whose name merely starts with "..".
+		{"release dir <install>/..rel", func(t *testing.T, f *fetchRig) []string {
+			in := filepath.Join(f.inst, "..rel")
+			if err := os.Mkdir(in, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			f.root = in
+			f.env(t, f.inbox, in)
+			return []string{fetchID}
+		}, "outside the install"},
+		{"no allowed-signers in the install",func(t *testing.T, f *fetchRig) []string {
 			if err := os.Remove(updaterworker.ReleaseAllowedSignersPath(f.inst)); err != nil {
 				t.Fatal(err)
 			}
