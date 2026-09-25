@@ -7513,3 +7513,7 @@ That is the shape worth naming: a dry run proves the steps it REACHES. Code afte
 **Fixed in 3b-A:** the parse moved into `internal/activation` and reads from the LAST `)` in the line, pinned by a test whose comm is literally `(nofx bin (x))`. `deploy/cutover.sh` v7 delegates rather than carrying its own copy, so the attended boot and the unattended worker share one implementation and one test suite.
 
 **Probe:** for every procedure with a rehearsal mode, list the steps the rehearsal never reaches and ask what tests them. If the answer is "nothing", they are exercised first in production. Either the rehearsal must reach them (a seam, a fixture, a `--force-through` for the safe parts) or they must be moved into code a unit test can call — the second is usually right, because a step that only a live cutover can exercise is a step nobody can afford to debug.
+
+## CLASS NN (assigned at merge) — UI TRUTH MUST DISTINGUISH UNKNOWN FROM EMPTY, AND STALE WRITES MUST NOT LAND
+
+A failed or malformed snapshot fetch (orders, positions, balances) must render UNKNOWN, never an empty table — only a validated success may clear prior state, and late or out-of-scope responses must be discarded against the request's own view identity (symbol/interval/account). Streamed session writes (SSE chat) must be owned by the session that started them: an old stream's completion or failure must not write into a newer session's store, clear its loading flag, or overwrite its history.
