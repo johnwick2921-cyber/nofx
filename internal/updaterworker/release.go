@@ -40,8 +40,12 @@ package updaterworker
 //  10. writes <data>/updater/verdicts/<release_id>.json (0600, dirs 0700,
 //     no-clobber link) — the updaterjob.Verdict the app-side reader
 //     (updaterjob.ReadVerdict) accepts; this package is its ONLY writer. If
-//     THAT fails, the just-renamed release dir is removed: no release dir
-//     survives without its verdict.
+//     THAT fails, the just-renamed release dir is removed. A KILL between 9
+//     and 10 cannot run that cleanup: it leaves a verdict-less dir carrying
+//     this fetch's pending marker (written before the rename), and the NEXT
+//     FetchRelease quarantines it under the release-root lock before doing
+//     anything else (D8b). A verdict-less dir is never read as verified, and
+//     a dir without our marker is never touched ("never overwritten").
 //
 // Any refusal removes the staging dir; nothing outside it is ever written
 // before step 9.
@@ -146,6 +150,10 @@ type activationManifest struct {
 	Signature string `json:"signature_verdict"`
 }
 
+// fetchAfterRename is a TEST SEAM: it runs between step 9's rename and step
+// 10's verdict link (D8b's kill point). A no-op in production.
+var fetchAfterRename = func() {}
+
 // FetchRelease materializes and verifies a local release archive and writes
 // its verdict (see the file comment for the exact order).
 func FetchRelease(cfg FetchConfig) (updaterjob.Verdict, error) {
@@ -177,6 +185,20 @@ func FetchRelease(cfg FetchConfig) (updaterjob.Verdict, error) {
 	now := time.Now
 	if cfg.Now != nil {
 		now = cfg.Now
+	}
+	// D8b (CTO 1790279155144 (4)): hold the release root for the WHOLE fetch
+	// (through the rename and the verdict link below), and first recover an
+	// interrupted fetch: a release dir carrying this package's own pending
+	// marker and no verdict is quarantined (renamed, never deleted), so a kill
+	// between rename and link can no longer block its sha forever. A dir with
+	// no marker is not ours and still refuses below ("never overwritten").
+	unlock, err := LockReleaseRoot(cfg.ReleaseRoot)
+	if err != nil {
+		return updaterjob.Verdict{}, fmt.Errorf("%w: %w", ErrFetchConfig, err)
+	}
+	defer unlock()
+	if _, err := quarantineLocked(cfg.ReleaseRoot, cfg.DataDir, now()); err != nil {
+		return updaterjob.Verdict{}, fmt.Errorf("%w: interrupted-fetch recovery: %w", ErrFetchConfig, err)
 	}
 
 	// 2. extract into a private staging dir inside the release root
@@ -272,19 +294,28 @@ func FetchRelease(cfg FetchConfig) (updaterjob.Verdict, error) {
 	if _, err := os.Lstat(final); !errors.Is(err, fs.ErrNotExist) {
 		return updaterjob.Verdict{}, fmt.Errorf("%w: %s appeared during the fetch", ErrReleaseDirExists, final)
 	}
+	if err := MarkFetchPending(cfg.ReleaseRoot, m.SourceSHA); err != nil {
+		return updaterjob.Verdict{}, fmt.Errorf("%w: pending marker: %w", ErrFetchConfig, err)
+	}
 	if err := os.Rename(staging, final); err != nil {
+		_ = ClearFetchPending(cfg.ReleaseRoot, m.SourceSHA)
 		return updaterjob.Verdict{}, fmt.Errorf("%w: %s: %w", ErrReleaseDirExists, final, err)
 	}
 	renamed = true
 	_ = syncDir(cfg.ReleaseRoot)
+	fetchAfterRename()
 
 	// 10. the verdict — last, and only now
 	if err := writeVerdict(cfg.DataDir, vpath, v); err != nil {
 		// no release dir survives without its verdict
 		_ = os.RemoveAll(final)
 		_ = syncDir(cfg.ReleaseRoot)
+		_ = ClearFetchPending(cfg.ReleaseRoot, m.SourceSHA)
 		return updaterjob.Verdict{}, err
 	}
+	// The verdict is written: a marker that survives this clear names a
+	// finished fetch, and the next recovery removes it (a verdict names the dir).
+	_ = ClearFetchPending(cfg.ReleaseRoot, m.SourceSHA)
 	return v, nil
 }
 
