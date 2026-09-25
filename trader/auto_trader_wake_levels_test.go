@@ -7,6 +7,7 @@ import (
 
 	"nofx/kernel"
 	"nofx/market"
+	"nofx/mcp"
 	"nofx/store"
 )
 
@@ -363,22 +364,53 @@ func TestMaybeWakePlannerFoldsOverlaySeatedLevel(t *testing.T) {
 	if err != nil || row == nil {
 		t.Fatalf("plan row: %v", err)
 	}
+	// T2 join (CTO 2026-09-25, root cause of the 06:07 CI fail): the claim is a
+	// TRANSIENT state — on the fast runner the read opened and released it
+	// between two waitFor polls, and the observation failed on a read that DID
+	// run (the CI log shows all three planner attempts completing in 0.0s).
+	// Durable fix: the fake planner BLOCKS inside the claim until the test has
+	// OBSERVED the claim open, so the observation cannot race the read; the
+	// release then lets the read finish fail-closed and the deferred
+	// drainReReads joins it.
+	bp := &blockingPlannerClient{entered: make(chan struct{}, 1), release: make(chan struct{})}
+	at.mcpClient = bp
 	at.maybeWakePlannerOnLevelEventsAt(now, "NY", "2026-08-25", row)
 	if at.lastLevelWakeKey == "" {
 		t.Fatal("the owner overlay's seated Demand level must wake the planner through the fold")
 	}
-	// T2 join (CTO 2026-09-25): the deferred drain alone is NOT a join here —
-	// the goroutine evaluates priorPlanLevelLines (store reads) BEFORE it
-	// claims, so the drain can run while the claim maps are empty and return
-	// with the read still ahead. Wait until the claim APPEARS — the read is
-	// then past the pre-claim work and holds the claim until completion — and
-	// let the deferred drainReReads join the release. The old seenOpen+closed
-	// observation raced: a fast read opened and closed between polls and the
-	// test failed with 'never ran to completion' on a completed read.
 	if !waitFor(t, 10*time.Second, func() bool {
 		_, open := anyPlannerStreamOpen()
 		return open
 	}) {
 		t.Fatal("the fired wake's read never started — no planner stream claim appeared (a wall-clock gate refused it: check session/clock/seam)")
 	}
+	close(bp.release) // the claim is observed open; let the read run to its fail-closed end
+}
+
+// blockingPlannerClient (CTO 2026-09-25) is the wake test's planner: it BLOCKS
+// inside the claimed read until released, so the claim stays open while the
+// test observes it. It returns no JSON (fail-closed), exactly like the CI
+// runner's fake.
+type blockingPlannerClient struct {
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (b *blockingPlannerClient) SetAPIKey(string, string, string) {}
+func (b *blockingPlannerClient) SetTimeout(time.Duration)         {}
+func (b *blockingPlannerClient) ResolvedModel() string            { return "test-model" }
+func (b *blockingPlannerClient) CallWithMessages(_, _ string) (string, error) {
+	select {
+	case b.entered <- struct{}{}:
+	default:
+	}
+	<-b.release
+	return "", nil
+}
+func (b *blockingPlannerClient) CallWithRequest(*mcp.Request) (string, error) { return "", nil }
+func (b *blockingPlannerClient) CallWithRequestStream(*mcp.Request, func(string)) (string, error) {
+	return "", nil
+}
+func (b *blockingPlannerClient) CallWithRequestFull(*mcp.Request) (*mcp.LLMResponse, error) {
+	return nil, nil
 }
