@@ -31,8 +31,15 @@ func (t *TCPTrader) StartCloseSync(traderID, exchangeID, exchangeType string, st
 	t.mu.Unlock()
 	pb := store.NewPositionBuilder(st.Position())
 	t.closeSyncOnce.Do(func() {
+		done := t.observerLifetime()
+		// W117 F5 — subscribe BEFORE the goroutines: a delayed old goroutine must
+		// never subscribe after the replacement and steal its account stream.
+		closes := t.server.SubscribeClosesFor(t.symbol, t.boundAccount)
+		rejects := t.server.SubscribeRejectsFor(t.symbol, t.boundAccount)
+		instruments := t.server.SubscribeInstrumentInfoFor(t.symbol, t.boundAccount)
 		go func() {
-			for p := range t.server.SubscribeClosesFor(t.symbol, t.boundAccount) { // P5.4 router-fed (per-symbol)
+			defer close(done) // drain all queued receipts before stopping reconcile
+			for p := range closes {
 				t.recordClose(traderID, exchangeID, exchangeType, st, pb, p)
 				// Fast, account-correct flat signal for reconcile-before-open: a
 				// position_close arrived for this trader's bound account (frame path
@@ -48,7 +55,7 @@ func (t *TCPTrader) StartCloseSync(traderID, exchangeID, exchangeType string, st
 		// natural bounded retry) and the periodic reconcile keeps the DB anchored to
 		// NT8 truth, so the orphan can't be netted onto by the next entry.
 		go func() {
-			for r := range t.server.SubscribeRejectsFor(t.symbol, t.boundAccount) { // P5.4 router-fed (per-symbol)
+			for r := range rejects { // P5.4 router-fed (per-symbol)
 				logger.Warnf("🚨 NT close REJECTED: %s %s — STILL OPEN in NT8, NOT recording closed (reason: %q, account: %s). Will retry on next decision cycle / reconnect.",
 					r.Symbol, r.PositionSide, r.Reason, r.Account)
 			}
@@ -59,7 +66,7 @@ func (t *TCPTrader) StartCloseSync(traderID, exchangeID, exchangeType string, st
 		// (no table entry) NT8 is the only source. The tables stay authoritative for
 		// the math; this is defense-in-depth + drift detection.
 		go func() {
-			for in := range t.server.SubscribeInstrumentInfoFor(t.symbol, t.boundAccount) { // P5.4 router-fed (per-symbol)
+			for in := range instruments { // P5.4 router-fed (per-symbol)
 				tablePV := market.FuturesPointValue(in.Symbol)
 				tableTick := market.FuturesTickSize(in.Symbol)
 				switch {
@@ -255,4 +262,17 @@ func buildExitFill(owner *store.TraderPosition, exchangeID, exchangeType, symbol
 		IsMaker:         false,
 		CreatedAt:       exitMs,
 	}
+}
+
+// observerLifetime (W117 F5) returns the shared observer-done channel,
+// initialized under mu. The close consumer closes it AFTER draining its queued
+// receipts, which retires the reconcile worker — same-account replacement
+// drains; a foreign account or a socket disconnect does not.
+func (t *TCPTrader) observerLifetime() chan struct{} {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.observerDone == nil {
+		t.observerDone = make(chan struct{})
+	}
+	return t.observerDone
 }

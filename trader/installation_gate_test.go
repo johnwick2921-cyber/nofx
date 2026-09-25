@@ -35,7 +35,9 @@ func newGateFixture(t *testing.T) *gateFixture {
 	dir := withMaintenanceDir(t)
 	at, st := resetTrader(t, store.StrategyConfig{})
 	at.id = "gate-t1"
-	at.trader = ntTrader.NewTCPTrader(ntwire.NewTCPServer(nil), "MNQ", "Sim101")
+	s := ntwire.NewTCPServer(nil)
+	s.SeedPositionsForTest("Sim101", []ntwire.OpenPosition{}) // W117 F4: known-flat on connect
+	at.trader = ntTrader.NewTCPTrader(s, "MNQ", "Sim101")
 	setHold(t, dir, "job-g")
 	f := &gateFixture{dir: dir, st: st, loaded: map[string]*AutoTrader{at.id: at},
 		wire: installationWire{Connected: true, Rec: ntwire.ConnectionRecord{AcceptSeq: 3, RemotePort: 50123, Ack: goodCensusAck("job-g")}, HasAck: true, AckAge: time.Second}}
