@@ -46,6 +46,49 @@ func repoRoot(t *testing.T) string {
 	return filepath.Dir(wd) // deploy/ -> repo root
 }
 
+// collectBuildSites scans one file for "npm run build" invocations and reports
+// which lack the guide rev within scanLookback lines. docMode counts only
+// copy-pastable commands (lines that also say "cd web") — a prose mention is
+// not a producer (PR B [12]).
+func collectBuildSites(rel, content string, docMode bool) (scanned, missing []string) {
+	lines := strings.Split(content, "\n")
+	for i, ln := range lines {
+		if !strings.Contains(ln, "npm run build") {
+			continue
+		}
+		if strings.HasPrefix(strings.TrimSpace(ln), "#") {
+			continue
+		}
+		if docMode && !strings.Contains(ln, "cd web") {
+			continue
+		}
+		scanned = append(scanned, fmt.Sprintf("%s:%d", rel, i+1))
+		lo := i - scanLookback
+		if lo < 0 {
+			lo = 0
+		}
+		if strings.Contains(strings.Join(lines[lo:i+1], "\n"), guideRevVar) {
+			continue
+		}
+		missing = append(missing, fmt.Sprintf("%s:%d  %s", rel, i+1, strings.TrimSpace(ln)))
+	}
+	return
+}
+
+// scanProducerFile reads one file at the repo root and folds its sites into the
+// census — the Makefile and the documented install/contributor commands live
+// OUTSIDE the three walked dirs, which was the [12] blind spot.
+func scanProducerFile(t *testing.T, root, rel string, docMode bool, scanned, missing *[]string) {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(root, rel))
+	if err != nil {
+		t.Fatalf("read %s: %v", rel, err)
+	}
+	s, m := collectBuildSites(rel, string(b), docMode)
+	*scanned = append(*scanned, s...)
+	*missing = append(*missing, m...)
+}
+
 func TestEveryProductionFrontendBuildSuppliesTheGuideRev(t *testing.T) {
 	root := repoRoot(t)
 	var scanned, missing []string
@@ -64,26 +107,9 @@ func TestEveryProductionFrontendBuildSuppliesTheGuideRev(t *testing.T) {
 			if rerr != nil {
 				return nil
 			}
-			lines := strings.Split(string(b), "\n")
-			for i, ln := range lines {
-				if !strings.Contains(ln, "npm run build") {
-					continue
-				}
-				// A comment mentioning the command is not an invocation of it.
-				// (This test failed on its OWN explanatory comments first.)
-				if strings.HasPrefix(strings.TrimSpace(ln), "#") {
-					continue
-				}
-				scanned = append(scanned, fmt.Sprintf("%s:%d", rel, i+1))
-				lo := i - scanLookback
-				if lo < 0 {
-					lo = 0
-				}
-				if strings.Contains(strings.Join(lines[lo:i+1], "\n"), guideRevVar) {
-					continue
-				}
-				missing = append(missing, fmt.Sprintf("%s:%d  %s", rel, i+1, strings.TrimSpace(ln)))
-			}
+			s, m := collectBuildSites(rel, string(b), false)
+			scanned = append(scanned, s...)
+			missing = append(missing, m...)
 			return nil
 		})
 	}
@@ -91,6 +117,12 @@ func TestEveryProductionFrontendBuildSuppliesTheGuideRev(t *testing.T) {
 	walk(".github/workflows", func(p string) bool { return strings.HasSuffix(p, ".yml") })
 	walk("docker", func(p string) bool { return strings.Contains(filepath.Base(p), "Dockerfile") })
 	walk("deploy", func(p string) bool { return strings.HasSuffix(p, ".sh") })
+	// PR B [12]: producers outside the three walked dirs — the repo-root
+	// Makefile and the DOCUMENTED copy-pastable build commands. A producer the
+	// census cannot see is one that fails at build time with no warning here.
+	scanProducerFile(t, root, "Makefile", false, &scanned, &missing)
+	scanProducerFile(t, root, "INSTALL.md", true, &scanned, &missing)
+	scanProducerFile(t, root, "CONTRIBUTING.md", true, &scanned, &missing)
 
 	if len(scanned) == 0 {
 		t.Fatal("scanned no production build call sites at all — the census is looking in the wrong place")
@@ -157,5 +189,94 @@ func TestWorkflowsThatBuildTheFrontendImagePassTheBuildArg(t *testing.T) {
 	if len(bad) > 0 {
 		t.Fatalf("%d workflow(s) build Dockerfile.frontend without a %s build-arg:\n  %s",
 			len(bad), guideRevVar, strings.Join(bad, "\n  "))
+	}
+}
+
+// TestReadmeProducerTableMatchesTheCensus (PR B [12]) — the README's producers
+// table must never drift from the census: every repo path the census scans as
+// a producer must be named in the table, and every path row in the table must
+// be a path the census actually scans. A table maintained by hand beside the
+// test is how "make build-frontend" shipped unstamped while the table claimed
+// completeness.
+func TestReadmeProducerTableMatchesTheCensus(t *testing.T) {
+	root := repoRoot(t)
+
+	// census paths: the files the census scans for build invocations.
+	census := map[string]bool{}
+	walk := func(dir string, keep func(string) bool) {
+		_ = filepath.Walk(filepath.Join(root, dir), func(p string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() || !keep(p) {
+				return nil
+			}
+			rel, _ := filepath.Rel(root, p)
+			if why, skip := notAProducer[filepath.ToSlash(rel)]; skip {
+				_ = why
+				return nil
+			}
+			b, rerr := os.ReadFile(p)
+			if rerr != nil {
+				return nil
+			}
+			if strings.Contains(string(b), "npm run build") {
+				census[filepath.ToSlash(rel)] = true
+			}
+			return nil
+		})
+	}
+	walk(".github/workflows", func(p string) bool { return strings.HasSuffix(p, ".yml") })
+	walk("docker", func(p string) bool { return strings.Contains(filepath.Base(p), "Dockerfile") })
+	walk("deploy", func(p string) bool { return strings.HasSuffix(p, ".sh") })
+	for _, rel := range []string{"Makefile", "INSTALL.md", "CONTRIBUTING.md"} {
+		if b, err := os.ReadFile(filepath.Join(root, rel)); err == nil && strings.Contains(string(b), "npm run build") {
+			census[rel] = true
+		}
+	}
+
+	// README path rows: parse the producers table between the CLASS 250 header
+	// and the next heading; a cell that names a repo path (contains "/" or
+	// ".md" or "Makefile") is a path row.
+	b, err := os.ReadFile(filepath.Join(root, "deploy/release/README.md"))
+	if err != nil {
+		t.Fatalf("read README: %v", err)
+	}
+	inTable := false
+	readme := map[string]bool{}
+	for _, ln := range strings.Split(string(b), "\n") {
+		if strings.HasPrefix(ln, "## Producers of ") {
+			inTable = true
+			continue
+		}
+		if inTable && strings.HasPrefix(ln, "## ") {
+			break
+		}
+		if !inTable || !strings.HasPrefix(strings.TrimSpace(ln), "|") {
+			continue
+		}
+		cell := strings.TrimSpace(strings.Split(strings.Trim(ln, "|"), "|")[0])
+		if !strings.Contains(cell, "/") && !strings.Contains(cell, ".md") && !strings.Contains(cell, "Makefile") {
+			continue // descriptive row, not a path
+		}
+		for _, tok := range strings.Split(cell, ",") {
+			tok = strings.TrimSpace(strings.Trim(tok, "`"))
+			if tok != "" {
+				readme[tok] = true
+			}
+		}
+	}
+
+	var drift []string
+	for p := range readme {
+		if !census[p] {
+			drift = append(drift, "README names "+p+" but the census does not scan it")
+		}
+	}
+	for p := range census {
+		if !readme[p] {
+			drift = append(drift, "the census scans "+p+" but the README table does not name it")
+		}
+	}
+	if len(drift) > 0 {
+		t.Fatalf("README producers table drifted from the census (%d):\n  %s",
+			len(drift), strings.Join(drift, "\n  "))
 	}
 }
