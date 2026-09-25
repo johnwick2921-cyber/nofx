@@ -175,8 +175,12 @@ if [ "$DRY" -eq 1 ]; then
   plan "  MainPID only if /proc/<pid>/stat field 22 still matches (a recycled pid is refused)"
   plan "run: nofx-activate watch -release $RELEASES/$NEW_SHA -log <the NEWEST data/nofx_*.log>"
   plan "  GREEN needs BOTH a boot line newer than the kill AND /api/health reporting $SHORT"
-  plan "on ANY failure: nofx-activate rollback -prev $RELEASES/$OLD_SHA, restoring all three"
-  plan "  halves, and prove $OLD_SHORT came back"
+  plan "on ANY failure BEFORE anything moved (verify, gate, staging, backup):"
+  plan "  REFUSE and stop — the running bot is NOT touched and NO rollback runs"
+  plan "  (a healthy bot must never be restarted for a cutover that never started)"
+  plan "on a failure AFTER nofx-activate began installing: nofx-activate rollback"
+  plan "  -prev $RELEASES/$OLD_SHA, restoring all three halves, and prove $OLD_SHORT"
+  plan "  came back"
   say "dry run complete — nothing was killed, swapped or written"
   exit 0
 fi

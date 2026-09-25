@@ -180,5 +180,14 @@ has   "F6 names the failing leg" "$OUT" "failing installation-gate legs: addon_c
 has   "F6 refuses the cutover"   "$OUT" "refusing"
 hasnt "F6 no dry-run completion" "$OUT" "dry run complete"
 
+echo "== F7: a pre-install failure must NOT route to rollback (finding [24]) =="
+start_server "{\"revision\":\"$SHA\"}" "$GATE_OK"
+printf '%s\n' "$SHA" > "$WORK/inst/RELEASE"
+run_cutover
+check "F7 rc is 0" "$RC" "0"
+has   "F7 pre-install failure = refuse, bot untouched" "$OUT" "NO rollback runs"
+has   "F7 rollback only AFTER the install began" "$OUT" "failure AFTER"
+hasnt "F7 no unconditional rollback instruction" "$OUT" "on ANY failure: nofx-activate rollback"
+
 printf '\n== %d pass / %d fail ==\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ] || exit 1

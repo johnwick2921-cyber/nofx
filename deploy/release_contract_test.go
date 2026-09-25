@@ -526,6 +526,25 @@ func TestCutoverTokenNeverRidesAProcessArgv(t *testing.T) {
 	}
 }
 
+func TestCutoverNeverInstructsRollbackForAPreInstallFailure(t *testing.T) {
+	sh := repoFile(t, "deploy/cutover.sh")
+	// Finding [24]: v6 ran `cp ... || { rollback; die }` — a staging failure
+	// BEFORE anything was live invoked rollback(), which SIGKILLs a healthy
+	// bot and re-proves the old rev for a cutover that never started. The
+	// plan must split the failure space: before anything moved, REFUSE with
+	// no restart and NO rollback; only after the install began may the
+	// rollback command be named.
+	if strings.Contains(sh, "on ANY failure: nofx-activate rollback") {
+		t.Fatalf("a pre-install failure must NOT route to rollback — nothing was touched, the healthy bot must not be restarted (finding [24])")
+	}
+	if !strings.Contains(sh, "NO rollback runs") {
+		t.Fatalf("the plan must say a pre-install failure REFUSES with NO rollback")
+	}
+	if !strings.Contains(sh, "failure AFTER nofx-activate began installing") {
+		t.Fatalf("rollback must be named only for a failure AFTER the install began")
+	}
+}
+
 func TestCutoverRollbackRestartsAndProvesTheOldRev(t *testing.T) {
 	sh := repoFile(t, "deploy/cutover.sh")
 	// P1-c: after a failed boot the RUNNING process is the NEW binary, so a
