@@ -9,12 +9,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"go/parser"
 	"go/token"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -24,6 +22,7 @@ import (
 	"time"
 
 	"nofx/internal/updaterjob"
+	"nofx/internal/updaterworker/releasefixture"
 )
 
 // ── release materialization, at the production call sites ────────────────────
@@ -47,77 +46,28 @@ const testReleaseID = "v0.0.1-u3"
 var (
 	testSHA     = strings.Repeat("c0ffee", 6) + "abcd" // 40 lowercase hex
 	testNow     = time.Date(2026, 9, 24, 14, 30, 0, 123456789, time.UTC)
-	testBuildID = "2026-09-24-u3"
+	testBuildID = releasefixture.BuildID
 )
 
-func repoRoot(t *testing.T) string {
-	t.Helper()
-	root, err := filepath.Abs(filepath.Join("..", ".."))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(filepath.Join(root, "deploy", "release", "package.sh")); err != nil {
-		t.Fatalf("repo root %s has no deploy/release/package.sh: %v", root, err)
-	}
-	return root
-}
+// The archive builder lives in internal/updaterworker/releasefixture (moved
+// there unchanged by U4N so cmd/nofx-updater's fetch pin builds the SAME
+// archive); these are its package-local names.
+
+func repoRoot(t *testing.T) string { return releasefixture.RepoRoot(t) }
 
 func writeFiles(t *testing.T, root string, files map[string]string) {
 	t.Helper()
-	for rel, body := range files {
-		p := filepath.Join(root, filepath.FromSlash(rel))
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
+	releasefixture.WriteFiles(t, root, files)
 }
 
-// releaseSource is a repo tree with exactly what package.sh requires, plus a
-// STALE deploy/RELEASE that package.sh must not ship.
 func releaseSource(t *testing.T, withIndex bool) string {
 	t.Helper()
-	src := t.TempDir()
-	files := map[string]string{
-		"nofx-bin":                             "\x7fELF u3 stand-in binary\n",
-		"LICENSE":                              "test licence\n",
-		"ninjascript/vltrader_tcp_PROTOCOL.md": "protocol_version: 3\n",
-		"ninjascript/VLTraderTcp.cs":           "public const string VL_BUILD_ID = \"" + testBuildID + "\";\n",
-		"web/dist/assets/app.js":               "console.log('u3')\n",
-		"deploy/RELEASE":                       strings.Repeat("a", 40) + "\n",
-	}
-	if withIndex {
-		files["web/dist/index.html"] = "<!doctype html><title>u3</title>\n"
-	}
-	writeFiles(t, src, files)
-	if err := os.Chmod(filepath.Join(src, "nofx-bin"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	return src
+	return releasefixture.ReleaseSource(t, withIndex)
 }
 
 func runIn(t *testing.T, dir string, stdoutOnly bool, name string, args ...string) []byte {
 	t.Helper()
-	cmd := exec.Command(name, args...)
-	cmd.Dir = dir
-	cmd.Env = keygenEnv(t)
-	var out []byte
-	var err error
-	if stdoutOnly {
-		out, err = cmd.Output()
-	} else {
-		out, err = cmd.CombinedOutput()
-	}
-	if err != nil {
-		var stderr []byte
-		if ee, ok := err.(*exec.ExitError); ok {
-			stderr = ee.Stderr
-		}
-		t.Fatalf("%s %v: %v\n%s%s", name, args, err, out, stderr)
-	}
-	return out
+	return releasefixture.RunIn(t, dir, stdoutOnly, name, args...)
 }
 
 type testRelease struct {
@@ -145,65 +95,26 @@ type releaseOpts struct {
 
 func buildRelease(t *testing.T, o releaseOpts) testRelease {
 	t.Helper()
-	sshKeygen(t)
-	root := repoRoot(t)
-	work := t.TempDir()
-	stage := filepath.Join(work, "stage")
-	runIn(t, root, false, "bash", "deploy/release/package.sh", releaseSource(t, !o.noIndex), stage, testSHA)
-	manifestPath := filepath.Join(stage, "manifest.json")
-	if o.beforeManifest != nil {
-		o.beforeManifest(t, stage)
-	}
-	if o.verbatimRedirect {
-		cmd := exec.Command("bash", "-c", `bash deploy/release/manifest.sh "$1" "$2" "$3" > "$1/manifest.json"`, "_", stage, testSHA, testReleaseID)
-		cmd.Dir = root
-		cmd.Env = keygenEnv(t)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return testRelease{redirectRefused: fmt.Sprintf("%v: %s", err, out)}
-		}
-	} else {
-		out := runIn(t, root, true, "bash", "deploy/release/manifest.sh", stage, testSHA, testReleaseID)
-		if o.selfEntry {
-			out = injectSelfEntry(t, out)
-		}
-		if o.editManifest != nil {
-			out = o.editManifest(out)
-		}
-		if err := os.WriteFile(manifestPath, out, 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	signer := newTestSigner(t, work, "release-signer")
-	sig := signer.sign(t, manifestPath, "release")
-	manifest, err := os.ReadFile(manifestPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if o.afterSign != nil {
-		o.afterSign(t, stage)
-	}
-	archive := filepath.Join(work, testReleaseID+".tar.gz")
-	runIn(t, work, false, "tar", "-C", stage, "-czf", archive, ".")
+	r := releasefixture.Build(t, testReleaseID, testSHA, releasefixture.Opts{
+		SelfEntry: o.selfEntry, VerbatimRedirect: o.verbatimRedirect, NoIndex: o.noIndex,
+		BeforeManifest: o.beforeManifest, EditManifest: o.editManifest, AfterSign: o.afterSign,
+	})
 	return testRelease{
-		archive: archive, stage: stage, signer: signer,
-		signers: writeAllowedSigners(t, work, "release "+signer.pub),
-		fp:      signer.fingerprint(t), manifest: manifest, sig: sig,
+		redirectRefused: r.RedirectRefused,
+		archive:         r.Archive, stage: r.Stage, signer: testSigner{priv: r.Signer.Priv, pub: r.Signer.Pub},
+		signers: r.Signers, fp: r.FP, manifest: r.Manifest, sig: r.Sig,
 	}
 }
 
 // zeroSelfEntry is the artifacts[] entry release.yml:172's redirect makes the
 // manifest list for itself: the shell creates manifest.json (0 bytes, the
 // sha256 of nothing) before find runs.
-const zeroSelfEntry = `{"path":"manifest.json","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","bytes":0}`
+const zeroSelfEntry = releasefixture.ZeroSelfEntry
 
 // injectSelfEntry puts zeroSelfEntry first in manifest.sh's artifacts[].
 func injectSelfEntry(t *testing.T, manifest []byte) []byte {
 	t.Helper()
-	const open = `"artifacts": [`
-	if bytes.Count(manifest, []byte(open)) != 1 {
-		t.Fatalf("fixture: manifest.sh output has no single %q:\n%s", open, manifest)
-	}
-	return bytes.Replace(manifest, []byte(open), []byte(open+zeroSelfEntry+","), 1)
+	return releasefixture.InjectSelfEntry(t, manifest)
 }
 
 type fetchEnv struct{ releaseRoot, dataDir string }
