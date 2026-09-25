@@ -1,15 +1,26 @@
 # RESTART 1 — BOOT WATCH SHEET
 
-**Author:** DS-105 · **Branch:** `docs/restart1-boot-watch` · **Base:** origin/dev `39829e65`
-**Scope:** what attended restart 1 (~07:00 CT, 2026-09-25) ships — already on dev: #197 #207 #208 #209 #210 #211 #214 #215 #217 #219 #220; merging next: #212 #213 #221 and #222 (planner-contract, fix/planner-contract).
-**Law:** every proof line below is READ from the code at the cited ref (file:line), never guessed; a line printed by a branch not yet on dev is cited from that branch's head. SIM-only throughout.
+**Author:** DS-105 · **Branch:** `docs/restart1-boot-watch` · **Base:** origin/dev `39829e65`, refreshed against **final restart-1 dev sha `9c106d0b`** (all citations re-grepped at that sha)
+**Scope:** what attended restart 1 (~07:00 CT, 2026-09-25) ships — ALL merged on dev `9c106d0b`: #215 #217 #214 #219 #220 #197 #221 #212 #216 #222 #213 (and the earlier #197 #207 #208 #209 #210 #211).
+**Law:** every proof line below is READ from the code at the cited ref (file:line), never guessed. All citations re-grepped at `9c106d0b`. SIM-only throughout.
+
+---
+
+## Not in this boot (open at `9c106d0b`, intentionally NOT shipped by restart 1)
+
+- **#218 W117-A (fix/w117-a-exec-evidence)** — NT8 execution-evidence ownership: F1 + F4 + F5 in this PR; **F2/F3 moved to a rebuild PR** (the "F2/F3 rebuild" the CTO named). Watch for it after the boot, not at it.
+- **#224 W117-B2 (fix/w117-b-cancel-truth follow-up)** — the boot sweep requests the cancel and settles only on a persisted broker snapshot (F8's last caller).
+- **#225 W117 PR-C (placement/commit semantics)** — F13, F13b, F14, F15.
+- **#206 M4 3b-B (feat/one-button-m4-worker)** — the updater worker (`nofx-updater`) + API glue behind `NOFX_UPDATER`, default OFF.
+
+None of these four is live in restart 1; do not look for their evidence in this boot.
 
 ---
 
 ## 1. #197 — W1a-plan: owed plan/planner folds (merged)
 
 - **Live change:** planner folds P1–P15/N2/N5/T2/T3 — repair order, zone-accepted identity, clock seams, bias-coherent arm handling. Runtime behaviour changes on the next planner read.
-- **Proof line (dev `39829e65`):** `🧭 bias-coherent arms: %s (WARN — write proceeds; owner ruling 2026-09-04 is warn-first)` — `trader/auto_trader_planner.go:2251`; `🧭 role mismatch: %s` — `:2311`.
+- **Proof line (dev `9c106d0b`):** `🧭 bias-coherent arms: %s (WARN — write proceeds; owner ruling 2026-09-04 is warn-first)` — `trader/auto_trader_planner.go:2345`; `🧭 role mismatch: %s` — `:2405`.
 - **Knobs:** none new (folds only).
 - **First evidence:** the first post-boot planner read either prints those 🧭 WARNs (if owed conditions apply) or proceeds silently; read output rows appear in `planner_rejected_prompts` / plan tables as before.
 
@@ -44,7 +55,7 @@
 ## 6. #211 — W117-E: authenticated chat model isolation (merged)
 
 - **Live change:** every authenticated chat request runs on a request-local `*Agent` (`agent/request_runtime.go`) so two users' model credentials can no longer clobber each other; an authenticated user with no enabled model gets NO client (no silent fallback to another account's key).
-- **Proof line:** `agent/request_runtime.go:18` comment — the SHARED-agent overwrite the fix kills; `HandleMessage`/`HandleMessageStream` first line `a = a.requestRuntime(storeUserID)`.
+- **Proof line:** `agent/request_runtime.go:21` (`requestRuntime`); `HandleMessage`/`HandleMessageStream` first line `a = a.requestRuntime(storeUserID)` — `agent/agent.go:433` / `:480`.
 - **Knobs:** none (behaviour fix).
 - **First evidence:** two concurrent authenticated chats with different models each answer with their own model; a user with no enabled model gets the refusal, not another account's model.
 
@@ -72,7 +83,7 @@
 ## 10. #219 — W117-F: position lifecycle fences (merged)
 
 - **Live change:** delayed-flatten Stop fence and trader-scoped account evidence (F6–F7): a reconcile before an open refuses or flattens an unexplained NT8 position instead of compounding onto an orphan.
-- **Proof lines (dev `39829e65`):** `⛔ reconcile-before-open: NT8 holds a %s %s that the ledger explains (%s) — refusing the %s open` `trader/auto_trader_orders.go:303`; `🚨 reconcile-before-open: … flattening first` `:306`; `✅ reconcile-before-open: %s flatten fill-confirmed via position_close frame` `:333`.
+- **Proof lines (dev `9c106d0b`):** `⛔ reconcile-before-open: NT8 holds a %s %s that the ledger explains (%s) — refusing the %s open` `trader/auto_trader_orders.go:303`; `🚨 reconcile-before-open: … flattening first` `:306`; `✅ reconcile-before-open: %s flatten fill-confirmed via position_close frame` `:333`.
 - **Knobs:** none.
 - **First evidence:** if NT8 ever holds an orphan at open time, one of those three lines fires instead of a compounding entry.
 
@@ -83,32 +94,32 @@
 - **Knobs:** none.
 - **First evidence:** the binary's module list carries the bumped versions.
 
-## 12. #212 — DEFAULTS-SANE (merging next; head `36efe3e5`)
+## 12. #212 — DEFAULTS-SANE (merged)
 
 - **Live change:** Picture HTF entry window default **90 → 360 s**, freshness default **15 → 30 s**; the evaluator's silent decision points now WARN once per (stage,reason); `liveFrameMaxAgeMs` exported as `LiveFrameMaxAgeMs` (sink admission bound, unchanged value 30 s).
-- **Proof line:** the 📷 boot line — `picture-htf: mode=%s rule=v1 … window=%ds fresh=%ds · foreign=… · stale=…` (`trader/picture_htf_live.go:206`, PR branch); it READS the resolver, so a live bot prints `window=360s fresh=30s`. The floor pins: `TestPictureHtfDefaultWindowExceedsWorstDetectionToPlacement`, `TestPictureHtfDefaultFreshnessAdmitsEverySinkAdmittedFrame`.
+- **Proof line:** the 📷 boot line — `picture-htf: mode=%s rule=v1 … window=%ds fresh=%ds · foreign=… · stale=…` (`trader/picture_htf_live.go:206`); it READS the resolver, so a live bot prints `window=360s fresh=30s`. The floor pins: `TestPictureHtfDefaultWindowExceedsWorstDetectionToPlacement`, `TestPictureHtfDefaultFreshnessAdmitsEverySinkAdmittedFrame`.
 - **Knobs:** `day_plan.picture_htf.entry_window_sec` (default **360**, 0 = default), `day_plan.picture_htf.freshness_sec` (default **30**). Effective value: the boot line itself, and the Studio effective-values table (`EffectiveMount` rows).
 - **First evidence:** post-boot 📷 line shows `window=360s fresh=30s`; on the next hour-open storm, `picture-htf: … stale=…` stays low and `picture_htf_opportunities` can finally produce rows (it was 0 ever before).
 
-## 13. #213 — Planner Lane B: executor arm-reach (merging next; head on `fix/planner-arm-reach`)
+## 13. #213 — Planner Lane B: executor arm-reach (merged)
 
 - **Live change:** B1 a far `market_in_zone` arm waits armed-unplaced beyond `zone_place_within_pts` and places when price comes inside; rest-cap expiry goes to cancel_pending with the signal kept and re-arms only on broker-book confirm. B3 one 🧭 per-read line + `planner:read*` counters. B4 `planner_rejected_prompts.response_text` stores the raw refused answer; zone-cap provenance shows the shipped cap 10.
-- **Proof lines:** `🧭 planner read: session=%s attempts=%d reject_classes=%s read→publish=%s lifecycle=%s` (`trader/auto_trader_planner.go:1822`, PR branch); counters `planner:read` / `planner:read_reject_<class>` (`:1834/:1840`).
+- **Proof lines (dev `9c106d0b`):** `🧭 planner read: session=%s attempts=%d reject_classes=%s read→publish=%s lifecycle=%s` (`trader/auto_trader_planner.go:1828`); counters `planner:read` (`:1840`) / `planner:read_reject_<class>` (`:1846`).
 - **Knobs:** `day_plan.zone_place_within_pts` — nil → **25** (ON, shipped), 0 → OFF (legacy byte-identical); effective via resolver `ResolveZonePlaceWithinPts`. `zone_rest_max_min` unchanged (30).
 - **First evidence:** the 🧭 line on the next planner read; a far arm resting beyond 25 pts stays armed-unplaced (DB `armed_orders.state`), and a rest-cap expiry first shows cancel_pending with its signal id, then armed-unplaced with a NEW signal only after the book confirms.
 
-## 14. #221 — Planner A6: born-dead retry on the fresh tape (merging next; head on `fix/planner-born-dead`)
+## 14. #221 — Planner A6: born-dead retry on the fresh tape (merged)
 
 - **Live change:** when the validator refuses born-dead / flip-met, the next attempt (REPAIR and RE-AUTHOR) appends a FRESH TAPE block — completed 1m/5m closes between the read clock and the refusal, the breached condition verbatim, never the forming bar.
-- **Proof line:** the block's header — `FRESH TAPE SINCE YOUR READ (previous attempt refused born-dead / flip-met)` (kernel prompt renderer, PR branch); the refusal WARN now records read→publish latency (B3's 🧭 line reads it).
-- **Knobs:** `day_plan.planner_fresh_tape` — nil = **ON** (shipped default); explicit false = today's blind retry, byte-identical (pinned by `TestPlannerBornDeadRetryKnobOffIsByteIdenticalToday`). Effective via effective-settings truth row.
+- **Proof line:** the block's header — `## FRESH TAPE SINCE YOUR READ (previous attempt refused born-dead / flip-met)` (`kernel/planner_fresh_tape.go:33`); the refusal WARN now records read→publish latency (B3's 🧭 line reads it).
+- **Knobs:** `day_plan.planner_fresh_tape` — `PlannerFreshTape *bool json:"planner_fresh_tape,omitempty"` (`store/strategy.go:1047`); nil = **ON** (shipped default); explicit false = today's blind retry, byte-identical (pinned by `TestPlannerBornDeadRetryKnobOffIsByteIdenticalToday`). Effective via effective-settings truth row.
 - **First evidence:** a born-dead rejection's attempt-2 row in `planner_rejected_prompts` carries the FRESH TAPE block; the 🧭 line's `read→publish` field is non-empty for that read.
 
-## 15. #222 — planner-contract (fix/planner-contract, head `495f0ec5`, merging next)
+## 15. #222 — planner-contract (merged)
 
 - **Live change:** A1 authored-entry-zone geometry: a null-width map line no longer admits a zone without provenance (`no_provenance`), and `authoredEntryZoneBand` caps the authored band at `store.ZoneMaxPtsDefault` (10.0).
-- **Proof lines (branch head `495f0ec5`):** refusal classes `entry_zone_edges_or_provenance_unusable` / `no_provenance` in `trader/structural_geometry.go` + `trader/entry_gate.go`.
-- **Knobs:** `day_plan.planner_contract` — `PlannerContract *bool json:"planner_contract,omitempty"` (`store/strategy.go:982`, branch), nil = **ON** shipped default; `PlannerContractOn()` (`:2810`).
+- **Proof lines (dev `9c106d0b`):** refusal class `entry_zone_edges_or_provenance_unusable` — `trader/structural_geometry.go:154`; the cap constant `ZoneMaxPtsDefault = 10.0` — `store/resolve_source.go:220`.
+- **Knobs:** `day_plan.planner_contract` — `PlannerContract *bool json:"planner_contract,omitempty"` (`store/strategy.go:996`), nil = **ON** shipped default; `PlannerContractOn()` (`store/strategy.go:2847`).
 - **First evidence:** a plan with a null-width zone map line is refused with the geometry class instead of trading on unproven geometry; the guide knob card shows the contract ON.
 
 ---
