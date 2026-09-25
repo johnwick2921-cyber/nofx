@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -92,19 +90,16 @@ func New(cfg Config, d Deps) (*Worker, error) {
 			return nil, fmt.Errorf("updaterworker: %s must be an absolute path", name)
 		}
 	}
-	// by path ELEMENTS (within) on RESOLVED paths: a backup root named
-	// through a symlink to the install is inside it (U4F, the containment
-	// class); the root may not exist yet, so its deepest existing ancestor
-	// is what gets resolved
-	backupReal, err := resolveExisting(cfg.BackupRoot)
+	// the ONE containment check (PathWithin: path ELEMENTS on RESOLVED
+	// paths): a backup root named through a symlink to the install is inside
+	// it (U4F, the containment class); the root may not exist yet, so its
+	// deepest existing ancestor is what gets resolved, and a dangling symlink
+	// on the way refuses (U4F verify note 4)
+	inside, err := PathWithin(cfg.BackupRoot, t.InstallDir)
 	if err != nil {
 		return nil, fmt.Errorf("updaterworker: the backup root %s cannot be checked against the install: %w", cfg.BackupRoot, err)
 	}
-	installReal, err := resolveExisting(t.InstallDir)
-	if err != nil {
-		return nil, fmt.Errorf("updaterworker: the install %s cannot be resolved: %w", t.InstallDir, err)
-	}
-	if within(backupReal, installReal) {
+	if inside {
 		return nil, fmt.Errorf("updaterworker: the backup root %s is inside the install %s — a snapshot must survive the install it restores", cfg.BackupRoot, t.InstallDir)
 	}
 	if t.Port <= 0 || t.Port > 65535 {
@@ -117,50 +112,6 @@ func New(cfg Config, d Deps) (*Worker, error) {
 		cfg.Logf = func(string, ...any) {}
 	}
 	return &Worker{cfg: cfg, lib: d.Lib, app: d.App, rel: d.Rel, host: d.Host, resume: map[string]bool{}, wake: make(chan struct{}, 1)}, nil
-}
-
-// resolveExisting is p with its deepest EXISTING ancestor resolved through
-// filepath.EvalSymlinks and the not-yet-created rest appended unchanged (p
-// absolute and clean). Every element that does not resolve is Lstat'ed first
-// (U4F verify note 4): only one that does not EXIST is text to append — a
-// dangling symlink or a loop there would later be followed by the MkdirAll
-// that creates the path, so it refuses, as does an element that cannot be
-// Lstat'ed at all. With nothing resolvable it is p itself.
-func resolveExisting(p string) (string, error) {
-	p = filepath.Clean(p)
-	var rest []string
-	for cur := p; ; cur = filepath.Dir(cur) {
-		real, err := filepath.EvalSymlinks(cur)
-		if err == nil {
-			for i := len(rest) - 1; i >= 0; i-- {
-				real = filepath.Join(real, rest[i])
-			}
-			return real, nil
-		}
-		fi, lerr := os.Lstat(cur)
-		switch {
-		case lerr == nil && fi.Mode()&fs.ModeSymlink != 0:
-			return "", fmt.Errorf("%s is a symlink that does not resolve (dangling or a loop): %w", cur, err)
-		case lerr == nil:
-			return "", fmt.Errorf("%s exists but cannot be resolved: %w", cur, err)
-		case !errors.Is(lerr, fs.ErrNotExist):
-			return "", fmt.Errorf("%s cannot be checked: %w", cur, lerr)
-		}
-		if filepath.Dir(cur) == cur {
-			return p, nil
-		}
-		rest = append(rest, filepath.Base(cur))
-	}
-}
-
-// within reports whether p is dir or below it (path elements, never a string
-// prefix: "<dir>/..x" is below dir).
-func within(p, dir string) bool {
-	rel, err := filepath.Rel(filepath.Clean(dir), filepath.Clean(p))
-	if err != nil {
-		return false
-	}
-	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, "../"))
 }
 
 func (w *Worker) dataDir() string { return w.cfg.Target.DataDir }
