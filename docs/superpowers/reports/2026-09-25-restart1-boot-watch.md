@@ -1,7 +1,7 @@
 # RESTART 1 — BOOT WATCH SHEET
 
 **Author:** DS-105 · **Branch:** `docs/restart1-boot-watch` · **Base:** origin/dev `39829e65`
-**Scope:** what attended restart 1 (~07:00 CT, 2026-09-25) ships — already on dev: #197 #207 #208 #209 #210 #211 #214 #215 #217 #219 #220; merging next: #212 #213 #221 and the planner-contract PR (fix/planner-contract, PR #TBD).
+**Scope:** what attended restart 1 (~07:00 CT, 2026-09-25) ships — already on dev: #197 #207 #208 #209 #210 #211 #214 #215 #217 #219 #220; merging next: #212 #213 #221 and #222 (planner-contract, fix/planner-contract).
 **Law:** every proof line below is READ from the code at the cited ref (file:line), never guessed; a line printed by a branch not yet on dev is cited from that branch's head. SIM-only throughout.
 
 ---
@@ -86,7 +86,7 @@
 ## 12. #212 — DEFAULTS-SANE (merging next; head `36efe3e5`)
 
 - **Live change:** Picture HTF entry window default **90 → 360 s**, freshness default **15 → 30 s**; the evaluator's silent decision points now WARN once per (stage,reason); `liveFrameMaxAgeMs` exported as `LiveFrameMaxAgeMs` (sink admission bound, unchanged value 30 s).
-- **Proof line:** the 📷 boot line — `picture-htf: mode=%s rule=v1 … window=%ds fresh=%ds · foreign=… · stale=…` (`trader/picture_htf_live.go:208`, PR branch); it READS the resolver, so a live bot prints `window=360s fresh=30s`. The floor pins: `TestPictureHtfDefaultWindowExceedsWorstDetectionToPlacement`, `TestPictureHtfDefaultFreshnessAdmitsEverySinkAdmittedFrame`.
+- **Proof line:** the 📷 boot line — `picture-htf: mode=%s rule=v1 … window=%ds fresh=%ds · foreign=… · stale=…` (`trader/picture_htf_live.go:206`, PR branch); it READS the resolver, so a live bot prints `window=360s fresh=30s`. The floor pins: `TestPictureHtfDefaultWindowExceedsWorstDetectionToPlacement`, `TestPictureHtfDefaultFreshnessAdmitsEverySinkAdmittedFrame`.
 - **Knobs:** `day_plan.picture_htf.entry_window_sec` (default **360**, 0 = default), `day_plan.picture_htf.freshness_sec` (default **30**). Effective value: the boot line itself, and the Studio effective-values table (`EffectiveMount` rows).
 - **First evidence:** post-boot 📷 line shows `window=360s fresh=30s`; on the next hour-open storm, `picture-htf: … stale=…` stays low and `picture_htf_opportunities` can finally produce rows (it was 0 ever before).
 
@@ -104,7 +104,7 @@
 - **Knobs:** `day_plan.planner_fresh_tape` — nil = **ON** (shipped default); explicit false = today's blind retry, byte-identical (pinned by `TestPlannerBornDeadRetryKnobOffIsByteIdenticalToday`). Effective via effective-settings truth row.
 - **First evidence:** a born-dead rejection's attempt-2 row in `planner_rejected_prompts` carries the FRESH TAPE block; the 🧭 line's `read→publish` field is non-empty for that read.
 
-## 15. planner-contract (fix/planner-contract, PR #TBD, merging next)
+## 15. #222 — planner-contract (fix/planner-contract, head `495f0ec5`, merging next)
 
 - **Live change:** A1 authored-entry-zone geometry: a null-width map line no longer admits a zone without provenance (`no_provenance`), and `authoredEntryZoneBand` caps the authored band at `store.ZoneMaxPtsDefault` (10.0).
 - **Proof lines (branch head `495f0ec5`):** refusal classes `entry_zone_edges_or_provenance_unusable` / `no_provenance` in `trader/structural_geometry.go` + `trader/entry_gate.go`.
