@@ -43,6 +43,29 @@ func do(t *testing.T, c *updaterwire.Client, req updaterwire.Request) updaterwir
 	return resp
 }
 
+// PIN (#206 note socket.go:181): a stopped worker's runner never acts on a
+// resume wake, so the verb must refuse — the old code answered ok("resuming")
+// although nothing would happen until a restart.
+func TestSocketResumeRefusesWhileStopped(t *testing.T) {
+	r := newRig(t, withCSChanged())
+	r.install()
+	if err := r.drive(); err != nil {
+		t.Fatal(err)
+	}
+	if j := r.job(); j.State != updaterjob.StateNT8Updated || j.Phase != updaterjob.PhaseDone {
+		t.Fatalf("no park: %s/%s", j.State, j.Phase)
+	}
+	c := r.serve(t)
+	// the runner hit a persist failure: the job stays parked and the worker stops
+	r.w.mu.Lock()
+	r.w.stopped = "recovery_needed: " + boxJobID
+	r.w.mu.Unlock()
+	resp := do(t, c, resumeRequest(boxJobID))
+	if resp.OK || resp.Error != "recovery needed" {
+		t.Fatalf("resume while stopped = %+v, want the recovery-needed refusal", resp)
+	}
+}
+
 // PIN (dispatch §3, §4(10), C14 as ruled): over the REAL socket, the four
 // verbs are authenticated by the worker's own job file — a job id that is not
 // the active job is refused, a cancel past the boundary (maintenance_held on)

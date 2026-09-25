@@ -154,6 +154,12 @@ func (w *Worker) handleCancel(jobID string) updaterwire.Response {
 func (w *Worker) handleResume(jobID string) updaterwire.Response {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	// #206 note socket.go:181: a stopped worker's runner never acts — the
+	// old code answered ok("resuming") while run() skips every wake. The
+	// install verb refuses this already; the resume verb must too.
+	if w.stopped != "" {
+		return refuse("recovery needed")
+	}
 	j, err := updaterjob.Read(w.dataDir(), jobID)
 	if errors.Is(err, updaterjob.ErrNotFound) || errors.Is(err, updaterjob.ErrBadJobID) {
 		return refuse("unknown job")
