@@ -19,6 +19,8 @@ import (
 	"nofx/trader"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 // ── W-ONE-BUTTON M3 — update authorization ────────────────────────────────
@@ -213,8 +215,90 @@ func (s *Server) registerUpdateRoutes(api *gin.RouterGroup) {
 	upd.GET("/jobs/:id/receipt", s.handleUpdatesJob)
 }
 
-func updatesForbid(c *gin.Context, why string) {
-	logger.Warnf("🔒 [updates] refused %s %.96q: %s", c.Request.Method, c.Request.URL.Path, why)
+// ── CTO fold 1790280466263 — the refusal log is not a flood ─────────────
+//
+// updatesRefusedTotal counts EVERY refusal by the route PATTERN (gin's
+// FullPath — never the client's path or id) and a CLOSED category. A
+// (route, category) that never refused has no series at all: absent, never
+// a fabricated 0.
+var updatesRefusedTotal = promauto.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "nofx_updates_refused_total",
+		Help: "Refusals by the /api/updates gate and install handler, by route pattern and closed refusal category.",
+	},
+	[]string{"route", "category"},
+)
+
+// updatesRefusalUnmapped is the category of a reason the closed map does not
+// know (TestEveryUpdatesRefusalReasonHasACategory keeps it unreachable).
+const updatesRefusalUnmapped = "unmapped"
+
+// updatesRefusalCategories is the CLOSED map reason → category. The label is
+// always one of these constants, never the reason text (which may carry a
+// header name or a configuration detail).
+var updatesRefusalCategories = map[string]string{
+	"data dir unconfigured":                "data_dir_unconfigured",
+	"peer unparseable":                     "peer_unparseable",
+	"peer not loopback":                    "peer_not_loopback",
+	"host not a loopback name":             "host_not_loopback",
+	"update header missing or wrong":       "update_header",
+	"cross-origin":                         "cross_origin",
+	"cross-site fetch":                     "cross_site_fetch",
+	"JWT secret empty":                     "jwt_secret_unfit",
+	"JWT secret is a public placeholder":   "jwt_secret_unfit",
+	"JWT secret shorter than 32 bytes":     "jwt_secret_unfit",
+	"authorization missing":                "authorization_missing",
+	"authorization malformed":              "authorization_malformed",
+	"token revoked":                        "token_revoked",
+	"token invalid":                        "token_invalid",
+	"machine token":                        "machine_token",
+	"not enrolled":                         "not_enrolled",
+	"enrollment unreadable":                "enrollment_unreadable",
+	"device key unreadable":                "device_key_unreadable",
+	"not the enrolled admin":               "not_enrolled_admin",
+	"no user store":                        "no_user_store",
+	"admin user row absent or changed":     "admin_row_changed",
+	"token older than the user row":        "token_older_than_row",
+	"install: outside the validity window": "install_expired",
+	"install: device key unreadable":       "install_key_unreadable",
+	"install: MAC mismatch":                "install_mac",
+	"password changed since enrollment (re-enroll with --replace)":                                  "password_changed",
+	"install: expired under the seen-store lock, or at/below its clock floor (clock stepped back?)": "install_expired_under_lock",
+}
+
+// updatesRefusalCategory maps a refusal reason onto its closed category.
+func updatesRefusalCategory(why string) string {
+	if c, ok := updatesRefusalCategories[why]; ok {
+		return c
+	}
+	if strings.HasPrefix(why, "forwarded request (") {
+		return "forwarded"
+	}
+	return updatesRefusalUnmapped
+}
+
+// updatesForbid is every /api/updates refusal: the uniform 403, the count,
+// and the log line — a WARN the FIRST time a (route, category) refuses in
+// this process (the process builds exactly one Server: main.go api.NewServer),
+// DEBUG for every repeat. An unmapped reason (none exist — pinned) would key
+// its once-set on the reason too, so two different unknown reasons never
+// hide behind one another.
+func (s *Server) updatesForbid(c *gin.Context, why string) {
+	route := c.FullPath()
+	if route == "" {
+		route = "unmatched"
+	}
+	cat := updatesRefusalCategory(why)
+	updatesRefusedTotal.WithLabelValues(route, cat).Inc()
+	key := route + "\x00" + cat
+	if cat == updatesRefusalUnmapped {
+		key += "\x00" + why
+	}
+	if _, seen := s.updatesWarned.LoadOrStore(key, struct{}{}); !seen {
+		logger.Warnf("🔒 [updates] refused %s %.96q: %s — first %s refusal on %s this process; repeats log at DEBUG, all count in nofx_updates_refused_total", c.Request.Method, c.Request.URL.Path, why, cat, route)
+	} else {
+		logger.Debugf("🔒 [updates] refused %s %.96q: %s (repeat, counted as %s on %s)", c.Request.Method, c.Request.URL.Path, why, cat, route)
+	}
 	c.AbortWithStatusJSON(http.StatusForbidden, errForbiddenBody)
 }
 
@@ -226,7 +310,7 @@ func updatesForbid(c *gin.Context, why string) {
 func (s *Server) updatesGate() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if why := s.updatesRefusal(c); why != "" {
-			updatesForbid(c, why)
+			s.updatesForbid(c, why)
 			return
 		}
 		c.Next()
@@ -455,18 +539,18 @@ func (s *Server) handleUpdatesInstall(c *gin.Context) {
 				}
 			}
 		}
-		updatesForbid(c, "install: outside the validity window")
+		s.updatesForbid(c, "install: outside the validity window")
 		return
 	}
 	key, err := updateauth.LoadDeviceKey(dataDir)
 	if err != nil {
-		updatesForbid(c, "install: device key unreadable")
+		s.updatesForbid(c, "install: device key unreadable")
 		return
 	}
 	ok := adminID != "" && updateauth.VerifyMAC(key, adminID, g.ReleaseID, g.JobID, g.ExpiresAt, g.HMAC)
 	clear(key)
 	if !ok {
-		updatesForbid(c, "install: MAC mismatch")
+		s.updatesForbid(c, "install: MAC mismatch")
 		return
 	}
 	// The job id is spent from here on, whatever follows.
@@ -488,7 +572,7 @@ func (s *Server) handleUpdatesInstall(c *gin.Context) {
 			return
 		}
 		if errors.Is(err, updateauth.ErrExpired) {
-			updatesForbid(c, "install: expired under the seen-store lock, or at/below its clock floor (clock stepped back?)")
+			s.updatesForbid(c, "install: expired under the seen-store lock, or at/below its clock floor (clock stepped back?)")
 			return
 		}
 		logger.Errorf("🔒 [updates] install: job-id store refused: %v", err)
