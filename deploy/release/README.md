@@ -78,7 +78,11 @@ produces the bundle or the frontend image must supply it. Adding a new one?
 | `.github/workflows/pr-checks.yml` | step `env:` from the PR head sha |
 | `.github/workflows/pr-checks-run.yml` | step `env:` (note: `continue-on-error` hides a failure here) |
 | `docker/Dockerfile.frontend` | `ARG` + `ENV` above `RUN npm run build` — the image cannot be built without `--build-arg` |
-| `.github/workflows/pr-docker-check.yml`, `docker-build.yml` | `build-args:` on the frontend image build |
+| `.github/workflows/pr-docker-check.yml`, `.github/workflows/docker-build.yml` | `build-args:` on the frontend image build |
 | `docker-compose.yml` | `args:` with `${VITE_GUIDE_BUILT_REV:?…}` — compose refuses rather than build unstamped |
 | `.github/workflows/pr-docker-compose-healthcheck.yml` | job-level `env:` — it builds via `docker compose up` |
+| `Makefile` (`make build-frontend`) | from `git rev-parse HEAD` — dev builds carry the tree sha |
+| `INSTALL.md` (documented fresh-install command) | from `git rev-parse HEAD` |
+| `CONTRIBUTING.md` (documented local-build commands) | from `git rev-parse HEAD` |
+| `deploy/cutover.sh` | instructs the human: build with `VITE_GUIDE_BUILT_REV=$NEW_SHA`; refuses to proceed otherwise |
 | the manual boot | `cd web && VITE_GUIDE_BUILT_REV=<sha> npm run build`, verified by finding the sha in `web/dist/assets/*.js` |

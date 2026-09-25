@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -46,31 +47,44 @@ func repoRoot(t *testing.T) string {
 	return filepath.Dir(wd) // deploy/ -> repo root
 }
 
-// collectBuildSites scans one file for "npm run build" invocations and reports
-// which lack the guide rev within scanLookback lines. docMode counts only
-// copy-pastable commands (lines that also say "cd web") — a prose mention is
-// not a producer (PR B [12]).
+// collectBuildSites scans one file for production frontend build invocations
+// and reports which lack the guide rev. Two invocation kinds:
+//   - "npm run build" lines: the rev must appear within scanLookback lines
+//     (a step's env: or an ARG/ENV above the RUN);
+//   - "Dockerfile.frontend" references (workflows/compose that build the image
+//     through build-args): the rev must appear ANYWHERE in the file — the
+//     build-args block can sit far from the dockerfile key (PR B [12]).
+//
+// docMode counts only copy-pastable commands (lines that also say "cd web") —
+// a prose mention is not a producer.
 func collectBuildSites(rel, content string, docMode bool) (scanned, missing []string) {
 	lines := strings.Split(content, "\n")
 	for i, ln := range lines {
-		if !strings.Contains(ln, "npm run build") {
+		if strings.Contains(ln, "npm run build") {
+			if strings.HasPrefix(strings.TrimSpace(ln), "#") {
+				continue
+			}
+			if docMode && !strings.Contains(ln, "cd web") {
+				continue
+			}
+			scanned = append(scanned, fmt.Sprintf("%s:%d", rel, i+1))
+			lo := i - scanLookback
+			if lo < 0 {
+				lo = 0
+			}
+			if strings.Contains(strings.Join(lines[lo:i+1], "\n"), guideRevVar) {
+				continue
+			}
+			missing = append(missing, fmt.Sprintf("%s:%d  %s", rel, i+1, strings.TrimSpace(ln)))
 			continue
 		}
-		if strings.HasPrefix(strings.TrimSpace(ln), "#") {
-			continue
+		if !docMode && strings.Contains(ln, "Dockerfile.frontend") {
+			scanned = append(scanned, fmt.Sprintf("%s:%d", rel, i+1))
+			if strings.Contains(content, guideRevVar) {
+				continue
+			}
+			missing = append(missing, fmt.Sprintf("%s:%d  %s", rel, i+1, strings.TrimSpace(ln)))
 		}
-		if docMode && !strings.Contains(ln, "cd web") {
-			continue
-		}
-		scanned = append(scanned, fmt.Sprintf("%s:%d", rel, i+1))
-		lo := i - scanLookback
-		if lo < 0 {
-			lo = 0
-		}
-		if strings.Contains(strings.Join(lines[lo:i+1], "\n"), guideRevVar) {
-			continue
-		}
-		missing = append(missing, fmt.Sprintf("%s:%d  %s", rel, i+1, strings.TrimSpace(ln)))
 	}
 	return
 }
@@ -192,6 +206,24 @@ func TestWorkflowsThatBuildTheFrontendImagePassTheBuildArg(t *testing.T) {
 	}
 }
 
+// pathTokenRe pulls backtick-quoted path tokens out of a README table cell.
+var pathTokenRe = regexp.MustCompile("`([^`]+)`")
+
+// globRoot returns repo-relative paths matching a root-level glob.
+func globRoot(t *testing.T, pattern string) []string {
+	t.Helper()
+	hits, err := filepath.Glob(filepath.Join(repoRoot(t), pattern))
+	if err != nil {
+		t.Fatalf("glob %s: %v", pattern, err)
+	}
+	var rel []string
+	for _, p := range hits {
+		r, _ := filepath.Rel(repoRoot(t), p)
+		rel = append(rel, filepath.ToSlash(r))
+	}
+	return rel
+}
+
 // TestReadmeProducerTableMatchesTheCensus (PR B [12]) — the README's producers
 // table must never drift from the census: every repo path the census scans as
 // a producer must be named in the table, and every path row in the table must
@@ -217,7 +249,7 @@ func TestReadmeProducerTableMatchesTheCensus(t *testing.T) {
 			if rerr != nil {
 				return nil
 			}
-			if strings.Contains(string(b), "npm run build") {
+			if strings.Contains(string(b), "npm run build") || strings.Contains(string(b), "Dockerfile.frontend") {
 				census[filepath.ToSlash(rel)] = true
 			}
 			return nil
@@ -229,6 +261,14 @@ func TestReadmeProducerTableMatchesTheCensus(t *testing.T) {
 	for _, rel := range []string{"Makefile", "INSTALL.md", "CONTRIBUTING.md"} {
 		if b, err := os.ReadFile(filepath.Join(root, rel)); err == nil && strings.Contains(string(b), "npm run build") {
 			census[rel] = true
+		}
+	}
+	// root compose files are producers only when they build the frontend image
+	// (the compose supply test uses the same rule); the README names
+	// docker-compose.yml, so the parity census must see it.
+	for _, p := range globRoot(t, "docker-compose*.yml") {
+		if b, err := os.ReadFile(filepath.Join(root, p)); err == nil && strings.Contains(string(b), "Dockerfile.frontend") {
+			census[p] = true
 		}
 	}
 
@@ -253,14 +293,20 @@ func TestReadmeProducerTableMatchesTheCensus(t *testing.T) {
 			continue
 		}
 		cell := strings.TrimSpace(strings.Split(strings.Trim(ln, "|"), "|")[0])
-		if !strings.Contains(cell, "/") && !strings.Contains(cell, ".md") && !strings.Contains(cell, "Makefile") {
+		// path tokens are backtick-quoted; a cell like "`Makefile` (`make
+		// build-frontend`)" carries the path in the first quoted token.
+		toks := pathTokenRe.FindAllStringSubmatch(cell, -1)
+		if len(toks) == 0 {
 			continue // descriptive row, not a path
 		}
-		for _, tok := range strings.Split(cell, ",") {
-			tok = strings.TrimSpace(strings.Trim(tok, "`"))
-			if tok != "" {
-				readme[tok] = true
+		for _, m := range toks {
+			tok := m[1]
+			// only path-like tokens count: "make build-frontend" in the same
+			// cell is a command, not a producer path.
+			if !strings.Contains(tok, "/") && !strings.Contains(tok, ".") && tok != "Makefile" {
+				continue
 			}
+			readme[tok] = true
 		}
 	}
 
