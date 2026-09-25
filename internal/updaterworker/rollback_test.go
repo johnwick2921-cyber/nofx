@@ -369,8 +369,11 @@ func restoreLines(t *testing.T, j updaterjob.Job, tg Target) []string {
 	in, snap := *j.Install, *j.Snapshot
 	tmp := filepath.Clean(os.TempDir())
 	for _, p := range []string{in.Dist, in.Binary, in.ReleaseFile, snap.Dist, snap.Binary, snap.ReleaseFile} {
-		if p == "" || filepath.Clean(p) == tmp || !within(p, tmp) {
+		if p == "" || filepath.Clean(p) == tmp {
 			t.Fatalf("refusing to run the restore on %q: not strictly under the temp dir %s", p, tmp)
+		}
+		if in, err := PathWithin(p, tmp); err != nil || !in {
+			t.Fatalf("refusing to run the restore on %q: not strictly under the temp dir %s (%v)", p, tmp, err)
 		}
 	}
 	var restore []string
