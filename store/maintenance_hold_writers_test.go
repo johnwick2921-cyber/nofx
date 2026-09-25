@@ -227,7 +227,11 @@ func TestHoldWriterAdmissionsArePinned(t *testing.T) {
 // binary, cmd/updater-bootstrap, links it.
 var (
 	tradingAppDirs          = []string{"api", "trader", "kernel", "agent", "telegram", "store"}
-	forbiddenWorkerPackages = []string{"nofx/internal/updaterwire/wireserver", "nofx/internal/updaterworker", "nofx/internal/updaterbootstrap"}
+	forbiddenWorkerPackages = []string{"nofx/internal/updaterwire/wireserver", "nofx/internal/updaterworker", "nofx/internal/updaterbootstrap",
+		// M4 3b-B U5b (f), OQ-8/C2 (CTO 1790259689740): the kill/restart
+		// library — only the worker binary links it
+		// (TestWorkerImportGuardRefusesTheActivationLibrary).
+		"nofx/internal/activation"}
 )
 
 func TestTradingAppNeverLinksTheUpdaterWorkerSide(t *testing.T) {
