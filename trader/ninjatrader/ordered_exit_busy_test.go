@@ -5,7 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 
 	ntwire "nofx/provider/ninjatrader"
 	"nofx/store"
@@ -161,7 +162,7 @@ func TestBriefBusyCloseAppliesOnTheWorkerAfterRetries(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	parksBefore := testutil.ToFloat64(telemetry.NT8ExitBusyParksTotal)
+	parksBefore := counterValue(telemetry.NT8ExitBusyParksTotal)
 
 	// The holder releases at ~250ms — inside the retry budget (attempt 1 burns
 	// 120ms busy, the loop sleeps 50ms, attempt 2 blocks ~80ms and applies).
@@ -219,7 +220,18 @@ func TestBriefBusyCloseAppliesOnTheWorkerAfterRetries(t *testing.T) {
 	if _, ok := takePricedClose("Sim101", "MNQ", "LONG", time.Now().UnixMilli()); ok {
 		t.Fatal("the retry path must not park a priced close for reconcile")
 	}
-	if delta := testutil.ToFloat64(telemetry.NT8ExitBusyParksTotal) - parksBefore; delta != 0 {
+	if delta := counterValue(telemetry.NT8ExitBusyParksTotal) - parksBefore; delta != 0 {
 		t.Fatalf("the busy-park counter must stay 0 on the retry path, delta %v", delta)
 	}
+}
+
+// counterValue reads a prometheus.Counter's current value directly through
+// client_model — the same byte stream testutil.ToFloat64 walks. testutil is a
+// test-only dependency whose transitive module (kylelemons/godebug) would force
+// a go.mod change; go.mod is brand-pinned and must stay byte-identical to dev
+// (CTO ruling 2026-09-25, PR #227).
+func counterValue(c prometheus.Counter) float64 {
+	var m dto.Metric
+	_ = c.Write(&m)
+	return m.GetCounter().GetValue()
 }
