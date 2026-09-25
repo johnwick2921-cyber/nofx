@@ -264,6 +264,7 @@ var updatesRefusalCategories = map[string]string{
 	"install: MAC mismatch":                "install_mac",
 	"password changed since enrollment (re-enroll with --replace)":                                  "password_changed",
 	"install: expired under the seen-store lock, or at/below its clock floor (clock stepped back?)": "install_expired_under_lock",
+	"install: job-id store refused":                                                                    "job_store_refused",
 }
 
 // updatesRefusalCategory maps a refusal reason onto its closed category.
@@ -581,7 +582,10 @@ func (s *Server) handleUpdatesInstall(c *gin.Context) {
 			return
 		}
 		logger.Errorf("🔒 [updates] install: job-id store refused: %v", err)
-		c.AbortWithStatusJSON(http.StatusForbidden, errForbiddenBody)
+		// #206 review fold: this refusal goes through updatesForbid too — the
+		// guide says every refusal increments nofx_updates_refused_total, and
+		// the raw 403 used to skip the counter silently.
+		s.updatesForbid(c, "install: job-id store refused")
 		return
 	}
 	m, err := s.updateVerifier.VerifiedManifest(g.ReleaseID)
