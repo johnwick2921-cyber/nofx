@@ -234,7 +234,10 @@ func fetch(t updaterworker.Target, releaseID string, stdout, stderr io.Writer) i
 		return refuse("NOFX_RELEASE_DIR=%q must be an absolute path", root)
 	}
 	root = filepath.Clean(root)
-	if rel, err := filepath.Rel(t.InstallDir, root); err != nil || rel == "." || !strings.HasPrefix(rel, "..") {
+	// Containment compares path ELEMENTS, never a string prefix: "..rel" is a
+	// directory INSIDE the install whose name starts with "..", so the root is
+	// outside only when the relative path IS ".." or starts with "../".
+	if rel, err := filepath.Rel(t.InstallDir, root); err != nil || !(rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))) {
 		return refuse("NOFX_RELEASE_DIR=%s must be outside the install %s", root, t.InstallDir)
 	}
 	v, err := updaterworker.FetchRelease(updaterworker.FetchConfig{
