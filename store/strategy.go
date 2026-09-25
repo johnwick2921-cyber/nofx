@@ -1017,6 +1017,14 @@ type DayPlanConfig struct {
 	// prompt. A POINTER because the default is ON: nil = ON, explicit false =
 	// today's behaviour byte-identical (dormant only).
 	DeathReread *bool `json:"death_reread,omitempty"`
+	// PlannerFreshTape (A6, planner-born-dead wave 2026-09-25): when an attempt
+	// is refused born-dead / flip-met, attempt N+1's prompt carries the
+	// COMPLETED bars between the read clock and the refusal (last 30 completed
+	// 1m closes + last 6 completed 5m closes) and the breached condition
+	// verbatim, so the re-author reads the tape that exists now instead of
+	// retrying blind against the stale read. A POINTER because the default is
+	// ON: nil = ON, explicit false = today's behaviour byte-identical.
+	PlannerFreshTape *bool `json:"planner_fresh_tape,omitempty"`
 	// T1Currencies (W-T1-CURRENCIES, 2026-09-18): the currencies whose T1
 	// (red) calendar events HARD-block entries (±T1BlackoutMinutes). Empty/nil
 	// = the shipped default ["USD"]. An explicit ["ALL"] (or ["*"]) restores
@@ -1708,6 +1716,14 @@ func (c *DayPlanConfig) FoldedKnobLines() []string {
 // (absent/false = OFF = today's dormant behaviour).
 func (c *DayPlanConfig) FlipRereadEnabled() bool {
 	return c != nil && c.FlipReread
+}
+
+// PlannerFreshTapeEnabled is the ONE resolution seam for the PLANNER A6 knob:
+// born-dead / flip-met retries carry the fresh completed tape between the read
+// clock and the refusal. nil = ON (the shipped default); explicit false =
+// today's blind-retry behaviour byte-identical.
+func (c *DayPlanConfig) PlannerFreshTapeEnabled() bool {
+	return c == nil || c.PlannerFreshTape == nil || *c.PlannerFreshTape
 }
 
 // T1CurrencyAll is the sentinel meaning "every currency hard-blocks" — the

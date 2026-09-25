@@ -7514,6 +7514,10 @@ That is the shape worth naming: a dry run proves the steps it REACHES. Code afte
 
 **Probe:** for every procedure with a rehearsal mode, list the steps the rehearsal never reaches and ask what tests them. If the answer is "nothing", they are exercised first in production. Either the rehearsal must reach them (a seam, a fixture, a `--force-through` for the safe parts) or they must be moved into code a unit test can call — the second is usually right, because a step that only a live cutover can exercise is a step nobody can afford to debug.
 
+## CLASS NN (assigned at merge) — A RETRY THAT READS THE SAME STALE TAPE IS A BLIND RETRY
+
+A multi-attempt loop whose refusal is caused by the market moving during the read (born-dead, flip-met, tape-window) must re-sight attempt N+1 on the tape that exists now — the completed bars between the read clock and the refusal, bounded, never the forming bar, with the breached condition verbatim. Retrying against the identical stale read burns the attempt budget fail-closed. The refusal check itself is never relaxed to make retries pass.
+
 ## CLASS NN (assigned at merge) — REQUEST MODEL SELECTION MUST NOT MUTATE SHARED AGENT
 
 Two authenticated chats must retain their own selected model credentials through all follow-up calls and summaries. Shared history/flow locks stay shared without copying mutexes. Missing user configuration must not select another owner's default credentials. Exercise both HTTP identity and concurrent model selection.

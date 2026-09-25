@@ -357,6 +357,22 @@ const dayPlan: KnobSpec[] = [
     perSession: 'No.',
   },
   {
+    label: 'Planner fresh tape on born-dead retry (PLANNER A6)',
+    where: 'Strategy → Day Plan → planner_fresh_tape toggle',
+    what: "When a planner attempt is refused born-dead or flip-met (the market moved during the 9–15 minute AI read and the validator correctly refused), attempt N+1's prompt carries the COMPLETED bars between the read clock and the refusal — at most the last 30 completed 1m closes and the last 6 completed 5m closes, never the forming bar — plus the breached condition named verbatim, so the re-author reads the tape that exists now instead of retrying blind against the stale read. The born-dead check itself is unchanged: a plan whose lines are already crossed at publication is still refused. ON is the default (nil=ON).",
+    trader:
+      "ON = a born-dead / flip-met retry re-sights the model on the fresh tape instead of burning attempts 2/3 on the identical stale read. The block is appended to BOTH the repair prompt and the full re-author prompt, and the refusal line logs the read→publish latency. OFF = today's behaviour byte-identical (blind retry).",
+    consumer:
+      'kernel.PlannerFreshTape · trader/auto_trader_planner.go retry loop · store.DayPlanConfig.PlannerFreshTapeEnabled',
+    range: 'ON | OFF',
+    systemDefault: 'ON (unset; nil=ON)',
+    recommended:
+      '⭐ ON — the default; OFF only to reproduce the pre-fix blind retry.',
+    whenToTouch:
+      'Turn OFF only for a side-by-side study of a blind born-dead retry.',
+    perSession: 'No.',
+  },
+  {
     label: 'Red-news hard-block currencies (W-T1-CURRENCIES)',
     where: 'Strategy → Day Plan → t1_currencies text field (comma-separated)',
     what: "Which currencies' T1 (red) calendar events open the HARD ±15m no-trade window. Default USD: only USD red events hard-block; a red event in any other currency (a BOJ rate decision, a BoE vote) is shown as an advisory line — on the plan card, in the plan's no_trade list and in the planner prompt — and blocks nothing. Set ALL to restore the old behaviour where every red event in the session's currency filter hard-blocked. Case-insensitive; blanks are ignored; a red event with NO currency still hard-blocks (fail closed) and is named once a day in the log.",
@@ -739,7 +755,10 @@ export const settings: GuideSection = {
     'Every knob on the Strategy page, what it really does, and who reads it.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
-    { kind: 'p', text: 'AgentBeta uses the authenticated user’s configured AI model for each conversation request. Another user’s request cannot replace that selection. If your account has no enabled model, configure one; it does not inherit another account’s credentials.' },
+    {
+      kind: 'p',
+      text: 'AgentBeta uses the authenticated user’s configured AI model for each conversation request. Another user’s request cannot replace that selection. If your account has no enabled model, configure one; it does not inherit another account’s credentials.',
+    },
     {
       kind: 'p',
       text: 'Every knob card below names the engine consumer (file:line) that reads it — so you always know whether a slider is real or decorative. FE persists but NO production code reads: nothing here is in that category; the three that used to be (plan_mode, proximity_filter_atr, …) are wired now.',
