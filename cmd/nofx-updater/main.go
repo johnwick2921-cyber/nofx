@@ -12,10 +12,10 @@
 // admitted hold.go does), never mints a token (serve reads the operator's
 // NOFX_CUTOVER_TOKEN from its environment) and never runs a step itself.
 //
-// L4: serve and fetch REFUSE until their production adapters land — the
-// activation library adapter after #201 merges to dev, the release re-proof
-// and fetch at the U3 fold — so today nothing here can change the
-// installation (TestServeAndFetchRefuseUntilTheAdaptersLand).
+// L4: serve REFUSES until both production adapters are wired — the release
+// re-proof is (U4N); the activation library adapter is not (see newLibrary) —
+// so today nothing here can change the installation
+// (TestServeAndFetchRefuseUntilTheAdaptersLand).
 package main
 
 import (
@@ -50,15 +50,19 @@ var (
 	}
 )
 
-// The two production adapters. Until they land they REFUSE, and serve with
-// them (L4): the activation library adapter (library_activation.go, one-line
-// delegations to nofx/internal/activation) after #201 merges into this
-// branch, the release re-proof (U3's ReadReleaseVerdict / RehashRelease /
-// ReverifyRelease against <install>/deploy/release_allowed_signers) at the
-// U3 fold. The fold replaces these two bodies and nothing else.
+// The two production adapters. serve refuses unless BOTH are wired (L4).
+//
+//   - newReverifier: the release re-proof — updaterworker.NewReleaseReverifier
+//     over U3's updaterjob.ReadVerdict / RehashRelease / ReverifyRelease
+//     against <install>/deploy/release_allowed_signers (U4N item A). WIRED.
+//   - newLibrary: the activation library adapter (one-line delegations to
+//     nofx/internal/activation). NOT wired, and it must not be yet: dev's
+//     internal/activation blank-imports github.com/glebarez/go-sqlite, which
+//     panics any binary that also links nofx/store (reported to the CTO,
+//     103's package). Until 103 fixes that, it refuses — so serve does.
 var (
 	newLibrary    = func() (updaterworker.Library, error) { return nil, updaterworker.ErrNotWired }
-	newReverifier = func(updaterworker.Target) (updaterworker.Reverifier, error) { return nil, updaterworker.ErrNotWired }
+	newReverifier = updaterworker.NewReleaseReverifier
 )
 
 func main() { os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)) }
@@ -134,9 +138,9 @@ func serve(t updaterworker.Target, stderr io.Writer) int {
 	}
 	lib, lerr := newLibrary()
 	rel, rerr := newReverifier(t)
-	if lerr != nil || rerr != nil {
-		fmt.Fprintf(stderr, "nofx-updater serve: %v — the activation library adapter lands after #201 merges to dev and the release re-proof adapter at the U3 fold; refusing to start (install dir %s, data dir %s); nothing was written\n",
-			updaterworker.ErrNotWired, t.InstallDir, t.DataDir)
+	if lerr != nil || rerr != nil || lib == nil || rel == nil {
+		fmt.Fprintf(stderr, "nofx-updater serve: %v — activation library adapter: %s · release re-proof adapter: %s; refusing to start (install dir %s, data dir %s); nothing was written\n",
+			updaterworker.ErrNotWired, adapterState(lib != nil, lerr), adapterState(rel != nil, rerr), t.InstallDir, t.DataDir)
 		return 2
 	}
 	home, err := os.UserHomeDir()
@@ -282,6 +286,17 @@ func printResponse(resp updaterwire.Response, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintln(stderr, "refused:", resp.Error)
 	return 1
+}
+
+// adapterState is one adapter's state for serve's refusal line (READ).
+func adapterState(ok bool, err error) string {
+	switch {
+	case err != nil:
+		return "missing (" + err.Error() + ")"
+	case !ok:
+		return "missing (nil)"
+	}
+	return "wired"
 }
 
 func na(s string) string {
