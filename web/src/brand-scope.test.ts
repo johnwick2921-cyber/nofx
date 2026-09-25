@@ -32,6 +32,14 @@
 //     fence and F2's ordered-execution dispatch: OrderedHandled guards around
 //     the order fan-out, the handleFill extraction, installNTOrderedExecutions.
 //   No identifier renamed, no guard removed; every removed line re-issued.
+// Bar-feed baselines advanced AGAIN the same day (2026-09-25, CTO review
+// of PR #218): F2 was ruled OUT of the PR and reverted (e3af23ec + b49f659c),
+// and the F-1 P0 fix landed on the PRODUCTION FramePositions path.
+//   provider/ninjatrader/tcp_framing.go  sha256 5c5a015c… — the F2 revert
+//     restored the pre-F2 bytes exactly (the earlier 09344e8b… pin is gone).
+//   provider/ninjatrader/tcp_server.go   sha256 479de30b… — the F2 revert
+//     minus the F-1 receipt-clock stamp in the FramePositions case.
+//   No identifier renamed, no guard removed.
 // Bar-feed baselines advanced 2026-09-10 for two owner-dispatched waves that
 // touched the protected files without renaming an identifier:
 //   provider/ninjatrader/tcp_server.go  @ a53359ce (fix/contract-roll: the
