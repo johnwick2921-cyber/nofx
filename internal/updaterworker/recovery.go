@@ -36,7 +36,7 @@ func RecoveryText(j updaterjob.Job, t Target) string {
 	}
 	hold := HoldFileForDisplay(t.DataDir)
 	p("")
-	p("The installation hold is KEPT (%s): every new entry stays refused until step 4.", hold)
+	p("The installation hold is KEPT (%s): every new entry stays refused until the last step.", hold)
 	oldSHA, newSHA := "n/a", "n/a"
 	if j.Install != nil {
 		oldSHA = j.Install.SHA
@@ -46,26 +46,50 @@ func RecoveryText(j updaterjob.Job, t Target) string {
 	}
 	p("Pre-update build: %s   release being installed: %s", oldSHA, newSHA)
 	p("")
+	// What is running decides the steps (verifier D3): a job that never
+	// reached the activate installed nothing; a proven rollback or a proven
+	// release must NOT be rolled back from the snapshot. Only an activate
+	// that was never proven either way restores the snapshot.
+	reach := recoveryReach(j)
+	prove, restart := oldSHA, true
 	step := 1
-	if j.Snapshot != nil && j.Install != nil {
-		s, in := *j.Snapshot, *j.Install
-		p("%d. Restore the pre-update install from this job's snapshot (copy to a temp name, then mv -f over the live one):", step)
-		p("     cp -p %s %s.recovery.tmp && mv -f %s.recovery.tmp %s", s.Binary, in.Binary, in.Binary, in.Binary)
-		p("     cp -p %s %s.recovery.tmp && mv -f %s.recovery.tmp %s", s.ReleaseFile, in.ReleaseFile, in.ReleaseFile, in.ReleaseFile)
-		p("     rm -rf %s.recovery.tmp && cp -a %s %s.recovery.tmp && mv %s %s.failed.%s && mv %s.recovery.tmp %s",
-			in.Dist, s.Dist, in.Dist, in.Dist, in.Dist, j.JobID, in.Dist, in.Dist)
-	} else {
-		p("%d. No snapshot was taken (the job stopped before backup_done): nothing was installed — skip to step %d.", step, step+1)
+	switch reach {
+	case reachNothingInstalled:
+		p("%d. Nothing was installed: the job stopped before the activate, so the pre-update build %s still runs. Do NOT restore anything.", step, oldSHA)
+		restart = false
+	case reachRolledBack:
+		p("%d. The rollback to the pre-update build %s was PROVEN (rolled_back reached). Do NOT restore anything.", step, oldSHA)
+		restart = false
+	case reachReleaseProven:
+		p("%d. The release %s was PROVEN running (boot_verified finished). Do NOT restore the snapshot: that would roll back a proven release.", step, newSHA)
+		prove, restart = newSHA, false
+	default:
+		if j.Snapshot != nil && j.Install != nil {
+			s, in := *j.Snapshot, *j.Install
+			p("%d. Restore the pre-update install from this job's snapshot (copy to a temp name, then mv -f over the live one):", step)
+			p("     cp -p %s %s.recovery.tmp && mv -f %s.recovery.tmp %s", s.Binary, in.Binary, in.Binary, in.Binary)
+			p("     cp -p %s %s.recovery.tmp && mv -f %s.recovery.tmp %s", s.ReleaseFile, in.ReleaseFile, in.ReleaseFile, in.ReleaseFile)
+			p("     rm -rf %s.recovery.tmp && cp -a %s %s.recovery.tmp && mv %s %s.failed.%s && mv %s.recovery.tmp %s",
+				in.Dist, s.Dist, in.Dist, in.Dist, in.Dist, j.JobID, in.Dist, in.Dist)
+		} else {
+			p("%d. The activate ran but this job recorded no snapshot of the install: the install cannot be restored from it — stop and restore it by hand.", step)
+		}
 	}
 	step++
-	p("%d. Restart the bot by its identity, never by name (systemd's Restart=on-failure relaunches it):", step)
-	p(`     kill -9 "$(systemctl show -p MainPID --value nofx)"`)
-	step++
-	short := oldSHA
+	short := prove
 	if len(short) > 12 {
 		short = short[:12]
 	}
-	p("%d. Prove the boot: the data log must show the OK line for the pre-update build, and health must serve it:", step)
+	if restart {
+		p("%d. Restart the bot by its identity, never by name (systemd's Restart=on-failure relaunches it):", step)
+	} else {
+		p("%d. ONLY if health (step %d) does not serve %s: restart the bot by its identity, never by name:", step, step+1, short)
+	}
+	// MainPID is 0 for a unit that is not running, and kill -9 0 signals
+	// the operator's whole process group: never kill a pid below 2.
+	p("     %s", restartLine)
+	step++
+	p("%d. Prove the boot: the data log must show the OK line for %s, and health must serve it:", step, short)
 	p(`     grep -a "BOOT INTEGRITY OK — rev %s ·" %s/nofx_$(date +%%F).log`, short, t.LogDir)
 	p("     curl -s http://127.0.0.1:%d/api/health    (revision must be %s)", t.Port, short)
 	if j.BackupPath != "" {
@@ -77,4 +101,45 @@ func RecoveryText(j updaterjob.Job, t Target) string {
 	p("")
 	p("Then restart nofx-updater (the restart is the acknowledgement; install stays refused until then).")
 	return b.String()
+}
+
+// restartLine restarts the unit by its MainPID and refuses a pid below 2 (a
+// stopped unit reports 0; kill -9 0 would signal the whole process group).
+const restartLine = `pid=$(systemctl show -p MainPID --value nofx); if [ "$pid" -gt 1 ] 2>/dev/null; then kill -9 "$pid"; else echo "nofx is not running (MainPID '$pid'); start it: sudo systemctl start nofx"; fi`
+
+type reach int
+
+const (
+	reachUnproven         reach = iota // the activate ran; neither build is proven
+	reachNothingInstalled              // the job never entered activated
+	reachRolledBack                    // rolled_back was entered: the old build is proven
+	reachReleaseProven                 // boot_verified finished, no rollback began
+)
+
+// recoveryReach reads the job's HISTORY (never its current state alone: a
+// recovery_needed job's state is recovery_needed).
+func recoveryReach(j updaterjob.Job) reach {
+	activated, rollingBack, rolledBack, proven := false, false, false, false
+	for _, tr := range j.Transitions {
+		switch {
+		case tr.State == updaterjob.StateActivated:
+			activated = true
+		case tr.State == updaterjob.StateRollingBack:
+			rollingBack = true
+		case tr.State == updaterjob.StateRolledBack:
+			rolledBack = true
+		case tr.State == updaterjob.StateBootVerified && tr.Phase == updaterjob.PhaseDone,
+			tr.State == updaterjob.StateComplete:
+			proven = true
+		}
+	}
+	switch {
+	case !activated:
+		return reachNothingInstalled
+	case rolledBack:
+		return reachRolledBack
+	case proven && !rollingBack:
+		return reachReleaseProven
+	}
+	return reachUnproven
 }
