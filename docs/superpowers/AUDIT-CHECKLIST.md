@@ -7656,3 +7656,31 @@ entry update lands. Pinned: `TestExitBeforeCumulativeEntryIsRetainedThenApplied`
 whose write depends on an earlier event must either park-until-it-lands or
 prove the earlier event always wins by construction — never a hard error, never
 a silent drop.
+
+## CLASS NN (assigned at merge) — a deferred transaction's read→write upgrade lost a live close
+
+**Found:** 2026-09-25, live boot-2 binary d7a442d5 [A]. `ApplyNT8Exit` ran as a
+DEFERRED transaction: it read first (the receipt lookup, which WAL readers
+always allow) and sought the write lock only at the first write. Under WAL an
+upgrade while another connection holds the write lock returns SQLITE_BUSY /
+SQLITE_BUSY_SNAPSHOT IMMEDIATELY — the busy handler is deliberately not invoked
+for an upgrade that risks deadlock, so busy_timeout cannot help. At 08:55 CT the
+ordered worker's `recordCloseOrdered` got "database is locked", logged and
+returned: no receipt persisted, no priced close parked, hasFill not cleared —
+row 618 stayed OPEN and reconcile's orphan close had no real price (class 40).
+Compounding it, `store/gorm.go`'s pool-wide `PRAGMA busy_timeout` is ONE
+`db.Exec` on a pool of 4 — it reaches exactly one connection, the rest keep 0.
+**Fixed:** `ApplyNT8Exit` takes the write lock UP FRONT (BEGIN IMMEDIATE on a
+dedicated pooled connection, where the busy handler DOES apply); the worker
+retries a busy error bounded (5 tries, backoff sleeps ≤ ~1.6s, in receive
+order); on final failure it NEVER drops — the broker price is parked
+(putPricedClose) + hasFill cleared, then the receipt is persisted in its own
+small write (dedicated connection, full busy wait) so RetryPendingNT8Exits
+applies it later, with an ERROR log + counter. Pinned at the production call
+sites: `TestApplyNT8ExitTakesTheWriteLockUpFront` (RED: deferred tx returns
+"database is locked" while the holder still holds) and
+`TestBusyCloseFrameIsNeverDropped` (RED: today's single-shot error→return loses
+the close — no receipt, no park). **Probe:** for every SQLite transaction whose
+loss is a lost exit/fill, assert the lock is acquired AT BEGIN (IMMEDIATE), not
+at the first write after reads; for every per-connection PRAGMA issued once via
+a pool handle, prove which pooled connections actually carry it.

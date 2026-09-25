@@ -12,6 +12,8 @@ import (
 	"nofx/market"
 	ntwire "nofx/provider/ninjatrader"
 	"nofx/store"
+	"nofx/store/sqlitedriver"
+	"nofx/telemetry"
 )
 
 // StartCloseSync consumes position_close frames from the TCP bridge and records
@@ -232,6 +234,26 @@ func (t *TCPTrader) recordClose(
 	t.mu.Unlock()
 }
 
+// W117 a3 — bounded busy retry on the worker, in receive order. Five total
+// tries (the first call + ntExitBusyRetries retries); the backoff sleeps sum to
+// 1.55s, so the worker's own retry schedule stays inside ~3s wall. Each
+// attempt's BEGIN IMMEDIATE busy wait is capped by the store's busy_timeout
+// (5000ms live); a holder that outlives it parks the exit instead of dropping.
+const ntExitBusyRetries = 4
+
+func ntExitBusyBackoff(attempt int) time.Duration {
+	switch attempt {
+	case 1:
+		return 50 * time.Millisecond
+	case 2:
+		return 100 * time.Millisecond
+	case 3:
+		return 200 * time.Millisecond
+	default:
+		return 400 * time.Millisecond
+	}
+}
+
 // ── W117 F3 / slice-A R6 — durable exit receipts, apply-or-park ON THE WORKER ──
 //
 // recordCloseOrdered is the ordered worker's close consumer: the same evidence
@@ -292,9 +314,40 @@ func (t *TCPTrader) recordCloseOrdered(
 	// close arrives, the rows the earlier exits were waiting on may exist.
 	t.RetryPendingNT8Exits(st)
 
+	// W117 a3 — SQLite lock contention must never lose a close. BEGIN
+	// IMMEDIATE already moves the lock wait to transaction start (the busy
+	// handler applies there); when the holder outlives busy_timeout the worker
+	// retries BOUNDED, in receive order, then parks on final failure.
 	result, err := st.Position().ApplyNT8Exit(receipt)
+	if err != nil && sqlitedriver.IsBusy(err) {
+		for attempt := 1; attempt <= ntExitBusyRetries && sqlitedriver.IsBusy(err); attempt++ {
+			time.Sleep(ntExitBusyBackoff(attempt))
+			result, err = st.Position().ApplyNT8Exit(receipt)
+		}
+	}
 	if err != nil {
-		logger.Warnf("NT8 exit receipt refused/uncommitted account=%s signal=%s qty=%.0f: %v", p.Account, p.SignalID, qty, err)
+		if !sqlitedriver.IsBusy(err) {
+			logger.Warnf("NT8 exit receipt refused/uncommitted account=%s signal=%s qty=%.0f: %v", p.Account, p.SignalID, qty, err)
+			return
+		}
+		// FINAL FAILURE — never drop. The two legacy contracts run first (the
+		// broker's real price is parked for reconcile's orphan close and the
+		// flat signal is dropped, exactly like legacy recordClose), THEN the
+		// receipt is persisted in its own small write so
+		// RetryPendingNT8Exits applies it once the lock storm passes.
+		putPricedClose(p.Account, symbol, side, p.ExitPrice, qty, exitMs)
+		t.mu.Lock()
+		t.hasFill = false
+		t.mu.Unlock()
+		telemetry.IncNT8ExitBusyPark()
+		if perr := st.Position().SavePendingExit(receipt); perr != nil {
+			telemetry.IncNT8ExitBusyParkPersistFailure()
+			logger.Errorf("❌ NT8 exit PARKED after busy retries but the receipt persist FAILED account=%s signal=%s qty=%.0f exit=%.2f: %v — the 2-minute priced park is the only net until the next frame",
+				p.Account, p.SignalID, qty, p.ExitPrice, perr)
+			return
+		}
+		logger.Errorf("❌ NT8 exit PARKED after busy retries exhausted account=%s signal=%s qty=%.0f exit=%.2f — priced + receipt persisted (applied=false); RetryPendingNT8Exits will apply it",
+			p.Account, p.SignalID, qty, p.ExitPrice)
 		return
 	}
 	if result.Pending {

@@ -47,6 +47,10 @@ type NT8ExitResult struct {
 	Quantity, RealizedPnL    float64
 }
 
+// pendingPersistBusyTimeoutMs is the busy wait for the receipt-persist small
+// write: the full live busy_timeout, independent of the retry-loop test seam.
+const pendingPersistBusyTimeoutMs = 5000
+
 // ApplyNT8Exit atomically records one actual execution, reduces its exact owned
 // row and records the fill. It never turns missing/excess quantity into a
 // close: when the row is incomplete (residual below the exit quantity) the
@@ -57,7 +61,12 @@ func (s *PositionStore) ApplyNT8Exit(in NT8ExitReceipt) (out NT8ExitResult, err 
 		!finitePositive(in.Quantity) || math.Trunc(in.Quantity) != in.Quantity || !finitePositive(in.Price) || !finitePositive(in.PointValue) || in.ExitMs <= 0 || math.IsNaN(in.Fee) || math.IsInf(in.Fee, 0) || in.Fee < 0 {
 		return out, fmt.Errorf("invalid NT8 exit evidence: identity, account, side, integral quantity, price, point value and time required")
 	}
-	err = s.db.Transaction(func(tx *gorm.DB) error {
+	// W117 a3 — the transaction takes SQLite's write lock UP FRONT (BEGIN
+	// IMMEDIATE on a dedicated connection). A deferred tx reads first and
+	// BUSYs at the read→write upgrade when another connection holds the lock
+	// (busy_timeout cannot help there), which lost a live close (row 618,
+	// 2026-09-25 08:55 CT). On other backends this is the plain GORM tx.
+	err = s.immediateOrPlainTx(func(tx *gorm.DB) error {
 		receipt := in
 		var existing NT8ExitReceipt
 		e := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", in.ID).First(&existing).Error
@@ -161,6 +170,25 @@ func (s *PositionStore) ApplyNT8Exit(in NT8ExitReceipt) (out NT8ExitResult, err 
 		return nil
 	})
 	return out, err
+}
+
+// SavePendingExit persists the receipt row in its OWN small write — outside the
+// multi-statement ApplyNT8Exit transaction — for the case where ApplyNT8Exit
+// exhausted its bounded busy retries. RetryPendingNT8Exits later re-applies it.
+// Idempotent: an existing receipt row (any state) is kept, never overwritten.
+//
+// W117 a3 — the write runs on a dedicated connection with the FULL busy wait
+// (not the retry loop's budget): the park is the final net, so this single
+// INSERT is allowed to block up to busy_timeout for the holder to release — a
+// pooled connection would carry busy_timeout=0 (store/gorm.go's PRAGMA reaches
+// only one of the four) and could lose the receipt to the SAME contention.
+func (s *PositionStore) SavePendingExit(in NT8ExitReceipt) error {
+	if in.ID == "" {
+		return fmt.Errorf("NT8 exit receipt identity required")
+	}
+	return withImmediateWriteTxBusy(s.db, pendingPersistBusyTimeoutMs, func(tx *gorm.DB) error {
+		return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&in).Error
+	})
 }
 
 func (s *PositionStore) PendingNT8Exits(account string) ([]NT8ExitReceipt, error) {
