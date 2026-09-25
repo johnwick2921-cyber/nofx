@@ -27,48 +27,88 @@ import (
 // clear goes through HoldForJob / ReleaseJob — and those two are called only
 // from the steps that the state table says write or clear (steps.go).
 func TestWorkerHoldSeamCensus(t *testing.T) {
-	seams := map[string]bool{"writeMaintenanceHold": true, "clearMaintenanceHold": true}
-	callers := map[string]map[string]bool{"HoldForJob": {}, "ReleaseJob": {}}
-	ents, err := os.ReadDir(".")
+	seamUsers, callers, scanned, err := workerHoldSeamUses(".")
 	if err != nil {
 		t.Fatal(err)
 	}
-	scanned := 0
+	if scanned < 10 {
+		t.Fatalf("scanned %d files — the census is not covering the package", scanned)
+	}
+	for _, off := range seamUsers {
+		t.Errorf("%s — only hold.go may name the hold writer seams", off)
+	}
+	for _, fn := range []string{"HoldForJob", "ReleaseJob"} {
+		if got := fmt.Sprint(keysOf(callers[fn])); got != "[steps.go]" {
+			t.Errorf("%s is named in %s, want exactly [steps.go] (stepHold / stepReleaseHold)", fn, got)
+		}
+	}
+	// the census itself (verifier D7): a writer taken as a VALUE — a func
+	// var, a method value, an argument — is a use the call-only census
+	// missed; every naming counts, the declarations in hold.go do not
+	dir := t.TempDir()
+	put := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put("hold.go", "package updaterworker\n\nvar writeMaintenanceHold, clearMaintenanceHold func()\n\nfunc HoldForJob() { writeMaintenanceHold() }\nfunc ReleaseJob() { clearMaintenanceHold() }\n")
+	put("steps.go", "package updaterworker\n\nfunc a() { HoldForJob(); ReleaseJob() }\n")
+	put("worker.go", "package updaterworker\n\nfunc b() { clr := ReleaseJob; clr() }\n")
+	put("socket.go", "package updaterworker\n\nfunc c(f func()) {}\nfunc d() { c(HoldForJob) }\n")
+	put("runner.go", "package updaterworker\n\nfunc e() { f := clearMaintenanceHold; f() }\n")
+	seamUsers, callers, _, err = workerHoldSeamUses(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprint(keysOf(callers["ReleaseJob"])) + fmt.Sprint(keysOf(callers["HoldForJob"])) + fmt.Sprint(seamUsers); got != "[steps.go worker.go][socket.go steps.go][runner.go names clearMaintenanceHold]" {
+		t.Fatalf("synthetic census = %s", got)
+	}
+}
+
+// workerHoldSeamUses scans dir's non-test files: every file other than
+// hold.go naming a seam var, and every file NAMING (calling, taking as a
+// value, passing) HoldForJob / ReleaseJob — their declarations excepted.
+func workerHoldSeamUses(dir string) (seamUsers []string, callers map[string]map[string]bool, scanned int, err error) {
+	seams := map[string]bool{"writeMaintenanceHold": true, "clearMaintenanceHold": true}
+	callers = map[string]map[string]bool{"HoldForJob": {}, "ReleaseJob": {}}
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, nil, 0, err
+	}
 	for _, e := range ents {
 		name := e.Name()
 		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 			continue
 		}
-		f, err := parser.ParseFile(token.NewFileSet(), filepath.Join(".", name), nil, 0)
+		f, err := parser.ParseFile(token.NewFileSet(), filepath.Join(dir, name), nil, 0)
 		if err != nil {
-			t.Fatal(err)
+			return nil, nil, 0, err
 		}
 		scanned++
+		decl := map[*ast.Ident]bool{}
+		for _, d := range f.Decls {
+			if fd, ok := d.(*ast.FuncDecl); ok && fd.Recv == nil {
+				decl[fd.Name] = true
+			}
+		}
+		seen := map[string]bool{}
 		ast.Inspect(f, func(n ast.Node) bool {
-			switch x := n.(type) {
-			case *ast.Ident:
-				if seams[x.Name] && name != "hold.go" {
-					t.Errorf("%s names the hold writer seam %s — only hold.go may", name, x.Name)
-				}
-			case *ast.CallExpr:
-				if id, ok := x.Fun.(*ast.Ident); ok {
-					if m, ok := callers[id.Name]; ok {
-						m[name] = true
-					}
-				}
+			x, ok := n.(*ast.Ident)
+			if !ok {
+				return true
+			}
+			if seams[x.Name] && name != "hold.go" && !seen[x.Name] {
+				seen[x.Name] = true
+				seamUsers = append(seamUsers, name+" names "+x.Name)
+			}
+			if m, ok := callers[x.Name]; ok && !decl[x] {
+				m[name] = true
 			}
 			return true
 		})
 	}
-	if scanned < 10 {
-		t.Fatalf("scanned %d files — the census is not covering the package", scanned)
-	}
-	for fn, files := range callers {
-		got := fmt.Sprint(keysOf(files))
-		if got != "[steps.go]" {
-			t.Errorf("%s is called from %s, want exactly [steps.go] (stepHold / stepReleaseHold)", fn, got)
-		}
-	}
+	sort.Strings(seamUsers)
+	return seamUsers, callers, scanned, nil
 }
 
 func keysOf(m map[string]bool) []string {
