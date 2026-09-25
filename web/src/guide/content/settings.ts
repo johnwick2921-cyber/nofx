@@ -310,6 +310,21 @@ const dayPlan: KnobSpec[] = [
     perSession: 'No — strategy-level.',
   },
   {
+    label: 'Zone placement reach (PLANNER B1)',
+    where: 'Strategy → Day Plan → zone_place_within_pts (API/config field)',
+    what: 'The distance bound (points) that decides whether an armed market_in_zone arm may place: a row whose zone is farther than this from the eval price stays armed-unplaced (no rest clock, nothing on the wire) and places on a later pass once price comes within the bound; inside and short_of_zone verdicts are unchanged. With the bound ON, a rest-cap expiry (zone_rest_max_min) no longer dismantles the arm — the resting order is cancelled on request (cancel_pending, signal kept) and only once the broker book confirms it does the row return to armed-unplaced (re-placeable) so it can try again when price is near; a failed cancel send is retried and a fill during the wait attributes to the row. 0 turns the whole reach contract OFF and restores the legacy behaviour byte-for-byte (a far arm places at once and an expiry dismantles the arm).',
+    trader:
+      'The bound is the existing armed placement band (25 pts on MNQ, the same distance a legacy limit waits for). A zone the market walked away from is not left resting 148 points away.',
+    consumer:
+      'store/resolve_source.go ResolveZonePlaceWithinPts · trader/zone_placement.go (placeZoneRow beyond-proximity gate + zoneRestCap reset) · 🎛 entry law boot line',
+    range: '0 = OFF (legacy). unset → 25 (the armed placement band).',
+    systemDefault: '25 (ON)',
+    recommended:
+      '⭐ 25 — the same bound legacy limit placement already uses; no evidence yet to argue another number.',
+    whenToTouch: 'After the receipts (placements vs distance per fill) exist.',
+    perSession: 'No — strategy-level.',
+  },
+  {
     label: 'Armable hold floor (W3)',
     where: 'Strategy → Day Plan → min_hold_min (API/config field)',
     what: 'The floor (minutes) on the RESOLVED hold of an ARMED market_in_zone time_hold scenario (acceptance / hold): the stored confirm.hold_min, else the ACCEPT_HOLD_MIN authoring default. Below it the plan is refused at write with its own law ("armable hold floor: …") — an unarmed scenario or a legacy arm is never judged. New plans only.',
