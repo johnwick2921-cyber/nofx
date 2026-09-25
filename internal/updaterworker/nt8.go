@@ -52,7 +52,7 @@ func (w *Worker) decideNT8(ctx context.Context, j updaterjob.Job) updaterjob.NT8
 		why("no AddOn maintenance_ack")
 	default:
 		a := m.AddonAck
-		d.AckedBuildID, d.AckedAt = a.BuildID, a.Received
+		d.AckedBuildID, d.AckedAt, d.AckAcceptSeq = a.BuildID, a.Received, a.AcceptSeq
 		if b := ackFor(a, j.JobID); b != "" {
 			why("%s", b)
 		} else if err == nil && validBuildID(f.AddonBuildID) && a.BuildID != f.AddonBuildID {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"nofx/internal/updaterjob"
@@ -465,11 +466,23 @@ func (w *Worker) resumeProof(ctx context.Context, j updaterjob.Job, ev map[strin
 		return errors.New("no AddOn maintenance_ack")
 	}
 	ev["acked_build_id"], ev["acked_at"] = orNA(a.BuildID), a.Received
+	ev["acked_accept_seq"] = strconv.FormatUint(a.AcceptSeq, 10)
 	if why := ackFor(a, j.JobID); why != "" {
 		return errors.New(why)
 	}
 	if a.BuildID != want {
 		return fmt.Errorf("the AddOn acks build %q, the release is %q", a.BuildID, want)
+	}
+	// #206 review fold (runner.go:471): when the park was because the
+	// release's ninjascript/*.cs differs but the manifest's build id was NOT
+	// bumped (it equals what the OLD AddOn already acks), the build check
+	// cannot tell a restarted AddOn from the old one — the resume then
+	// passed without any F5 and activated a Go/C# mismatch. The proof of a
+	// restart is a NEW connection: accept_seq is assigned per connection,
+	// so the resume demands an ack from a different connection than the one
+	// the park recorded (an F5 + NT8 restart reconnects the AddOn).
+	if j.NT8 != nil && j.NT8.CSUnchanged != nil && !*j.NT8.CSUnchanged && a.AcceptSeq == j.NT8.AckAcceptSeq {
+		return fmt.Errorf("the release's %s differs and the AddOn still runs on connection accept_seq=%d — copy it over, F5 and restart NT8, then resume", ninjascriptGlob, a.AcceptSeq)
 	}
 	return nil
 }

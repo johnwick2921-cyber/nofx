@@ -220,3 +220,50 @@ func TestBootVerifyRollsBackWithoutTheAddOnOrTheReleaseUI(t *testing.T) {
 		})
 	}
 }
+
+// PIN (#206 review fold, runner.go:471): when the release's ninjascript/*.cs
+// changed but the author forgot to bump VL_BUILD_ID (the manifest's
+// addon.build_id equals what the OLD AddOn already acks), the build check
+// cannot tell a restarted AddOn from the old one — a resume without any F5
+// used to leave the park and activate a Go/C# mismatch. The proof of a
+// restart is a NEW connection (accept_seq, assigned per connection): the
+// resume must refuse while the AddOn still runs on the park's connection,
+// and pass once an F5 reconnects it.
+func TestResumeNeedsANewConnectionWhenTheCSharpChangedWithoutABuildBump(t *testing.T) {
+	r := newRig(t)
+	writeFile(r.t, filepath.Join(r.relDir, "ninjascript", "VLTrader.cs"), "// C# v2\n")
+	// NO manifestBuild bump: the manifest names boxOldBuild, which the OLD
+	// AddOn acks already.
+	r.install()
+	if err := r.drive(); err != nil {
+		t.Fatal(err)
+	}
+	if j := r.job(); j.State != updaterjob.StateNT8Updated || j.Phase != updaterjob.PhaseDone {
+		t.Fatalf("no park: %s/%s", j.State, j.Phase)
+	}
+	// Resume with no F5: the AddOn is still on the park's connection.
+	if resp := r.w.Handle(resumeRequest(boxJobID)); !resp.OK {
+		t.Fatalf("resume verb: %+v", resp)
+	}
+	if err := r.drive(); err != nil {
+		t.Fatal(err)
+	}
+	j := r.job()
+	if j.State != updaterjob.StateNT8Updated {
+		t.Fatalf("a resume without an F5 left the park: %s (error %q)", j.State, j.Error)
+	}
+	if !strings.Contains(j.Error, "accept_seq") && !strings.Contains(j.Blocker, "accept_seq") {
+		t.Fatalf("the refusal must name the unchanged connection: error %q blocker %q", j.Error, j.Blocker)
+	}
+	// F5 + NT8 restart reconnects the AddOn: the same build id, a NEW seq.
+	r.f5()
+	if resp := r.w.Handle(resumeRequest(boxJobID)); !resp.OK {
+		t.Fatalf("resume verb after the F5: %+v", resp)
+	}
+	if err := r.drive(); err != nil {
+		t.Fatal(err)
+	}
+	if j := r.job(); j.State != updaterjob.StateComplete {
+		t.Fatalf("a resume after the F5 ended %s (error %q)", j.State, j.Error)
+	}
+}

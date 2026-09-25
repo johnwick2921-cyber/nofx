@@ -96,6 +96,7 @@ type box struct {
 	holdWriteFails bool          // the hold write errs before anything lands
 	ackStale       bool          // the AddOn's last ack is 20 s old
 	ackJob         string        // the AddOn acks this job id instead of the hold's
+	addonSeq       uint64        // the AddOn's connection accept_seq (a reconnect = a new seq)
 	exe            string        // /proc/<MainPID>/exe, when not the install's binary
 	healthRev      string        // /api/health serves this revision instead of the running sha
 	ackLag         time.Duration // the AddOn's last ack is this much older than the 5 s tick (age stays consistent)
@@ -657,7 +658,7 @@ func (b *box) serveApp(w http.ResponseWriter, r *http.Request) {
 // resent every 5 s (received = the last 5 s tick; age = now − received).
 func (b *box) ack() *AckView {
 	b.mu.Lock()
-	connected, build, stale, ackJob, lag, wall := b.addonConnected, b.addonBuild, b.ackStale, b.ackJob, b.ackLag, b.wallStep
+	connected, build, stale, ackJob, lag, wall, seq := b.addonConnected, b.addonBuild, b.ackStale, b.ackJob, b.ackLag, b.wallStep, b.addonSeq
 	b.mu.Unlock()
 	if !connected {
 		return nil
@@ -667,7 +668,7 @@ func (b *box) ack() *AckView {
 	recv := now.Truncate(5 * time.Second).Add(-lag)
 	// wallStep shifts ONLY the rendered wall time (the thing the old code
 	// compared); AgeMs keeps measuring the monotonic age of the SAME ack.
-	a := &AckView{Received: recv.Add(wall).Format(time.RFC3339Nano), AgeMs: now.Sub(recv).Milliseconds(), BuildID: build, AcceptSeq: 1}
+	a := &AckView{Received: recv.Add(wall).Format(time.RFC3339Nano), AgeMs: now.Sub(recv).Milliseconds(), BuildID: build, AcceptSeq: seq}
 	b.mu.Lock()
 	b.ackAges = append(b.ackAges, a.AgeMs) // the age sequence the worker OBSERVED
 	b.mu.Unlock()

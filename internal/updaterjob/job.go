@@ -145,7 +145,8 @@ type NT8Decision struct {
 	Reason          string `json:"reason,omitempty"` // why "updated" (ack absent, build differs, C# changed, read failed)
 	ManifestBuildID string `json:"manifest_build_id,omitempty"`
 	AckedBuildID    string `json:"acked_build_id,omitempty"`
-	AckedAt         string `json:"acked_at,omitempty"` // addon_ack.received, verbatim
+	AckedAt         string `json:"acked_at,omitempty"`       // addon_ack.received, verbatim
+	AckAcceptSeq    uint64 `json:"ack_accept_seq,omitempty"` // the connection's accept_seq at the park — a new seq proves a new connection
 	CSUnchanged     *bool  `json:"cs_unchanged,omitempty"`
 }
 

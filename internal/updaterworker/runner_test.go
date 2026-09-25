@@ -34,6 +34,7 @@ func (r *rig) f5() {
 	r.clock.Advance(3 * time.Minute)
 	r.mu.Lock()
 	r.addonBuild = r.manifestBuild
+	r.addonSeq++ // F5 + NT8 restart: the AddOn reconnects on a NEW connection
 	r.mu.Unlock()
 }
 

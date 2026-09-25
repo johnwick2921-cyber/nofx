@@ -59,7 +59,7 @@ func fullJob(t *testing.T, dd string) Job {
 		Dist: "/home/u/nofx-backups/updater/" + id + "/install/web/dist", ReleaseFile: "/home/u/nofx-backups/updater/" + id + "/install/deploy/RELEASE"}
 	step(t, dd, &j, &now, StateBackupDone)
 	cs := false
-	j.NT8 = &NT8Decision{Decision: NT8Updated, Reason: "ninjascript/*.cs changed", ManifestBuildID: "2026-09-24-m4", AckedBuildID: "2026-09-23-m21", AckedAt: "2026-09-24T18:02:30Z", CSUnchanged: &cs}
+	j.NT8 = &NT8Decision{Decision: NT8Updated, Reason: "ninjascript/*.cs changed", ManifestBuildID: "2026-09-24-m4", AckedBuildID: "2026-09-23-m21", AckedAt: "2026-09-24T18:02:30Z", AckAcceptSeq: 7, CSUnchanged: &cs}
 	step(t, dd, &j, &now, StateNT8Updated)
 	j.Blocker = "attended AddOn F5 required"
 	mustWrite(t, dd, j)
