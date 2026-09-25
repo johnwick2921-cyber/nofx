@@ -228,7 +228,7 @@ func TestUpdateAuthCensus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	offenders, scanned, err := updateAuthOffenders(root)
+	offenders, scanned, err := updateAuthOffenders(t, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,7 +322,8 @@ func TestUpdateAuthCensusTablesArePinned(t *testing.T) {
 }
 
 // updateAuthOffenders is the census over every non-test .go file under root.
-func updateAuthOffenders(root string) (offenders []string, scanned int, err error) {
+func updateAuthOffenders(t *testing.T, root string) (offenders []string, scanned int, err error) {
+	t.Helper()
 	module, err := censuswalk.ModulePath(root)
 	if err != nil {
 		return nil, 0, err
@@ -365,7 +366,7 @@ func updateAuthOffenders(root string) (offenders []string, scanned int, err erro
 	// assembled from fragments in a SIBLING file or in ANOTHER package.
 	// Files/packages without an entry fall back to the per-file name-based
 	// fold below (old behaviour, unchanged).
-	fileTypes := constTypeInfo(root)
+	fileTypes := constTypeInfo(t, root)
 	for _, file := range files {
 		rel := file.Rel
 		// ParseComments: directives live in comments (verifier D2 — mode 0
@@ -933,14 +934,20 @@ type constTypeFile struct {
 // object per import path; types.Config{Importer}.Check type-checks each
 // package. It returns, keyed by cleaned absolute filename, the parsed file and
 // its *types.Info for every non-test compiled file the compiler type-checked.
-// Packages the compiler cannot type-check (missing deps, type errors, build
-// constraints excluding every file) have no entry — the caller falls back to
-// its per-file name-based fold.
-func constTypeInfo(root string) map[string]*constTypeFile {
+//
+// CTO fold (1790310827826) — NO SILENT DEGRADATION: a censuswalk error, a
+// filepath.Rel error, a go list failure or an undecodable go list output is
+// FATAL (t.Fatalf) — the typed pass must never silently turn itself off and
+// let the census pass blind. Only a PER-PACKAGE type-check failure (missing
+// deps, type errors, build constraints excluding every file) keeps the
+// per-file name-fold fallback, and every such package is COUNTED and
+// t.Logf'd with its import path (never silent).
+func constTypeInfo(t *testing.T, root string) map[string]*constTypeFile {
+	t.Helper()
 	out := map[string]*constTypeFile{}
 	fs, err := censuswalk.NonTestGoFiles(root)
 	if err != nil {
-		return out
+		t.Fatalf("constTypeInfo: censuswalk over %s failed: %v", root, err)
 	}
 	dirs := map[string]bool{}
 	for _, f := range fs {
@@ -950,7 +957,7 @@ func constTypeInfo(root string) map[string]*constTypeFile {
 	for d := range dirs {
 		rel, rerr := filepath.Rel(root, d)
 		if rerr != nil {
-			return out
+			t.Fatalf("constTypeInfo: filepath.Rel(%s, %s): %v", root, d, rerr)
 		}
 		patterns = append(patterns, "./"+filepath.ToSlash(rel))
 	}
@@ -959,10 +966,11 @@ func constTypeInfo(root string) map[string]*constTypeFile {
 	cmd.Dir = root
 	raw, err := cmd.CombinedOutput()
 	if err != nil {
-		return out
+		t.Fatalf("constTypeInfo: go list over the walked dirs failed: %v\n%s", err, tailBytes(string(raw), 2000))
 	}
 	pkgFiles := map[string][]string{}
 	exportOf := map[string]string{}
+	unchecked := []string{}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	for dec.More() {
 		var p struct {
@@ -975,11 +983,12 @@ func constTypeInfo(root string) map[string]*constTypeFile {
 			}
 		}
 		if derr := dec.Decode(&p); derr != nil {
-			return out
+			t.Fatalf("constTypeInfo: decode go list output: %v", derr)
 		}
 		if p.Error != nil {
 			// Build constraints exclude every file, or the package does not
-			// compile — the compiler cannot type-check it (fallback).
+			// compile — the compiler cannot type-check it (fallback, counted).
+			unchecked = append(unchecked, p.ImportPath+" (go list: "+p.Error.Err+")")
 			continue
 		}
 		if p.Export != "" {
@@ -1014,11 +1023,13 @@ func constTypeInfo(root string) map[string]*constTypeFile {
 			parsed = append(parsed, af)
 		}
 		if !ok {
+			unchecked = append(unchecked, importPath+" (unparseable file)")
 			continue
 		}
 		info := &types.Info{Types: map[ast.Expr]types.TypeAndValue{}}
 		cfg := &types.Config{Importer: imp}
 		if _, cerr := cfg.Check(importPath, fset, parsed, info); cerr != nil {
+			unchecked = append(unchecked, importPath)
 			continue // the compiler cannot type-check this package (fallback)
 		}
 		for _, af := range parsed {
@@ -1026,7 +1037,18 @@ func constTypeInfo(root string) map[string]*constTypeFile {
 			out[filepath.Clean(pos.Filename)] = &constTypeFile{f: af, info: info}
 		}
 	}
+	if len(unchecked) > 0 {
+		t.Logf("constTypeInfo: %d package(s) not type-checked (per-file name-fold fallback): %s", len(unchecked), strings.Join(unchecked, ", "))
+	}
 	return out
+}
+
+// tailBytes returns the last n bytes of s (for LOUD error tails).
+func tailBytes(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[len(s)-n:]
 }
 
 // constantStrings returns every string the file spells as a constant: each
