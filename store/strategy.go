@@ -974,6 +974,12 @@ type DayPlanConfig struct {
 	// break → next-5m entry through the shared execution gate) and the AI
 	// provides commentary + momentum context instead of authoring fade entries.
 	PictureHtf *PictureHtfConfig `json:"picture_htf,omitempty"`
+	// PlannerContract (WAVE PLANNER A3, 2026-09-25) — the prompt, the
+	// validator and the executor are ONE contract: confirming-close authorship,
+	// planned_order entry policy, nonzero-risk economics, the REJECT composed-stop
+	// exception. *bool: nil = ON (the shipped default); an explicit false renders
+	// the pre-A3 prompt bytes (pinned by TestW3PlannerPromptLegacyPolicyByteIdentical).
+	PlannerContract *bool `json:"planner_contract,omitempty"`
 	// OneSetupMinGrade — the lowest merged-candidate grade the best level may
 	// carry ("A+" | "A" | "B" | "C"); empty = B [O].
 	OneSetupMinGrade string `json:"one_setup_min_grade,omitempty"`
@@ -2797,4 +2803,13 @@ func (c *StrategyConfig) getEffectiveTimeframeCount() int {
 		count++
 	}
 	return count
+}
+
+// PlannerContractOn (WAVE PLANNER A3): nil = ON (shipped default); explicit
+// false renders the pre-A3 prompt bytes.
+func (c *DayPlanConfig) PlannerContractOn() bool {
+	if c == nil || c.PlannerContract == nil {
+		return true
+	}
+	return *c.PlannerContract
 }

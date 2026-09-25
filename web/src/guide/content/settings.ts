@@ -37,6 +37,22 @@ const dayPlan: KnobSpec[] = [
     whenToTouch:
       'Only to restore the wide book for a comparison; the boot line names the switch and its source. W3 PRECONDITION: with entry_policy_default=market_in_zone, ON declines every non-reject play (play_not_reject) — only reject arms can place; set it OFF to trade acceptance/hold/reclaim/waterfall arms under strict. The 🎛 entry law boot line WARNs while both are on. W5 (D8 ruling): one_setup governs PLANNER plays only — a Picture scenario (📷 P1…) is admitted by its own switch and one_setup never declines, retires, ranks or re-targets it; a 📷 WARN says so at boot while Picture is on and this is ON.',
     perSession: 'No.',
+  {
+    label: 'Planner contract (A3)',
+    where: 'Strategy → Day Plan → Planner contract switch (advanced).',
+    what:
+      'WAVE PLANNER A3 (2026-09-25): the prompt, the validator and the executor are ONE contract — breakdown/breakup entries must wait for the tape\'s confirming close, planned_order is legal only on reject / fvg_entry / sweep_reclaim leg 0, every scenario\'s economics must carry nonzero risk, and a REJECT fade\'s stop is composed by the executor from the frozen zone (edge − buffer).',
+    trader:
+      'ON by default (nil). Turning it OFF restores the pre-A3 prompt text byte-for-byte — the machine still refuses the same violations; only the prompt\'s contract wording changes.',
+    consumer:
+      'store/strategy.go PlannerContractOn · kernel/planner_prompt.go (contract fragments) · kernel/class45_feeds_forward.go (stop-floor qualification)',
+    range: 'switch (ON/OFF)',
+    systemDefault: 'ON · nil = ON',
+    recommended:
+      '⭐ leave ON — the contract wording is the machine\'s ground truth. OFF exists only to prove the prompt change is byte-reversible.',
+    whenToTouch: 'Never in normal trading. OFF is a diagnostic position for A/B studies of planner wording.',
+    perSession: 'No.',
+  },
   },
   {
     label: 'One setup — minimum grade',

@@ -118,7 +118,7 @@ func TestW3EntryPolicyRowHasTeeth(t *testing.T) {
 	if err := ValidatePromptContracts(legacy + " " + EntryPolicyPromptMarker); err == nil {
 		t.Fatal("the marker without the market_in_zone law must fail the class-38 guard")
 	}
-	miz := plannerOutputContractFor(8, 3, true, true, true, resolvePromptEntryPolicy(EntryPolicyMarketInZone, 0, 0))
+	miz := plannerOutputContractFor(8, 3, true, true, true, resolvePromptEntryPolicy(EntryPolicyMarketInZone, 0, 0), false)
 	for _, frag := range []string{"the zone must contain arm.entry", "an armed time_hold holds at least", "entry_mode=pullback or entry_mode=immediate"} {
 		if err := ValidatePromptContracts(strings.ReplaceAll(miz, frag, "")); err == nil {
 			t.Errorf("dropping %q from the market_in_zone prompt must fail the guard", frag)

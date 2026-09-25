@@ -3107,22 +3107,23 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 	}
 
 	in := kernel.PlannerInput{
-		TradeDate:        tradeDate,
-		Session:          session,
-		Now:              now, // P0 timezone — the planner's labelled CT clock
-		ReadKind:         session + " scheduled read (stored+cached data)",
-		Price:            price,
-		DATR:             dATR,
-		ATR5m:            kernel.StaleConfirmATR5m(bars),
-		GeometryRefIDs:   at.dayPlanCfg().GeometryRefIDsEnabled(), // W-GEOMETRY-REFUSAL (b1)
-		Regime:           regime,
-		Levels:           scored,
-		Pool:             pool,
-		HTFZones:         htfZoneScored,
-		HTFZonesFull:     htfZonesFull,
-		StructureSummary: structure,
-		Structure:        structureMap, // S1 — nil unless day_plan.structure_map is on
-		ConsumedLevels:   consumedLines,
+		TradeDate:         tradeDate,
+		Session:           session,
+		Now:               now, // P0 timezone — the planner's labelled CT clock
+		ReadKind:          session + " scheduled read (stored+cached data)",
+		Price:             price,
+		DATR:              dATR,
+		ATR5m:             kernel.StaleConfirmATR5m(bars),
+		GeometryRefIDs:    at.dayPlanCfg().GeometryRefIDsEnabled(), // W-GEOMETRY-REFUSAL (b1)
+		PlannerContractOn: at.dayPlanCfg().PlannerContractOn(),     // WAVE PLANNER A3 (nil=ON)
+		Regime:            regime,
+		Levels:            scored,
+		Pool:              pool,
+		HTFZones:          htfZoneScored,
+		HTFZonesFull:      htfZonesFull,
+		StructureSummary:  structure,
+		Structure:         structureMap, // S1 — nil unless day_plan.structure_map is on
+		ConsumedLevels:    consumedLines,
 		// CLASS 45 E2/E3 (2026-09-02) — feed forward what the enforcers already
 		// know. The void verdict is the VALIDATOR'S OWN predicate reached through
 		// a level-oriented entry point (never a second implementation), and the
