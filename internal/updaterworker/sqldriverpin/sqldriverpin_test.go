@@ -47,13 +47,18 @@ func TestNoBinaryLinkingTheWorkerSetRegistersADuplicateSQLDriver(t *testing.T) {
 	for _, c := range []struct {
 		binary string
 		args   []string
+		tags   string
+		want   string // the ONE driver the build tag selects
 	}{
-		{"the nofx-updater binary (./cmd/nofx-updater)", []string{"list", "-deps", "-f", "{{.ImportPath}}", "./cmd/nofx-updater"}},
-		{"the updaterworker test binary (./internal/updaterworker)", []string{"list", "-deps", "-test", "-f", "{{.ImportPath}}", "./internal/updaterworker"}},
-		{"the api test binary (./api)", []string{"list", "-deps", "-test", "-f", "{{.ImportPath}}", "./api"}},
+		{"the nofx-updater binary (./cmd/nofx-updater)", []string{"list", "-deps", "-f", "{{.ImportPath}}", "./cmd/nofx-updater"}, "", modernc},
+		{"the nofx-updater binary under -tags cgofree", []string{"list", "-deps", "-f", "{{.ImportPath}}", "./cmd/nofx-updater"}, "cgofree", glebarez},
+		{"the updaterworker test binary (./internal/updaterworker)", []string{"list", "-deps", "-test", "-f", "{{.ImportPath}}", "./internal/updaterworker"}, "", modernc},
+		{"the updaterworker test binary under -tags cgofree", []string{"list", "-deps", "-test", "-f", "{{.ImportPath}}", "./internal/updaterworker"}, "cgofree", glebarez},
+		{"the api test binary (./api)", []string{"list", "-deps", "-test", "-f", "{{.ImportPath}}", "./api"}, "", modernc},
+		{"the api test binary under -tags cgofree", []string{"list", "-deps", "-test", "-f", "{{.ImportPath}}", "./api"}, "cgofree", glebarez},
 	} {
 		t.Run(c.binary, func(t *testing.T) {
-			deps := goList(t, root, c.args...)
+			deps := goList(t, root, c.tags, c.args...)
 			var drivers []string
 			for _, d := range []string{modernc, glebarez} {
 				if deps[d] {
@@ -61,21 +66,32 @@ func TestNoBinaryLinkingTheWorkerSetRegistersADuplicateSQLDriver(t *testing.T) {
 				}
 			}
 			sort.Strings(drivers)
-			switch len(drivers) {
-			case 0:
+			switch {
+			case len(drivers) == 0:
 				t.Fatalf("%s links neither %s nor %s — the probe is not seeing the binary (%d deps)", c.binary, modernc, glebarez, len(deps))
-			case 2:
+			case len(drivers) == 2:
 				t.Fatalf("%s links BOTH %s — two registrations of the database/sql driver \"sqlite\"; it panics at init "+
 					"(\"sql: Register called twice for driver sqlite\"). Every package imports nofx/store/sqlitedriver, never a driver.",
 					c.binary, strings.Join(drivers, " AND "))
+			case drivers[0] != c.want:
+				// one driver, the wrong one for this tag: a build that flipped
+				// store/sqlitedriver's backend choice would slip past the
+				// not-both check and still panic in any binary that links the
+				// other registration.
+				t.Fatalf("%s links %s — under this build the ONE registration must be %s", c.binary, drivers[0], c.want)
 			}
 		})
 	}
 }
 
-// goList runs `go <args>` (goCommand) and returns the import paths it prints.
-func goList(t *testing.T, root string, args ...string) map[string]bool {
+// goList runs `go <args>` (goCommand) under the build tags and returns the
+// import paths it prints.
+func goList(t *testing.T, root string, tags string, args ...string) map[string]bool {
 	t.Helper()
+	if tags != "" {
+		// -tags is a flag of the subcommand, not of go itself
+		args = append([]string{args[0], "-tags", tags}, args[1:]...)
+	}
 	cmd := goCommand(root, args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
