@@ -234,9 +234,10 @@ func TestSSHSIGRefusesWrongPrincipal(t *testing.T) {
 	t.Run("a wildcard principal ssh-keygen honours", func(t *testing.T) {
 		refuseBoth(t, writeAllowedSigners(t, f.dir, "rel* "+f.signer.pub), sig, f.msg, true, ErrSigPrincipal)
 	})
-	// ssh-keygen separates the fields of an allowed-signers line with SPACE and
-	// TAB only (CTO ruling 1790279155144 (1)); every other character — ASCII
-	// VT/FF, Unicode NBSP/NEL — is part of the field it sits in. A parser that
+	// ssh-keygen separates the fields of an allowed-signers line with space,
+	// tab, CR and LF; ours with SPACE and TAB only (CTO ruling 1790279155144
+	// (1)); every other character — ASCII VT/FF, Unicode NBSP/NEL — is part of
+	// the field it sits in, for both. A parser that
 	// split on Unicode white space would admit each of these lines, which the
 	// tool refuses: a divergence from the reference, never a looseness we keep.
 	keyType, keyRest, ok := strings.Cut(f.signer.pub, " ")
@@ -264,6 +265,13 @@ func TestSSHSIGRefusesWrongPrincipal(t *testing.T) {
 		// "release\rssh-…" and admits nothing. Refusing what the tool accepts
 		// is the permitted direction; accepting what it refuses is not.
 		{"a CR separator ssh-keygen honours", "release\r" + f.signer.pub, true, ErrSigPrincipal},
+		// A LEADING CR (verifier f13 defect 1): ssh-keygen skips only leading
+		// space/tab, then ends the first field at the CR — an EMPTY principal
+		// — and refuses (OpenSSH 9.6p1, rc 255 "Could not verify signature.").
+		// Trimming CR from the FRONT of the line would admit it.
+		{"a leading CR", "\rrelease " + f.signer.pub, false, ErrSigPrincipal},
+		{"a leading CR then a space", "\r release " + f.signer.pub, false, ErrSigPrincipal},
+		{"a leading space then a CR", " \rrelease " + f.signer.pub, false, ErrSigPrincipal},
 	} {
 		t.Run("a non space/tab separator: "+tc.name, func(t *testing.T) {
 			refuseBoth(t, writeAllowedSigners(t, f.dir, tc.line), sig, f.msg, tc.toolAccepts, tc.want)

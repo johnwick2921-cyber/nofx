@@ -242,13 +242,19 @@ func releaseSignerKeys(path string) ([][]byte, error) {
 	}
 	var keys [][]byte
 	for i, line := range strings.Split(string(raw), "\n") {
-		// Tokenized the way ssh-keygen tokenizes it (CTO ruling 1790279155144
-		// (1)): fields are separated by SPACE and TAB ONLY. strings.TrimSpace /
-		// strings.Fields would also split on VT, FF and Unicode spaces (NBSP,
-		// NEL, …), admitting lines the reference tool refuses; here those
-		// characters stay inside the field they sit in, so the principal or
-		// the key no longer matches and the line admits nothing.
-		line = strings.Trim(line, " \t\r\n")
+		// Tokenized so that we never admit a line ssh-keygen refuses (CTO
+		// ruling 1790279155144 (1)). Our fields are separated by SPACE and TAB
+		// ONLY. ssh-keygen's field delimiter set is " \t\r\n", so ours is
+		// deliberately STRICTER on CR (a CR inside a line stays in its field
+		// and the line admits nothing — refusing what the tool accepts is the
+		// permitted direction). strings.TrimSpace / strings.Fields would also
+		// split on VT, FF and Unicode spaces (NBSP, NEL, …), admitting lines
+		// the tool refuses; here those characters stay inside their field.
+		// LEADING trim is space/tab exactly as the tool skips it: the tool
+		// ends the first field at a leading CR (an empty principal) and
+		// refuses, so a leading CR must never be trimmed away (verifier f13
+		// defect 1). Trailing CR/LF is trimmed (CRLF files).
+		line = strings.TrimLeft(strings.TrimRight(line, " \t\r\n"), " \t")
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
@@ -285,7 +291,8 @@ func releaseSignerKeys(path string) ([][]byte, error) {
 }
 
 // isAllowedSignersSep is the ONLY field separator of an allowed-signers line:
-// space and tab, as in ssh-keygen (sshsig.c) — never unicode.IsSpace.
+// space and tab — never unicode.IsSpace. ssh-keygen (sshsig.c, strdelimw)
+// also splits on CR/LF; ours does not, deliberately stricter on CR.
 func isAllowedSignersSep(r rune) bool { return r == ' ' || r == '\t' }
 
 // looksLikeKeyType reports whether an allowed-signers field is a key type
