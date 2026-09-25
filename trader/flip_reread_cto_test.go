@@ -69,7 +69,7 @@ const validShortPlanJSON = `{
     {"price": 15575, "label": "RN 15575", "grade": "B", "instruction": "fade"},
     {"price": 15620, "label": "PDH", "grade": "A", "instruction": "fade"}
   ],
-  "scenarios": [{"id": "S1", "trigger": "reject 15480 from below", "condition": "reject", "direction": "short", "target_chain": [15450, 15430], "invalid": "2x5m>15490", "quality": "A", "confirm":{"rule":"touch","ref_price":15480,"side":"above"},"economics":{"entry_zone":[15480,15480],"geometry":{"entry":15480,"stop":15490,"target":15430},"first_obstacle":{"price":15475,"level":"RN 15475 (25)","family":"round","response":"pass_through"},"r_to_obstacle":0.5,"r_to_arm_target":5.0,"path_levels":[{"price":15450,"level":"RN 15450","role":"pass_through"}]}}],
+  "scenarios": [{"id": "S1", "trigger": "reject 15480 from below", "condition": "reject", "direction": "short", "target_chain": [15450, 15430], "invalid": "2x5m>15490", "quality": "A", "confirm":{"rule":"touch","ref_price":15480,"side":"above"},"economics":{"entry_zone":[15480,15480],"geometry":{"entry":15480,"stop":15490,"target":15430},"first_obstacle":{"price":15475,"level":"RN 15475 (25)","family":"round","response":"pass_through"},"r_to_obstacle":0.5,"r_to_arm_target":5.0,"path_levels":[{"price":15470,"level":"IB-L","role":"pass_through"},{"price":15455,"level":"IB-1.5x","role":"pass_through"},{"price":15450,"level":"RN 15450","role":"pass_through"}]}}],
   "no_trade": ["first 5m"],
   "death_condition": "acceptance below 15430",
   "death": {"price": 15430, "side": "below", "rule": "2x5m"},
@@ -395,12 +395,17 @@ func TestFlipRereadInFlightGuardBlocksSecondLaunch(t *testing.T) {
 	}
 	// Next cycle, well past wake_min_interval: dormant branch → guard refuses.
 	next := now.Add(time.Duration(store.DefaultWakeMinIntervalMin+1) * time.Minute)
-	flipRereadTestNow(t, next)
 	seedFlipBars(15500, 15470, 6*time.Minute, next)
 	at.maybeRunSessionReadsAt(next)
 	time.Sleep(200 * time.Millisecond)
 	if client.calls() != 1 {
 		t.Fatalf("a second read must not launch while the first is open, got %d calls", client.calls())
+	}
+	// Skeptic F3: the second cycle is refused by the FLIP in-flight guard
+	// (:845, silent), BEFORE the class-47 stream guard could log. If the flip
+	// guard were missing, the open planner stream would defer with this line.
+	if strings.Contains(logBuf.String(), "a planner stream is already open") {
+		t.Fatalf("the second cycle must be refused by the flip in-flight guard, not the class-47 stream guard; log:\n%s", logBuf.String())
 	}
 	close(release)
 	if !waitFor(t, 10*time.Second, func() bool {
@@ -413,6 +418,44 @@ func TestFlipRereadInFlightGuardBlocksSecondLaunch(t *testing.T) {
 	}
 	if client.calls() != 1 {
 		t.Fatalf("exactly one AI call end to end, got %d", client.calls())
+	}
+}
+
+// TestFlipRereadInFlightGuardRefusesWhenNoStreamOpen (skeptic F3) — isolates
+// the flip in-flight guard: the planner stream claim is deliberately NOT held,
+// so anyPlannerStreamOpen is false and the ONLY layer that can refuse the
+// second launch is flipRereadInFlight. RED = neuter BOTH flip checks
+// (:845 Load and :895 LoadOrStore) → the launch reaches the AI client.
+func TestFlipRereadInFlightGuardRefusesWhenNoStreamOpen(t *testing.T) {
+	at, _, client := realPathTrader(t, true, func(int, string) (string, error) {
+		return validShortPlanJSON, nil
+	})
+	now := time.Date(2026, 8, 18, 14, 0, 0, 0, time.UTC)
+	flipRereadTestNow(t, now)
+	td := "2026-08-18"
+	row := seedActivePlan(t, at, td, "NY", now.Add(-40*time.Minute), flipFixtureDoc())
+	seedFlipBars(15500, 15470, 6*time.Minute, now)
+	// A first read is open for this row — the guard's own memory. The stream
+	// guard must stay out of this test: no plannerReadInFlight claim exists.
+	inflightKey := flipRereadInFlightKey(at, row)
+	flipRereadInFlight.Store(inflightKey, now)
+	t.Cleanup(func() { flipRereadInFlight.Delete(inflightKey) })
+	if held, open := anyPlannerStreamOpen(); open {
+		t.Fatalf("harness precondition: no planner stream may be open (held=%q)", held)
+	}
+	logBuf := captureTraderLog(t)
+	next := now.Add(time.Duration(store.DefaultWakeMinIntervalMin+1) * time.Minute)
+	flipRereadTestNow(t, next)
+	at.maybeRereadAfterFlip(next, "NY", td, row, "test flip")
+	time.Sleep(200 * time.Millisecond) // a launched goroutine would call the client by now
+	if client.calls() != 0 {
+		t.Fatalf("the flip in-flight guard must refuse the second launch with no stream open, got %d calls", client.calls())
+	}
+	if strings.Contains(logBuf.String(), "a planner stream is already open") {
+		t.Fatalf("the refusal must not come from the stream guard; log:\n%s", logBuf.String())
+	}
+	if v := sysCfgVal(t, at.store, flipRereadDoneKey(row)); v != "" && v != "0" {
+		t.Fatalf("a refused second launch must not write the once-key, got %q", v)
 	}
 }
 

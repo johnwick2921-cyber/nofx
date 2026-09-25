@@ -822,6 +822,7 @@ func buildEffectiveResolvers() map[string]effResolver {
 		})
 	}
 	dpBool("flip_reread", "store.(*DayPlanConfig).FlipRereadEnabled", store.SourceShippedDefault, (*store.DayPlanConfig).FlipRereadEnabled)
+	dpBool("planner_fresh_tape", "store.(*DayPlanConfig).PlannerFreshTapeEnabled", store.SourceShippedDefault, (*store.DayPlanConfig).PlannerFreshTapeEnabled)
 	dpBool("death_reread", "store.(*DayPlanConfig).DeathRereadEnabled", store.SourceShippedDefault, (*store.DayPlanConfig).DeathRereadEnabled)
 	dpBool("write_time_feasibility", "store.(*DayPlanConfig).WriteTimeFeasibilityEnabled", store.SourceShippedDefault, (*store.DayPlanConfig).WriteTimeFeasibilityEnabled)
 	dpBool("geometry_reference_levels", "store.(*DayPlanConfig).GeometryRefIDsEnabled", store.SourceShippedDefault, (*store.DayPlanConfig).GeometryRefIDsEnabled)
