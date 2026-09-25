@@ -398,20 +398,7 @@ func main() {
 				logger.Errorf("🧮 e8 backfill ABORTED — backup failed: %v", bErr)
 			} else {
 				res, rErr := st.AbConfirm().BackfillShortRows(func(planID string, version int, scenario string) (string, bool) {
-					row, e := st.Plan().GetPlan(planID, version)
-					if e != nil || row == nil {
-						return "", false
-					}
-					var doc kernel.PlanDoc
-					if json.Unmarshal([]byte(row.Doc), &doc) != nil {
-						return "", false
-					}
-					for _, sc := range doc.Scenarios {
-						if sc.ID == scenario {
-							return sc.Direction, sc.Direction != ""
-						}
-					}
-					return "", false
+					return e8ScenarioDirection(st, planID, version, scenario)
 				})
 				if rErr != nil {
 					logger.Errorf("🧮 e8 backfill failed: %v", rErr)
@@ -764,4 +751,30 @@ func totalUnrecomputable(r store.BackfillResult) int {
 		n += v
 	}
 	return n
+}
+
+// e8ScenarioDirection resolves the scenario's direction for the E8 short-row
+// backfill. It reads the BASE doc's Direction directly — no fold, no overlay:
+// the recompute sees the scenario as authored. That is exactly what makes it a
+// HISTORICAL reader (CTO 03:31, 6th order): the E8 backfill re-scores PAST
+// short rows, so an overlay applied after the trade closed must not change
+// that trade's attribution — the BASE doc governs, and overlays are
+// deliberately invisible (the same rule as trade_excursion_backfill.go:148 and
+// expectancy/aggregate). (Extracted from the inline closure at main.go:402 so
+// a main-package test can pin it at the production call site.)
+func e8ScenarioDirection(st *store.Store, planID string, version int, scenario string) (string, bool) {
+	row, e := st.Plan().GetPlan(planID, version)
+	if e != nil || row == nil {
+		return "", false
+	}
+	var doc kernel.PlanDoc
+	if json.Unmarshal([]byte(row.Doc), &doc) != nil {
+		return "", false
+	}
+	for _, sc := range doc.Scenarios {
+		if sc.ID == scenario {
+			return sc.Direction, sc.Direction != ""
+		}
+	}
+	return "", false
 }

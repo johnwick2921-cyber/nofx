@@ -1759,7 +1759,7 @@ func (s *TCPServer) drainBarIngest(ctx context.Context) {
 					staleLiveFrames.Add(1)
 					if n := staleLiveFrames.Load(); n%100 == 1 {
 						s.logger.Warn("picture-htf: bar_update frame refused as a live entry event — too old; cached, not traded",
-							"max_age_ms", liveFrameMaxAgeMs, "refused_total", n, "symbol", msg.symbol, "timeframe", msg.timeframe)
+							"max_age_ms", LiveFrameMaxAgeMs, "refused_total", n, "symbol", msg.symbol, "timeframe", msg.timeframe)
 					}
 				} else {
 					fanOutLiveBars(msg.symbol, msg.timeframe, msg.contract, msg.bars)
@@ -1769,10 +1769,11 @@ func (s *TCPServer) drainBarIngest(ctx context.Context) {
 			// its own goroutine: a slow/failing DB must never stall the drain
 			// (backpressure invariant) or the socket read loop.
 			//
-			// Live bar_update frames carry ONLY the forming bar (NT8 does not
-			// re-emit the just-closed bar at the boundary), so live candidates
-			// come from the cache tail — the cache always holds the final
-			// closed bars. Historical replays persist from the frame batch.
+			// The AddOn DOES re-emit the just-closed bar at the boundary
+			// (VLBarsSubscriptionManager.cs:539-551) and the cache finalises it,
+			// so live candidates come from the cache tail — the cache always
+			// holds the final closed bars. Historical replays persist from the
+			// frame batch.
 			var persistBars []Bar
 			if msg.historical {
 				persistBars = ClosedBarsOnly(msg.bars, msg.timeframe, time.Now().UnixMilli())
