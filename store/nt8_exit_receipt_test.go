@@ -7,6 +7,7 @@
 package store
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 	"time"
@@ -140,5 +141,75 @@ func TestLatestNT8ExitReceiptMs(t *testing.T) {
 	}
 	if ms == 0 {
 		t.Fatal("the receipt fence must report the receipt's received_ms")
+	}
+}
+
+// W117 a3 — BEGIN IMMEDIATE pin. A second connection holds the write lock; the
+// transaction must WAIT on lock acquisition (where the busy handler applies),
+// not return "database is locked" at the read→write upgrade. RED = today's
+// deferred tx: it reads first (WAL readers proceed) and BUSYs instantly at the
+// first write, long before the holder releases.
+func TestApplyNT8ExitTakesTheWriteLockUpFront(t *testing.T) {
+	st, err := New(filepath.Join(t.TempDir(), "f3busy.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := openNT8Row(t, st, 1)
+	ctx := context.Background()
+	sqlDB, err := st.GormDB().DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	holder, err := sqlDB.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := holder.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		t.Fatalf("holder BEGIN IMMEDIATE: %v", err)
+	}
+	released := make(chan struct{})
+	defer func() {
+		select {
+		case <-released:
+		default:
+			_, _ = holder.ExecContext(ctx, "COMMIT")
+			_ = holder.Close()
+		}
+	}()
+	type applyOut struct {
+		out NT8ExitResult
+		err error
+	}
+	res := make(chan applyOut, 1)
+	go func() {
+		out, err := st.Position().ApplyNT8Exit(receiptFor(row, 1, 105, 2))
+		res <- applyOut{out, err}
+	}()
+	select {
+	case r := <-res:
+		t.Fatalf("ApplyNT8Exit returned while the write lock was held (err=%v) — RED: the deferred tx read first and BUSY'd at the upgrade instead of waiting on BEGIN IMMEDIATE", r.err)
+	case <-time.After(700 * time.Millisecond):
+		// Still blocked in the busy wait — the lock is being honored.
+	}
+	if _, err := holder.ExecContext(ctx, "COMMIT"); err != nil {
+		t.Fatalf("holder COMMIT: %v", err)
+	}
+	close(released)
+	_ = holder.Close()
+	select {
+	case r := <-res:
+		if r.err != nil {
+			t.Fatalf("after the holder released, the exit must apply: %v", r.err)
+		}
+		if !r.out.Applied || !r.out.Closed {
+			t.Fatalf("the exit must apply and close once the lock frees, got %+v", r.out)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the exit never applied after the holder released")
+	}
+	var fills []TraderFill
+	st.GormDB().Where("exchange_trade_id = ?", "receipt-1").Find(&fills)
+	if len(fills) != 1 {
+		t.Fatalf("exactly one exit fill after the contended apply, got %d", len(fills))
 	}
 }

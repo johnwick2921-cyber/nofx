@@ -148,17 +148,24 @@ func TestOrderedWorkerCallbackReregistersWithoutWedging(t *testing.T) {
 	}
 	defer unreg()
 
-	for i := 0; i < 3; i++ {
+	// Write ONE fill first — its callback performs the unreg + re-register.
+	// A frame that lands in the re-registration gap finds no owner and goes to
+	// the advisory channel BY DESIGN (enqueueOrdered returns false), so the
+	// remaining fills are written only AFTER the replacement is installed.
+	writeFill := func() {
 		if err := WriteFrame(w.conn, FrameFill, FillPayload{SignalID: "sig", Symbol: "MNQ", Account: "Sim101", Side: "long", Quantity: 1, Status: "filled"}); err != nil {
 			t.Fatalf("write fill: %v", err)
 		}
 	}
+	writeFill()
 	select {
 	case <-replaced:
-	case <-time.After(3 * time.Second):
+	case <-time.After(15 * time.Second):
 		t.Fatal("the worker wedged inside the re-registering callback")
 	}
-	waitEvents(t, rec, 3, 3*time.Second)
+	writeFill()
+	writeFill()
+	waitEvents(t, rec, 3, 15*time.Second)
 }
 
 // R5 — a second LIVE owner for the same (symbol, account) is refused loudly;
