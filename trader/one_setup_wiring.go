@@ -388,6 +388,12 @@ func (at *AutoTrader) oneSetupRetireDeclined(c *oneSetupCycle, plan *kernel.Acti
 		if r.TraderID != at.id || r.PlanID != plan.PlanID || r.State != store.StateArmed || strings.TrimSpace(r.SignalID) != "" {
 			continue
 		}
+		if r.Source == store.ArmSourcePicture {
+			// Picture rows answer to their own epoch/admission gates, not to
+			// one-setup verdicts — a waiting Picture arm has no verdict here
+			// and must never be retired by this pass (W5 picture executor).
+			continue
+		}
 		v, ok := c.verdicts[r.Scenario]
 		if ok && v.Allowed {
 			continue
