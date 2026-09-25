@@ -8,6 +8,7 @@ import (
 	"nofx/mcp"
 	_ "nofx/mcp/payment"
 	_ "nofx/mcp/provider"
+	ntwire "nofx/provider/ninjatrader"
 	"nofx/store"
 	"nofx/telemetry"
 	"nofx/trader/aster"
@@ -908,6 +909,7 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		// THE LEDGER'S EAR FOR A REFUSAL (2026-09-07). Every entry-reject path
 		// in the NT8 trader calls this with the BROKER'S reason, verbatim.
 		nt.SetRejectSink(at.recordBrokerRejection)
+		at.installNTOrderedExecutions(nt) // W117 F2 — durable consumers in receive order
 		// W-ONE-BUTTON M2 — the installation maintenance hold (sites 4, 4b, 7
 		// and the M-2 drop sink), wired at construction, before Run.
 		wireNT8Maintenance(at, nt)
@@ -1350,6 +1352,18 @@ func (at *AutoTrader) recordBrokerRejection(signalID, brokerReason string) {
 	}
 	at.logWarnf("🚨 received armed entry rejection %s leg %d signal=%s reason=%q", row.Scenario, row.LegIndex+1, signalID, reason)
 	telemetry.IncGateBlock(at.id, "place_rejected_by_broker")
+}
+
+// installNTOrderedExecutions (W117 F2) wires the NT8 trader's ordered execution
+// handlers at construction, before Run: the armed ledger's order-state changes
+// apply ON the TCP read goroutine in receive order, and the channel consumers
+// skip the already-handled copy via the OrderedHandled flags.
+func (at *AutoTrader) installNTOrderedExecutions(nt *ntTrader.TCPTrader) {
+	if at.store == nil {
+		return
+	}
+	nt.InstallOrderedExecutions(at.id, at.exchangeID, at.exchange, at.store,
+		func(u ntwire.OrderUpdatePayload) { at.onArmedOrderUpdate(u, at.store.ArmedOrders()) })
 }
 
 // firstFor reports whether key is new for the dedupe-once field *f and records

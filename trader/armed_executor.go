@@ -2191,6 +2191,9 @@ func logArmedOrderUpdateSummary() {
 
 // onArmedOrderUpdate applies one NT8 order state change to the armed ledger.
 func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *store.ArmedOrderStore) {
+	if u.OrderedHandled {
+		return // W117 F2 — the owning ordered consumer already applied this state change
+	}
 	// Frame-receipt proof (cutover confirmation wave): the C# dispatcher's
 	// receive path stays provable from the journal via the 1-line/min summary;
 	// the per-frame content is DEBUG + 1-in-N sampled (FORENSICS HYGIENE —

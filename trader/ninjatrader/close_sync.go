@@ -85,6 +85,9 @@ func (t *TCPTrader) recordClose(
 	pb *store.PositionBuilder,
 	p ntwire.PositionClosePayload,
 ) {
+	if p.OrderedHandled {
+		return // W117 F2 — the owning ordered consumer already recorded this close
+	}
 	side, action := "LONG", "close_long"
 	if strings.EqualFold(p.PositionSide, "short") {
 		side, action = "SHORT", "close_short"
