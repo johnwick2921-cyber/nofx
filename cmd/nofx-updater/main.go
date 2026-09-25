@@ -15,10 +15,10 @@
 // fetch is wired (U4N item B): it only verifies a LOCAL archive into the
 // release root and writes its verdict — it installs nothing.
 //
-// L4: serve REFUSES until both production adapters are wired — the release
-// re-proof is (U4N); the activation library adapter is not (see newLibrary) —
-// so today nothing here can change the installation
-// (TestServeAndFetchRefuseUntilTheAdaptersLand).
+// L4: serve REFUSES unless both production adapters are wired — the release
+// re-proof (U4N) and the activation library (NewActivationLibrary) — and, even
+// then, only an operator who starts `serve` with its token, a home for the
+// backups and the worker lock runs anything (TestServeRefusesUnlessBothAdaptersAreWired).
 package main
 
 import (
@@ -59,13 +59,15 @@ var (
 //   - newReverifier: the release re-proof — updaterworker.NewReleaseReverifier
 //     over U3's updaterjob.ReadVerdict / RehashRelease / ReverifyRelease
 //     against <install>/deploy/release_allowed_signers (U4N item A). WIRED.
-//   - newLibrary: the activation library adapter (one-line delegations to
-//     nofx/internal/activation). NOT wired, and it must not be yet: dev's
-//     internal/activation blank-imports github.com/glebarez/go-sqlite, which
-//     panics any binary that also links nofx/store (reported to the CTO,
-//     103's package). Until 103 fixes that, it refuses — so serve does.
+//   - newLibrary: the activation library adapter —
+//     updaterworker.NewActivationLibrary, one-line delegations to
+//     nofx/internal/activation. WIRED. It needs 103's D4 fix (activation
+//     registers the ONE sqlite driver, store/sqlitedriver's): without it this
+//     binary panics at init with "sql: Register called twice for driver
+//     sqlite" (TestUpdaterBinaryInitsWithoutPanic,
+//     TestNoBinaryLinkingTheWorkerSetRegistersADuplicateSQLDriver).
 var (
-	newLibrary    = func() (updaterworker.Library, error) { return nil, updaterworker.ErrNotWired }
+	newLibrary    = updaterworker.NewActivationLibrary
 	newReverifier = updaterworker.NewReleaseReverifier
 )
 

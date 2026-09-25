@@ -78,15 +78,28 @@ func runCLI(t *testing.T, stdin io.Reader, args ...string) (int, string, string)
 	return rc, out.String(), errb.String()
 }
 
+// productionNewLibrary / productionNewReverifier are the adapters main.go
+// wires, captured at package init before any test swaps a seam — the tests
+// below restore THESE, never a stand-in.
+var (
+	productionNewLibrary    = newLibrary
+	productionNewReverifier = newReverifier
+)
+
 // L4: serve refuses and writes NOTHING — no updater dir, no socket, no job,
-// no hold — unless BOTH production adapters are wired. Today the release
-// re-proof IS wired (U4N item A: newReverifier is updaterworker's
-// NewReleaseReverifier) and the activation library is NOT (dev's
-// internal/activation panics a binary that links nofx/store), so an
-// installed nofx-updater binary cannot change the installation.
-func TestServeAndFetchRefuseUntilTheAdaptersLand(t *testing.T) {
+// no hold — unless BOTH production adapters are wired. Both now are: the
+// release re-proof (U4N item A: updaterworker.NewReleaseReverifier) and the
+// activation library (updaterworker.NewActivationLibrary, one-line delegations
+// to nofx/internal/activation, possible since 103's D4 fix made activation
+// register the ONE sqlite driver store/sqlitedriver owns). So the production
+// wiring passes the adapter precondition and serve proceeds to its NEXT
+// precondition (a home for ~/nofx-backups/updater — unset here, so it still
+// refuses and still writes nothing). Every row with a missing or erroring
+// adapter keeps refusing, naming which adapter is missing.
+func TestServeRefusesUnlessBothAdaptersAreWired(t *testing.T) {
 	inst, data := install(t)
 	t.Setenv(updaterworker.CutoverTokenEnv, "tok-cli-never-printed-51c2")
+	t.Setenv("HOME", "")                       // serve's next precondition after the adapters: refuses, writes nothing
 	checkProcess = func() error { return nil } // not root, not the bot's cgroup, no TZ
 	t.Cleanup(func() { checkProcess = updaterworker.CheckProcess })
 	tg, err := updaterworker.ResolveTarget(inst)
@@ -102,37 +115,41 @@ func TestServeAndFetchRefuseUntilTheAdaptersLand(t *testing.T) {
 	if _, err := rel.Verdict("v1.2.0"); !errors.Is(err, updaterjob.ErrVerdict) || !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("the wired re-proof's Verdict of an unfetched release = %v, want updaterjob.ErrVerdict wrapping fs.ErrNotExist", err)
 	}
-	if _, err := newLibrary(); !errors.Is(err, updaterworker.ErrNotWired) {
-		t.Fatalf("newLibrary = %v, want ErrNotWired until 103 fixes internal/activation's sqlite import", err)
+	// the PRODUCTION library adapter is wired: the activation delegations
+	if lib, err := newLibrary(); err != nil || lib == nil || fmt.Sprintf("%T", lib) != "updaterworker.activationLibrary" {
+		t.Fatalf("newLibrary = %T, %v; want the activation library adapter (updaterworker.activationLibrary), wired", lib, err)
 	}
-	defer func() {
-		newLibrary = func() (updaterworker.Library, error) { return nil, updaterworker.ErrNotWired }
-		newReverifier = updaterworker.NewReleaseReverifier
-	}()
+	defer func() { newLibrary, newReverifier = productionNewLibrary, productionNewReverifier }()
 	notWired := func() (updaterworker.Library, error) { return nil, updaterworker.ErrNotWired }
 	for _, c := range []struct {
-		name string
-		lib  func() (updaterworker.Library, error)
-		rel  func(updaterworker.Target) (updaterworker.Reverifier, error)
-		want string
+		name    string
+		lib     func() (updaterworker.Library, error)
+		rel     func(updaterworker.Target) (updaterworker.Reverifier, error)
+		refused bool   // refused at the adapter precondition
+		want    string // the refusal line names this
 	}{
-		// the production wiring today: re-proof wired, library missing
-		{"production: library missing, re-proof wired", notWired, updaterworker.NewReleaseReverifier,
+		// the production wiring: both adapters wired → past the adapters, to the next precondition
+		{"production: both adapters wired", productionNewLibrary, productionNewReverifier, false,
+			"nofx-updater serve: no home directory for ~/nofx-backups/updater"},
+		{"library errors, re-proof wired", notWired, productionNewReverifier, true,
 			"activation library adapter: missing (updaterworker: not wired yet) · release re-proof adapter: wired"},
-		{"library wired, re-proof missing", func() (updaterworker.Library, error) { return testLib{}, nil },
-			func(updaterworker.Target) (updaterworker.Reverifier, error) { return nil, updaterworker.ErrNotWired },
+		{"library wired, re-proof missing", productionNewLibrary,
+			func(updaterworker.Target) (updaterworker.Reverifier, error) { return nil, updaterworker.ErrNotWired }, true,
 			"activation library adapter: wired · release re-proof adapter: missing (updaterworker: not wired yet)"},
 		{"both missing", notWired,
-			func(updaterworker.Target) (updaterworker.Reverifier, error) { return nil, updaterworker.ErrNotWired },
+			func(updaterworker.Target) (updaterworker.Reverifier, error) { return nil, updaterworker.ErrNotWired }, true,
 			"activation library adapter: missing (updaterworker: not wired yet) · release re-proof adapter: missing"},
-		{"library nil without an error", func() (updaterworker.Library, error) { return nil, nil }, updaterworker.NewReleaseReverifier,
+		{"library nil without an error", func() (updaterworker.Library, error) { return nil, nil }, productionNewReverifier, true,
 			"activation library adapter: missing (nil) · release re-proof adapter: wired"},
+		{"re-proof nil without an error", productionNewLibrary,
+			func(updaterworker.Target) (updaterworker.Reverifier, error) { return nil, nil }, true,
+			"activation library adapter: wired · release re-proof adapter: missing (nil)"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			newLibrary, newReverifier = c.lib, c.rel
 			rc, out, errs := runCLI(t, nil, "--install-dir", inst, "serve")
-			if rc != 2 || !strings.Contains(errs, "not wired yet") || !strings.Contains(errs, c.want) || out != "" {
-				t.Fatalf("serve = %d %q %q; want refused naming %q", rc, out, errs, c.want)
+			if rc != 2 || out != "" || !strings.Contains(errs, c.want) || strings.Contains(errs, "not wired yet") != c.refused {
+				t.Fatalf("serve = %d %q %q; want rc 2 naming %q (refused at the adapters: %v)", rc, out, errs, c.want, c.refused)
 			}
 			if strings.Contains(errs, "tok-cli-never-printed") {
 				t.Fatal("serve printed the cutover token")
@@ -142,7 +159,7 @@ func TestServeAndFetchRefuseUntilTheAdaptersLand(t *testing.T) {
 			}
 		})
 	}
-	newLibrary, newReverifier = notWired, updaterworker.NewReleaseReverifier
+	newLibrary, newReverifier = productionNewLibrary, productionNewReverifier
 	// fetch is wired (U4N item B) but, with no inbox configured, refuses
 	// before it reads or writes anything (TestFetchRefusesWithoutItsInputs)
 	t.Setenv(releaseInboxEnv, "")
@@ -314,8 +331,7 @@ func TestServeWiresTheWorkerBehindTheSocket(t *testing.T) {
 	serveContext = func() (context.Context, context.CancelFunc) { return ctx, cancel }
 	t.Cleanup(func() {
 		checkProcess = updaterworker.CheckProcess
-		newLibrary = func() (updaterworker.Library, error) { return nil, updaterworker.ErrNotWired }
-		newReverifier = updaterworker.NewReleaseReverifier
+		newLibrary, newReverifier = productionNewLibrary, productionNewReverifier
 		serveContext = func() (context.Context, context.CancelFunc) { return context.WithCancel(context.Background()) }
 	})
 	var errb syncBuffer
@@ -393,8 +409,7 @@ func TestASecondServeWithoutTheWorkerLockWritesNothing(t *testing.T) {
 			t.Cleanup(func() {
 				cancel()
 				checkProcess = updaterworker.CheckProcess
-				newLibrary = func() (updaterworker.Library, error) { return nil, updaterworker.ErrNotWired }
-				newReverifier = updaterworker.NewReleaseReverifier
+				newLibrary, newReverifier = productionNewLibrary, productionNewReverifier
 				serveContext = func() (context.Context, context.CancelFunc) { return context.WithCancel(context.Background()) }
 			})
 			j, err := updaterjob.New(testJob, "v1.2.0", time.Now().Add(-tc.age))
