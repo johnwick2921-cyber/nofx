@@ -235,3 +235,45 @@ func TestNT8ParksWhenTheReleaseListsNoCSharp(t *testing.T) {
 		t.Fatal("activated without proving the AddOn source")
 	}
 }
+
+// PIN (U4 re-verify note 2, mutant M32 — the verifier's probe P1): a resume
+// while the AddOn still runs the OLD build does NOT leave the park — the
+// owner typed resume but never did the F5. The job stays nt8_updated, nothing
+// is activated, the resume receipt is a refusal and the blocker names both
+// builds. After the F5 (the AddOn now acks the release's build) the next
+// resume leaves the park and the job completes.
+func TestResumeWaitsForTheAddOnBuildToMove(t *testing.T) {
+	r := newRig(t, withCSChanged())
+	r.install()
+	if err := r.drive(); err != nil {
+		t.Fatal(err)
+	}
+	if j := r.job(); j.State != updaterjob.StateNT8Updated || j.Phase != updaterjob.PhaseDone {
+		t.Fatalf("fixture: job %s/%s, want parked at nt8_updated/done", j.State, j.Phase)
+	}
+	r.clock.Advance(3 * time.Minute) // the owner takes as long as a real F5 would — but never does it
+	if resp := r.w.Handle(resumeRequest(boxJobID)); !resp.OK {
+		t.Fatalf("resume verb: %+v", resp)
+	}
+	if err := r.drive(); err != nil {
+		t.Fatal(err)
+	}
+	j := r.job()
+	rc := receiptOf(j, "resume")
+	wantWhy := `the AddOn acks build "` + boxOldBuild + `", the release is "` + boxNewBuild + `"`
+	if j.State != updaterjob.StateNT8Updated || r.callCount("activate") != 0 || j.ResumedAt != nil ||
+		!strings.Contains(j.Blocker, "resume refused") || !strings.Contains(j.Blocker, wantWhy) || rc == nil || rc.OK {
+		t.Fatalf("a resume without the F5 left the park: %s/%s activate=%d resumed_at=%v blocker=%q resume receipt=%+v",
+			j.State, j.Phase, r.callCount("activate"), j.ResumedAt, j.Blocker, rc)
+	}
+	r.f5()
+	if resp := r.w.Handle(resumeRequest(boxJobID)); !resp.OK {
+		t.Fatalf("resume verb after the F5: %+v", resp)
+	}
+	if err := r.drive(); err != nil {
+		t.Fatal(err)
+	}
+	if j := r.job(); j.State != updaterjob.StateComplete || r.callCount("activate") != 1 {
+		t.Fatalf("after the F5 the resume ended %s/%s (activate=%d), want complete", j.State, j.Phase, r.callCount("activate"))
+	}
+}
