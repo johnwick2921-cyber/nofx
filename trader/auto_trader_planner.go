@@ -1891,6 +1891,38 @@ func samePlannerDefect(a, b string) bool {
 // resolvePlannerRetryMode delegates to the kernel resolver (RETRY_MODE env).
 func resolvePlannerRetryMode() string { return kernel.ResolvePlannerRetryMode() }
 
+// bornCheckRefused reports the born-dead / flip-met class from the stored
+// check record — outcome invalidated = a scenario's authored condition
+// breached between read and publish, subject death|flip met = a structured
+// line already crossed. It reads the SAME verdicts the refusal error was
+// built from, so it can never disagree with the refusal. DS-106's
+// kernel.PlannerRejectItemClass will supersede this classification when #213
+// lands; the A6 wiring keys off this until then.
+func bornCheckRefused(check *kernel.BornCheck) bool {
+	if check == nil {
+		return false
+	}
+	for _, v := range check.Verdicts {
+		switch v.Outcome {
+		case "invalidated":
+			return true
+		case "met":
+			if v.Subject == "death" || v.Subject == "flip" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// plannerFreshTapeOn resolves the A6 knob at the retry loop: nil config or nil
+// knob = ON (shipped default); an explicit false reproduces today's blind
+// retry byte-identically.
+func (at *AutoTrader) plannerFreshTapeOn() bool {
+	cfg := at.dayPlanCfg()
+	return cfg == nil || cfg.PlannerFreshTapeEnabled()
+}
+
 // plannerStreamIdle delegates to the kernel resolver (AI_PLAN_STREAM_IDLE_SECS).
 func plannerStreamIdle() time.Duration {
 	return time.Duration(kernel.PlannerStreamIdleSeconds()) * time.Second
@@ -2000,6 +2032,12 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 	liveConditions := kernel.ResolvedLiveConditions(baseCond, sessCond, kernel.ShadowConditionsEnv())
 
 	var lastErr error
+	// A6 (planner-born-dead wave): when an attempt is refused born-dead /
+	// flip-met, attempt N+1 re-sights the model on the COMPLETED tape between
+	// the read clock and the refusal (kernel.PlannerFreshTape), behind the
+	// planner_fresh_tape knob (nil = ON). OFF = today's blind retry.
+	prevBornDead := false
+	var prevPublishAt time.Time
 	// RETRY-APPEND-REJECT-REASON (owner ruling 2026-08-31): attempt N≥2 carries
 	// the PREVIOUS attempt's validator reason VERBATIM in the prompt tail — the
 	// 2026-08-31 LONDON read burned attempts 1+2 on the IDENTICAL split-arm
@@ -2048,6 +2086,16 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 				}
 			}
 			at.logInfof("🧩 planner attempt %d/3 %s: prompt ~%d tokens (full-author ~%d tokens)", attempt, modeLabel, estimatePromptTokens(userPrompt), estimatePromptTokens(prompt))
+		}
+		// A6 — after a born-dead / flip-met refusal, attempt N+1 carries the
+		// fresh completed tape between the read clock and the refusal, so the
+		// re-author reads the market that exists now instead of the stale read.
+		if attempt >= 2 && prevBornDead && at.plannerFreshTapeOn() {
+			var tape []market.Kline
+			if market.FuturesBarsProvider != nil {
+				tape = market.FuturesBarsProvider(at.futuresSymbol(), "1m", kernel.AISVPBarCount)
+			}
+			userPrompt += "\n\n" + kernel.PlannerFreshTape(tape, facts.ReadAt, prevPublishAt, lastErr.Error())
 		}
 		researchTrace.Begin(attempt, modeLabel, userPrompt)
 		raw, err := call(userPrompt)
@@ -2347,6 +2395,15 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 		if verr != nil {
 			lastErr = verr
 			repairing := prevReason
+			if check != nil && bornCheckRefused(check) {
+				// A6 — the market moved during the read: remember the class and
+				// the refusal clock so attempt N+1 carries the fresh tape, and
+				// record the read→publish latency on the refusal line (B3 reads
+				// it; the counters themselves stay in B3's lane).
+				prevBornDead = true
+				prevPublishAt = authoredAt
+				at.logWarnf("📐 planner attempt %d/3 born-dead/flip-met refusal: read→publish latency %s — attempt %d re-sights on the fresh tape", attempt, authoredAt.Sub(facts.ReadAt), attempt+1)
+			}
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, verr, &prevReason, FactsSnapshotJSON(facts))
 			rejectBlock = plannerRejectBlock(verr, liveConditions, kernel.StructureTrend4h(facts.Structure))
