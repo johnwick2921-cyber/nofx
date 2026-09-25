@@ -90,6 +90,14 @@ owner_data="$(cd "$STAGE" && for p in calendar_static_t1.json; do
     "$p" "$(sha256sum "$p" | cut -d' ' -f1)" "$(stat -c%s "$p")"
 done | paste -sd, -)"
 
+# A version nobody measured is null (A24: absent ≠ a guess). An updater that
+# trusts the manifest must not read a fabricated tested-range — the only
+# honest source is an explicit env value (PR B [10]).
+json_or_null() { if [ -n "$1" ]; then printf '"%s"' "$1"; else printf 'null'; fi; }
+NT8_MIN_J="$(json_or_null "${NT8_MIN:-}")"
+NT8_MAX_TESTED_J="$(json_or_null "${NT8_MAX_TESTED:-}")"
+UPDATER_MIN_J="$(json_or_null "${UPDATER_MIN:-}")"
+
 cat <<JSON
 {
   "release_id": "$REL_ID",
@@ -97,9 +105,9 @@ cat <<JSON
   "artifacts": [${arts}],
   "owner_data": [${owner_data}],
   "platform": { "os": "linux", "arch": "amd64", "wsl": true },
-  "nt8": { "min_version": "${NT8_MIN:-8.1.2.1}", "max_tested_version": "${NT8_MAX_TESTED:-n/a}" },
+  "nt8": { "min_version": $NT8_MIN_J, "max_tested_version": $NT8_MAX_TESTED_J },
   "addon": { "build_id": "$ADDON_BUILD", "protocol_version": $PROTO, "transition_order": "${ADDON_TRANSITION_ORDER:-go-then-addon}" },
-  "updater_min_version": "${UPDATER_MIN:-0.0.0}",
+  "updater_min_version": $UPDATER_MIN_J,
   "upgrade_pairs": ${UPGRADE_PAIRS:-null},
   "rollback_pairs": ${ROLLBACK_PAIRS:-null},
   "capabilities_required": ${CAPABILITIES_REQUIRED:-null},
