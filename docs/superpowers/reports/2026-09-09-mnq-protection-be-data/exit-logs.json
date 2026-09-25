@@ -1,0 +1,47 @@
+[
+  {
+    "file": "nofx_2026-09-08.log",
+    "line": 90,
+    "text": "09-08 00:35:50 [INFO] nofx/main.go:335 \ud83d\uded1 exits: stop=max(anchor+clr, 1.5\u00d7ATR5m) \u00b7 anchor_max=3.0\u00d7ATR5m \u00b7 BE=off \u00b7 trail=off \u00b7 size=1 \u00b7 re-arm-after-sweep=on (0B)"
+  },
+  {
+    "file": "nofx_2026-09-08.log",
+    "line": 4777,
+    "text": "09-08 01:33:46 [INFO] nofx/main.go:335 \ud83d\uded1 exits: stop=max(anchor+clr, 1.5\u00d7ATR5m) \u00b7 anchor_max=3.0\u00d7ATR5m \u00b7 BE=off \u00b7 trail=off \u00b7 size=1 \u00b7 re-arm-after-sweep=on (0B)"
+  },
+  {
+    "file": "nofx_2026-09-08.log",
+    "line": 16011,
+    "text": "09-08 08:49:55 [WARN] trader/auto_trader.go:49 [identity redacted] \u23f8 auto-breakeven SUSPENDED (0B) \u2014 suspended 2026-09-02 pending MFE data (wave 1A); trigger condition MET and NOT sent to the broker: MNQ LONG +44.8 pts, stop would move to entry 29478.50. Exits are stop/target/EOD-flat/invalidation only. Set EXIT_MECHS_SUSPENDED=0 to restore."
+  },
+  {
+    "file": "nofx_2026-09-08.log",
+    "line": 24142,
+    "text": "09-08 15:17:31 [INFO] nofx/main.go:336 \ud83d\uded1 exits: stop=max(anchor+clr, 1.5\u00d7ATR5m) \u00b7 anchor_max=3.0\u00d7ATR5m \u00b7 BE=off \u00b7 trail=off \u00b7 size=1 \u00b7 re-arm-after-sweep=on (0B)"
+  },
+  {
+    "file": "nofx_2026-09-08.log",
+    "line": 38195,
+    "text": "09-08 18:11:54 [INFO] nofx/main.go:340 \ud83d\uded1 exits: stop=max(anchor+clr, 1.5\u00d7ATR5m) \u00b7 anchor_max=3.0\u00d7ATR5m \u00b7 BE=off \u00b7 trail=off \u00b7 size=1 \u00b7 re-arm-after-sweep=on (0B)"
+  },
+  {
+    "file": "nofx_2026-09-09.log",
+    "line": 82,
+    "text": "09-09 13:02:06 [INFO] nofx/main.go:340 \ud83d\uded1 exits: stop=max(anchor+clr, 1.5\u00d7ATR5m) \u00b7 anchor_max=3.0\u00d7ATR5m \u00b7 BE=off \u00b7 trail=off \u00b7 size=1 \u00b7 re-arm-after-sweep=on (0B)"
+  },
+  {
+    "file": "nofx_2026-09-09.log",
+    "line": 1575818,
+    "text": "09-09 14:52:35 [INFO] nofx/main.go:341 \ud83d\uded1 exits: stop=max(anchor+clr, 1.5\u00d7ATR5m) \u00b7 anchor_max=3.0\u00d7ATR5m \u00b7 BE=off \u00b7 trail=off \u00b7 size=1 \u00b7 re-arm-after-sweep=on (0B)"
+  },
+  {
+    "file": "nofx_2026-09-09.log",
+    "line": 2252087,
+    "text": "09-09 18:14:25 [INFO] nofx/main.go:341 \ud83d\uded1 exits: stop=max(anchor+clr, 1.5\u00d7ATR5m) \u00b7 anchor_max=3.0\u00d7ATR5m \u00b7 BE=off \u00b7 trail=off \u00b7 size=1 \u00b7 re-arm-after-sweep=on (0B)"
+  },
+  {
+    "file": "nofx_2026-09-09.log",
+    "line": 4196968,
+    "text": "09-09 21:39:36 [WARN] trader/auto_trader.go:49 [identity redacted] \u23f8 auto-breakeven SUSPENDED (0B) \u2014 suspended 2026-09-02 pending MFE data (wave 1A); trigger condition MET and NOT sent to the broker: MNQ LONG +41.0 pts, stop would move to entry 29372.50. Exits are stop/target/EOD-flat/invalidation only. Set EXIT_MECHS_SUSPENDED=0 to restore."
+  }
+]
