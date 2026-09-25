@@ -2,6 +2,7 @@ package updaterworker
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -290,5 +291,89 @@ func TestAFailureEdgeIntoRollingBackIsItsFirstAttempt(t *testing.T) {
 	}
 	if j.State != updaterjob.StateRolledBack {
 		t.Fatalf("job %s (reason %q), want rolled_back after %d crashed runs", j.State, j.RecoveryReason, crashes)
+	}
+}
+
+// PIN (U4 re-verify note 7): the recovery text's restore is safe to run
+// AGAIN. The failed dist is moved aside to a UNIQUE name each run (never
+// deleted: it is the evidence of what failed), so a repeat run can never
+// `mv` the live dist INTO the first run's leftover. The three restore lines
+// are RUN here twice under sh, on the rig's temp install and snapshot only.
+func TestRecoveryRestoreIsSafeToRunTwice(t *testing.T) {
+	r := newRig(t)
+	r.watchFail[boxNew] = true
+	r.rollbackFail = true
+	j := r.runToEnd(t)
+	if j.State != updaterjob.StateRecoveryNeeded || j.Install == nil || j.Snapshot == nil {
+		t.Fatalf("fixture: job %s", j.State)
+	}
+	in, snap := *j.Install, *j.Snapshot
+	for _, p := range []string{in.Dist, snap.Dist} {
+		if !strings.HasPrefix(p, os.TempDir()) {
+			t.Fatalf("refusing to run the restore on %s: not under the temp dir", p)
+		}
+	}
+	var restore []string
+	for _, l := range strings.Split(RecoveryText(j, r.cfg.Target), "\n") {
+		if l = strings.TrimSpace(l); strings.HasPrefix(l, "cp -p ") || strings.HasPrefix(l, "rm -rf ") {
+			restore = append(restore, l)
+		}
+	}
+	if len(restore) != 3 {
+		t.Fatalf("want the 3 restore lines (binary, RELEASE, dist), got %q", restore)
+	}
+	// relFiles is dir's files as relative path -> content
+	relFiles := func(dir string) map[string]string {
+		out := map[string]string{}
+		for p, b := range allBytes(t, dir) {
+			rel, _ := filepath.Rel(dir, p)
+			out[rel] = string(b)
+		}
+		return out
+	}
+	snapFiles := relFiles(snap.Dist)
+	if len(snapFiles) == 0 {
+		t.Fatal("fixture: the snapshot dist is empty")
+	}
+	for run := 1; run <= 2; run++ {
+		// what the failed release left in the live dist this time
+		writeFile(t, filepath.Join(in.Dist, "failed-run.txt"), fmt.Sprintf("run %d\n", run))
+		cmd := exec.Command("/bin/sh", "-c", strings.Join(restore, "\n"))
+		cmd.Env = []string{"PATH=/usr/bin:/bin"}
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("restore run %d: %v\n%s", run, err, out)
+		}
+		if got := relFiles(in.Dist); !maps.Equal(got, snapFiles) {
+			t.Fatalf("run %d: the live dist is %v, want the snapshot's %v", run, got, snapFiles)
+		}
+	}
+	// both failed dists kept, side by side, neither inside the other
+	parent, base := filepath.Dir(in.Dist), filepath.Base(in.Dist)
+	ents, err := os.ReadDir(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var failed []string
+	for _, e := range ents {
+		if strings.HasPrefix(e.Name(), base+".failed."+j.JobID) {
+			failed = append(failed, e.Name())
+			if _, err := os.Lstat(filepath.Join(parent, e.Name(), base)); err == nil {
+				t.Fatalf("a repeat run moved the live dist INTO %s", e.Name())
+			}
+		}
+	}
+	if len(failed) != 2 {
+		t.Fatalf("failed dists kept = %v, want one per run (2)", failed)
+	}
+	seen := map[string]bool{}
+	for _, f := range failed {
+		b, err := os.ReadFile(filepath.Join(parent, f, "failed-run.txt"))
+		if err != nil {
+			t.Fatalf("%s lost its evidence: %v", f, err)
+		}
+		seen[string(b)] = true
+	}
+	if !seen["run 1\n"] || !seen["run 2\n"] {
+		t.Fatalf("the evidence of each run is not kept: %v", seen)
 	}
 }
