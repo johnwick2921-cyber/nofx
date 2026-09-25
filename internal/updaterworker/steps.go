@@ -314,6 +314,11 @@ func (w *Worker) stepGate(ctx context.Context, j updaterjob.Job) stepResult {
 
 // reprove is R-i: one more ready:true for THIS job, polled for the Reprove
 // budget, before each step that changes something (backup, nt8, activate).
+// It also re-reads the hold FILE itself (#206 review fold, hold.go:129): the
+// gate only exposes held + job id, so an operator hold written over ours after
+// the hold step (`maintenance-hold set --job <this job> --withdraw-entries`)
+// looks identical to it — ReadHoldFor is the one reader that sees owner and
+// withdraw_entries, and only HoldOurs may ride along.
 func (w *Worker) reprove(ctx context.Context, j updaterjob.Job) error {
 	return w.poll(ctx, j, w.cfg.Budgets.Reprove, func() (string, error) {
 		g, err := w.app.InstallationGate(ctx)
@@ -328,6 +333,9 @@ func (w *Worker) reprove(ctx context.Context, j updaterjob.Job) error {
 				return b, nil
 			}
 			return "installation-gate: not ready", nil
+		}
+		if s, st := ReadHoldFor(w.dataDir(), j.JobID); s != HoldOurs {
+			return "the hold on disk is not this job's (" + holdSummary(s, st) + ")", nil
 		}
 		return "", nil
 	})
@@ -535,6 +543,12 @@ func (w *Worker) stepBootVerify(ctx context.Context, j updaterjob.Job) stepResul
 func (w *Worker) stepRollback(ctx context.Context, j updaterjob.Job) stepResult {
 	if j.Snapshot == nil || j.Install == nil || j.RollbackWatchSince == nil || j.RollbackLogOffset == nil {
 		return stepResult{err: errors.New("rollback without its inputs (snapshot, install, rollback watch)"), reason: "rollback without its inputs"}
+	}
+	// #206 review fold (hold.go:129): the rollback kills and restores — never
+	// under a hold the worker does not own (an operator overwrite mid-job).
+	// Recovery_needed keeps the foreign hold on disk.
+	if s, st := ReadHoldFor(w.dataDir(), j.JobID); s != HoldOurs {
+		return stepResult{err: fmt.Errorf("the hold on disk is not this job's (%s)", holdSummary(s, st)), reason: "the hold on disk is not this job's"}
 	}
 	if j.Attempts > 1 || j.IdentityRollback == nil {
 		id, ok := w.currentIdentityRetry(ctx)

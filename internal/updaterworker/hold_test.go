@@ -113,6 +113,54 @@ func TestTheWorkerHoldNeverCarriesWithdrawEntries(t *testing.T) {
 	}
 }
 
+// PIN (#206 review fold, P1-pending hold.go:129): a hold carrying THIS job's
+// id but owner cli and/or withdraw_entries, written AFTER the hold step (the
+// operator's `maintenance-hold set --job <this job> --withdraw-entries` during
+// drain, gate or backup), must stop the job: the worker must not backup,
+// activate (SIGKILL) or clear under a hold it does not own, and the operator's
+// hold must stay on disk byte-identical. The old code never re-read the hold
+// after the hold step, ran the whole machine and cleared the foreign hold by
+// job id alone.
+func TestAForeignHoldWrittenAfterTheHoldStepStopsTheJob(t *testing.T) {
+	plants := map[string]store.MaintenanceHold{
+		"our job id, owner cli": {
+			Held: true, JobID: boxJobID, Since: "2026-09-24T14:00:00Z", Owner: "cli", Reason: "operator drill",
+		},
+		"our job id, owner updater, withdraw_entries": {
+			Held: true, JobID: boxJobID, Since: "2026-09-24T14:00:00Z", Owner: "updater", Reason: "withdraw", WithdrawEntries: true,
+		},
+		"our job id, owner cli, withdraw_entries": {
+			Held: true, JobID: boxJobID, Since: "2026-09-24T14:00:00Z", Owner: "cli", Reason: "withdraw drill", WithdrawEntries: true,
+		},
+	}
+	for name, plant := range plants {
+		t.Run(name, func(t *testing.T) {
+			r := newRig(t)
+			r.hookAt("gate_ok/started", func() {
+				if err := store.WriteMaintenanceHold(r.data, plant); err != nil {
+					t.Fatal(err)
+				}
+			})
+			r.install()
+			if err := r.drive(); err != nil {
+				t.Fatal(err)
+			}
+			r.noViolations(t)
+			j := r.job()
+			if j.State != updaterjob.StateRecoveryNeeded {
+				t.Fatalf("job %s after the operator overwrote the hold, want recovery_needed\n%v", j.State, states(j))
+			}
+			if r.callCount("activate") != 0 || r.callCount("backup") != 0 || r.callCount("hold_clear") != 0 {
+				t.Fatalf("the job changed something under a foreign hold: calls %v", r.calls)
+			}
+			s, _ := ReadHoldFor(r.data, boxJobID)
+			if s != HoldForeign {
+				t.Fatalf("the operator's hold is %s — it must survive untouched", s)
+			}
+		})
+	}
+}
+
 // PIN (U1 verifier item 9): a hold write that errs AFTER the hold landed on
 // disk is recovery_needed with the hold kept — "refused" would claim nothing
 // was held. A write that errs with nothing on disk is refused.

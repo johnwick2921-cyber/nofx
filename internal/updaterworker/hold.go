@@ -121,12 +121,23 @@ func HoldForJob(dataDir, jobID, releaseID string, now time.Time) (already bool, 
 }
 
 // ReleaseJob clears this job's hold (store.ClearMaintenanceHold is job-scoped
-// and idempotent when absent). Called at complete and rolled_back ONLY.
+// and idempotent when absent). Called at complete and rolled_back ONLY. It
+// clears ONLY the worker's own hold (#206 review fold): the store's clear
+// matches on job_id alone, so a hold the operator wrote over ours (owner cli
+// and/or withdraw_entries) must not be removed by this job — refusing keeps
+// the operator's hold on disk and the runner ends recovery_needed.
 func ReleaseJob(dataDir, jobID string) error {
 	if !updaterwire.ValidJobID(jobID) {
 		return fmt.Errorf("updaterworker: release: invalid job id")
 	}
-	return clearMaintenanceHold(dataDir, jobID)
+	switch s, st := ReadHoldFor(dataDir, jobID); s {
+	case HoldOurs, HoldAbsent:
+		return clearMaintenanceHold(dataDir, jobID)
+	case HoldCorrupt:
+		return fmt.Errorf("%w: %s", ErrCorruptHold, st.Err)
+	default:
+		return fmt.Errorf("%w: job %q owner %q", ErrForeignHold, st.Hold.JobID, st.Hold.Owner)
+	}
 }
 
 // HoldFileForDisplay is the hold file's path for operator text (recovery
