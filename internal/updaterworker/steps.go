@@ -599,8 +599,20 @@ func (w *Worker) stepRollback(ctx context.Context, j updaterjob.Job) stepResult 
 	if rerr != nil || watchID.PID <= 0 {
 		watchID, _ = w.currentIdentityRetry(ctx)
 	}
+	// The boot log is re-resolved AFTER the kill (#206 review fold,
+	// runner.go:367): the path was predicted from the pre-kill instant, and a
+	// restart that crosses local midnight makes the bot log to nofx_<D+1>.log
+	// — watching and scanning only the D file turned a successful rollback
+	// into recovery_needed. A new file is scanned whole (offset 0): it holds
+	// no earlier boot of today, so a stale OK line cannot satisfy it. The
+	// activate path re-predicts the same way (stepActivate).
+	watchLogPath, watchLogOff := j.RollbackLogPath, *j.RollbackLogOffset
+	if p := w.predictedLog(w.host.Now()); p != watchLogPath {
+		zero := int64(0)
+		watchLogPath, watchLogOff = p, zero
+	}
 	wrc, werr := w.lib.Watch(snap, watchID, WatchOpts{
-		LogPath: j.RollbackLogPath, HealthURL: w.cfg.Target.HealthURL(), Since: *j.RollbackWatchSince, Within: w.cfg.Budgets.Watch,
+		LogPath: watchLogPath, HealthURL: w.cfg.Target.HealthURL(), Since: *j.RollbackWatchSince, Within: w.cfg.Budgets.Watch,
 	})
 	receipts = append(receipts, wrc)
 	if werr != nil {
@@ -611,7 +623,7 @@ func (w *Worker) stepRollback(ctx context.Context, j updaterjob.Job) stepResult 
 		return stepResult{receipts: receipts, err: errors.New(clipText(why)), reason: clipText(why)}
 	}
 	vstart, ev := w.host.Now(), map[string]string{}
-	verr := verifyBootLine(j.RollbackLogPath, *j.RollbackLogOffset, snap.SHA, watchID.PID, ev)
+	verr := verifyBootLine(watchLogPath, watchLogOff, snap.SHA, watchID.PID, ev)
 	if verr == nil {
 		h, err := w.app.Health(ctx)
 		switch {
