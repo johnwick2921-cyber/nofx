@@ -34,9 +34,21 @@ func RecoveryText(j updaterjob.Job, t Target) string {
 		p("this job is not recovery_needed; nothing to do.")
 		return b.String()
 	}
+	// The hold line is what is ON DISK, not a claim (#206 review fold): a
+	// pre-hold recovery_needed job has NO hold — entries are NOT refused —
+	// and the old text said the hold was KEPT unconditionally.
 	hold := HoldFileForDisplay(t.DataDir)
-	p("")
-	p("The installation hold is KEPT (%s): every new entry stays refused until the last step.", hold)
+	switch s, st := ReadHoldFor(t.DataDir, j.JobID); s {
+	case HoldOurs:
+		p("")
+		p("The installation hold is KEPT (%s): every new entry stays refused until the last step.", hold)
+	case HoldAbsent:
+		p("")
+		p("No installation hold is on disk: entries are NOT refused. The job stopped before the hold step — recover before trading.")
+	default:
+		p("")
+		p("The hold on disk is NOT this job's (%s): do not clear it from this job's steps — recover the hold by hand first.", holdSummary(s, st))
+	}
 	oldSHA, newSHA := "n/a", "n/a"
 	if j.Install != nil {
 		oldSHA = j.Install.SHA
@@ -55,7 +67,15 @@ func RecoveryText(j updaterjob.Job, t Target) string {
 	step := 1
 	switch reach {
 	case reachNothingInstalled:
-		p("%d. Nothing was installed: the job stopped before the activate, so the pre-update build %s still runs. Do NOT restore anything.", step, oldSHA)
+		if oldSHA == "n/a" {
+			// The job never read the install: it can name no build, so no
+			// restart of it and no boot proof of it can be printed — a
+			// kill whose condition is "health does not serve n/a" is
+			// always true and proves nothing (#206 review fold).
+			p("%d. Nothing was installed: the job stopped in %s before it read the install, so no build is on record for this job. The bot keeps whatever build it booted; this job proves nothing about it. Do NOT restore anything.", step, j.State)
+		} else {
+			p("%d. Nothing was installed: the job stopped before the activate, so the pre-update build %s still runs. Do NOT restore anything.", step, oldSHA)
+		}
 		restart = false
 	case reachRolledBack:
 		p("%d. The rollback to the pre-update build %s was PROVEN (rolled_back reached). Do NOT restore anything.", step, oldSHA)
@@ -94,24 +114,35 @@ func RecoveryText(j updaterjob.Job, t Target) string {
 	if len(short) > 12 {
 		short = short[:12]
 	}
-	if restart {
-		p("%d. Restart the bot by its identity, never by name (systemd's Restart=on-failure relaunches it):", step)
+	if prove == "n/a" {
+		// No build can be named, so no restart of the bot and no boot proof
+		// can be printed: a kill whose condition is "health does not serve
+		// n/a" is always met, and "revision must be n/a" can never pass.
+		p("%d. No bot restart and no boot proof: this job never read the install, so there is nothing it can name to restart or prove.", step)
 	} else {
-		p("%d. ONLY if health (step %d) does not serve %s: restart the bot by its identity, never by name:", step, step+1, short)
+		if restart {
+			p("%d. Restart the bot by its identity, never by name (systemd's Restart=on-failure relaunches it):", step)
+		} else {
+			p("%d. ONLY if health (step %d) does not serve %s: restart the bot by its identity, never by name:", step, step+1, short)
+		}
+		// MainPID is 0 for a unit that is not running, and kill -9 0 signals
+		// the operator's whole process group: never kill a pid below 2.
+		p("     %s", restartLine)
+		step++
+		p("%d. Prove the boot: the data log must show the OK line for %s, and health must serve it:", step, short)
+		p(`     grep -a "BOOT INTEGRITY OK — rev %s ·" %s/nofx_$(date +%%F).log`, short, t.LogDir)
+		p("     curl -s http://127.0.0.1:%d/api/health    (revision must be %s)", t.Port, short)
 	}
-	// MainPID is 0 for a unit that is not running, and kill -9 0 signals
-	// the operator's whole process group: never kill a pid below 2.
-	p("     %s", restartLine)
-	step++
-	p("%d. Prove the boot: the data log must show the OK line for %s, and health must serve it:", step, short)
-	p(`     grep -a "BOOT INTEGRITY OK — rev %s ·" %s/nofx_$(date +%%F).log`, short, t.LogDir)
-	p("     curl -s http://127.0.0.1:%d/api/health    (revision must be %s)", t.Port, short)
 	if j.BackupPath != "" {
 		p("   If the database itself must be restored, use this job's backup %s with deploy/RESTORE.md's database-restore section only.", j.BackupPath)
 	}
 	step++
-	p("%d. LAST, once the boot is proven, clear this job's hold:", step)
-	p("     maintenance-hold --install-dir %s clear --job %s", t.InstallDir, j.JobID)
+	if s, _ := ReadHoldFor(t.DataDir, j.JobID); s == HoldAbsent {
+		p("%d. There is no hold to clear (the job stopped before the hold step).", step)
+	} else {
+		p("%d. LAST, once the boot is proven, clear this job's hold:", step)
+		p("     maintenance-hold --install-dir %s clear --job %s", t.InstallDir, j.JobID)
+	}
 	p("")
 	p("Then restart nofx-updater (the restart is the acknowledgement; install stays refused until then).")
 	return b.String()

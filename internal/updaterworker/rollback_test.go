@@ -185,6 +185,59 @@ func TestRecoveryRestartNeverKillsTheProcessGroup(t *testing.T) {
 	}
 }
 
+// PIN (#206 review fold, P1 recovery.go:96): a job swept to recovery_needed
+// BEFORE the hold step has no hold on disk and never read the install. Its
+// recovery text must not claim the hold is kept (entries are NOT refused),
+// must not print a kill -9 whose condition is vacuous ("health does not serve
+// n/a" is always true), and must not print a boot proof of a build the job
+// never read (a proof of "n/a" can never pass).
+func TestRecoveryTextPreHoldJobClaimsNothing(t *testing.T) {
+	r := newRig(t)
+	r.w.crash = func(q string) {
+		if q == "downloaded/started" {
+			panic(crashPanic{q})
+		}
+	}
+	if !r.runCrashing(t) {
+		t.Fatal("the job never reached downloaded/started")
+	}
+	r.clock.Advance(31 * time.Minute)
+	r.w = r.newWorker()
+	if _, err := r.w.sweep(); err != nil {
+		t.Fatal(err)
+	}
+	j := r.job()
+	if j.State != updaterjob.StateRecoveryNeeded || j.Install != nil {
+		t.Fatalf("job %s (install %+v): want recovery_needed with no install read", j.State, j.Install)
+	}
+	if s, _ := ReadHoldFor(r.data, boxJobID); s != HoldAbsent {
+		t.Fatalf("hold %s: a pre-hold job has no hold on disk", s)
+	}
+	text := RecoveryText(j, r.cfg.Target)
+	for _, want := range []string{
+		"entries are NOT refused",
+		"No bot restart and no boot proof",
+		"There is no hold to clear",
+		"Do NOT restore anything",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("the text lacks %q:\n%s", want, text)
+		}
+	}
+	for _, forbid := range []string{
+		"The installation hold is KEPT",
+		"kill -9",
+		"MainPID",
+		"BOOT INTEGRITY OK — rev",
+		"revision must be",
+		"clear --job", // there is nothing of this job's to clear
+	} {
+		if strings.Contains(text, forbid) {
+			t.Fatalf("the text claims %q the job never proved:\n%s", forbid, text)
+		}
+	}
+}
+
 // PIN (verifier D3, low): the steps follow what the job PROVED. A job that
 // never reached the activate installed nothing; one whose release was proven
 // (boot_verified done) must never be rolled back from the snapshot; only an
