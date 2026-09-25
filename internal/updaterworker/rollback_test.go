@@ -308,29 +308,8 @@ func TestRecoveryRestoreIsSafeToRunTwice(t *testing.T) {
 		t.Fatalf("fixture: job %s", j.State)
 	}
 	in, snap := *j.Install, *j.Snapshot
-	for _, p := range []string{in.Dist, snap.Dist} {
-		if !strings.HasPrefix(p, os.TempDir()) {
-			t.Fatalf("refusing to run the restore on %s: not under the temp dir", p)
-		}
-	}
-	var restore []string
-	for _, l := range strings.Split(RecoveryText(j, r.cfg.Target), "\n") {
-		if l = strings.TrimSpace(l); strings.HasPrefix(l, "cp -p ") || strings.HasPrefix(l, "rm -rf ") {
-			restore = append(restore, l)
-		}
-	}
-	if len(restore) != 3 {
-		t.Fatalf("want the 3 restore lines (binary, RELEASE, dist), got %q", restore)
-	}
-	// relFiles is dir's files as relative path -> content
-	relFiles := func(dir string) map[string]string {
-		out := map[string]string{}
-		for p, b := range allBytes(t, dir) {
-			rel, _ := filepath.Rel(dir, p)
-			out[rel] = string(b)
-		}
-		return out
-	}
+	restore := restoreLines(t, j, r.cfg.Target)
+	relFiles := func(dir string) map[string]string { return relFiles(t, dir) }
 	snapFiles := relFiles(snap.Dist)
 	if len(snapFiles) == 0 {
 		t.Fatal("fixture: the snapshot dist is empty")
@@ -375,5 +354,146 @@ func TestRecoveryRestoreIsSafeToRunTwice(t *testing.T) {
 	}
 	if !seen["run 1\n"] || !seen["run 2\n"] {
 		t.Fatalf("the evidence of each run is not kept: %v", seen)
+	}
+}
+
+// restoreLines is the recovery text's three restore lines (binary, RELEASE,
+// dist) for a recovery_needed job with a snapshot — and a refusal to hand
+// them to a shell unless EVERY path they write or read is strictly below the
+// temp dir (compared by path elements, never a string prefix: U4F defect 5).
+func restoreLines(t *testing.T, j updaterjob.Job, tg Target) []string {
+	t.Helper()
+	if j.Install == nil || j.Snapshot == nil {
+		t.Fatalf("fixture: job %s has no install/snapshot", j.State)
+	}
+	in, snap := *j.Install, *j.Snapshot
+	tmp := filepath.Clean(os.TempDir())
+	for _, p := range []string{in.Dist, in.Binary, in.ReleaseFile, snap.Dist, snap.Binary, snap.ReleaseFile} {
+		if p == "" || filepath.Clean(p) == tmp || !within(p, tmp) {
+			t.Fatalf("refusing to run the restore on %q: not strictly under the temp dir %s", p, tmp)
+		}
+	}
+	var restore []string
+	for _, l := range strings.Split(RecoveryText(j, tg), "\n") {
+		if l = strings.TrimSpace(l); strings.HasPrefix(l, "cp -p ") || strings.HasPrefix(l, "rm -rf ") {
+			restore = append(restore, l)
+		}
+	}
+	if len(restore) != 3 {
+		t.Fatalf("want the 3 restore lines (binary, RELEASE, dist), got %q", restore)
+	}
+	return restore
+}
+
+// relFiles is dir's files as relative path -> content.
+func relFiles(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	for p, b := range allBytes(t, dir) {
+		rel, _ := filepath.Rel(dir, p)
+		out[rel] = string(b)
+	}
+	return out
+}
+
+// runRestore runs lines under sh with PATH=<extra>:/usr/bin:/bin.
+func runRestore(lines []string, extraPath string) ([]byte, error) {
+	path := "/usr/bin:/bin"
+	if extraPath != "" {
+		path = extraPath + ":" + path
+	}
+	cmd := exec.Command("/bin/sh", "-c", strings.Join(lines, "\n"))
+	cmd.Env = []string{"PATH=" + path}
+	return cmd.CombinedOutput()
+}
+
+// PIN (U4F defect 5): `mv -T` is the SECOND guard of the dist restore. With
+// the failed-dist name forced to collide (a `date` that always prints the same
+// stamp, first in PATH) and that name already a non-empty directory, the
+// restore REFUSES — the live dist is neither moved INTO the leftover nor
+// replaced, and the leftover keeps only its own evidence. Without -T, mv would
+// nest the live dist inside it.
+func TestRecoveryRestoreRefusesAnExistingFailedDistRatherThanNest(t *testing.T) {
+	r := newRig(t)
+	r.watchFail[boxNew] = true
+	r.rollbackFail = true
+	j := r.runToEnd(t)
+	if j.State != updaterjob.StateRecoveryNeeded {
+		t.Fatalf("fixture: job %s", j.State)
+	}
+	restore := restoreLines(t, j, r.cfg.Target)
+	in := *j.Install
+	const stamp = "20260924T000000.000000000"
+	bin := t.TempDir()
+	writeFile(t, filepath.Join(bin, "date"), "#!/bin/sh\necho "+stamp+"\n")
+	if err := os.Chmod(filepath.Join(bin, "date"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	leftover := in.Dist + ".failed." + j.JobID + "." + stamp
+	writeFile(t, filepath.Join(leftover, "evidence.txt"), "an earlier failed dist\n")
+	writeFile(t, filepath.Join(in.Dist, "failed-run.txt"), "the live failed dist\n")
+	live := relFiles(t, in.Dist)
+	if out, err := runRestore(restore, bin); err == nil {
+		t.Fatalf("the restore succeeded over an existing failed dist %s:\n%s", leftover, out)
+	}
+	if _, err := os.Lstat(filepath.Join(leftover, filepath.Base(in.Dist))); err == nil {
+		t.Fatalf("the restore moved the live dist INTO %s", leftover)
+	}
+	if got := relFiles(t, leftover); !maps.Equal(got, map[string]string{"evidence.txt": "an earlier failed dist\n"}) {
+		t.Fatalf("the leftover %s is now %v, want only its own evidence", leftover, got)
+	}
+	if got := relFiles(t, in.Dist); !maps.Equal(got, live) {
+		t.Fatalf("the live dist changed on a refused restore: %v, want %v", got, live)
+	}
+}
+
+// PIN (U4F defect 5): a crash BETWEEN the dist restore's two mv's (the live
+// dist already moved aside, the snapshot copy not yet moved in) leaves no live
+// dist. Re-running the full restore then stops at its first `mv -T` (nothing
+// to move) — safe, but it cannot finish — so the recovery text names the one
+// command that does: if the dist is absent, run only the second mv. Both are
+// RUN here on the rig's temp paths.
+func TestRecoveryRestoreFinishesAfterACrashBetweenTheTwoMoves(t *testing.T) {
+	r := newRig(t)
+	r.watchFail[boxNew] = true
+	r.rollbackFail = true
+	j := r.runToEnd(t)
+	if j.State != updaterjob.StateRecoveryNeeded {
+		t.Fatalf("fixture: job %s", j.State)
+	}
+	restore := restoreLines(t, j, r.cfg.Target)
+	in, snap := *j.Install, *j.Snapshot
+	snapFiles := relFiles(t, snap.Dist)
+	text := RecoveryText(j, r.cfg.Target)
+	var only string
+	for _, l := range strings.Split(text, "\n") {
+		if i := strings.Index(l, "run only: "); i >= 0 && strings.Contains(l, in.Dist+" is ABSENT") {
+			only = strings.TrimSpace(l[i+len("run only: "):])
+		}
+	}
+	if want := "mv -T " + in.Dist + ".recovery.tmp " + in.Dist; only != want {
+		t.Fatalf("the recovery text has no crash-between-the-moves line (got %q, want %q):\n%s", only, want, text)
+	}
+	// play the crash: the first mv ran, the second did not
+	writeFile(t, filepath.Join(in.Dist, "failed-run.txt"), "the live failed dist\n")
+	if out, err := runRestore([]string{fmt.Sprintf("rm -rf %[1]s.recovery.tmp && cp -a %[2]s %[1]s.recovery.tmp && mv -T %[1]s %[1]s.failed.%[3]s.crashed", in.Dist, snap.Dist, j.JobID)}, ""); err != nil {
+		t.Fatalf("playing the crash: %v\n%s", err, out)
+	}
+	// a full re-run stops at its first mv -T and creates no dist
+	if out, err := runRestore(restore, ""); err == nil {
+		t.Fatalf("a full re-run with the dist absent succeeded:\n%s", out)
+	}
+	if _, err := os.Lstat(in.Dist); err == nil {
+		t.Fatal("a failed re-run left something at the live dist path")
+	}
+	// the named line finishes it
+	if out, err := runRestore([]string{only}, ""); err != nil {
+		t.Fatalf("the crash-between-the-moves line: %v\n%s", err, out)
+	}
+	if got := relFiles(t, in.Dist); !maps.Equal(got, snapFiles) {
+		t.Fatalf("after the named line the live dist is %v, want the snapshot's %v", got, snapFiles)
+	}
+	if b, err := os.ReadFile(filepath.Join(in.Dist+".failed."+j.JobID+".crashed", "failed-run.txt")); err != nil || string(b) != "the live failed dist\n" {
+		t.Fatalf("the failed dist's evidence was lost: %q %v", b, err)
 	}
 }

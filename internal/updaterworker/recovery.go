@@ -76,6 +76,11 @@ func RecoveryText(j updaterjob.Job, t Target) string {
 			// (U4 re-verify note 7, TestRecoveryRestoreIsSafeToRunTwice).
 			p("     rm -rf %s.recovery.tmp && cp -a %s %s.recovery.tmp && mv -T %s %s.failed.%s.$(date +%%Y%%m%%dT%%H%%M%%S.%%N) && mv -T %s.recovery.tmp %s",
 				in.Dist, s.Dist, in.Dist, in.Dist, in.Dist, j.JobID, in.Dist, in.Dist)
+			// A crash BETWEEN the two mv's leaves no live dist; a re-run then
+			// stops at its first mv -T (safe, but it cannot finish), so name
+			// the one command that does (U4F defect 5,
+			// TestRecoveryRestoreFinishesAfterACrashBetweenTheTwoMoves).
+			p("     If %s is ABSENT (a crash between the two mv's above), run only: mv -T %s.recovery.tmp %s", in.Dist, in.Dist, in.Dist)
 		} else {
 			p("%d. The activate ran but this job recorded no snapshot of the install: the install cannot be restored from it — stop and restore it by hand.", step)
 		}
