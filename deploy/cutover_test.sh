@@ -69,12 +69,13 @@ SRV_PY="$WORK/server.py"
 cat > "$SRV_PY" <<'PY'
 import http.server, sys
 health_body = sys.argv[1].encode()
+gate_body = open(sys.argv[3], 'rb').read()
 class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith('/health'):
             body = health_body
         else:
-            body = b'{"ready": true, "legs": {}}'
+            body = gate_body
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
         self.end_headers()
@@ -85,11 +86,22 @@ open(sys.argv[2], 'w').write(str(srv.server_port))
 srv.serve_forever()
 PY
 
-start_server() { # $1 = health revision
+# Gate payloads. GATE_OK pins the [1] core property: overall ready is FALSE and
+# addon_census FAILS (a bot that has never been held), yet every REQUIRED leg
+# passes — the script must proceed on the required legs, never the verdict.
+GATE_OK='{"ready":false,"job_id":"n/a","legs":[{"name":"trader_cutover:abc","pass":true,"detail":"","source":""},{"name":"ledger_exposure","pass":true,"detail":"","source":""},{"name":"planner_in_flight","pass":true,"detail":"","source":""},{"name":"traders_nt8","pass":true,"detail":"","source":""},{"name":"addon_census","pass":false,"detail":"never held","source":""}],"traders":["abc"],"note":"fixture"}'
+GATE_BAD_LEG='{"ready":false,"job_id":"n/a","legs":[{"name":"trader_cutover:abc","pass":true,"detail":"","source":""},{"name":"ledger_exposure","pass":false,"detail":"armed row","source":""},{"name":"planner_in_flight","pass":true,"detail":"","source":""},{"name":"traders_nt8","pass":true,"detail":"","source":""}],"traders":["abc"],"note":"fixture"}'
+GATE_NO_TRADER='{"ready":false,"job_id":"n/a","legs":[{"name":"ledger_exposure","pass":true,"detail":"","source":""},{"name":"planner_in_flight","pass":true,"detail":"","source":""},{"name":"traders_nt8","pass":true,"detail":"","source":""}],"traders":["abc"],"note":"fixture"}'
+GATE_PREHOLD_FAIL='{"ready":true,"job_id":"n/a","legs":[{"name":"trader_cutover:abc","pass":true,"detail":"","source":""},{"name":"ledger_exposure","pass":true,"detail":"","source":""},{"name":"planner_in_flight","pass":true,"detail":"","source":""},{"name":"traders_nt8","pass":true,"detail":"","source":""},{"name":"addon_census_prehold","pass":false,"detail":"fresh connection","source":""}],"traders":["abc"],"note":"fixture"}'
+
+write_gate() { printf '%s\n' "$1" > "$WORK/gate.json"; }
+
+start_server() { # $1 = health revision, $2 = gate payload
   [ -n "$SRV_PID" ] && kill "$SRV_PID" 2>/dev/null && wait "$SRV_PID" 2>/dev/null
   rm -f "$WORK/port"
   PORTFILE="$WORK/port"
-  python3 "$SRV_PY" "$1" "$PORTFILE" &
+  write_gate "$2"
+  python3 "$SRV_PY" "$1" "$PORTFILE" "$WORK/gate.json" &
   SRV_PID=$!
   for _ in $(seq 1 50); do [ -f "$PORTFILE" ] && break; sleep 0.1; done
   [ -f "$PORTFILE" ] || { echo "FAIL: fixture server did not start"; exit 1; }
@@ -103,16 +115,19 @@ run_cutover() { # prints the script's combined output, sets RC
 }
 
 echo "== F1: disk == health == RELEASE -> proceeds (dry run completes) =="
-start_server "{\"revision\":\"$SHA\"}"
+# GATE_OK is overall-ready FALSE with addon_census FAILING — the script must
+# proceed on the REQUIRED legs alone, never the payload's verdict ([1]).
+start_server "{\"revision\":\"$SHA\"}" "$GATE_OK"
 printf '%s\n' "$SHA" > "$WORK/inst/RELEASE"
 run_cutover
 check "F1 rc is 0"        "$RC" "0"
 has   "F1 prints reconciled" "$OUT" "current reconciled"
+has   "F1 prints every leg"  "$OUT" "leg: trader_cutover:abc"
 has   "F1 dry run completes" "$OUT" "dry run complete"
 hasnt "F1 no refusal"        "$OUT" "refusing"
 
 echo "== F2: disk != health -> refuses, names the mismatch =="
-start_server "{\"revision\":\"$OTHER\"}"
+start_server "{\"revision\":\"$OTHER\"}" "$GATE_OK"
 rm -f "$WORK/inst/RELEASE"
 run_cutover
 check "F2 rc is nonzero"   "$([ $RC -ne 0 ] && echo nonzero || echo zero)" "nonzero"
@@ -129,6 +144,33 @@ check "F3 rc is nonzero"   "$([ $RC -ne 0 ] && echo nonzero || echo zero)" "nonz
 has   "F3 cannot reconcile"   "$OUT" "cannot reconcile OLD_SHA=$SHORT"
 has   "F3 refuses the cutover" "$OUT" "refusing"
 hasnt "F3 no dry-run completion" "$OUT" "dry run complete"
+
+echo "== F4: a REQUIRED leg fails -> refuses, names it =="
+start_server "{\"revision\":\"$SHA\"}" "$GATE_BAD_LEG"
+printf '%s\n' "$SHA" > "$WORK/inst/RELEASE"
+run_cutover
+check "F4 rc is nonzero"   "$([ $RC -ne 0 ] && echo nonzero || echo zero)" "nonzero"
+has   "F4 names the failing leg" "$OUT" "failing installation-gate legs: ledger_exposure"
+has   "F4 refuses the cutover"   "$OUT" "refusing"
+hasnt "F4 no dry-run completion" "$OUT" "dry run complete"
+
+echo "== F5: a REQUIRED leg is absent -> refuses (unevaluable = failure) =="
+start_server "{\"revision\":\"$SHA\"}" "$GATE_NO_TRADER"
+printf '%s\n' "$SHA" > "$WORK/inst/RELEASE"
+run_cutover
+check "F5 rc is nonzero"   "$([ $RC -ne 0 ] && echo nonzero || echo zero)" "nonzero"
+has   "F5 names the missing leg" "$OUT" "names no trader_cutover:* leg"
+has   "F5 refuses the cutover"   "$OUT" "refusing"
+hasnt "F5 no dry-run completion" "$OUT" "dry run complete"
+
+echo "== F6: addon_census_prehold present and failing -> refuses =="
+start_server "{\"revision\":\"$SHA\"}" "$GATE_PREHOLD_FAIL"
+printf '%s\n' "$SHA" > "$WORK/inst/RELEASE"
+run_cutover
+check "F6 rc is nonzero"   "$([ $RC -ne 0 ] && echo nonzero || echo zero)" "nonzero"
+has   "F6 names the failing leg" "$OUT" "failing installation-gate legs: addon_census_prehold"
+has   "F6 refuses the cutover"   "$OUT" "refusing"
+hasnt "F6 no dry-run completion" "$OUT" "dry run complete"
 
 printf '\n== %d pass / %d fail ==\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ] || exit 1

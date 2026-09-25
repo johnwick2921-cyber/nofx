@@ -116,19 +116,49 @@ if [ -z "$HEALTH_REV" ] && [ -z "$RELEASE_REV" ]; then
 fi
 say "current reconciled: disk=$OLD_SHORT health=$(rev12 "${HEALTH_REV:-}") release=$(rev12 "${RELEASE_REV:-}")"
 
-# --- THE FLAT GATE (class 33) -------------------------------------------------
-# Nothing is touched until every leg passes. An unevaluable leg is a FAILURE.
-# The token comes from the environment and is never echoed, never logged, and
-# never accepted as an argument.
+# --- THE INSTALLATION GATE (W-ONE-BUTTON M2) -------------------------------
+# Nothing is touched until every REQUIRED leg passes. The payload's overall
+# "ready" verdict is NEVER trusted: it folds in legs like addon_census that can
+# never pass on a bot that has not been held, so a green gate could still hide
+# a trader holding a position (finding [1]). Every leg is printed; a required
+# leg that is absent, unevaluable or failing refuses the cutover. The token
+# comes from the environment and is never echoed, never logged, and never
+# accepted as an argument.
 [ -n "${NOFX_CUTOVER_TOKEN:-}" ] || die "cutover gate needs a token — set NOFX_CUTOVER_TOKEN (never pass it on the command line)"
-GATE_URL="${NOFX_GATE_URL:-http://127.0.0.1:8080/api/cutover-gate}"
+GATE_URL="${NOFX_GATE_URL:-http://127.0.0.1:8080/api/installation-gate}"
 GATE="$(curl -s --max-time 10 -H "Authorization: Bearer ${NOFX_CUTOVER_TOKEN}" \
          "$GATE_URL" 2>/dev/null || true)"
-[ -n "$GATE" ] || die "the cutover gate did not answer; refusing to kill a trader whose state is unknown"
-printf '%s\n' "$GATE" | sed 's/^/    gate: /'
-printf '%s' "$GATE" | grep -qi '"ready"[[:space:]]*:[[:space:]]*true' \
-  || die "the cutover gate is NOT ready — a leg failed above. An unevaluable leg counts as a failure (A5)"
-say "flat gate READY — every leg passed"
+[ -n "$GATE" ] || die "the installation gate did not answer; refusing to kill a trader whose state is unknown"
+LEGS="$(printf '%s' "$GATE" | jq -r '.legs[]? | "\(.name)\t\(.pass)"' 2>/dev/null)" \
+  || die "the installation gate answered something that is not a gate payload; refusing a cutover over unreadable state"
+[ -n "$LEGS" ] || die "the installation gate payload names no legs; refusing a cutover over unreadable state"
+printf '%s\n' "$LEGS" | sed 's/^/    leg: /'
+
+require_legs() { # $1 = name or glob; every matching leg must pass, one must exist
+  found=0; bad=""
+  while IFS=$'\t' read -r name pass; do
+    case "$name" in
+      $1)
+        found=$((found+1))
+        [ "$pass" = "true" ] || bad="$bad $name"
+        ;;
+    esac
+  done <<LEGS_EOF
+$LEGS
+LEGS_EOF
+  [ "$found" -gt 0 ] || die "the installation gate names no $1 leg; refusing (an unevaluable leg is a failure)"
+  [ -z "$bad" ] || die "failing installation-gate legs:$bad — refusing the cutover"
+}
+
+require_legs 'trader_cutover:*'
+require_legs 'ledger_exposure'
+require_legs 'planner_in_flight'
+require_legs 'traders_nt8'
+# addon_census_prehold lands with #206; require it the moment the payload has it.
+if printf '%s\n' "$LEGS" | cut -f1 | grep -qx 'addon_census_prehold'; then
+  require_legs 'addon_census_prehold'
+fi
+say "installation gate READY — every required leg passed"
 
 if [ "$DRY" -eq 1 ]; then
   plan "back up $INSTALL/data/data.db with nofx-activate backup (online copy + integrity_check)"
