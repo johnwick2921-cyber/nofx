@@ -123,6 +123,28 @@ func TestToolchainUncoveredControls(t *testing.T) {
 	}
 }
 
+// A SYMLINKED PACKAGE DIRECTORY IS REFUSED, NOT SKIPPED (CTO CENSUS-GUARDS
+// 1790306266164 [32]). filepath.WalkDir does not descend into a symlinked
+// dir, so a package the toolchain compiles THROUGH the link (api/hid ->
+// elsewhere/hid, imported by api/api.go) was invisible to every per-census
+// walk — only the suite-level ToolchainUncovered pin reported it. The walk
+// must fail loud on the link so every census that uses NonTestGoFiles sees
+// the package instead of silently skipping it.
+func TestWalkRefusesSymlinkedPackageDir(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "go.mod", "module nofx\n\ngo 1.25\n")
+	write(t, root, "api/api.go", "package api\n\nimport _ \"nofx/api/hid\"\n")
+	write(t, root, "elsewhere/hid/x.go", "package hid\n\nvar X = 1\n")
+	if err := os.Symlink(filepath.Join(root, "elsewhere", "hid"), filepath.Join(root, "api", "hid")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NonTestGoFiles(root); err == nil {
+		t.Fatal("the walk accepted a symlinked package directory — api/hid is compiled through the link but the walk does not descend into it, so every census using NonTestGoFiles was blind to nofx/api/hid")
+	} else if !strings.Contains(err.Error(), filepath.Join("api", "hid")) {
+		t.Fatalf("error does not name the symlinked dir: %v", err)
+	}
+}
+
 // nonTestImporters asks the toolchain which packages matched by ./... import
 // target from a NON-test file (.Imports never carries TestImports or
 // XTestImports). .Imports is the CURRENT GOOS/GOARCH/tags only (census-repair
