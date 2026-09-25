@@ -84,7 +84,7 @@ export const status: GuideSection = {
     { kind: 'h', text: 'The update hold (maintenance)' },
     {
       kind: 'p',
-      text: "When an update is about to replace the bot or the NinjaTrader AddOn, it first puts the whole installation on HOLD. The hold is one file (data/updater/hold.json). While it is present, no NEW entry is sent from anywhere: the AI's opens, armed orders, Picture HTF entries and new planner reads are all refused, and the NinjaTrader AddOn refuses new entries too. Everything that protects or closes a position keeps working: stops, targets, breakeven and trailing moves, cancels and closes. An arm that could not be placed stays armed and places once the hold clears. A Picture HTF opportunity seen during the hold is refused for good, because its entry window is short (90s by default). A file that exists but cannot be read counts as held.",
+      text: "When an update is about to replace the bot or the NinjaTrader AddOn, it first puts the whole installation on HOLD. The hold is one file (data/updater/hold.json). While it is present, no NEW entry is sent from anywhere: the AI's opens, armed orders, Picture HTF entries and new planner reads are all refused, and the NinjaTrader AddOn refuses new entries too. Everything that protects or closes a position keeps working: stops, targets, breakeven and trailing moves, cancels and closes. An arm that could not be placed stays armed and places once the hold clears. A Picture HTF opportunity seen during the hold is refused for good, because its entry window is short (360s by default). A file that exists but cannot be read counts as held.",
     },
     {
       kind: 'p',
