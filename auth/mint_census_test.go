@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -115,6 +116,28 @@ func unscopedMintSites(root string) (seen map[string]int, scanned int, err error
 			}
 			return true
 		})
+		// DS-105 CENSUS-AUTH [14]: a jwt.Token composite literal or a
+		// NewWithClaims/New call-or-reference OUTSIDE the admitted minting
+		// site (auth/auth.go signToken) mints an unscoped token the
+		// GenerateJWT census cannot see — counted here, type-based (see
+		// jwtMintShapes). auth/auth.go is the admitted site and exempt.
+		if rel != "auth/auth.go" {
+			jwtName := ""
+			for _, im := range f.Imports {
+				p, _ := strconv.Unquote(im.Path.Value)
+				if p != "github.com/golang-jwt/jwt/v5" {
+					continue
+				}
+				if im.Name == nil {
+					jwtName = "jwt"
+				} else {
+					jwtName = im.Name.Name
+				}
+			}
+			if jwtName != "" && jwtName != "." && jwtName != "_" {
+				jwtMintShapes(f, jwtName, func() { seen[rel]++ })
+			}
+		}
 	}
 	return seen, scanned, nil
 }
