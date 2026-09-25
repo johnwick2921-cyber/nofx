@@ -571,6 +571,53 @@ func TestFetchVerifiesALocalReleaseEndToEnd(t *testing.T) {
 	}
 }
 
+// PIN (U4F defect 6, probe P7; a fail-closed default named for the CTO): a
+// release fetched — through the production entry — into root A is NOT
+// re-provable once NOFX_RELEASE_DIR names root B: the wired re-proof's
+// Verdict refuses (so the install verb, the verify step, the nt8 rule, the
+// resume and the boot check all refuse), and with the knob back at A it
+// re-proves again. The verdict's release_dir must be <the current resolved
+// release root>/<source sha>.
+func TestAVerdictIsReprovedOnlyUnderTheCurrentReleaseRoot(t *testing.T) {
+	f := newFetchRig(t)
+	if rc, out, errs := runCLI(t, nil, "--install-dir", f.inst, "fetch", fetchID); rc != 0 {
+		t.Fatalf("fetch = %d %q %q", rc, out, errs)
+	}
+	tg, err := updaterworker.ResolveTarget(f.inst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := filepath.Join(t.TempDir(), "other-root")
+	if err := os.Mkdir(other, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name, root string
+		ok         bool
+	}{
+		{"the root it was fetched into", f.root, true},
+		{"another root (the operator moved NOFX_RELEASE_DIR)", other, false},
+		{"unset", "", false},
+		{"back at the root it was fetched into", f.root, true},
+	} {
+		f.env(t, f.inbox, c.root)
+		rel, err := newReverifier(tg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, err := rel.Verdict(fetchID)
+		if c.ok {
+			if err != nil || v.ReleaseDir != filepath.Join(f.root, fetchSHA) {
+				t.Fatalf("%s: Verdict = %+v, %v; want the verdict at %s", c.name, v, err, filepath.Join(f.root, fetchSHA))
+			}
+			continue
+		}
+		if !errors.Is(err, updaterworker.ErrReleaseRoot) || v != (updaterworker.Verdict{}) {
+			t.Fatalf("%s: Verdict = %+v, %v; want refused with ErrReleaseRoot and no verdict", c.name, v, err)
+		}
+	}
+}
+
 // PIN (U4N item B): fetch refuses — and writes NO verdict and NO release dir —
 // without its knobs (C9: a local inbox, never a network source; the release
 // root the one resolver reads), with a release root inside the install, a

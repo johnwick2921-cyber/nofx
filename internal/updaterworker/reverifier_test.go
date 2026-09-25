@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"nofx/internal/installpath"
 	"nofx/internal/updaterjob"
 )
 
@@ -45,7 +46,17 @@ func reproofInstall(t *testing.T, r testRelease) (Target, Verdict) {
 	if err != nil {
 		t.Fatalf("fixture fetch: %v", err)
 	}
+	setReleaseRoot(t, root) // the operator's NOFX_RELEASE_DIR is the root it was fetched into
 	return tg, mirrorVerdict(fv)
+}
+
+// setReleaseRoot sets NOFX_RELEASE_DIR ("" unsets it) and resets the one
+// release-dir resolver (a sync.Once in production).
+func setReleaseRoot(t *testing.T, root string) {
+	t.Helper()
+	t.Setenv("NOFX_RELEASE_DIR", root)
+	installpath.ResetReleaseDirForTest()
+	t.Cleanup(installpath.ResetReleaseDirForTest)
 }
 
 // PIN (U4N item A): the production Reverifier — the constructor
@@ -112,6 +123,27 @@ func TestReleaseReverifierRefuses(t *testing.T) {
 		"the install's deploy/ is a symlink to a copy of itself": {func(t *testing.T, tg Target, v *Verdict) {
 			symlinkDeployElsewhere(t, tg.InstallDir)
 		}, reverify, ErrAllowedSignersUnsafe},
+		// U4F defect 6 (fail-closed default for the CTO): the verdict's
+		// release dir must be <the CURRENT resolved release root>/<source
+		// sha> — Verdict refuses otherwise, so no step resolves a release
+		// from a root the operator no longer names (probe P7).
+		"NOFX_RELEASE_DIR is unset": {func(t *testing.T, tg Target, v *Verdict) {
+			setReleaseRoot(t, "")
+		}, verdict, ErrReleaseRoot},
+		"NOFX_RELEASE_DIR now names another root": {func(t *testing.T, tg Target, v *Verdict) {
+			other := filepath.Join(t.TempDir(), "other-root")
+			if err := os.Mkdir(other, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			setReleaseRoot(t, other)
+		}, verdict, ErrReleaseRoot},
+		"NOFX_RELEASE_DIR names the same root through a symlink": {func(t *testing.T, tg Target, v *Verdict) {
+			link := filepath.Join(t.TempDir(), "rootlink")
+			if err := os.Symlink(filepath.Dir(v.ReleaseDir), link); err != nil {
+				t.Fatal(err)
+			}
+			setReleaseRoot(t, link)
+		}, verdict, ErrReleaseRoot},
 		"the install's allowed-signers names another key": {func(t *testing.T, tg Target, v *Verdict) {
 			writeFile(t, ReleaseAllowedSignersPath(tg.InstallDir), "release "+foreign.pub+"\n")
 		}, reverify, ErrSigForeignKey},
@@ -142,6 +174,8 @@ func TestReleaseReverifierRefuses(t *testing.T) {
 }
 
 func reverify(rv Reverifier, v Verdict) error { _, err := rv.Reverify(v); return err }
+
+func verdict(rv Reverifier, v Verdict) error { _, err := rv.Verdict(v.ReleaseID); return err }
 
 // PIN (U4N item A): the worker's Verdict mirror IS the verdict file — the
 // same fields, in the same order, of the same types, with the same json tags.
