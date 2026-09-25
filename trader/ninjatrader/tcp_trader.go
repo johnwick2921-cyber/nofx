@@ -169,6 +169,13 @@ func IsMaintenanceHold(err error) bool {
 
 // SetEntryHoldCheck forwards the maintenance predicate to this trader's TCP
 // server, whose queue drops held entries on flush (gap U2).
+// IsBound reports whether the trader has a bound NT8 sub-account. An unbound
+// trader has no book to read and cannot flatten: reconcile-before-open skips it
+// so the broker's own binding refusal names the cause (still fail-closed).
+func (t *TCPTrader) IsBound() bool {
+	return strings.TrimSpace(t.boundAccount) != ""
+}
+
 func (t *TCPTrader) SetEntryHoldCheck(fn func() bool) {
 	if t.server != nil {
 		t.server.SetEntryHoldCheck(fn)

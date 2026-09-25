@@ -289,6 +289,13 @@ func (at *AutoTrader) reconcileBeforeOpenNTReport(symbol, intendedSide string) (
 	if at.exchange != "ninjatrader" {
 		return false, nil
 	}
+	// W117 F4 (CTO addendum 2) — an UNBOUND NT trader has no book to read and
+	// cannot flatten; reconcile would refuse with a misleading "positions
+	// unknown". Skip so the broker's own binding refusal names the cause (the
+	// entry still refuses at the broker — fail-closed either way).
+	if ntTCP, ok := at.trader.(*ntTrader.TCPTrader); ok && !ntTCP.IsBound() {
+		return false, nil
+	}
 	// Never flatten into a dead feed (Track A also gates upstream; be defensive).
 	if down, status := at.ninjaFeedDown(); down {
 		return false, fmt.Errorf("reconcile-before-open: NT8 feed not Connected (%s) — refusing open", status)
