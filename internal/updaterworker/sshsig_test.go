@@ -247,6 +247,40 @@ func TestSSHSIGRefusesWrongPrincipal(t *testing.T) {
 	}
 }
 
+// PIN (#206 note sshsig.go:245): the trust anchor is accepted only when owned
+// by this uid or root — a foreign uid can rewrite the anchor at will, so the
+// mode check alone proves nothing about who controls the trusted keys. chown
+// to another uid needs root, so the judgment is pinned directly and the
+// WIRING through the signersAnchorUID seam (anchorUID in production).
+func TestAllowedSignersAnchorMustBeOursOrRoot(t *testing.T) {
+	euid := os.Geteuid()
+	for _, tc := range []struct {
+		uid  uint32
+		good bool
+	}{
+		{uint32(euid), true},
+		{0, true}, // a root-owned 0644 anchor is legitimate hardening
+		{uint32(euid) + 1000, false},
+		{12345, false},
+	} {
+		if why := anchorOwnerBad(tc.uid, euid); (why == "") != tc.good {
+			t.Errorf("anchorOwnerBad(%d, %d) = %q, good=%v", tc.uid, euid, why, tc.good)
+		}
+	}
+	f := newSigFixture(t)
+	sig := f.signer.sign(t, f.msgPath, "release")
+	prev := signersAnchorUID
+	t.Cleanup(func() { signersAnchorUID = prev })
+	signersAnchorUID = func(os.FileInfo) (uint32, bool) { return 54321, true }
+	if _, err := VerifySSHSIG(f.msg, sig, f.signers); !errors.Is(err, ErrAllowedSignersUnsafe) || !strings.Contains(err.Error(), "uid 54321") {
+		t.Fatalf("a foreign-owned anchor = %v, want ErrAllowedSignersUnsafe naming uid 54321", err)
+	}
+	signersAnchorUID = func(os.FileInfo) (uint32, bool) { return 0, true }
+	if _, err := VerifySSHSIG(f.msg, sig, f.signers); err != nil {
+		t.Fatalf("a root-owned anchor is legitimate hardening: %v", err)
+	}
+}
+
 // acceptLikeTool asserts ssh-keygen ACCEPTS the fixture and so do we.
 func acceptLikeTool(t *testing.T, signers string, sig, msg []byte) {
 	t.Helper()

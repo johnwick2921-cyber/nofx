@@ -43,6 +43,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -245,6 +246,16 @@ func releaseSignerKeys(path string) ([][]byte, error) {
 	if fi.Mode().Perm()&0o022 != 0 {
 		return nil, fmt.Errorf("%w: %s is writable by group or other (%#o)", ErrAllowedSignersUnsafe, path, fi.Mode().Perm())
 	}
+	// #206 note sshsig.go:245: the mode check proves nothing if the file is
+	// owned by ANOTHER uid — that uid can rewrite or chmod it at any time.
+	// Accept only this uid or root (a root-owned 0644 anchor is legitimate
+	// hardening; a root-owned anchor cannot be rewritten by an unprivileged
+	// peer).
+	if uid, ok := signersAnchorUID(fi); ok {
+		if why := anchorOwnerBad(uid, os.Geteuid()); why != "" {
+			return nil, fmt.Errorf("%w: %s: %s", ErrAllowedSignersUnsafe, path, why)
+		}
+	}
 	if signersCheckedHook != nil {
 		signersCheckedHook(path)
 	}
@@ -331,6 +342,28 @@ func releaseSignerKeys(path string) ([][]byte, error) {
 // space and tab — never unicode.IsSpace. ssh-keygen (sshsig.c, strdelimw)
 // also splits on CR/LF; ours does not, deliberately stricter on CR.
 func isAllowedSignersSep(r rune) bool { return r == ' ' || r == '\t' }
+
+// anchorUID returns the file's owner uid when the platform reports one.
+func anchorUID(fi os.FileInfo) (uint32, bool) {
+	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
+		return st.Uid, true
+	}
+	return 0, false
+}
+
+// signersAnchorUID is a TEST SEAM, anchorUID in production (chown to another
+// uid needs root, so the ownership refusal is proven through this seam).
+var signersAnchorUID = anchorUID
+
+// anchorOwnerBad is "" when a root- or self-owned trust anchor is acceptable
+// (#206 note sshsig.go:245): any other owner can rewrite the anchor at will,
+// so the mode check would prove nothing about who controls the trusted keys.
+func anchorOwnerBad(uid uint32, euid int) string {
+	if uid == 0 || int(uid) == euid {
+		return ""
+	}
+	return fmt.Sprintf("owned by uid %d, not this process (%d) or root", uid, euid)
+}
 
 // sshKeygenPrincipalsToken extracts the principal field of an allowed-signers
 // line exactly as OpenSSH 9.6p1 strdelimw does (misc.c): the token ends at the
