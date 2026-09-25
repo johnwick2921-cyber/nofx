@@ -109,8 +109,10 @@ func TestPlannerBornDeadRetryCarriesTheFreshTape(t *testing.T) {
 	facts := kernel.PlanFacts{Price: 15550, DATR: 300, ReadAt: read}
 	machine := map[float64]string{15480: "PWL", 15700: "RN 15700"}
 	blocks := []string{}
-	_, lc, err := at.runPlannerReadCoreWithFactsGradesClock(
-		func() time.Time { return publish },
+	_, lc, err := at.runPlannerReadCoreObserved(
+		func() time.Time { return read },    // authoring (read-side) clock
+		func() time.Time { return publish }, // publish clock — the fixture refusal clock
+		nil,
 		"ASIA", "2026-09-23", "owner_reset", "deepseek-v4-pro", "hashA6", "", "", "", "FULLPROMPT",
 		facts, nil, machine, nil, true,
 		func(userPrompt string) (string, error) {
@@ -164,8 +166,10 @@ func TestPlannerBornDeadRetryKnobOffIsByteIdenticalToday(t *testing.T) {
 	facts := kernel.PlanFacts{Price: 15550, DATR: 300, ReadAt: read}
 	machine := map[float64]string{15480: "PWL", 15700: "RN 15700"}
 	blocks := []string{}
-	_, lc, err := at.runPlannerReadCoreWithFactsGradesClock(
-		func() time.Time { return publish },
+	_, lc, err := at.runPlannerReadCoreObserved(
+		func() time.Time { return read },    // authoring (read-side) clock
+		func() time.Time { return publish }, // publish clock
+		nil,
 		"ASIA", "2026-09-23", "owner_reset", "deepseek-v4-pro", "hashA6off", "", "", "", "FULLPROMPT",
 		facts, nil, machine, nil, true,
 		func(userPrompt string) (string, error) {
