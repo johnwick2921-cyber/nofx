@@ -8,7 +8,7 @@ import (
 // entryReceiptState shares execution knowledge with the account snapshot's
 // lifetime. Adapter replacement must not forget which empty snapshots predate
 // entry execution, or treat replayed cumulative evidence as a new execution.
-// Protected by TCPServer.acctMu, never executionMu (the frame path may hold it).
+// Protected by TCPServer.acctMu.
 type entryReceiptState struct {
 	received   time.Time
 	quantities map[string]int
