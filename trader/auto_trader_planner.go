@@ -3116,6 +3116,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		ATR5m:             kernel.StaleConfirmATR5m(bars),
 		GeometryRefIDs:    at.dayPlanCfg().GeometryRefIDsEnabled(), // W-GEOMETRY-REFUSAL (b1)
 		PlannerContractOn: at.dayPlanCfg().PlannerContractOn(),     // WAVE PLANNER A3 (nil=ON)
+		MinTargetRR:       at.armMinRRFor(nil),                     // A2 min_tgt column = the SAME floor the arm seam judges (canon 28)
 		Regime:            regime,
 		Levels:            scored,
 		Pool:              pool,

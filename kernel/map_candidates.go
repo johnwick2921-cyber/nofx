@@ -130,6 +130,12 @@ type MapCandidateOpts struct {
 	// risk is impossible by construction. Zero → the stop floor
 	// (MinSLATRMult() × atr5m), which is exactly that guarantee.
 	MinTargetDistance float64
+	// MinRR is the A2 column's resolved floor: the min_tgt≥Npts value is
+	// MinSLATRMult() × atr5m × this floor. Zero → PlannerArmMinRR (the prompt's
+	// own feasibility contract — the same value the FEASIBILITY CONTRACT
+	// states). The executor passes its resolvedMinRR(cfg) so the prompt and the
+	// arm seam judge with ONE floor (canon 28, CTO fold 2026-09-25).
+	MinRR float64
 }
 
 // BuildMapCandidates is the W3 selection path: merge overlapping references,
@@ -207,6 +213,7 @@ func BuildMapCandidates(scored []ScoredLevel, price, atr5m float64, opts MapCand
 	}
 
 	assignMapRoles(out, price, minTarget)
+	setMinTargetColumn(out, atr5m, opts.MinRR)
 
 	// D4 — the entry shortlist orders by REACHABILITY: nearest first, in ATR5m
 	// when it is available and in points when it is not. [I] until E4.
@@ -279,6 +286,7 @@ func BuildMapWithProjections(scored []ScoredLevel, projections []MapCandidate, p
 	}
 
 	assignMapRoles(out, price, minTarget)
+	setMinTargetColumn(out, atr5m, opts.MinRR)
 	sort.SliceStable(out, func(i, j int) bool {
 		di, dj := math.Abs(out[i].Distance), math.Abs(out[j].Distance)
 		if di != dj {
@@ -287,6 +295,23 @@ func BuildMapWithProjections(scored []ScoredLevel, projections []MapCandidate, p
 		return out[i].Score > out[j].Score
 	})
 	return out
+}
+
+// setMinTargetColumn stamps the A2 column on every candidate: the minimum
+// target DISTANCE the planner must clear, = min-SL floor × the resolved R:R
+// floor. Omitted (0) when ATR is absent — canon 49, an uncomputed value is not
+// a fabricated one.
+func setMinTargetColumn(cs []MapCandidate, atr5m, minRR float64) {
+	if atr5m <= 0 {
+		return
+	}
+	if minRR <= 0 {
+		minRR = PlannerArmMinRR
+	}
+	pts := MinSLATRMult() * atr5m * minRR
+	for i := range cs {
+		cs[i].MinTargetPts = pts
+	}
 }
 
 // EntryShortlist returns only the entry candidates, in the reachability order

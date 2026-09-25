@@ -60,13 +60,18 @@ type PlannerInput struct {
 	// with an unknown formation close carry a stable id (never NULL).
 	GeometryRefIDs bool
 	// PlannerContractOn gates the A3 prompt additions (confirming close,
-	// planned_order entry policy, nonzero-risk economics, REJECT composed-stop
-	// exception). Shipped default ON; OFF renders the pre-A3 bytes exactly
-	// (pinned by TestW3PlannerPromptLegacyPolicyByteIdentical).
+	// the legality schema, the planned_order entry policy, the REJECT
+	// composed-stop exception, the A4 gap-reach law, the A5 obstacle chains) —
+	// nil=ON at the store, this field is the resolved bool.
 	PlannerContractOn bool
-	Regime            RegimeBlock
-	Levels            []ScoredLevel // Go-ranked, graded (P1.5) — the decision-critical block
-	StructureSummary  []string      // one line per timeframe
+	// MinTargetRR is the A2 min_tgt column's resolved R:R floor. Zero → the
+	// prompt's own PlannerArmMinRR (2.0); the executor passes its
+	// resolvedMinRR(cfg) so the prompt and the arm seam judge with ONE floor
+	// (canon 28).
+	MinTargetRR      float64
+	Regime           RegimeBlock
+	Levels           []ScoredLevel // Go-ranked, graded (P1.5) — the decision-critical block
+	StructureSummary []string      // one line per timeframe
 	// Structure (S1, 2026-09-16) — the STRUCTURE table; nil = knob off =
 	// nothing rendered (byte-identical prompt).
 	Structure *StructureMap
@@ -586,7 +591,7 @@ func BuildPlannerPrompt(in PlannerInput) string {
 		// distance in ATR5m, projections beyond the mapped range, and the entry
 		// shortlist in reachability order. Rendered BELOW the ranked table, which
 		// is left exactly as the scorer produced it (the score is untouched).
-		candidates := BuildMapCandidates(in.Levels, in.Price, in.ATR5m, MapCandidateOpts{})
+		candidates := BuildMapCandidates(in.Levels, in.Price, in.ATR5m, MapCandidateOpts{MinRR: in.MinTargetRR})
 		// W-GEOMETRY-REFUSAL (2026-09-18) — with day_plan.geometry_reference_levels
 		// ON (the owner's default), reference-anchor levels whose formation close
 		// is unknown get a STABLE sha id instead of NULL, so the planner can author

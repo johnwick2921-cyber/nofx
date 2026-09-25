@@ -358,8 +358,8 @@ func tickRound(p, tick float64) float64 {
 type pathCandidate struct {
 	price float64 // tick-rounded
 	label string
-	dist  float64  // from entry, in the trade direction
-	id    *string  // the map row's id; nil = NULL (canon 49)
+	dist  float64 // from entry, in the trade direction
+	id    *string // the map row's id; nil = NULL (canon 49)
 }
 
 // onPath returns the candidates strictly between entry and target in the
