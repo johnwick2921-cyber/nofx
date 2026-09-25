@@ -273,9 +273,24 @@ func releaseSignerKeys(path string) ([][]byte, error) {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		fields := strings.FieldsFunc(line, isAllowedSignersSep)
+		// P0 (review fold): the principal field is extracted with
+		// ssh-keygen's strdelimw quote semantics (OpenSSH 9.6p1, misc.c):
+		// the token ends at the first whitespace or quote; if that first
+		// delimiter is a quote, the OPENING quote is dropped and the token
+		// ends at the NEXT quote (no closing quote ⇒ the line is invalid);
+		// the quoted content is kept verbatim, commas included. A naive
+		// comma split of the raw field trusted `release` segments inside a
+		// quoted principal that ssh-keygen parses as one name — accepting
+		// what the tool refuses. Deliberate deviation, per the standing
+		// ruling: CR/LF are NOT token terminators here (stricter — the tool
+		// accepts a CR-separated line, we refuse it).
+		principals, rest, ok := sshKeygenPrincipalsToken(line)
+		if !ok {
+			return nil, fmt.Errorf("%w: %s:%d: unterminated quote in the principals field", ErrAllowedSignersBad, path, i+1)
+		}
+		fields := strings.FieldsFunc(rest, isAllowedSignersSep)
 		forRelease, negated := false, false
-		for _, p := range strings.Split(fields[0], ",") {
+		for _, p := range strings.Split(principals, ",") {
 			forRelease = forRelease || p == ReleaseSignaturePrincipal
 			negated = negated || strings.HasPrefix(p, "!")
 		}
@@ -284,16 +299,23 @@ func releaseSignerKeys(path string) ([][]byte, error) {
 		if !forRelease || negated {
 			continue
 		}
-		if len(fields) < 3 {
+		if len(fields) < 2 {
 			return nil, fmt.Errorf("%w: %s:%d: a release line needs <principals> <keytype> <base64>", ErrAllowedSignersBad, path, i+1)
 		}
-		if !looksLikeKeyType(fields[1]) {
-			return nil, fmt.Errorf("%w: %s:%d: options on a release line are not supported (%q)", ErrAllowedSignersBad, path, i+1, fields[1])
+		// The keytype is the FIRST token after the principals (the tool parses
+		// the key field with sshkey_read; anything else is an option list it
+		// skips before re-reading — options this verifier does not implement,
+		// so the line refuses). This also closes the P0 second half:
+		// `"release",evil ssh-ed25519 …` leaves `,evil` as that first token
+		// and the tool refuses ("bad options: unknown key option") — trusting
+		// the keytype two fields later would accept what the tool refuses.
+		if !looksLikeKeyType(fields[0]) {
+			return nil, fmt.Errorf("%w: %s:%d: options on a release line are not supported (%q)", ErrAllowedSignersBad, path, i+1, fields[0])
 		}
-		if fields[1] != sshEd25519 {
+		if fields[0] != sshEd25519 {
 			continue // can never verify under this policy; admits nothing
 		}
-		blob, err := base64.StdEncoding.DecodeString(fields[2])
+		blob, err := base64.StdEncoding.DecodeString(fields[1])
 		if err != nil {
 			return nil, fmt.Errorf("%w: %s:%d: key is not base64: %w", ErrAllowedSignersBad, path, i+1, err)
 		}
@@ -309,6 +331,38 @@ func releaseSignerKeys(path string) ([][]byte, error) {
 // space and tab — never unicode.IsSpace. ssh-keygen (sshsig.c, strdelimw)
 // also splits on CR/LF; ours does not, deliberately stricter on CR.
 func isAllowedSignersSep(r rune) bool { return r == ' ' || r == '\t' }
+
+// sshKeygenPrincipalsToken extracts the principal field of an allowed-signers
+// line exactly as OpenSSH 9.6p1 strdelimw does (misc.c): the token ends at the
+// first space/tab or quote; when that first delimiter is a quote, the opening
+// quote is DROPPED and the token ends at the next quote — the quoted content
+// is kept verbatim (commas and spaces included), and everything after the
+// closing quote belongs to the following fields. No backslash escapes exist.
+// ok=false means an unterminated quote, which the tool rejects as
+// "invalid line". Deliberate deviation: CR/LF do NOT terminate the token
+// (the tool treats them as whitespace; we stay stricter, per ruling
+// 1790279155144 (1)).
+func sshKeygenPrincipalsToken(line string) (principals, rest string, ok bool) {
+	idx := strings.IndexAny(line, " \t\"")
+	if idx < 0 {
+		return line, "", true // token runs to end of line; no further fields
+	}
+	if line[idx] != '"' {
+		return line[:idx], strings.TrimLeft(line[idx:], " \t"), true
+	}
+	// The tool memmoves the opening quote away and terminates the token at
+	// the next quote; an unterminated quote makes strdelimw return NULL.
+	// Everything before the opening quote is part of the token (OpenSSH's
+	// strpbrk finds the quote but the token runs from the line start).
+	body := line[idx+1:]
+	closeIdx := strings.IndexByte(body, '"')
+	if closeIdx < 0 {
+		return "", "", false
+	}
+	principals = line[:idx] + body[:closeIdx]
+	rest = strings.TrimLeft(body[closeIdx+1:], " \t")
+	return principals, rest, true
+}
 
 // looksLikeKeyType reports whether an allowed-signers field is a key type
 // rather than an option list (OpenSSH key type names).

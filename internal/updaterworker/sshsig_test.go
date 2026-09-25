@@ -247,6 +247,66 @@ func TestSSHSIGRefusesWrongPrincipal(t *testing.T) {
 	}
 }
 
+// acceptLikeTool asserts ssh-keygen ACCEPTS the fixture and so do we.
+func acceptLikeTool(t *testing.T, signers string, sig, msg []byte) {
+	t.Helper()
+	if err := keygenVerify(t, signers, sig, msg); err != nil {
+		t.Fatalf("fixture: ssh-keygen refuses: %v", err)
+	}
+	v, err := VerifySSHSIG(msg, sig, signers)
+	if err != nil {
+		t.Fatalf("VerifySSHSIG refused a signature ssh-keygen accepts: %v", err)
+	}
+	if v.Principal != "release" {
+		t.Fatalf("verdict = %+v", v)
+	}
+}
+
+// TestSSHSIGPrincipalQuotingMatchesSshKeygen is the P0 differential: the
+// principal field of an allowed-signers line is tokenized the way OpenSSH
+// 9.6p1 strdelimw tokenizes it (quotes drop, quoted content kept verbatim —
+// commas inside quotes do NOT split the principal list), so we never trust a
+// key ssh-keygen treats as part of a principal name. Every toolAccepts value
+// was measured on this box's ssh-keygen (OpenSSH 9.6p1), 2026-09-25.
+func TestSSHSIGPrincipalQuotingMatchesSshKeygen(t *testing.T) {
+	f := newSigFixture(t)
+	sig := f.signer.sign(t, f.msgPath, "release")
+	for _, tc := range []struct {
+		name        string
+		line        string
+		toolAccepts bool
+		want        error // when toolAccepts is false: the error ours must give
+	}{
+		// ssh-keygen ACCEPTS all of these (strdelimw drops ONE quote pair and
+		// the principal list splits on commas only outside quotes):
+		{"a quoted principal", `"release" ` + f.signer.pub, true, nil},
+		{"a quoted list naming release", `"release,evil" ` + f.signer.pub, true, nil},
+		{"a quote that opens mid-field", `a,"release" ` + f.signer.pub, true, nil},
+		{"a quote pair around the middle", `re"lease" ` + f.signer.pub, true, nil},
+		{"a quoted suffix in the list", `release,"x,y" ` + f.signer.pub, true, nil},
+		// ssh-keygen REFUSES all of these — and so must we:
+		{"a quote pair before the comma", `"x,y"z,release ` + f.signer.pub, false, ErrSigPrincipal},
+		{"a quote pair before a suffix", `"rel"ease ` + f.signer.pub, false, ErrSigPrincipal},
+		{"a quoted suffix after release", `release"evil" ` + f.signer.pub, false, ErrSigPrincipal},
+		{"an escaped principal", `rele\ase ` + f.signer.pub, false, ErrSigPrincipal},
+		{"a quoted principal then an option fragment", `"release",evil ` + f.signer.pub, false, ErrAllowedSignersBad},
+		{"a space inside the quotes", `"release evil" ` + f.signer.pub, false, ErrSigPrincipal},
+		{"a quote pair before the list split", `"rel",ease ` + f.signer.pub, false, ErrSigPrincipal},
+		{"an empty quoted principal", `"" ` + f.signer.pub, false, ErrSigPrincipal},
+		{"quoted text then the keytype field", `"x,y"release ` + f.signer.pub, false, ErrSigPrincipal},
+		{"an unterminated quote", `"release ` + f.signer.pub, false, ErrAllowedSignersBad},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			signers := writeAllowedSigners(t, f.dir, tc.line)
+			if tc.toolAccepts {
+				acceptLikeTool(t, signers, sig, f.msg)
+				return
+			}
+			refuseBoth(t, signers, sig, f.msg, false, tc.want)
+		})
+	}
+}
+
 func TestSSHSIGRefusesForeignKey(t *testing.T) {
 	f := newSigFixture(t)
 	foreign := newTestSigner(t, f.dir, "foreign")
