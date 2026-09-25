@@ -455,7 +455,10 @@ func TestRecoveryRestoreRefusesAnExistingFailedDistRatherThanNest(t *testing.T) 
 // dist. Re-running the full restore then stops at its first `mv -T` (nothing
 // to move) — safe, but it cannot finish — so the recovery text names the one
 // command that does: if the dist is absent, run only the second mv. Both are
-// RUN here on the rig's temp paths.
+// RUN here on the rig's temp paths. The crash itself is played with the
+// PRODUCTION dist restore line cut before its last " && " (U4F verify note 6:
+// never a copy of it), and the part cut off must BE the crash line — so a
+// change to the chain's order or names moves the test with it.
 func TestRecoveryRestoreFinishesAfterACrashBetweenTheTwoMoves(t *testing.T) {
 	r := newRig(t)
 	r.watchFail[boxNew] = true
@@ -467,20 +470,28 @@ func TestRecoveryRestoreFinishesAfterACrashBetweenTheTwoMoves(t *testing.T) {
 	restore := restoreLines(t, j, r.cfg.Target)
 	in, snap := *j.Install, *j.Snapshot
 	snapFiles := relFiles(t, snap.Dist)
-	text := RecoveryText(j, r.cfg.Target)
-	var only string
-	for _, l := range strings.Split(text, "\n") {
-		if i := strings.Index(l, "run only: "); i >= 0 && strings.Contains(l, in.Dist+" is ABSENT") {
-			only = strings.TrimSpace(l[i+len("run only: "):])
-		}
-	}
+	only := crashLine(j, r.cfg.Target)
 	if want := "mv -T " + in.Dist + ".recovery.tmp " + in.Dist; only != want {
-		t.Fatalf("the recovery text has no crash-between-the-moves line (got %q, want %q):\n%s", only, want, text)
+		t.Fatalf("the recovery text has no crash-between-the-moves line (got %q, want %q):\n%s", only, want, RecoveryText(j, r.cfg.Target))
 	}
-	// play the crash: the first mv ran, the second did not
+	// the production dist line, cut before its last move: what ran before the crash
+	distLine := restore[2]
+	k := strings.LastIndex(distLine, " && ")
+	if !strings.HasPrefix(distLine, "rm -rf "+in.Dist+".recovery.tmp ") || k < 0 {
+		t.Fatalf("restore line 3 is not the dist restore: %q", distLine)
+	}
+	preCrash, lastMove := distLine[:k], distLine[k+len(" && "):]
+	if lastMove != only {
+		t.Fatalf("the dist restore's last move %q is not the crash-between-the-moves line %q", lastMove, only)
+	}
+	// play the crash: everything before the last move ran, the last move did not
 	writeFile(t, filepath.Join(in.Dist, "failed-run.txt"), "the live failed dist\n")
-	if out, err := runRestore([]string{fmt.Sprintf("rm -rf %[1]s.recovery.tmp && cp -a %[2]s %[1]s.recovery.tmp && mv -T %[1]s %[1]s.failed.%[3]s.crashed", in.Dist, snap.Dist, j.JobID)}, ""); err != nil {
-		t.Fatalf("playing the crash: %v\n%s", err, out)
+	if out, err := runRestore([]string{preCrash}, ""); err != nil {
+		t.Fatalf("playing the crash (%q): %v\n%s", preCrash, err, out)
+	}
+	aside, err := filepath.Glob(in.Dist + ".failed." + j.JobID + ".*")
+	if err != nil || len(aside) != 1 {
+		t.Fatalf("the crash left failed dists %v (%v), want exactly one", aside, err)
 	}
 	// a full re-run stops at its first mv -T and creates no dist
 	if out, err := runRestore(restore, ""); err == nil {
@@ -496,7 +507,7 @@ func TestRecoveryRestoreFinishesAfterACrashBetweenTheTwoMoves(t *testing.T) {
 	if got := relFiles(t, in.Dist); !maps.Equal(got, snapFiles) {
 		t.Fatalf("after the named line the live dist is %v, want the snapshot's %v", got, snapFiles)
 	}
-	if b, err := os.ReadFile(filepath.Join(in.Dist+".failed."+j.JobID+".crashed", "failed-run.txt")); err != nil || string(b) != "the live failed dist\n" {
+	if b, err := os.ReadFile(filepath.Join(aside[0], "failed-run.txt")); err != nil || string(b) != "the live failed dist\n" {
 		t.Fatalf("the failed dist's evidence was lost: %q %v", b, err)
 	}
 }
