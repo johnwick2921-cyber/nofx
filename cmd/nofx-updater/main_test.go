@@ -444,6 +444,7 @@ func TestASecondServeWithoutTheWorkerLockWritesNothing(t *testing.T) {
 type fetchRig struct {
 	inst, data, inbox, root string
 	r                       releasefixture.Release
+	instArg                 string // --install-dir as the operator types it ("" = inst)
 }
 
 const fetchID = "v0.0.2-u4n"
@@ -581,7 +582,43 @@ func TestFetchRefusesWithoutItsInputs(t *testing.T) {
 			f.env(t, f.inbox, in)
 			return []string{fetchID}
 		}, "outside the install"},
-		{"no allowed-signers in the install",func(t *testing.T, f *fetchRig) []string {
+		// U4F defect 2: containment resolves symlinks on BOTH sides first —
+		// text that looks outside can still point inside (probe P2).
+		{"release dir through a symlink to the install", func(t *testing.T, f *fetchRig) []string {
+			link := filepath.Join(t.TempDir(), "instlink")
+			if err := os.Symlink(f.inst, link); err != nil {
+				t.Fatal(err)
+			}
+			in := filepath.Join(f.inst, "rel")
+			if err := os.Mkdir(in, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			f.root = in
+			f.env(t, f.inbox, filepath.Join(link, "rel"))
+			return []string{fetchID}
+		}, "is not its own resolved path"},
+		{"release dir through a symlinked ancestor outside the install", func(t *testing.T, f *fetchRig) []string {
+			link := filepath.Join(t.TempDir(), "baselink")
+			if err := os.Symlink(filepath.Dir(f.root), link); err != nil {
+				t.Fatal(err)
+			}
+			f.env(t, f.inbox, filepath.Join(link, filepath.Base(f.root)))
+			return []string{fetchID}
+		}, "is not its own resolved path"},
+		{"install dir named through a symlink, release dir inside the real install", func(t *testing.T, f *fetchRig) []string {
+			link := filepath.Join(t.TempDir(), "instlink")
+			if err := os.Symlink(f.inst, link); err != nil {
+				t.Fatal(err)
+			}
+			in := filepath.Join(f.inst, "rel")
+			if err := os.Mkdir(in, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			f.instArg, f.root = link, in
+			f.env(t, f.inbox, in)
+			return []string{fetchID}
+		}, "outside the install"},
+		{"no allowed-signers in the install", func(t *testing.T, f *fetchRig) []string {
 			if err := os.Remove(updaterworker.ReleaseAllowedSignersPath(f.inst)); err != nil {
 				t.Fatal(err)
 			}
@@ -598,7 +635,11 @@ func TestFetchRefusesWithoutItsInputs(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			f := newFetchRig(t)
 			ops := c.setup(t, &f)
-			rc, out, errs := runCLI(t, nil, append([]string{"--install-dir", f.inst, "fetch"}, ops...)...)
+			inst := f.inst
+			if f.instArg != "" {
+				inst = f.instArg
+			}
+			rc, out, errs := runCLI(t, nil, append([]string{"--install-dir", inst, "fetch"}, ops...)...)
 			if rc == 0 || !strings.Contains(errs, c.want) || out != "" {
 				t.Fatalf("fetch = %d %q %q; want refused with %q", rc, out, errs, c.want)
 			}

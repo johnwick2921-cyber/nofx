@@ -35,7 +35,6 @@ import (
 	"strings"
 	"syscall"
 
-	"nofx/internal/installpath"
 	"nofx/internal/updaterjob"
 	"nofx/internal/updaterwire"
 	"nofx/internal/updaterwire/wireserver"
@@ -226,19 +225,12 @@ func fetch(t updaterworker.Target, releaseID string, stdout, stderr io.Writer) i
 	if !filepath.IsAbs(inbox) {
 		return refuse("%s=%q must be an absolute path", releaseInboxEnv, inbox)
 	}
-	root := installpath.ReleaseDir()
-	if root == "" {
-		return refuse("NOFX_RELEASE_DIR is not set (the release root the release is materialized under)")
-	}
-	if !filepath.IsAbs(root) {
-		return refuse("NOFX_RELEASE_DIR=%q must be an absolute path", root)
-	}
-	root = filepath.Clean(root)
-	// Containment compares path ELEMENTS, never a string prefix: "..rel" is a
-	// directory INSIDE the install whose name starts with "..", so the root is
-	// outside only when the relative path IS ".." or starts with "../".
-	if rel, err := filepath.Rel(t.InstallDir, root); err != nil || !(rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))) {
-		return refuse("NOFX_RELEASE_DIR=%s must be outside the install %s", root, t.InstallDir)
+	// the ONE release-root check (the re-proof adapter makes the same one):
+	// unset, relative, not its own resolved path, or inside the RESOLVED
+	// install — compared by path elements — refuses
+	root, err := updaterworker.ReleaseRoot(t.InstallDir)
+	if err != nil {
+		return refuse("%v", err)
 	}
 	v, err := updaterworker.FetchRelease(updaterworker.FetchConfig{
 		Archive:        filepath.Join(inbox, releaseID+".tar.gz"),
