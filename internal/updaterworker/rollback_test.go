@@ -497,3 +497,81 @@ func TestRecoveryRestoreFinishesAfterACrashBetweenTheTwoMoves(t *testing.T) {
 		t.Fatalf("the failed dist's evidence was lost: %q %v", b, err)
 	}
 }
+
+// crashLine is the recovery text's "if <dist> is ABSENT … run only: <cmd>"
+// command, exactly as printed ("" when the text has none).
+func crashLine(j updaterjob.Job, tg Target) string {
+	in := *j.Install
+	for _, l := range strings.Split(RecoveryText(j, tg), "\n") {
+		if i := strings.Index(l, "run only: "); i >= 0 && strings.Contains(l, in.Dist+" is ABSENT") {
+			return strings.TrimSpace(l[i+len("run only: "):])
+		}
+	}
+	return ""
+}
+
+// PIN (U4F verify note 1): `mv -T` guards the dist restore's SECOND move too.
+// Something re-creates <dist> (non-empty) between the two moves — played by an
+// `mv` first in PATH that runs the real mv and, right after the move that
+// takes <dist> aside, makes <dist> again. The production restore line then
+// REFUSES: the snapshot copy is not moved INTO the re-created dist (plain mv
+// would nest it there and report success), the intruder is untouched, and the
+// copy waits at <dist>.recovery.tmp. The crash-between-the-moves line is the
+// same move, so it refuses the same way while <dist> exists and finishes the
+// restore once the operator has moved the intruder away.
+func TestRecoveryRestoreRefusesADistRecreatedBetweenTheTwoMoves(t *testing.T) {
+	r := newRig(t)
+	r.watchFail[boxNew] = true
+	r.rollbackFail = true
+	j := r.runToEnd(t)
+	if j.State != updaterjob.StateRecoveryNeeded {
+		t.Fatalf("fixture: job %s", j.State)
+	}
+	restore := restoreLines(t, j, r.cfg.Target)
+	in, snap := *j.Install, *j.Snapshot
+	snapFiles := relFiles(t, snap.Dist)
+	only := crashLine(j, r.cfg.Target)
+	if only == "" {
+		t.Fatal("the recovery text has no crash-between-the-moves line")
+	}
+	bin := t.TempDir()
+	mvShim := "#!/bin/sh\n/usr/bin/mv \"$@\" || exit $?\nprev=; last=\nfor a in \"$@\"; do prev=$last; last=$a; done\n" +
+		"if [ \"$prev\" = '" + in.Dist + "' ]; then mkdir '" + in.Dist + "' && echo intruder > '" + in.Dist + "/intruder.txt'; fi\n"
+	writeFile(t, filepath.Join(bin, "mv"), mvShim)
+	if err := os.Chmod(filepath.Join(bin, "mv"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	intruder := map[string]string{"intruder.txt": "intruder\n"}
+	nested := filepath.Join(in.Dist, filepath.Base(in.Dist)+".recovery.tmp")
+	if out, err := runRestore(restore, bin); err == nil {
+		t.Fatalf("the restore's second move succeeded over a re-created dist (nested at %s: %v):\n%s", nested, fileThere(nested), out)
+	}
+	if fileThere(nested) {
+		t.Fatalf("the restore moved the snapshot copy INTO the re-created dist (%s)", nested)
+	}
+	if got := relFiles(t, in.Dist); !maps.Equal(got, intruder) {
+		t.Fatalf("the re-created dist is now %v, want only the intruder %v", got, intruder)
+	}
+	if got := relFiles(t, in.Dist+".recovery.tmp"); !maps.Equal(got, snapFiles) {
+		t.Fatalf("the snapshot copy is %v, want it waiting at %s.recovery.tmp as %v", got, in.Dist, snapFiles)
+	}
+	// the crash line's move is the same move: it refuses while <dist> exists …
+	if out, err := runRestore([]string{only}, ""); err == nil {
+		t.Fatalf("the crash-between-the-moves line succeeded over a re-created dist (nested: %v):\n%s", fileThere(nested), out)
+	}
+	if fileThere(nested) {
+		t.Fatalf("the crash-between-the-moves line moved the snapshot copy INTO the re-created dist (%s)", nested)
+	}
+	// … and finishes the restore once the intruder is moved away
+	if err := os.Rename(in.Dist, in.Dist+".intruder"); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := runRestore([]string{only}, ""); err != nil {
+		t.Fatalf("the crash-between-the-moves line: %v\n%s", err, out)
+	}
+	if got := relFiles(t, in.Dist); !maps.Equal(got, snapFiles) {
+		t.Fatalf("after the crash line the live dist is %v, want the snapshot's %v", got, snapFiles)
+	}
+}
+
+func fileThere(p string) bool { _, err := os.Lstat(p); return err == nil }
