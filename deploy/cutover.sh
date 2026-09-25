@@ -99,9 +99,10 @@ say "current: rev=$OLD_SHORT  releases → $RELEASES"
 # never-proven file on disk while the old process keeps serving. Reconcile the
 # way back against BOTH /api/health (the running process's own revision) and
 # the RELEASE marker. A mismatch, or neither consultable, refuses the cutover.
-HEALTH_REV="$(curl -s --max-time 5 http://127.0.0.1:8080/api/health 2>/dev/null \
+HEALTH_URL="${NOFX_HEALTH_URL:-http://127.0.0.1:8080/api/health}"
+HEALTH_REV="$(curl -s --max-time 5 "$HEALTH_URL" 2>/dev/null \
   | sed -n 's/.*"revision"[[:space:]]*:[[:space:]]*"\([0-9a-fA-F]*\)".*/\1/p' | tr 'A-F' 'a-f')"
-RELEASE_REV="$(tr -d '[:space:]' < "$INSTALL/RELEASE" 2>/dev/null | tr 'A-F' 'a-f')"
+RELEASE_REV="$([ -f "$INSTALL/RELEASE" ] && tr -d '[:space:]' < "$INSTALL/RELEASE" 2>/dev/null | tr 'A-F' 'a-f')"
 rev12() { v="$1"; if [ ${#v} -ge 12 ]; then printf '%s' "${v:0:12}"; else printf '%s' "$v"; fi; }
 OLD12="$(rev12 "$OLD_SHA")"
 if [ -n "$HEALTH_REV" ] && [ "$(rev12 "$HEALTH_REV")" != "$OLD12" ]; then
@@ -120,8 +121,9 @@ say "current reconciled: disk=$OLD_SHORT health=$(rev12 "${HEALTH_REV:-}") relea
 # The token comes from the environment and is never echoed, never logged, and
 # never accepted as an argument.
 [ -n "${NOFX_CUTOVER_TOKEN:-}" ] || die "cutover gate needs a token — set NOFX_CUTOVER_TOKEN (never pass it on the command line)"
+GATE_URL="${NOFX_GATE_URL:-http://127.0.0.1:8080/api/cutover-gate}"
 GATE="$(curl -s --max-time 10 -H "Authorization: Bearer ${NOFX_CUTOVER_TOKEN}" \
-         http://127.0.0.1:8080/api/cutover-gate 2>/dev/null || true)"
+         "$GATE_URL" 2>/dev/null || true)"
 [ -n "$GATE" ] || die "the cutover gate did not answer; refusing to kill a trader whose state is unknown"
 printf '%s\n' "$GATE" | sed 's/^/    gate: /'
 printf '%s' "$GATE" | grep -qi '"ready"[[:space:]]*:[[:space:]]*true' \
