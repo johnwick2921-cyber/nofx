@@ -18,7 +18,7 @@ import (
 )
 
 // wantGlueVerifier is the verifier the knob-ON server must hold and name.
-const wantGlueVerifier = "verifier=stub"
+const wantGlueVerifier = "verifier=verdict-file"
 
 // M3's bytes at 8d189a1e (golden literals; captured, not re-derived).
 const (
