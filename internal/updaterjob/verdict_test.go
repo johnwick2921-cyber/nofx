@@ -66,9 +66,11 @@ var verdictPathNames = map[string]bool{"VerdictPath": true, "verdictsDirName": t
 // verdictsDirName as an identifier or selector (a call, a function-value
 // alias, a Join argument), or spells the "verdicts" directory in a string
 // literal, is refused. A comment mention is not a reference and passes.
-// Inside verdict.go, VerdictPath may only be CALLED and verdictsDirName used
-// only in VerdictPath's own body, so verdict.go cannot hand a second name for
-// either to another file.
+// Inside verdict.go, VerdictPath may only be CALLED, and only inside
+// ReadVerdict; verdictsDirName is used only in VerdictPath's own body; and the
+// "verdicts" literal appears only as verdictsDirName's value — so verdict.go
+// cannot hand a second name for either (a wrapper, a second const) to another
+// file (verifier f13 defects 2+3). Limits are named at checkVerdictGoPathUses.
 func testVerdictPathOnlyInVerdictGo(t *testing.T) {
 	entries, err := os.ReadDir(".")
 	if err != nil {
@@ -97,14 +99,8 @@ func testVerdictPathOnlyInVerdictGo(t *testing.T) {
 					t.Errorf("%s references %s — only verdict.go may name the verdict path (the verdict's one writer is internal/updaterworker)", name, n.Name)
 				}
 			case *ast.BasicLit:
-				if n.Kind == token.STRING {
-					if v, err := strconv.Unquote(n.Value); err == nil {
-						for _, seg := range strings.Split(filepath.ToSlash(v), "/") {
-							if seg == verdictsDirName {
-								t.Errorf("%s spells the verdict directory %q in a string literal (%s) — only verdict.go may name the verdict path", name, verdictsDirName, n.Value)
-							}
-						}
-					}
+				if spellsVerdictsDir(n) {
+					t.Errorf("%s spells the verdict directory %q in a string literal (%s) — only verdict.go may name the verdict path", name, verdictsDirName, n.Value)
 				}
 			}
 			return true
@@ -116,15 +112,48 @@ func testVerdictPathOnlyInVerdictGo(t *testing.T) {
 	}
 }
 
-// checkVerdictGoPathUses holds verdict.go to CALLING VerdictPath and using
-// verdictsDirName only inside VerdictPath; it reports whether it saw both.
+// spellsVerdictsDir reports whether a string literal names the verdict
+// directory as one of its path segments.
+func spellsVerdictsDir(n *ast.BasicLit) bool {
+	if n.Kind != token.STRING {
+		return false
+	}
+	v, err := strconv.Unquote(n.Value)
+	if err != nil {
+		return false
+	}
+	for _, seg := range strings.Split(filepath.ToSlash(v), "/") {
+		if seg == verdictsDirName {
+			return true
+		}
+	}
+	return false
+}
+
+// checkVerdictGoPathUses holds verdict.go to CALLING VerdictPath only inside
+// ReadVerdict (its one reader today — a wrapper elsewhere in verdict.go would
+// hand the path to another file under a name the walk does not know), using
+// verdictsDirName only inside VerdictPath, and spelling the "verdicts"
+// directory in exactly ONE string literal: the verdictsDirName const's own
+// value (a second const/var with that value would be a second name the walk
+// does not know). It reports whether it saw the call and the use.
+//
+// Named limit [B]: a directory name BUILT from pieces ("verdict"+"s", a
+// runtime concatenation, a byte slice) is not a literal that spells it and is
+// not caught here; neither is a caller OUTSIDE this package that takes
+// VerdictPath's result and writes (only internal/updaterworker does today).
 func checkVerdictGoPathUses(t *testing.T, f *ast.File) bool {
 	t.Helper()
 	called, used := false, false
 	allowed := map[*ast.Ident]bool{}
+	allowedLit := map[*ast.BasicLit]bool{}
+	var readVerdict *ast.FuncDecl
 	for _, d := range f.Decls {
 		switch d := d.(type) {
 		case *ast.FuncDecl:
+			if d.Name.Name == "ReadVerdict" && d.Recv == nil {
+				readVerdict = d
+			}
 			if d.Name.Name == "VerdictPath" && d.Recv == nil {
 				allowed[d.Name] = true
 				ast.Inspect(d.Body, func(n ast.Node) bool {
@@ -137,26 +166,42 @@ func checkVerdictGoPathUses(t *testing.T, f *ast.File) bool {
 		case *ast.GenDecl:
 			for _, sp := range d.Specs {
 				if vs, ok := sp.(*ast.ValueSpec); ok && d.Tok == token.CONST {
-					for _, nm := range vs.Names {
+					for i, nm := range vs.Names {
 						if nm.Name == "verdictsDirName" {
 							allowed[nm] = true
+							if i < len(vs.Values) {
+								if lit, ok := vs.Values[i].(*ast.BasicLit); ok {
+									allowedLit[lit] = true
+								}
+							}
 						}
 					}
 				}
 			}
 		}
 	}
-	ast.Inspect(f, func(n ast.Node) bool {
-		if c, ok := n.(*ast.CallExpr); ok {
-			if id, ok := c.Fun.(*ast.Ident); ok && id.Name == "VerdictPath" {
-				allowed[id], called = true, true
+	if readVerdict == nil || readVerdict.Body == nil {
+		t.Errorf("verdict.go has no ReadVerdict — the one place VerdictPath may be called is gone; re-judge this pin")
+	} else {
+		ast.Inspect(readVerdict.Body, func(n ast.Node) bool {
+			if c, ok := n.(*ast.CallExpr); ok {
+				if id, ok := c.Fun.(*ast.Ident); ok && id.Name == "VerdictPath" {
+					allowed[id], called = true, true
+				}
 			}
-		}
-		return true
-	})
+			return true
+		})
+	}
 	ast.Inspect(f, func(n ast.Node) bool {
-		if id, ok := n.(*ast.Ident); ok && verdictPathNames[id.Name] && !allowed[id] {
-			t.Errorf("verdict.go uses %s other than by a call (VerdictPath) or inside VerdictPath (verdictsDirName) — a second name for the verdict path could reach another file", id.Name)
+		switch n := n.(type) {
+		case *ast.Ident:
+			if verdictPathNames[n.Name] && !allowed[n] {
+				t.Errorf("verdict.go uses %s other than by a call inside ReadVerdict (VerdictPath) or inside VerdictPath (verdictsDirName) — a second name for the verdict path could reach another file", n.Name)
+			}
+		case *ast.BasicLit:
+			if spellsVerdictsDir(n) && !allowedLit[n] {
+				t.Errorf("verdict.go spells the verdict directory %q in a string literal (%s) other than verdictsDirName's own value — a second name for the verdict path could reach another file", verdictsDirName, n.Value)
+			}
 		}
 		return true
 	})
