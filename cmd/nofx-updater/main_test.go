@@ -127,8 +127,7 @@ func TestServeRefusesUnlessBothAdaptersAreWired(t *testing.T) {
 	defer func() { newLibrary, newReverifier = productionNewLibrary, productionNewReverifier }()
 	notWired := func() (updaterworker.Library, error) { return nil, updaterworker.ErrNotWired }
 	// a serve that WRONGLY starts must end at once and touch no real home:
-	// its context is already cancelled and HOME is a temp dir
-	t.Setenv("HOME", t.TempDir())
+	// its context is already cancelled (HOME stays "" from above)
 	done, cancel := context.WithCancel(context.Background())
 	cancel()
 	serveContext = func() (context.Context, context.CancelFunc) { return done, cancel }
@@ -160,10 +159,10 @@ func TestServeRefusesUnlessBothAdaptersAreWired(t *testing.T) {
 		// U4F defect 4: a factory that hands back an adapter AND an error is a
 		// half-built adapter — the error alone refuses, whatever came with it
 		{"library returns an adapter AND an error", func() (updaterworker.Library, error) { return testLib{}, errHalfBuilt },
-			updaterworker.NewReleaseReverifier,
+			updaterworker.NewReleaseReverifier, true,
 			"activation library adapter: missing (" + errHalfBuilt.Error() + ") · release re-proof adapter: wired"},
 		{"re-proof returns an adapter AND an error", func() (updaterworker.Library, error) { return testLib{}, nil },
-			func(updaterworker.Target) (updaterworker.Reverifier, error) { return testRel{}, errHalfBuilt },
+			func(updaterworker.Target) (updaterworker.Reverifier, error) { return testRel{}, errHalfBuilt }, true,
 			"activation library adapter: wired · release re-proof adapter: missing (" + errHalfBuilt.Error() + ")"},
 		{"re-proof nil without an error", productionNewLibrary,
 			func(updaterworker.Target) (updaterworker.Reverifier, error) { return nil, nil }, true,
@@ -172,7 +171,7 @@ func TestServeRefusesUnlessBothAdaptersAreWired(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			newLibrary, newReverifier = c.lib, c.rel
 			rc, out, errs := runCLI(t, nil, "--install-dir", inst, "serve")
-			if rc != 2 || out != "" || !strings.Contains(errs, c.want) || strings.Contains(errs, "not wired yet") != c.refused {
+			if rc != 2 || out != "" || !strings.Contains(errs, c.want) || strings.Contains(errs, "adapter: missing") != c.refused {
 				t.Fatalf("serve = %d %q %q; want rc 2 naming %q (refused at the adapters: %v)", rc, out, errs, c.want, c.refused)
 			}
 			if strings.Contains(errs, "tok-cli-never-printed") {
