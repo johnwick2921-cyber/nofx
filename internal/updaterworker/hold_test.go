@@ -56,6 +56,19 @@ func TestTheWorkerHoldNeverCarriesWithdrawEntries(t *testing.T) {
 		"another job's updater hold": func(d string) error {
 			return store.WriteMaintenanceHold(d, store.MaintenanceHold{Held: true, JobID: "job-u4-9999abcd", Since: "2026-09-24T14:00:00Z", Owner: "updater"})
 		},
+		// U4 re-verify note 3 (mutants M4/M4b): OUR job id is not enough — a
+		// hold carrying it is ours only with owner "updater" and no
+		// withdraw_entries; taking any of these as "already held" would later
+		// clear an operator's (withdrawing) hold as if it were the worker's
+		"our job id, owner cli": func(d string) error {
+			return store.WriteMaintenanceHold(d, store.MaintenanceHold{Held: true, JobID: boxJobID, Since: "2026-09-24T14:00:00Z", Owner: "cli"})
+		},
+		"our job id, owner updater, withdraw_entries": func(d string) error {
+			return store.WriteMaintenanceHold(d, store.MaintenanceHold{Held: true, JobID: boxJobID, Since: "2026-09-24T14:00:00Z", Owner: "updater", WithdrawEntries: true})
+		},
+		"our job id, owner cli, withdraw_entries": func(d string) error {
+			return store.WriteMaintenanceHold(d, store.MaintenanceHold{Held: true, JobID: boxJobID, Since: "2026-09-24T14:00:00Z", Owner: "cli", WithdrawEntries: true})
+		},
 		"a corrupt hold": func(d string) error {
 			if err := os.MkdirAll(d+"/updater", 0o700); err != nil {
 				return err
