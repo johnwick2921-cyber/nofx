@@ -663,6 +663,66 @@ func TestAVerdictIsReprovedOnlyUnderTheCurrentReleaseRoot(t *testing.T) {
 	}
 }
 
+// PIN (U4F verify note 2): the refusal after the operator moved
+// NOFX_RELEASE_DIR names BOTH steps — remove the old verdict by hand (a
+// re-fetch alone refuses: the verdict is written once), then re-fetch — as
+// exact guidance, and FOLLOWING it works end to end through the production
+// entry: fetch into root A, move the knob to root B, run the two printed
+// commands as printed, and the wired re-proof's Verdict is ok under B.
+func TestAMovedReleaseRootRefusalNamesBothStepsAndFollowingThemWorks(t *testing.T) {
+	f := newFetchRig(t)
+	if rc, out, errs := runCLI(t, nil, "--install-dir", f.inst, "fetch", fetchID); rc != 0 {
+		t.Fatalf("fetch into A = %d %q %q", rc, out, errs)
+	}
+	tg, err := updaterworker.ResolveTarget(f.inst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := filepath.Join(t.TempDir(), "root-b")
+	if err := os.Mkdir(b, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f.env(t, f.inbox, b)
+	rel, err := newReverifier(tg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = rel.Verdict(fetchID)
+	vpath := filepath.Join(f.data, "updater", "verdicts", fetchID+".json")
+	want := fmt.Sprintf("release root refused: the verdict for %s names the release dir %s, not %s under the current NOFX_RELEASE_DIR — "+
+		"to use this release there: (1) remove the old verdict by hand: rm %s (2) then re-fetch it: nofx-updater --install-dir %s fetch %s",
+		fetchID, filepath.Join(f.root, fetchSHA), filepath.Join(b, fetchSHA), vpath, tg.InstallDir, fetchID)
+	if err == nil || err.Error() != want {
+		t.Fatalf("Verdict under the moved root = %v;\nwant exactly %q", err, want)
+	}
+	// follow the text, as printed
+	msg := err.Error()
+	i, k := strings.Index(msg, "by hand: "), strings.Index(msg, " (2) then re-fetch it: ")
+	if i < 0 || k < i {
+		t.Fatalf("no two steps in %q", msg)
+	}
+	rmCmd, fetchCmd := msg[i+len("by hand: "):k], strings.Fields(msg[k+len(" (2) then re-fetch it: "):])
+	if out, err := exec.Command("/bin/sh", "-c", rmCmd).CombinedOutput(); err != nil {
+		t.Fatalf("step 1 %q: %v %s", rmCmd, err, out)
+	}
+	if len(fetchCmd) == 0 || fetchCmd[0] != "nofx-updater" {
+		t.Fatalf("step 2 is not an nofx-updater command: %q", fetchCmd)
+	}
+	if rc, out, errs := runCLI(t, nil, fetchCmd[1:]...); rc != 0 {
+		t.Fatalf("step 2 %q = %d %q %q", fetchCmd, rc, out, errs)
+	}
+	v, err := rel.Verdict(fetchID)
+	if err != nil || v.ReleaseDir != filepath.Join(b, fetchSHA) {
+		t.Fatalf("Verdict after following the text = %+v, %v; want the verdict at %s", v, err, filepath.Join(b, fetchSHA))
+	}
+	if n, err := rel.Rehash(v); err != nil || n == 0 {
+		t.Fatalf("re-proof Rehash under B = %d, %v", n, err)
+	}
+	if facts, err := rel.Reverify(v); err != nil || facts.SourceSHA != fetchSHA {
+		t.Fatalf("re-proof Reverify under B = %+v, %v", facts, err)
+	}
+}
+
 // PIN (U4N item B): fetch refuses — and writes NO verdict and NO release dir —
 // without its knobs (C9: a local inbox, never a network source; the release
 // root the one resolver reads), with a release root inside the install, a

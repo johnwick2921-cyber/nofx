@@ -60,7 +60,15 @@ func (r releaseReverifier) Verdict(releaseID string) (Verdict, error) {
 		return Verdict{}, fmt.Errorf("release %s: %w", releaseID, err)
 	}
 	if want := filepath.Join(root, v.SourceSHA); v.ReleaseDir != want {
-		return Verdict{}, fmt.Errorf("%w: the verdict for %s names the release dir %s, not %s under the current NOFX_RELEASE_DIR — re-fetch it there", ErrReleaseRoot, releaseID, v.ReleaseDir, want)
+		// BOTH steps (U4F verify note 2): a re-fetch alone refuses — the
+		// verdict is written once — so the old verdict goes first, by hand.
+		vpath, perr := updaterjob.VerdictPath(r.dataDir, releaseID)
+		if perr != nil {
+			return Verdict{}, fmt.Errorf("%w: the verdict for %s names the release dir %s, not %s under the current NOFX_RELEASE_DIR (and its path: %w)", ErrReleaseRoot, releaseID, v.ReleaseDir, want, perr)
+		}
+		return Verdict{}, fmt.Errorf("%w: the verdict for %s names the release dir %s, not %s under the current NOFX_RELEASE_DIR — "+
+			"to use this release there: (1) remove the old verdict by hand: rm %s (2) then re-fetch it: nofx-updater --install-dir %s fetch %s",
+			ErrReleaseRoot, releaseID, v.ReleaseDir, want, vpath, r.installDir, releaseID)
 	}
 	return mirrorVerdict(v), nil
 }
