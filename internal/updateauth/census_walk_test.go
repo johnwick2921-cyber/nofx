@@ -39,7 +39,7 @@ func TestUpdateAuthCensusSeesNestedSkipNamedDirs(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		off, _, err := updateAuthOffenders(root)
+		off, _, err := updateAuthOffenders(t, root)
 		if err != nil {
 			t.Fatal(err)
 		}
