@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -768,6 +769,181 @@ func TestAMovedReleaseRootRefusalNamesBothStepsAndFollowingThemWorks(t *testing.
 	}
 	if facts, err := rel.Reverify(v); err != nil || facts.SourceSHA != fetchSHA {
 		t.Fatalf("re-proof Reverify under B = %+v, %v", facts, err)
+	}
+}
+
+// PIN (U4G verify defect 1, probe G1): the operator MOVED THE DIRECTORY —
+// fetch into A, mv A B, NOFX_RELEASE_DIR=B — so <B>/<sha> already exists and
+// a re-fetch would refuse ("never overwritten"). The refusal says so and
+// names the safe path BEFORE any rm: move that directory aside first, then
+// remove the verdict, then re-fetch. Following the printed text end to end
+// through the production entry ends with Verdict/Rehash/Reverify ok under B,
+// and the moved-aside bytes are kept, never deleted.
+func TestAMovedReleaseDirectoryRefusalMovesTheExistingDirAsideBeforeAnyRm(t *testing.T) {
+	f := newFetchRig(t)
+	if rc, out, errs := runCLI(t, nil, "--install-dir", f.inst, "fetch", fetchID); rc != 0 {
+		t.Fatalf("fetch into A = %d %q %q", rc, out, errs)
+	}
+	tg, err := updaterworker.ResolveTarget(f.inst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := filepath.Join(t.TempDir(), "root-b")
+	if err := os.Rename(f.root, b); err != nil { // mv A B
+		t.Fatal(err)
+	}
+	f.env(t, f.inbox, b)
+	rel, err := newReverifier(tg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = rel.Verdict(fetchID)
+	vpath := filepath.Join(f.data, "updater", "verdicts", fetchID+".json")
+	want := filepath.Join(b, fetchSHA)
+	aside := filepath.Join(b, ".aside-"+fetchSHA)
+	wantMsg := fmt.Sprintf("release root refused: the verdict for %s names the release dir %s, not %s under the current NOFX_RELEASE_DIR — "+
+		"%s already exists and a fetch never overwrites it, so do NOT remove the verdict first; "+
+		"to use this release there: (1) move that directory aside first: mv -T %s %s (2) then remove the old verdict by hand: rm %s (3) then re-fetch it: nofx-updater --install-dir %s fetch %s",
+		fetchID, filepath.Join(f.root, fetchSHA), want, want, want, aside, vpath, tg.InstallDir, fetchID)
+	if err == nil {
+		t.Fatal("Verdict after mv A B = ok; want refused")
+	}
+	msg := err.Error()
+	followPrintedSteps(t, msg) // behaviour first: the text, followed as printed, must work
+	v, err := rel.Verdict(fetchID)
+	if err != nil || v.ReleaseDir != want {
+		t.Fatalf("Verdict after following the text = %+v, %v; want the verdict at %s", v, err, want)
+	}
+	if n, err := rel.Rehash(v); err != nil || n == 0 {
+		t.Fatalf("re-proof Rehash under B = %d, %v", n, err)
+	}
+	if facts, err := rel.Reverify(v); err != nil || facts.SourceSHA != fetchSHA {
+		t.Fatalf("re-proof Reverify under B = %+v, %v", facts, err)
+	}
+	if _, err := os.Stat(filepath.Join(aside, "nofx-bin")); err != nil {
+		t.Fatalf("the moved-aside release was not kept: %v", err)
+	}
+	if msg != wantMsg {
+		t.Fatalf("Verdict after mv A B = %v;\nwant exactly %q", msg, wantMsg)
+	}
+}
+
+// PIN (U4G verify defect 1): when the existing <root>/<sha> is the CURRENT
+// release (<root>/current names it) the refusal prints NO rm and NO mv — only
+// "point NOFX_RELEASE_DIR back" (with the root moved back first when the
+// verdict's dir is gone) — and the verdict is untouched.
+func TestAMovedReleaseDirectoryThatIsCurrentIsNeverMovedOrItsVerdictRemoved(t *testing.T) {
+	f := newFetchRig(t)
+	if rc, out, errs := runCLI(t, nil, "--install-dir", f.inst, "fetch", fetchID); rc != 0 {
+		t.Fatalf("fetch into A = %d %q %q", rc, out, errs)
+	}
+	tg, err := updaterworker.ResolveTarget(f.inst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := filepath.Join(t.TempDir(), "root-b")
+	if err := os.Rename(f.root, b); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(fetchSHA, filepath.Join(b, "current")); err != nil {
+		t.Fatal(err)
+	}
+	f.env(t, f.inbox, b)
+	rel, err := newReverifier(tg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = rel.Verdict(fetchID)
+	want := filepath.Join(b, fetchSHA)
+	wantMsg := fmt.Sprintf("release root refused: the verdict for %s names the release dir %s, not %s under the current NOFX_RELEASE_DIR — "+
+		"%s already exists and a fetch never overwrites it, and it is the CURRENT release (%s names it): do not move it and do NOT remove the verdict; "+
+		"move the release root back so %s exists again, then point NOFX_RELEASE_DIR back at %s",
+		fetchID, filepath.Join(f.root, fetchSHA), want, want, filepath.Join(b, "current"), filepath.Join(f.root, fetchSHA), f.root)
+	if err == nil {
+		t.Fatal("Verdict with <B>/current naming the release = ok; want refused")
+	}
+	if strings.Contains(err.Error(), " rm ") || strings.Contains(err.Error(), "mv ") {
+		t.Fatalf("the refusal prints a destructive step for the CURRENT release: %q", err)
+	}
+	if err.Error() != wantMsg {
+		t.Fatalf("Verdict with <B>/current naming the release = %v;\nwant exactly %q", err, wantMsg)
+	}
+	if _, err := os.Stat(filepath.Join(f.data, "updater", "verdicts", fetchID+".json")); err != nil {
+		t.Fatalf("verdict gone: %v", err)
+	}
+}
+
+// PIN (U4G verify defect 1): <B>/<sha> exists AND the verdict's own dir still
+// exists — the refusal names BOTH ways out (point NOFX_RELEASE_DIR back, or
+// move the dir aside before any rm), and the printed steps still work end to
+// end through run().
+func TestAMovedReleaseRefusalWithBothDirsNamesPointingBackAndItsStepsWork(t *testing.T) {
+	f := newFetchRig(t)
+	if rc, out, errs := runCLI(t, nil, "--install-dir", f.inst, "fetch", fetchID); rc != 0 {
+		t.Fatalf("fetch into A = %d %q %q", rc, out, errs)
+	}
+	tg, err := updaterworker.ResolveTarget(f.inst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := filepath.Join(t.TempDir(), "root-b")
+	if err := os.MkdirAll(filepath.Join(b, fetchSHA), 0o755); err != nil { // placed by other means
+		t.Fatal(err)
+	}
+	f.env(t, f.inbox, b)
+	rel, err := newReverifier(tg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = rel.Verdict(fetchID)
+	want := filepath.Join(b, fetchSHA)
+	wantMsg := fmt.Sprintf("release root refused: the verdict for %s names the release dir %s, not %s under the current NOFX_RELEASE_DIR — "+
+		"%s already exists and a fetch never overwrites it, so do NOT remove the verdict first; or point NOFX_RELEASE_DIR back at %s, where the verdict's release still is; "+
+		"to use this release there: (1) move that directory aside first: mv -T %s %s (2) then remove the old verdict by hand: rm %s (3) then re-fetch it: nofx-updater --install-dir %s fetch %s",
+		fetchID, filepath.Join(f.root, fetchSHA), want, want, f.root, want, filepath.Join(b, ".aside-"+fetchSHA),
+		filepath.Join(f.data, "updater", "verdicts", fetchID+".json"), tg.InstallDir, fetchID)
+	if err == nil {
+		t.Fatal("Verdict with both dirs = ok; want refused")
+	}
+	msg := err.Error()
+	followPrintedSteps(t, msg)
+	if v, err := rel.Verdict(fetchID); err != nil || v.ReleaseDir != want {
+		t.Fatalf("Verdict after following the text = %+v, %v", v, err)
+	}
+	if msg != wantMsg {
+		t.Fatalf("Verdict with both dirs = %v;\nwant exactly %q", msg, wantMsg)
+	}
+}
+
+// followPrintedSteps runs the numbered steps after "to use this release
+// there: " exactly as printed: an nofx-updater command through the production
+// entry run(), anything else under /bin/sh. Every step must succeed.
+func followPrintedSteps(t *testing.T, msg string) {
+	t.Helper()
+	const lead = "to use this release there: "
+	i := strings.Index(msg, lead)
+	if i < 0 {
+		t.Fatalf("no steps in %q", msg)
+	}
+	var steps []string
+	for _, part := range regexp.MustCompile(`\(\d\) [^:]+: `).Split(msg[i+len(lead):], -1) {
+		if part = strings.TrimSpace(part); part != "" {
+			steps = append(steps, part)
+		}
+	}
+	if len(steps) == 0 {
+		t.Fatalf("no steps in %q", msg)
+	}
+	for n, s := range steps {
+		if args := strings.Fields(s); args[0] == "nofx-updater" {
+			if rc, out, errs := runCLI(t, nil, args[1:]...); rc != 0 {
+				t.Fatalf("step %d %q = %d %q %q", n+1, s, rc, out, errs)
+			}
+			continue
+		}
+		if out, err := exec.Command("/bin/sh", "-c", s).CombinedOutput(); err != nil {
+			t.Fatalf("step %d %q: %v %s", n+1, s, err, out)
+		}
 	}
 }
 

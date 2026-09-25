@@ -20,7 +20,10 @@ package updaterworker
 // Verdict.file); TestVerdictMirrorIsTheVerdictFile pins its field parity.
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"path/filepath"
 
 	"nofx/internal/updaterjob"
@@ -60,17 +63,89 @@ func (r releaseReverifier) Verdict(releaseID string) (Verdict, error) {
 		return Verdict{}, fmt.Errorf("release %s: %w", releaseID, err)
 	}
 	if want := filepath.Join(root, v.SourceSHA); v.ReleaseDir != want {
-		// BOTH steps (U4F verify note 2): a re-fetch alone refuses — the
-		// verdict is written once — so the old verdict goes first, by hand.
+		head := fmt.Sprintf("the verdict for %s names the release dir %s, not %s under the current NOFX_RELEASE_DIR", releaseID, v.ReleaseDir, want)
 		vpath, perr := updaterjob.VerdictPath(r.dataDir, releaseID)
 		if perr != nil {
-			return Verdict{}, fmt.Errorf("%w: the verdict for %s names the release dir %s, not %s under the current NOFX_RELEASE_DIR (and its path: %w)", ErrReleaseRoot, releaseID, v.ReleaseDir, want, perr)
+			return Verdict{}, fmt.Errorf("%w: %s (and its path: %w)", ErrReleaseRoot, head, perr)
 		}
-		return Verdict{}, fmt.Errorf("%w: the verdict for %s names the release dir %s, not %s under the current NOFX_RELEASE_DIR — "+
-			"to use this release there: (1) remove the old verdict by hand: rm %s (2) then re-fetch it: nofx-updater --install-dir %s fetch %s",
-			ErrReleaseRoot, releaseID, v.ReleaseDir, want, vpath, r.installDir, releaseID)
+		return Verdict{}, fmt.Errorf("%w: %s — %s", ErrReleaseRoot, head, movedRootGuidance(root, want, v.ReleaseDir, vpath, r.installDir, releaseID))
 	}
 	return mirrorVerdict(v), nil
+}
+
+// movedRootGuidance is the refusal's way out when a verdict names a release
+// dir that is not <root>/<sha> under the current release root. Every case it
+// can be printed in is correct when followed as printed (U4G verify defect 1):
+//
+//   - <root>/<sha> absent (the operator moved only NOFX_RELEASE_DIR): BOTH
+//     steps (U4F verify note 2) — the verdict is written once, so it goes
+//     first, by hand, then the re-fetch;
+//   - <root>/<sha> present (the operator MOVED THE DIRECTORY, mv A B): a
+//     re-fetch would refuse ("never overwritten"), so removing the verdict
+//     first would leave nothing usable — the text says so and moves that dir
+//     aside BEFORE the rm (bytes kept, never deleted), and names pointing
+//     NOFX_RELEASE_DIR back when the verdict's dir still exists;
+//   - <root>/<sha> is the CURRENT release (<root>/current names it), or that
+//     cannot be checked, or <root>/<sha> itself cannot be checked: NO rm and
+//     NO mv is printed — only pointing NOFX_RELEASE_DIR back (after moving the
+//     root back when the verdict's dir is gone). Fail-closed default.
+//
+// Commands are not shell-quoted (the RecoveryText convention; a named limit).
+func movedRootGuidance(root, want, verdictDir, vpath, installDir, releaseID string) string {
+	fetch := fmt.Sprintf("nofx-updater --install-dir %s fetch %s", installDir, releaseID)
+	oldRoot := filepath.Dir(verdictDir)
+	_, oerr := os.Lstat(verdictDir)
+	oldThere := oerr == nil
+	_, werr := os.Lstat(want)
+	switch {
+	case errors.Is(werr, fs.ErrNotExist):
+		return fmt.Sprintf("to use this release there: (1) remove the old verdict by hand: rm %s (2) then re-fetch it: %s", vpath, fetch)
+	case werr != nil:
+		return pointBack(fmt.Sprintf("%s cannot be checked (%v), so do not move anything and do NOT remove the verdict", want, werr), verdictDir, oldRoot, oldThere)
+	}
+	cur := filepath.Join(root, "current")
+	isCur, cerr := namesDir(cur, want)
+	switch {
+	case cerr != nil:
+		return pointBack(fmt.Sprintf("%s already exists and a fetch never overwrites it, and whether it is the CURRENT release cannot be checked (%s: %v): do not move it and do NOT remove the verdict", want, cur, cerr), verdictDir, oldRoot, oldThere)
+	case isCur:
+		return pointBack(fmt.Sprintf("%s already exists and a fetch never overwrites it, and it is the CURRENT release (%s names it): do not move it and do NOT remove the verdict", want, cur), verdictDir, oldRoot, oldThere)
+	}
+	alt := ""
+	if oldThere {
+		alt = fmt.Sprintf("or point NOFX_RELEASE_DIR back at %s, where the verdict's release still is; ", oldRoot)
+	}
+	return fmt.Sprintf("%s already exists and a fetch never overwrites it, so do NOT remove the verdict first; %s"+
+		"to use this release there: (1) move that directory aside first: mv -T %s %s (2) then remove the old verdict by hand: rm %s (3) then re-fetch it: %s",
+		want, alt, want, filepath.Join(root, ".aside-"+filepath.Base(want)), vpath, fetch)
+}
+
+// pointBack is the no-rm, no-mv way out: point NOFX_RELEASE_DIR back at the
+// root the verdict names, after moving that root back when its dir is gone.
+func pointBack(why, verdictDir, oldRoot string, oldThere bool) string {
+	if oldThere {
+		return fmt.Sprintf("%s; point NOFX_RELEASE_DIR back at %s", why, oldRoot)
+	}
+	return fmt.Sprintf("%s; move the release root back so %s exists again, then point NOFX_RELEASE_DIR back at %s", why, verdictDir, oldRoot)
+}
+
+// namesDir reports whether the link at cur resolves to dir. An absent cur is
+// false; any other error (a dangling link, an unreadable element) is returned.
+func namesDir(cur, dir string) (bool, error) {
+	if _, err := os.Lstat(cur); errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	} else if err != nil {
+		return false, err
+	}
+	rc, err := filepath.EvalSymlinks(cur)
+	if err != nil {
+		return false, err
+	}
+	rd, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return false, err
+	}
+	return rc == rd, nil
 }
 
 // Rehash is RehashRelease over the verdict it is given.
