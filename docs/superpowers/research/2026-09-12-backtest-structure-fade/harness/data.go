@@ -13,7 +13,7 @@ import (
 	"sort"
 	"time"
 
-	_ "modernc.org/sqlite" // SQLite driver (same pure-Go driver the repo uses)
+	_ "nofx/store/sqlitedriver" // the ONE sqlite registration site (DS-102 fold, CTO 1790305899255)
 
 	"nofx/kernel"
 	"nofx/market"

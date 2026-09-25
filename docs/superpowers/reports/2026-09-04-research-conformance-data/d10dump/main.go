@@ -9,15 +9,15 @@ import (
 	"time"
 
 	"nofx/expectancy"
+	"nofx/store/sqlitedriver" // the ONE sqlite registration site (DS-102 fold, CTO 1790305899255)
 
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	gl "gorm.io/gorm/logger"
 )
 
 func main() {
 	dsn := os.Args[1]
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{Logger: gl.Default.LogMode(gl.Silent)})
+	db, err := gorm.Open(sqlitedriver.GormDialector(dsn), &gorm.Config{Logger: gl.Default.LogMode(gl.Silent)})
 	if err != nil {
 		fmt.Println("open:", err)
 		os.Exit(1)
