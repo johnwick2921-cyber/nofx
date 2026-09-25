@@ -10,9 +10,11 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -25,6 +27,9 @@ import (
 )
 
 const testJob = "job-u4-cli0abcd"
+
+// errHalfBuilt is a factory's error returned WITH a non-nil adapter (U4F defect 4).
+var errHalfBuilt = errors.New("adapter half-built")
 
 // install makes a short temp installation (the socket path must fit sun_path)
 // with a bot database, and returns its dir and data dir.
@@ -110,6 +115,17 @@ func TestServeAndFetchRefuseUntilTheAdaptersLand(t *testing.T) {
 		newReverifier = updaterworker.NewReleaseReverifier
 	}()
 	notWired := func() (updaterworker.Library, error) { return nil, updaterworker.ErrNotWired }
+	// a serve that WRONGLY starts must end at once and touch no real home:
+	// its context is already cancelled and HOME is a temp dir
+	t.Setenv("HOME", t.TempDir())
+	done, cancel := context.WithCancel(context.Background())
+	cancel()
+	serveContext = func() (context.Context, context.CancelFunc) { return done, cancel }
+	t.Cleanup(func() {
+		serveContext = func() (context.Context, context.CancelFunc) {
+			return signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		}
+	})
 	for _, c := range []struct {
 		name string
 		lib  func() (updaterworker.Library, error)
@@ -127,6 +143,14 @@ func TestServeAndFetchRefuseUntilTheAdaptersLand(t *testing.T) {
 			"activation library adapter: missing (updaterworker: not wired yet) · release re-proof adapter: missing"},
 		{"library nil without an error", func() (updaterworker.Library, error) { return nil, nil }, updaterworker.NewReleaseReverifier,
 			"activation library adapter: missing (nil) · release re-proof adapter: wired"},
+		// U4F defect 4: a factory that hands back an adapter AND an error is a
+		// half-built adapter — the error alone refuses, whatever came with it
+		{"library returns an adapter AND an error", func() (updaterworker.Library, error) { return testLib{}, errHalfBuilt },
+			updaterworker.NewReleaseReverifier,
+			"activation library adapter: missing (" + errHalfBuilt.Error() + ") · release re-proof adapter: wired"},
+		{"re-proof returns an adapter AND an error", func() (updaterworker.Library, error) { return testLib{}, nil },
+			func(updaterworker.Target) (updaterworker.Reverifier, error) { return testRel{}, errHalfBuilt },
+			"activation library adapter: wired · release re-proof adapter: missing (" + errHalfBuilt.Error() + ")"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			newLibrary, newReverifier = c.lib, c.rel
