@@ -908,6 +908,20 @@ func (c *StrategyConfig) UnmarshalJSON(data []byte) error {
 // list). Additive + defaults-off: a nil *DayPlanConfig (absent day_plan) leaves
 // an existing strategy byte-identical, and PlanEnabled=false is the master
 // switch even when the block is present. Lives at ROOT of StrategyConfig.
+// PictureHtf default timing knobs (DEFAULTS-SANE fold, DS-105 2026-09-25).
+// Sized from the production trace (PR #212 STEP 1 measurements + code read):
+// the evaluator's window is anchored at the 5m interval after the confirming
+// H1 close (nextFiveMBoundary); the live sink admits frames up to 30s old
+// (LiveFrameMaxAgeMs); a dropped boundary frame (measured at EVERY hour
+// storm) is recoverable only by the successor completed 5m frame, whose
+// receipt sits one 5m interval + the sink admission into the window (330s
+// worst). 360s = 330s worst + 30s margin; 30s freshness admits exactly every
+// frame the sink admitted. FLOOR-pinned in trader/picture_htf_floor_pins_test.go.
+const (
+	PictureHtfDefaultEntryWindowSec = 360
+	PictureHtfDefaultFreshnessSec   = 30
+)
+
 // PictureHtfConfig (W-PICTURE-HTF, 2026-09-19) — the named SIM entry mode's
 // knobs. The explicit defaults are ENGINEERING DEFAULTS chosen to translate the
 // owner's two pictures into repeatable rules; they are not research-proven
@@ -917,8 +931,8 @@ type PictureHtfConfig struct {
 	TickSize       float64 `json:"tick_size,omitempty"`        // default 0.25 (MNQ)
 	PivotWindow    int     `json:"pivot_window,omitempty"`     // default 120 completed 4H candles
 	SwingLookback  int     `json:"swing_lookback,omitempty"`   // default 24 completed 5m candles
-	EntryWindowSec int     `json:"entry_window_sec,omitempty"` // default 10s from the new 5m interval start
-	FreshnessSec   int     `json:"freshness_sec,omitempty"`    // default 2s max data age at evaluation
+	EntryWindowSec int     `json:"entry_window_sec,omitempty"` // default 360s from the new 5m interval start
+	FreshnessSec   int     `json:"freshness_sec,omitempty"`    // default 30s max data age at evaluation
 	MinRR          float64 `json:"min_rr,omitempty"`           // 0 = the strategy's configured min R:R
 }
 
@@ -940,10 +954,10 @@ func PictureHtfResolved(c *PictureHtfConfig) PictureHtfConfig {
 		out.SwingLookback = 24
 	}
 	if out.EntryWindowSec <= 0 {
-		out.EntryWindowSec = 10
+		out.EntryWindowSec = PictureHtfDefaultEntryWindowSec
 	}
 	if out.FreshnessSec <= 0 {
-		out.FreshnessSec = 2
+		out.FreshnessSec = PictureHtfDefaultFreshnessSec
 	}
 	return out
 }
