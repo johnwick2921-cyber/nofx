@@ -31,12 +31,13 @@ func (t *TCPTrader) InstallOrderedExecutions(traderID, exchangeID, exchangeType 
 	// The durable close consumer is the SAME recordClose the legacy close-sync
 	// path calls — one funnel, so the worker's receive-order close applies the
 	// same ownership routing, pnl attribution and (R6) ApplyNT8Exit parking.
-	pb := store.NewPositionBuilder(st.Position())
 	unreg, err := t.server.RegisterOrderedExecutionsFor(t.symbol, t.boundAccount, ntwire.OrderedExecutionHandlers{
 		Order: orderFn,
 		Fill:  t.handleFillInbound,
 		Close: func(p ntwire.PositionClosePayload) {
-			t.recordClose(traderID, exchangeID, exchangeType, st, pb, p)
+			// R6 — durable apply-or-park ON the worker: the exit is retained
+			// when its cumulative entry update has not landed yet.
+			t.recordCloseOrdered(traderID, exchangeID, exchangeType, st, p)
 		},
 	})
 	if err != nil {

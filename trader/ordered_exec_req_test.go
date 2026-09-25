@@ -155,3 +155,115 @@ func TestAcceptedRiskUsesThePostChangeBook(t *testing.T) {
 		t.Fatalf("accepted stop must come from the POST-change snapshot (29700), got %v — the PRE-change book leaked in", r.AcceptedStopPx)
 	}
 }
+
+// R6 — an exit that arrives BEFORE its cumulative entry update is RETAINED
+// (pending receipt) and applied after the entry lands. Production call sites:
+// the worker's close handler (recordCloseOrdered → ApplyNT8Exit) and the
+// worker's order handler with the post-entry retry (installNTOrderedExecutions).
+func TestExitBeforeCumulativeEntryIsRetainedThenApplied(t *testing.T) {
+	st, err := store.New(filepath.Join(t.TempDir(), "r6.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	srv := ntwire.NewTCPServer(nil)
+	srv.SetAddrForTest("127.0.0.1:0")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := srv.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = srv.Stop() })
+
+	var c net.Conn
+	for i := 0; i < 100 && c == nil; i++ {
+		cc, err := net.Dial("tcp", srv.ListenAddrForTest().String())
+		if err == nil {
+			deadline := time.Now().Add(20 * time.Millisecond)
+			for time.Now().Before(deadline) && !srv.IsConnected() {
+				time.Sleep(2 * time.Millisecond)
+			}
+			if srv.IsConnected() {
+				c = cc
+			} else {
+				_ = cc.Close()
+			}
+		} else if cc != nil {
+			_ = cc.Close()
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if c == nil {
+		t.Fatal("fake client never connected")
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	if err := ntwire.WriteFrame(c, ntwire.FrameHello, ntwire.HelloPayload{ProtocolVersion: ntwire.ProtocolVersion, Source: "vltrader-addon"}); err != nil {
+		t.Fatal(err)
+	}
+
+	nt := ntTrader.NewTCPTrader(srv, "MNQ", "Sim101")
+	at := &AutoTrader{id: "trader-1", store: st, exchange: "ninjatrader", trader: nt, exchangeID: "ex-1"}
+	at.installNTOrderedExecutions(nt)
+	t.Cleanup(func() {
+		at.orderedExecMu.Lock()
+		if at.orderedExecUnreg != nil {
+			at.orderedExecUnreg()
+		}
+		at.orderedExecMu.Unlock()
+	})
+
+	// 1. The exit arrives FIRST — no open row exists anywhere.
+	if err := ntwire.WriteFrame(c, ntwire.FramePositionClose, ntwire.PositionClosePayload{SignalID: "sig-r6", Symbol: "MNQ", PositionSide: "long", Account: "Sim101", Quantity: 1, ExitPrice: 29360, ExitReason: "sl", ExitTime: time.Now().UTC().Add(-time.Second).Format(time.RFC3339)}); err != nil {
+		t.Fatal(err)
+	}
+	var pending []store.NT8ExitReceipt
+	deadline := time.Now().Add(4 * time.Second)
+	for time.Now().Before(deadline) {
+		if pending, err = st.Position().PendingNT8Exits("Sim101"); err == nil && len(pending) == 1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(pending) != 1 {
+		t.Fatalf("the early exit must be RETAINED as a pending receipt, got %d (err=%v)", len(pending), err)
+	}
+	if pending[0].Applied {
+		t.Fatal("the pending receipt must not be applied while its entry is absent")
+	}
+
+	// 2. The cumulative entry update lands (with its snapshot), then the
+	// worker's order handler retries the parked exit.
+	ledger := st.ArmedOrders()
+	if err := ledger.UpsertArm(&store.ArmedOrderDB{TraderID: at.id, PlanID: "2026-09-25:R6", Version: 1, Session: "NY", Scenario: "S1", Side: "long", EntryPx: 29350, StopPx: 29345, TargetPx: 29380, State: "working", SignalID: "sig-r6"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ntwire.WriteFrame(c, ntwire.FrameOrderUpdate, ntwire.OrderUpdatePayload{SignalID: "sig-r6", State: "filled", FillPrice: 29350, Symbol: "MNQ", Account: "Sim101", Quantity: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ntwire.WriteFrame(c, ntwire.FrameOrderSnapshot, ntwire.OrderSnapshotPayload{Account: "Sim101", BuildID: "test", Orders: []ntwire.NT8Order{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	// 3. The parked exit applies after the entry: the receipt flips, the
+	// position exists and is CLOSED with the receipt's pnl.
+	deadline = time.Now().Add(4 * time.Second)
+	var applied []store.NT8ExitReceipt
+	for time.Now().Before(deadline) {
+		if pending, err = st.Position().PendingNT8Exits("Sim101"); err == nil && len(pending) == 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(pending) != 0 {
+		t.Fatalf("the parked exit must apply once the entry lands; still pending: %d", len(pending))
+	}
+	_ = applied
+	closedRows, cerr := st.Position().GetUngradedClosedPositions(at.id, 0, 10)
+	if cerr != nil || len(closedRows) == 0 {
+		t.Fatalf("after the entry lands the exit must close the row: %v", cerr)
+	}
+	if closedRows[0].Status != "CLOSED" || closedRows[0].RealizedPnL == 0 {
+		t.Fatalf("the applied exit must close the row with realized pnl: %+v", closedRows[0])
+	}
+}

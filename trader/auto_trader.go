@@ -1140,8 +1140,8 @@ func (at *AutoTrader) Stop() {
 		at.orderedExecUnreg = nil
 	}
 	at.orderedExecMu.Unlock()
-	close(at.stopMonitorCh)        // Notify monitoring goroutine to stop
-	at.monitorWg.Wait()            // Wait for monitoring goroutine to finish
+	close(at.stopMonitorCh) // Notify monitoring goroutine to stop
+	at.monitorWg.Wait()     // Wait for monitoring goroutine to finish
 	logger.Info("⏹ Automatic trading system stopped")
 }
 
@@ -1381,7 +1381,14 @@ func (at *AutoTrader) installNTOrderedExecutions(nt *ntTrader.TCPTrader) {
 		return
 	}
 	unreg, err := nt.InstallOrderedExecutions(at.id, at.exchangeID, at.exchange, at.store,
-		func(u ntwire.OrderUpdatePayload) { at.onArmedOrderUpdate(u, at.store.ArmedOrders()) })
+		func(u ntwire.OrderUpdatePayload) {
+			at.onArmedOrderUpdate(u, at.store.ArmedOrders())
+			// R6 — a cumulative entry update is exactly what a parked exit was
+			// waiting for: retry the account's pending exit receipts now.
+			if strings.EqualFold(u.State, "filled") || strings.EqualFold(u.State, "partfilled") {
+				nt.RetryPendingNT8Exits(at.store)
+			}
+		})
 	if err != nil {
 		at.logErrorf("❌ ordered-execution install refused (%v) — the durable consumers stay on the legacy advisory path", err)
 		return
