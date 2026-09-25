@@ -19,8 +19,9 @@
 // live binary, never systemd, never :8080:
 //
 //	Library     the activation library (103's internal/activation at #201 head
-//	            afd60391) — mirrored here EXACTLY; the real adapter
-//	            (library_activation.go) is written after #201 merges to dev
+//	            afd60391) — mirrored here EXACTLY; the real adapter is
+//	            library_activation.go (NewActivationLibrary), one-line
+//	            delegations, parity-pinned by TestAdapterReceiptParity
 //	Reverifier  the release re-proof (U3's updaterjob.ReadVerdict /
 //	            RehashRelease / ReverifyRelease) — the production adapter is
 //	            reverifier.go (NewReleaseReverifier)
