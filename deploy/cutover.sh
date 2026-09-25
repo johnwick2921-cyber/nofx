@@ -64,7 +64,7 @@ fi
 # runs is the one that answers here. The manifest records what the operator
 # asserted; verify decides whether the binary agrees.
 STAGE_DIR="$(mktemp -d -t nofx-cutover.XXXXXX)"
-trap 'rm -rf "$STAGE_DIR"; [ -n "${ACTIVATE:-}" ] && [ -z "${NOFX_ACTIVATE_BIN:-}" ] && rm -f "$ACTIVATE"' EXIT
+trap 'rm -rf "$STAGE_DIR"; [ -n "${ACTIVATE:-}" ] && [ -z "${NOFX_ACTIVATE_BIN:-}" ] && rm -f "$ACTIVATE"; rm -f "${TOKEN_HDR:-}"' EXIT
 [ -f "$NEW_BIN" ] || die "new binary $NEW_BIN not found"
 cp "$NEW_BIN" "$STAGE_DIR/nofx-bin" || die "cannot stage $NEW_BIN"
 NEW_MD5="$(md5sum "$STAGE_DIR/nofx-bin" | cut -d' ' -f1)"
@@ -126,8 +126,15 @@ say "current reconciled: disk=$OLD_SHORT health=$(rev12 "${HEALTH_REV:-}") relea
 # accepted as an argument.
 [ -n "${NOFX_CUTOVER_TOKEN:-}" ] || die "cutover gate needs a token — set NOFX_CUTOVER_TOKEN (never pass it on the command line)"
 GATE_URL="${NOFX_GATE_URL:-http://127.0.0.1:8080/api/installation-gate}"
-GATE="$(curl -s --max-time 10 -H "Authorization: Bearer ${NOFX_CUTOVER_TOKEN}" \
-         "$GATE_URL" 2>/dev/null || true)"
+# The token never rides ANY process's argv ([25]/[29]): it is written to a 0600
+# header file and handed to curl as -H @file, so ps and /proc/<pid>/cmdline show
+# only the file path for the call's lifetime, and the file is removed on every
+# exit path.
+TOKEN_HDR="$(mktemp -t nofx-cutover-hdr.XXXXXX)" || die "cannot create the token header file; refusing"
+( umask 077; printf 'Authorization: Bearer %s' "$NOFX_CUTOVER_TOKEN" > "$TOKEN_HDR" ) \
+  || { rm -f "$TOKEN_HDR"; die "cannot write the token header file; refusing"; }
+GATE="$(curl -s --max-time 10 -H "@$TOKEN_HDR" "$GATE_URL" 2>/dev/null || true)"
+rm -f "$TOKEN_HDR"
 [ -n "$GATE" ] || die "the installation gate did not answer; refusing to kill a trader whose state is unknown"
 LEGS="$(printf '%s' "$GATE" | jq -r '.legs[]? | "\(.name)\t\(.pass)"' 2>/dev/null)" \
   || die "the installation gate answered something that is not a gate payload; refusing a cutover over unreadable state"

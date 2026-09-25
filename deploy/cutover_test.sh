@@ -59,7 +59,11 @@ cp "$BIN" "$WORK/inst/nofx-bin"
 mkdir -p "$WORK/inst/web/dist"
 printf 'fixture bundle carrying %s\n' "$SHA" > "$WORK/inst/web/dist/index.js"
 export NOFX_INSTALL="$WORK/inst"
-export NOFX_CUTOVER_TOKEN="fixture-token-not-a-secret"
+export NOFX_CUTOVER_TOKEN="DS102-SECRETMARKER-NOT-A-TOKEN"
+check_hdr_gone() { # the token header file must not survive any exit path
+  n=$(ls /tmp/nofx-cutover-hdr.* 2>/dev/null | wc -l)
+  check "$1" "$n" "0"
+}
 
 # --- a local HTTP server: /health serves a revision, /gate serves ready ------
 # The python interpreter is launched DIRECTLY with '&' (no function wrapper):
@@ -125,6 +129,8 @@ has   "F1 prints reconciled" "$OUT" "current reconciled"
 has   "F1 prints every leg"  "$OUT" "leg: trader_cutover:abc"
 has   "F1 dry run completes" "$OUT" "dry run complete"
 hasnt "F1 no refusal"        "$OUT" "refusing"
+hasnt "F1 token never printed" "$OUT" "$NOFX_CUTOVER_TOKEN"
+check_hdr_gone "F1 token header file removed"
 
 echo "== F2: disk != health -> refuses, names the mismatch =="
 start_server "{\"revision\":\"$OTHER\"}" "$GATE_OK"
@@ -153,6 +159,8 @@ check "F4 rc is nonzero"   "$([ $RC -ne 0 ] && echo nonzero || echo zero)" "nonz
 has   "F4 names the failing leg" "$OUT" "failing installation-gate legs: ledger_exposure"
 has   "F4 refuses the cutover"   "$OUT" "refusing"
 hasnt "F4 no dry-run completion" "$OUT" "dry run complete"
+hasnt "F4 token never printed" "$OUT" "$NOFX_CUTOVER_TOKEN"
+check_hdr_gone "F4 token header file removed"
 
 echo "== F5: a REQUIRED leg is absent -> refuses (unevaluable = failure) =="
 start_server "{\"revision\":\"$SHA\"}" "$GATE_NO_TRADER"

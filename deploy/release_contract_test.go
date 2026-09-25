@@ -505,6 +505,27 @@ func TestCutoverRefusesWithoutAPassingInstallationGate(t *testing.T) {
 	}
 }
 
+func TestCutoverTokenNeverRidesAProcessArgv(t *testing.T) {
+	sh := repoFile(t, "deploy/cutover.sh")
+	// Findings [25]/[29]: the token was interpolated into curl's -H header, i.e.
+	// argv, readable by any UID via ps//proc/<pid>/cmdline for the call's
+	// lifetime — while the script's own refusal text says "never pass it on the
+	// command line". The fold: a 0600 header file, curl -H @file, removed on
+	// every exit path.
+	if strings.Contains(sh, "Authorization: Bearer ${NOFX_CUTOVER_TOKEN}") {
+		t.Fatalf("the token must never be interpolated into curl's argv — it rides a header FILE")
+	}
+	if !strings.Contains(sh, `-H "@$TOKEN_HDR"`) {
+		t.Fatalf("curl must receive the header via -H @file")
+	}
+	if !strings.Contains(sh, "umask 077") {
+		t.Fatalf("the token header file must be written 0600")
+	}
+	if !strings.Contains(sh, `rm -f "${TOKEN_HDR:-}"`) {
+		t.Fatalf("the token header file must be removed on every exit path (trap)")
+	}
+}
+
 func TestCutoverRollbackRestartsAndProvesTheOldRev(t *testing.T) {
 	sh := repoFile(t, "deploy/cutover.sh")
 	// P1-c: after a failed boot the RUNNING process is the NEW binary, so a
