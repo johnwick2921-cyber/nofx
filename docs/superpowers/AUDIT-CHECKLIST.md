@@ -7537,3 +7537,47 @@ Two authenticated chats must retain their own selected model credentials through
 ## CLASS NN (assigned at merge) — a request-supplied key selects server-side per-owner state
 
 **Found:** 2026-09-25, W117 PR-D, porting #117 e39d2070 [A]. `HandleChat`/`HandleChatStream` read a `user_id` from the caller's request body — a request carrying another owner's numeric key selected THAT owner's persisted conversation history; the authenticated owner's own clear didn't address it. **Fixed:** HTTP conversation identity derives ONLY from the authenticated middleware (`WithStoreUserID`); the caller-supplied key is ignored; a caller census confirms the two chat handlers are mounted exclusively behind the auth middleware (no telegram/agent-door/internal callers exist today). **Probe:** any endpoint that persists or clears per-owner state must derive the owner from the AUTHENTICATED session, never from a request field — grep the body keys for `user_id`-shaped names and prove each is ignored.
+
+## CLASS NN (assigned at merge) — a filled armed row moved out of 'filled' by a racing pass
+
+**Found:** 2026-09-25, W117 slice A, F2 rebuild [A]. A late fill (order_update
+arriving after the armed pass had moved on) could be UNWOUND: the pass's
+`RequestCancel` or an invalidation `SetState` overwrote the row's state, so a
+fill the broker had executed was no longer ledger-visible as a position while
+the materialized position row said otherwise. **Fixed:** the store's `SetState`
+and `RequestCancel` now carry `AND state <> 'filled'` in their WHERE — a CAS on
+state: a filled row is terminal, no later writer can move it out. Pinned at the
+production call sites (store test + `TestLateFillSurvivesThePassCancelRequest`,
+RED by removing the guard). **Probe:** for every terminal state, list every
+writer that can change a row's state; each must carry the precondition, or be
+proven post-terminal.
+
+## CLASS NN (assigned at merge) — the pre-change broker book read at acceptance
+
+**Found:** 2026-09-25, W117 slice A, F2 rebuild [A]. The AddOn sends
+`order_update` THEN `order_snapshot` on the same state change
+(VLTraderTCPClient.cs ~1948 then ~1955). A consumer that applied the
+order_update the moment it arrived read the PRE-change broker book, so
+`recordAcceptedRisk` stamped the OLD prices as "what the broker accepted".
+**Fixed:** the ordered worker stamps each order_update with the snapshot
+watermark at enqueue and waits (bounded) for a post-update snapshot before
+applying; on timeout it applies with `BookGate=BookGateNotFresh` and the book is
+suppressed — never read stale. Pinned with the real frame order
+(`TestAcceptedRiskUsesThePostChangeBook`). **Probe:** for every read of a
+frame-fed cache by a durable consumer, name the frame that MUST precede the
+read, and pin the pair in receive order.
+
+## CLASS NN (assigned at merge) — an exit receipt dropped when it beat its cumulative entry
+
+**Found:** 2026-09-25, W117 slice A, F2 rebuild, porting #117 F3 [A]. A valid
+completed `position_close` could arrive before the later cumulative entry
+update; the old path hard-errored (losing the exit forever) or trimmed the
+evidence. **Fixed:** `recordCloseOrdered` → `store.ApplyNT8Exit`
+apply-or-park: one transaction reduces the exact owned residual, writes the
+deduped exit fill, flips the receipt and closes at zero residual; an incomplete
+or missing row RETAINS the receipt as pending, retried (idempotent) after the
+entry update lands. Pinned: `TestExitBeforeCumulativeEntryIsRetainedThenApplied`
+(RED: retry removed → the exit stays parked forever). **Probe:** every event
+whose write depends on an earlier event must either park-until-it-lands or
+prove the earlier event always wins by construction — never a hard error, never
+a silent drop.

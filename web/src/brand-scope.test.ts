@@ -122,6 +122,16 @@
 //   The bar-feed guards this pin protects are byte-untouched by both deltas:
 //   SubscribeBarsHistoryFor, the bars_history_request write, and the
 //   bars_history_data / _error fan-out.
+// Wire baselines advanced 2026-09-25 for W117 slice A (fix/w117-a2-ordered-exec,
+// the F2 rebuild — per-(symbol,account) FIFO workers instead of the failed
+// read-goroutine consumers), each delta measured against the PR base:
+//   provider/ninjatrader/tcp_framing.go — the three wire structs gain
+//     OrderedOwned / BookGate json:"-" fields (routing flags, never
+//     serialized). No identifier renamed, no frame type changed.
+//   provider/ninjatrader/tcp_server.go  — orderedMu/orderedOwners/snapSeq
+//     fields; the read loop enqueues order/fill/close to the owner's worker
+//     before the advisory channel send, and advances the snapshot watermark.
+//     The bar-feed guards this pin protects are byte-untouched by the delta.
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
