@@ -10,7 +10,7 @@ in CLAUDE.md).
 
 ## PART 1 — THE BUG CLASSES (name · root cause · probe · law)
 
-*Highest occupied class: **274** (2026-09-24). Numbers are assigned AT MERGE and
+Highest occupied class: **268** (2026-09-24). Numbers are assigned AT MERGE and
 never renumbered; a gap means a wave took a later slot to avoid a collision.*
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
@@ -7514,7 +7514,7 @@ That is the shape worth naming: a dry run proves the steps it REACHES. Code afte
 
 **Probe:** for every procedure with a rehearsal mode, list the steps the rehearsal never reaches and ask what tests them. If the answer is "nothing", they are exercised first in production. Either the rehearsal must reach them (a seam, a fixture, a `--force-through` for the safe parts) or they must be moved into code a unit test can call — the second is usually right, because a step that only a live cutover can exercise is a step nobody can afford to debug.
 
-## CLASS 269 — a cross-process hold specified as an in-process call
+## CLASS NN (assigned at merge) — a cross-process hold specified as an in-process call
 
 **Found:** 2026-09-24, WAVE 3b-B brief (CTO ruling 1790258770876) [A]. The M4 dispatch specified the updater's maintenance hold as `EntryBarrier.Hold(ctx)`. That barrier is an unexported package-level value in the TRADING APP (`trader/maintenance_gate.go:21 var maintenanceBarrier EntryBarrier`); the updater worker is a SEPARATE binary. Had the worker imported `trader`, it would have received its own inert copy of the barrier: every worker test green, and the app still trading.
 
@@ -7524,7 +7524,7 @@ That is the shape: a spec says "call X" where X's value lives in another process
 
 **Probe:** for every "call X" in a spec, ask which binary X's VALUE lives in (`go list -deps ./cmd/<caller>`), whether X is exported, and whether it is package state. If caller and owner are different binaries, the call cannot reach it: the spec needs a file, a socket or an HTTP route, and a reader on the owner's side.
 
-## CLASS 270 — per-step idempotence claimed for a kill
+## CLASS NN (assigned at merge) — per-step idempotence claimed for a kill
 
 **Found:** 2026-09-24, WAVE 3b-B brief C3 [A code, B outcome]. The activation library's contract said "every step is idempotent", but only `Backup` (`already=true`) is. `Activate`, `Rollback` and `RollbackTo` SIGKILL a recorded process identity; after a crash-resume that pid is gone (or recycled), so a blind re-run either refuses or signals the wrong process. A resumed `Watch` given a fresh `since` misses a boot line already written and reports a false RED.
 
@@ -7532,7 +7532,7 @@ That is the shape: a spec says "call X" where X's value lives in another process
 
 **Probe:** for each step, list its external side effects (kill, restart, file install). Replay the step after a simulated crash at each boundary, with the identity and time READ AT RESUME, not the persisted ones. "Idempotent" is a claim about the effect, and a kill's target does not survive the crash.
 
-## CLASS 271 — a boot proof a REFUSED boot satisfies
+## CLASS NN (assigned at merge) — a boot proof a REFUSED boot satisfies
 
 **Found:** 2026-09-24, WAVE 3b-B brief C13 [A]. "Booted" was judged by the new revision appearing in the log or in `/api/health`. A binary that starts and then REFUSES at boot integrity still prints its revision: the REFUSED line carries the same rev token, and health answers "ok" while trading is refused. Separately, health returns 12 characters, so a check `== source_sha` (40) could never pass.
 
@@ -7540,7 +7540,7 @@ That is the shape: a spec says "call X" where X's value lives in another process
 
 **Probe:** boot a build that FAILS boot integrity against the watcher; it must go RED. Diff the length of the revision the watcher compares against the length health actually returns. A proof must be one the failure mode cannot also produce.
 
-## CLASS 272 — a per-request refusal log under a polling client is a flood
+## CLASS NN (assigned at merge) — a per-request refusal log under a polling client is a flood
 
 **Found:** 2026-09-24, skeptic pass on live `4c05158b`, finding [5] (CTO ruling 1790280466263) [A]. `api/handler_updates.go` `updatesForbid` WARNed on EVERY refusal; the header badge polls `/api/updates` every 60 s, so an un-enrolled box wrote one 🔒 WARN and one `log_events` row per minute per open tab, forever. The signal drowns, and the log becomes a byte sink proportional to uptime.
 
@@ -7548,7 +7548,7 @@ That is the shape: a spec says "call X" where X's value lives in another process
 
 **Probe:** for every log call on a refusal path, find whether anything polls the route (grep the web for `setInterval` / `refetchInterval` against it), and count WARN lines per hour in the refusing state. Confirm which levels the `log_events` sink ships (`logger/db_sink.go` Levels): a DEBUG repeat is flood-free only if the sink drops DEBUG.
 
-## CLASS 273 — a package-registered process-wide name: green alone, panicking in the first binary that links both
+## CLASS NN (assigned at merge) — a package-registered process-wide name: green alone, panicking in the first binary that links both
 
 **Found:** 2026-09-24, WAVE 3b-B U4, while wiring the activation adapter; reproduced on dev `e401eb5e` [A]. `internal/activation/steps.go:14` blank-imported `github.com/glebarez/go-sqlite`, and `store/sqlitedriver/backend_default.go` imports `modernc.org/sqlite`: both register the database/sql driver `"sqlite"`. Each package's own tests are green. The first binary that links both, the updater worker (`hold.go` → `store`), panics at init before `main`: `panic: sql: Register called twice for driver sqlite` (rc 2). `nofx-activate` alone never trips it because it does not link `store`.
 
@@ -7558,7 +7558,7 @@ That is the shape: a spec says "call X" where X's value lives in another process
 
 **Probe:** for each `cmd/*` and each TEST binary that imports the worker side (`go list -deps -test ./<pkg>`, under the default build AND `-tags cgofree`, since the tag changes which driver `store/sqlitedriver` registers), intersect with packages that register process-global names (`sql.Register`, promauto/`MustRegister` names, `flag` names, `gob.Register`, `http.Handle` on `DefaultServeMux`). Build each binary and run it with a no-op flag in a temp dir. A test binary is a binary: a `_test.go` import inherits every registrant of what it imports.
 
-## CLASS 274 — containment compared as a string prefix, not path elements, without resolving symlinks
+## CLASS NN (assigned at merge) — containment compared as a string prefix, not path elements, without resolving symlinks
 
 **Found:** 2026-09-24, WAVE 3b-B U4N verify [A]. `nofx-updater fetch` refused a release root inside the install with `!strings.HasPrefix(rel, "..")`, so `NOFX_RELEASE_DIR=<install>/..rel` counted as OUTSIDE and the release was written INSIDE the install (rc 0). A symlinked parent put the root inside the install the same way; a symlinked `<install>/deploy` let the trust anchor (`release_allowed_signers`) be read from outside the install; the backup-root check and a test guard (`HasPrefix(p, os.TempDir())`) carried the same shape.
 
