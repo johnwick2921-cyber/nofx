@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"nofx/kernel"
+	ntwire "nofx/provider/ninjatrader"
 	"nofx/store"
 	ntTrader "nofx/trader/ninjatrader"
 )
@@ -85,12 +86,13 @@ func TestZoneReachKnobOffPlacesBeyondTheBand(t *testing.T) {
 	}
 }
 
-// A resting market_in_zone limit past the rest cap is returned to
-// armed-unplaced (re-placeable) instead of dismantled: the wire cancel is
-// sent exactly as today, the row resets (state=armed, signal/eval/placed_at
-// cleared, placement_seq+1), and it re-places once the broker book clears
-// and price is within the band. Fixture shape: row 184 (+24.5, placed and
-// killed by the rest cap on 09-24) [A].
+// A resting market_in_zone limit past the rest cap is NOT reset on the
+// request (CTO #213 P1 fold): the expiry requests the cancel exactly like the
+// legacy path — cancel_pending with the signal id KEPT — and only once the
+// broker book CONFIRMS the cancel does the row return to armed-unplaced
+// (placement stamp cleared, seq+1) and re-place under a NEW signal once price
+// is within the band. Fixture shape: row 184 (+24.5, placed and killed by the
+// rest cap on 09-24) [A].
 func TestZoneRestExpiryReturnsTheRowToArmedUnplaced(t *testing.T) {
 	r := zoneReachRig(t, "w3-reach-restexpiry", 25)
 	first := r.placeWorking(100.5)
@@ -107,8 +109,26 @@ func TestZoneRestExpiryReturnsTheRowToArmedUnplaced(t *testing.T) {
 		t.Fatalf("the wire cancel is still sent for the resting order: %+v", cancels)
 	}
 	row := r.row("S1")
+	if row.State != store.StateCancelPending || row.SignalID != sid {
+		t.Fatalf("the expiry REQUESTS the cancel with the signal id KEPT — the re-arm waits for the book: %+v", row)
+	}
+	if !strings.Contains(row.StateReason, "re-arm on broker-book confirm") {
+		t.Fatalf("the reason marks the confirm-gated re-arm: %+v", row)
+	}
+	// The broker book CONFIRMS the cancel (a fresh persisted empty snapshot)
+	// → the row returns to armed-unplaced, not 'cancelled'. Price sits beyond
+	// the band so the settle pass itself places nothing.
+	t32 := t31.Add(time.Minute)
+	r.persistFlat(t32)
+	r.flatBook(t32)
+	r.setTape(zoneTape(160.0, t32, 0))
+	r.at.maybeManageArmedOrdersAt(nil, t32)
+	if sigs, cancels := r.drain(); len(sigs) != 0 || len(cancels) != 0 {
+		t.Fatalf("the settle pass must send nothing: sigs=%+v cancels=%+v", sigs, cancels)
+	}
+	row = r.row("S1")
 	if row.State != store.StateArmed {
-		t.Fatalf("the expiry returns the row to armed-unplaced, got %q (%q): %+v", row.State, row.StateReason, row)
+		t.Fatalf("the book-confirmed cancel returns the row to armed-unplaced, got %q (%q): %+v", row.State, row.StateReason, row)
 	}
 	if row.SignalID != "" || row.PlacedAtMs != nil || row.EvalPrice != nil || row.EvalBarMs != nil {
 		t.Fatalf("the reset clears the placement stamp (no rest clock): %+v", row)
@@ -119,19 +139,18 @@ func TestZoneRestExpiryReturnsTheRowToArmedUnplaced(t *testing.T) {
 	if !strings.Contains(row.StateReason, "zone rest expired") {
 		t.Fatalf("the reason names the rest expiry: %+v", row)
 	}
-	// Re-placeable: the broker book confirms the old order is gone and price
-	// is within the band → the same row places again under a new signal.
-	// The adapter's B3 duplicate guard runs on the WALL clock while the
-	// fixture clock says minutes passed — the adapter is re-made to stand for
-	// that (the settleAndReArm pattern).
-	t32 := t31.Add(time.Minute)
-	r.flatBook(t32)
+	// Re-placeable: price returns within the band → the same row places again
+	// under a NEW signal. The adapter's B3 duplicate guard runs on the WALL
+	// clock while the fixture clock says minutes passed — the adapter is
+	// re-made to stand for that (the settleAndReArm pattern).
+	t33 := t32.Add(time.Minute)
+	r.flatBook(t33)
 	r.at.trader = ntTrader.NewTCPTrader(r.srv, "MNQ", "Sim101")
-	r.setTape(zoneTape(101.95, t32, 0))
-	r.at.maybeManageArmedOrdersAt(nil, t32)
+	r.setTape(zoneTape(101.95, t33, 0))
+	r.at.maybeManageArmedOrdersAt(nil, t33)
 	sigs, _ = r.drain()
 	if len(sigs) != 1 || sigs[0].SignalID == sid {
-		t.Fatalf("after the book clears the reset row re-places under a NEW signal: %+v", sigs)
+		t.Fatalf("after the book confirms the reset row re-places under a NEW signal: %+v", sigs)
 	}
 	if sigs[0].LimitPrice != 100.5 {
 		t.Fatalf("the re-place sits at the far edge 100.50: %+v", sigs)
@@ -155,5 +174,73 @@ func TestZoneRestExpiryKnobOffKeepsToday(t *testing.T) {
 	row := r.row("S1")
 	if row.State != store.StateCancelPending || row.StateReason != "zone rest expired" {
 		t.Fatalf("zone_place_within_pts=0 keeps the legacy dismantle: %+v", row)
+	}
+}
+
+// CTO #213 P1 fold, RED (1): a FAILED wire cancel send must not re-arm the
+// row — it stays cancel_pending with its signal id (the order may still be
+// working at the broker, and the settlement's re-request loop retries it).
+func TestZoneRestCancelSendFailureKeepsTheSignalNoReplace(t *testing.T) {
+	r := zoneReachRig(t, "w3-reach-sendfail", 25)
+	first := r.placeWorking(100.5)
+	sid := first.SignalID
+	t31 := r.now.Add(31 * time.Minute)
+	r.restingBook(t31, sid, 100.5)
+	r.setTape(zoneTape(101.95, t31, 0))
+	// The wire dies: the immediate SendCancelOrder fails with
+	// "no NT client connected" while every ledger/book read still works.
+	_ = r.conn.Close()
+	deadline := time.Now().Add(5 * time.Second)
+	for r.srv.IsConnected() && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if r.srv.IsConnected() {
+		t.Fatal("fixture: the server must drop its client so the cancel send fails")
+	}
+	r.at.maybeManageArmedOrdersAt(nil, t31)
+	row := r.row("S1")
+	if row.State != store.StateCancelPending || row.SignalID != sid {
+		t.Fatalf("a failed cancel send must NOT re-arm: the row keeps cancel_pending and its signal id %s: %+v", sid, row)
+	}
+	if !strings.Contains(row.StateReason, "re-arm on broker-book confirm") {
+		t.Fatalf("the reason still marks the confirm-gated re-arm: %+v", row)
+	}
+}
+
+// CTO #213 P1 fold, RED (2): a fill DURING cancel_pending attributes to the
+// row — the signal id was never dropped, so the fill can never be an
+// untracked one (the W0 reconcile path stays out of it).
+func TestZoneRestFillDuringCancelPendingAttributesToTheRow(t *testing.T) {
+	r := zoneReachRig(t, "w3-reach-fillrace", 25)
+	first := r.placeWorking(100.5)
+	sid := first.SignalID
+	t31 := r.now.Add(31 * time.Minute)
+	r.restingBook(t31, sid, 100.5)
+	r.setTape(zoneTape(101.95, t31, 0))
+	r.at.maybeManageArmedOrdersAt(nil, t31)
+	if _, cancels := r.drain(); len(cancels) != 1 {
+		t.Fatalf("fixture: the expiry requests the cancel: %+v", cancels)
+	}
+	row := r.row("S1")
+	if row.State != store.StateCancelPending || row.SignalID != sid {
+		t.Fatalf("fixture: cancel_pending with the signal kept: %+v", row)
+	}
+	// The old limit FILLS in the cancel race.
+	r.at.onArmedOrderUpdate(ntwire.OrderUpdatePayload{SignalID: sid, State: "filled", FillPrice: 100.25, Account: "Sim101"}, r.st.ArmedOrders())
+	row = r.row("S1")
+	if row.State != store.StateFilled {
+		t.Fatalf("the fill during cancel_pending attributes to the row: %+v", row)
+	}
+	if row.SignalID != sid || row.FillPrice != 100.25 {
+		t.Fatalf("the row keeps its signal and the fill price: %+v", row)
+	}
+	// And the position materializes under the SAME signal — never an
+	// untracked fill for reconcile.
+	pos, err := r.st.Position().GetOpenPositionBySymbol(r.at.id, r.at.futuresSymbol(), "LONG")
+	if err != nil || pos == nil {
+		t.Fatalf("the fill materializes the position under the row's signal (err %v, pos %+v)", err, pos)
+	}
+	if pos.EntryOrderID != sid {
+		t.Fatalf("the materialized position names the row's signal, got %q", pos.EntryOrderID)
 	}
 }

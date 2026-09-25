@@ -348,7 +348,10 @@ func (at *AutoTrader) refuseSlot(r store.ArmedOrderDB, v slotVerdict, what strin
 }
 
 // confirmPendingCancels is the per-cycle settlement pass (D1/D2). It is the
-// ONLY place a cancel becomes 'cancelled' through the cancel path.
+// ONLY place a cancel becomes 'cancelled' through the cancel path, and the
+// only place a zone-rest row re-arms after a CONFIRMED cancel (WAVE PLANNER
+// B1, P1 fold — the re-arm is booked on the book's word, never on the
+// request).
 //
 // A10/class 23: it is telemetry-shaped — a failed read WARNs and returns; it
 // never stops the loop and never promotes a row on ignorance.
@@ -385,6 +388,22 @@ func (at *AutoTrader) confirmPendingCancels(ledger *store.ArmedOrderStore, cance
 		r := rows[i]
 		ok, why := cancelSettled(book, have, age, maxAge, r.SignalID)
 		if ok && snapID > 0 {
+			// WAVE PLANNER B1 (P1 fold, CTO #213): a zone-rest cancel the book
+			// CONFIRMS is not the end of the arm — the row returns to
+			// armed-unplaced (placement stamp cleared, seq+1) for a NEW signal
+			// on the next placement. The reset runs on the SAME evidence
+			// ConfirmCancel demands (snapID > 0): a book that never proved the
+			// order gone can never re-arm the row.
+			if rearm, rearmWhy := at.zoneRestReArmOnConfirm(r, why); rearm {
+				if err := ledger.ResetToArmedUnplaced(r.ID, rearmWhy); err != nil {
+					at.logWarnf("🧾 cancel confirm: re-arm write failed for %s: %v", r.Scenario, err)
+					continue
+				}
+				settled++
+				at.logInfof("🧾 cancel CONFIRMED %s signal=%s — %s (snapshot %d, book age %s, attempts %d) — returned to armed-unplaced, re-placeable",
+					r.Scenario, shortID(r.SignalID), why, snapID, age.Round(time.Second), r.CancelAttempts)
+				continue
+			}
 			// The ORIGINAL reason survives the confirmation. Each cancel site
 			// names WHY it cancelled (gate changed, one_live_arm_guard,
 			// entry_gate, condition_shadowed…) and that word is the only record

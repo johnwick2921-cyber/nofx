@@ -524,10 +524,15 @@ func firstClause(s string) string {
 // zoneRestCap ends a market_in_zone limit that has rested past
 // day_plan.zone_rest_max_min, measured from placed_at_ms (updated_at is
 // rewritten by every pass). The cancel mirrors the withdraw: the filled-arm
-// guard first, then the wire cancel. WAVE PLANNER B1: with
-// zone_place_within_pts ON the expiry then RETURNS the row to
-// armed-unplaced (re-placeable) instead of dismantling it — the knob OFF
-// (0) keeps the legacy cancel_pending terminal-for-version path.
+// guard first, then the wire cancel. WAVE PLANNER B1 (P1 fold, CTO #213):
+// with zone_place_within_pts ON the expiry REQUESTS the cancel exactly like
+// the legacy path — cancel_pending with the signal id KEPT — and only when
+// the broker book CONFIRMS it (confirmPendingCancels) does the row return to
+// armed-unplaced (seq+1, re-placeable) under a NEW signal. A failed wire
+// send leaves the row cancel_pending with its signal id and the settlement's
+// re-request loop retries it; a fill during cancel_pending attributes to the
+// row as today (the signal id was never dropped). The knob OFF (0) keeps the
+// legacy cancel_pending terminal-for-version path byte-identical.
 // Legacy rows are never touched.
 func (at *AutoTrader) zoneRestCap(nt *ntTrader.TCPTrader, ledger *store.ArmedOrderStore, rows []store.ArmedOrderDB, now time.Time) {
 	if nt == nil || ledger == nil {
@@ -586,14 +591,18 @@ func (at *AutoTrader) zoneRestCap(nt *ntTrader.TCPTrader, ledger *store.ArmedOrd
 				r.Scenario, r.LegIndex+1, r.EntryPx, shortID(r.SignalID), rested.Round(time.Second), maxMin, src, shown)
 			continue
 		}
-		// WAVE PLANNER B1 — the expiry returns the row to armed-unplaced
-		// (re-placeable) instead of dismantling it: the wire cancel above
-		// stands, the row resets (state=armed, placement stamp cleared,
-		// seq+1) so a later pass places it again once price is within the
-		// bound. It ends terminal only on invalidation (E1/E2, deadline)
+		// WAVE PLANNER B1 (P1 fold, CTO #213 review): the expiry REQUESTS the
+		// cancel exactly like the legacy path — cancel_pending with the signal
+		// id KEPT. A failed wire send above leaves the row's order at the
+		// broker and the settlement's re-request loop retries it; a fill
+		// during cancel_pending attributes to the row as today. Only when the
+		// broker book CONFIRMS the cancel (confirmPendingCancels →
+		// zoneRestReArmOnConfirm) does the row return to armed-unplaced
+		// (placement stamp cleared, seq+1) for a NEW signal on the next
+		// placement. It ends terminal only on invalidation (E1/E2, deadline)
 		// or window close. The filled/stopped re-arm loop (W3) is untouched.
-		if err := ledger.ResetToArmedUnplaced(r.ID, "zone rest expired — returned to armed-unplaced (re-placeable)"); err != nil {
-			at.logWarnf("✕ zone rest: reset-to-armed write failed for %s: %v", r.Scenario, err)
+		if err := ledger.RequestCancel(r.ID, zoneRestReArmReason, now.UnixMilli()); err != nil {
+			at.logWarnf("✕ zone rest: ledger write failed for %s: %v", r.Scenario, err)
 			continue
 		}
 		shown := ""
@@ -602,9 +611,34 @@ func (at *AutoTrader) zoneRestCap(nt *ntTrader.TCPTrader, ledger *store.ArmedOrd
 				shown = fmt.Sprintf(" · rest expiries recorded: %d", n)
 			}
 		}
-		at.logWarnf("⏱ zone rest expired: %s leg %d limit %.2f signal=%s rested %s > %d min (%s) — wire cancel sent, row returned to armed-unplaced (re-placeable within %.1f pts)%s",
+		at.logWarnf("⏱ zone rest expired: %s leg %d limit %.2f signal=%s rested %s > %d min (%s) — cancel REQUESTED, signal kept; on broker-book confirm the row returns to armed-unplaced (re-placeable within %.1f pts)%s",
 			r.Scenario, r.LegIndex+1, r.EntryPx, shortID(r.SignalID), rested.Round(time.Second), maxMin, src, bound, shown)
 	}
+}
+
+// zoneRestReArmReason is the RequestCancel reason the rest cap writes with
+// zone_place_within_pts ON: the cancel must be CONFIRMED by the broker book
+// before the row re-arms. confirmPendingCancels reads it back off the row —
+// the reason is the only marker that travels with it.
+const zoneRestReArmReason = "zone rest expired — re-arm on broker-book confirm"
+
+// zoneRestReArmOnConfirm decides whether a CONFIRMED cancel is a zone-rest
+// re-arm: the marker + a market_in_zone policy + the knob still ON at confirm
+// time (it may have flipped OFF between the request and the confirm). It
+// returns the reset reason; OFF at confirm time falls through to the legacy
+// ConfirmCancel (terminal).
+func (at *AutoTrader) zoneRestReArmOnConfirm(r store.ArmedOrderDB, confirmed string) (bool, string) {
+	if !strings.Contains(strings.TrimSpace(r.StateReason), zoneRestReArmReason) {
+		return false, ""
+	}
+	if r.Policy != kernel.EntryPolicyMarketInZone {
+		return false, ""
+	}
+	bound, _ := store.ResolveZonePlaceWithinPts(at.dayPlanCfg())
+	if bound <= 0 {
+		return false, ""
+	}
+	return true, strings.TrimSpace(r.StateReason) + " — confirmed: " + confirmed + fmt.Sprintf(" (re-placeable within %.1f pts)", bound)
 }
 
 // ── the zone watch (the event pass trigger) ─────────────────────────────────
