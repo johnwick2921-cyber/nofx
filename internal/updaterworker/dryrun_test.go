@@ -164,6 +164,19 @@ func TestNoTokenEverReachesTheJobFileOrEvidence(t *testing.T) {
 				}
 			}
 		}, final: updaterjob.StateRecoveryNeeded},
+		// verifier D5 / mutant A36: an app that answers non-200 with the
+		// request's own Authorization header in its body — the worker's error
+		// (a blocker, a receipt, the recovery reason) never carries the body
+		{name: "500 echoing the header in preflight", setup: func(r *rig) { r.echo500 = true }, final: updaterjob.StateRefused},
+		{name: "500 echoing the header after the hold", setup: func(r *rig) {
+			r.w.crash = func(q string) {
+				if q == "drained_acked/started" {
+					r.mu.Lock()
+					r.echo500 = true
+					r.mu.Unlock()
+				}
+			}
+		}, final: updaterjob.StateRecoveryNeeded},
 	} {
 		t.Run(p.name, func(t *testing.T) {
 			r := newRig(t)

@@ -96,6 +96,12 @@ type box struct {
 	ackStale       bool   // the AddOn's last ack is 20 s old
 	ackJob         string // the AddOn acks this job id instead of the hold's
 	exe            string // /proc/<MainPID>/exe, when not the install's binary
+	healthRev      string        // /api/health serves this revision instead of the running sha
+	ackLag         time.Duration // the AddOn's last ack is this much older than the 5 s tick (age stays consistent)
+	maintJob       string        // /api/maintenance names this job instead of the hold's
+	echo500        bool          // the authed endpoints answer 500 echoing the request's Authorization header
+	noCS           bool          // the signed manifest lists no ninjascript/*.cs
+	reverifyTamper func(*ReleaseFacts)
 
 	calls       []string
 	violations  []string
@@ -517,14 +523,21 @@ func (f *fakeRel) Rehash(v Verdict) (int, error) {
 func (f *fakeRel) Reverify(v Verdict) (ReleaseFacts, error) {
 	arts := map[string]string{}
 	for _, rel := range []string{"web/dist/index.html", "ninjascript/VLTrader.cs", calendarFile, "nofx-bin"} {
+		if f.b.noCS && strings.HasPrefix(rel, "ninjascript/") {
+			continue
+		}
 		sum, err := sha256File(filepath.Join(f.b.relDir, filepath.FromSlash(rel)))
 		if err != nil {
 			return ReleaseFacts{}, err
 		}
 		arts[rel] = sum
 	}
-	return ReleaseFacts{ReleaseID: v.ReleaseID, SourceSHA: v.SourceSHA, ManifestSHA256: v.ManifestSHA256,
-		SignerFingerprint: v.SignerFingerprint, AddonBuildID: f.b.manifestBuild, Artifacts: arts}, nil
+	facts := ReleaseFacts{ReleaseID: v.ReleaseID, SourceSHA: v.SourceSHA, ManifestSHA256: v.ManifestSHA256,
+		SignerFingerprint: v.SignerFingerprint, AddonBuildID: f.b.manifestBuild, Artifacts: arts}
+	if f.b.reverifyTamper != nil {
+		f.b.reverifyTamper(&facts)
+	}
+	return facts, nil
 }
 
 // ── the fake host ───────────────────────────────────────────────────────────
@@ -575,6 +588,13 @@ func (b *box) serveApp(w http.ResponseWriter, r *http.Request) {
 		b.mu.Lock()
 		bad := b.badToken
 		b.mu.Unlock()
+		b.mu.Lock()
+		echo := b.echo500
+		b.mu.Unlock()
+		if echo {
+			http.Error(w, "internal error: request carried "+r.Header.Get("Authorization"), http.StatusInternalServerError)
+			return false
+		}
 		if bad || r.Header.Get("Authorization") != "Bearer "+boxToken {
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return false
@@ -585,6 +605,9 @@ func (b *box) serveApp(w http.ResponseWriter, r *http.Request) {
 	case "/api/health":
 		b.mu.Lock()
 		rev := b.running[:12]
+		if b.healthRev != "" {
+			rev = b.healthRev
+		}
 		b.mu.Unlock()
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "time": "x", "revision": rev})
 	case "/api/maintenance":
@@ -611,14 +634,14 @@ func (b *box) serveApp(w http.ResponseWriter, r *http.Request) {
 // resent every 5 s (received = the last 5 s tick; age = now − received).
 func (b *box) ack() *AckView {
 	b.mu.Lock()
-	connected, build, stale, ackJob := b.addonConnected, b.addonBuild, b.ackStale, b.ackJob
+	connected, build, stale, ackJob, lag := b.addonConnected, b.addonBuild, b.ackStale, b.ackJob, b.ackLag
 	b.mu.Unlock()
 	if !connected {
 		return nil
 	}
 	st := store.ReadMaintenanceHold(b.data)
 	now := b.clock.Now().UTC()
-	recv := now.Truncate(5 * time.Second)
+	recv := now.Truncate(5 * time.Second).Add(-lag)
 	a := &AckView{Received: recv.Format(time.RFC3339Nano), AgeMs: now.Sub(recv).Milliseconds(), BuildID: build, AcceptSeq: 1}
 	if st.Held && !st.Corrupt {
 		a.Held, a.JobID = true, st.Hold.JobID
@@ -639,6 +662,12 @@ func (b *box) maintenanceView() MaintenanceView {
 		job, since := st.Hold.JobID, st.Hold.Since
 		v.Held, v.State, v.JobID, v.Since = true, "held", &job, &since
 	}
+	b.mu.Lock()
+	if b.maintJob != "" {
+		mj := b.maintJob
+		v.JobID = &mj
+	}
+	b.mu.Unlock()
 	return v
 }
 
