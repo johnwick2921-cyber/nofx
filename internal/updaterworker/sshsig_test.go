@@ -582,6 +582,12 @@ func TestSSHSIGRefusesMalformedEnvelopes(t *testing.T) {
 		"no armor":          {[]byte(strings.SplitN(string(real), "\n", 2)[1]), ErrSigFormat},
 		"text before armor": {append([]byte("x\n"), real...), ErrSigFormat},
 		"no end line":       {[]byte(strings.Replace(string(real), "-----END SSH SIGNATURE-----", "", 1)), ErrSigFormat},
+		// The END marker glued to the last base64 chars (#206 review fold):
+		// ssh-keygen's dearmor wants "\n-----END …" and refuses with 'missing
+		// footer'; the bare-marker search used to accept this shape.
+		"END glued to the base64": {func() []byte {
+			return []byte(strings.Replace(string(real), "\n"+armorEnd, armorEnd, 1))
+		}(), ErrSigFormat},
 		"text after armor":  {append(append([]byte(nil), real...), []byte("junk\n")...), ErrSigFormat},
 		"empty":             {nil, ErrSigFormat},
 		"oversized":         {bytes.Repeat([]byte("A"), MaxSignatureBytes+1), ErrSigFormat},
@@ -596,4 +602,12 @@ func TestSSHSIGRefusesMalformedEnvelopes(t *testing.T) {
 			}
 		})
 	}
+	// The differential for the glued-END case: the real ssh-keygen refuses
+	// the same bytes ('missing footer'), so the refusal matches the tool.
+	t.Run("the tool refuses the glued END", func(t *testing.T) {
+		glued := []byte(strings.Replace(string(real), "\n"+armorEnd, armorEnd, 1))
+		if err := keygenVerify(t, f.signers, glued, f.msg); err == nil {
+			t.Fatal("fixture: ssh-keygen ACCEPTS the glued END — the case is not the refusal it claims")
+		}
+	})
 }

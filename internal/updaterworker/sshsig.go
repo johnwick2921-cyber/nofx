@@ -410,11 +410,18 @@ func dearmorSSHSIG(armored []byte) ([]byte, error) {
 		return nil, fmt.Errorf("%w: does not begin with %q", ErrSigFormat, armorBegin)
 	}
 	s = s[len(armorBegin)+1:]
-	end := strings.Index(s, armorEnd)
+	// The END marker must begin a LINE (#206 review fold): ssh-keygen's
+	// dearmor looks for "\n-----END SSH SIGNATURE-----" and refuses
+	// 'missing footer' when the marker is glued to the last base64
+	// characters. Searching for the bare marker accepted that shape here —
+	// looser than the tool on byte-identical decoded data.
+	needle := "\n" + armorEnd
+	end := strings.Index(s, needle)
 	if end < 0 {
 		return nil, fmt.Errorf("%w: no %q line", ErrSigFormat, armorEnd)
 	}
-	if strings.TrimSpace(s[end+len(armorEnd):]) != "" {
+	marker := end + 1 // the "\n" belongs to the body, not the marker
+	if strings.TrimSpace(s[marker+len(armorEnd):]) != "" {
 		return nil, fmt.Errorf("%w: text after %q", ErrSigFormat, armorEnd)
 	}
 	body := strings.ReplaceAll(s[:end], "\n", "")
