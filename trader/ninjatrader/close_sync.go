@@ -33,6 +33,12 @@ func (t *TCPTrader) StartCloseSync(traderID, exchangeID, exchangeType string, st
 	t.closeSyncOnce.Do(func() {
 		go func() {
 			for p := range t.server.SubscribeClosesFor(t.symbol, t.boundAccount) { // P5.4 router-fed (per-symbol)
+				// W117 F2 — the ordered worker owns this frame's durable close; the
+				// advisory copy only marks it (never records it twice).
+				if p.OrderedOwned {
+					t.MarkCloseConfirmed(p.Symbol, p.PositionSide)
+					continue
+				}
 				t.recordClose(traderID, exchangeID, exchangeType, st, pb, p)
 				// Fast, account-correct flat signal for reconcile-before-open: a
 				// position_close arrived for this trader's bound account (frame path
