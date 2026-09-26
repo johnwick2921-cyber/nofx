@@ -103,6 +103,14 @@ func main() {
 	}
 	defer st.Close()
 
+	// P2-10 (audit 0926-system) — the logout blacklist persists across a
+	// restart: revoked token fingerprints live in the DB, and expired rows
+	// are pruned here at boot.
+	auth.SetTokenBlacklistStore(st.RevokedTokens())
+	if err := st.RevokedTokens().PruneExpired(time.Now()); err != nil {
+		logger.Warnf("⚠️  prune expired token revocations failed: %v", err)
+	}
+
 	// P6 (ledger-close 2026-08-19) — WARN+ERROR→DB log shipping. Attached
 	// AFTER the store exists (the logger boots first); non-blocking by the
 	// LogEventStore contract (select-default drop + single writer + daily
@@ -149,7 +157,14 @@ func main() {
 
 	// Set JWT secret
 	auth.SetJWTSecret(cfg.JWTSecret)
-	logger.Info("🔑 JWT secret configured")
+	// P2-13 (audit 0926-system): print the READ state, never an unconditional
+	// "configured" — the boot line must distinguish a custom secret from the
+	// insecure default (class 45/49 shape).
+	if cfg.JWTSecretIsDefault() {
+		logger.Warnf("🔑 JWT secret: INSECURE DEFAULT (JWT_SECRET not set) — acceptable only for localhost; set JWT_SECRET before any network-exposed deploy")
+	} else {
+		logger.Info("🔑 JWT secret: configured (custom)")
+	}
 
 	// P0 timezone — CT is canonical for EVERY rendered time (owner rule
 	// 2026-08-19). The host's local zone is ignored by every renderer.

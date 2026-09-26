@@ -2,9 +2,11 @@ package api
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"nofx/auth"
@@ -42,6 +44,94 @@ const currentPasswordWrongGate = "credential_current_password_wrong"
 // real second; TestWrongCurrentPasswordIsDelayedAndCounted pins that the
 // production value is time.Sleep and the delay 1 s.
 var currentPasswordFailSleep = time.Sleep
+
+// ── P2-11 (audit 0926-system) — /login rate limit + constant-time unknown ──
+//
+// The unknown-email path returned a fast 401 while the known-email path ran
+// bcrypt — a timing oracle for account existence. Now the unknown path burns
+// the SAME bcrypt cost against a dummy hash, and both paths plus the IP get a
+// failure limiter with backoff.
+const (
+	loginFailWindow        = 5 * time.Minute
+	loginBlockAfterFails   = 5
+	loginLongBlockAfterFails = 10
+	loginBlockShort        = time.Minute
+	loginBlockLong         = 15 * time.Minute
+	loginLimiterMaxKeys    = 4096
+)
+
+// loginCheckPassword is a seam: production is auth.CheckPassword (the test
+// swaps it to count calls — proving the unknown-email path burns the dummy
+// hash — and to avoid real bcrypt cost where it isn't the subject).
+var loginCheckPassword = auth.CheckPassword
+
+// loginLimiterClock is a seam: production is time.Now.
+var loginLimiterClock = time.Now
+
+// loginDummyHash is a fixed bcrypt hash of a fixed string: the unknown-email
+// path compares against it so both paths cost one bcrypt compare.
+var loginDummyHash, _ = auth.HashPassword("nofx-login-dummy-constant-time-v1")
+
+type loginLimiterEntry struct {
+	fails        int
+	windowStart  time.Time
+	blockedUntil time.Time
+}
+
+type loginLimiter struct {
+	mu sync.Mutex
+	m  map[string]*loginLimiterEntry
+}
+
+var apiLoginLimiter = &loginLimiter{m: make(map[string]*loginLimiterEntry)}
+
+// blockedUntil reports how long the key is refused for, if at all.
+func (l *loginLimiter) blocked(now time.Time, key string) (time.Duration, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if e := l.m[key]; e != nil && e.blockedUntil.After(now) {
+		return e.blockedUntil.Sub(now), true
+	}
+	return 0, false
+}
+
+// recordFail bumps the key and returns how long the key is now blocked for.
+// Expired entries are pruned opportunistically so a probe with fresh keys
+// cannot grow the map without bound.
+func (l *loginLimiter) recordFail(now time.Time, key string) time.Duration {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if len(l.m) > loginLimiterMaxKeys {
+		for k, e := range l.m {
+			if now.Sub(e.windowStart) > loginFailWindow && !e.blockedUntil.After(now) {
+				delete(l.m, k)
+			}
+		}
+	}
+	e := l.m[key]
+	if e == nil || now.Sub(e.windowStart) > loginFailWindow {
+		e = &loginLimiterEntry{windowStart: now}
+		l.m[key] = e
+	}
+	e.fails++
+	switch {
+	case e.fails >= loginLongBlockAfterFails:
+		e.blockedUntil = now.Add(loginBlockLong)
+	case e.fails >= loginBlockAfterFails:
+		e.blockedUntil = now.Add(loginBlockShort)
+	}
+	if e.blockedUntil.After(now) {
+		return e.blockedUntil.Sub(now)
+	}
+	return 0
+}
+
+// clear removes the key (a successful login resets its failure count).
+func (l *loginLimiter) clear(key string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.m, key)
+}
 
 // handleLogout Add current token to blacklist
 func (s *Server) handleLogout(c *gin.Context) {
@@ -174,18 +264,40 @@ func (s *Server) handleLogin(c *gin.Context) {
 		return
 	}
 
+	// P2-11: per-IP AND per-account backoff. A blocked key returns 429 with
+	// Retry-After BEFORE any password work runs.
+	now := loginLimiterClock()
+	for _, key := range []string{c.ClientIP(), req.Email} {
+		if d, blocked := apiLoginLimiter.blocked(now, key); blocked {
+			c.Header("Retry-After", fmt.Sprintf("%.0f", math.Ceil(d.Seconds())))
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many login attempts — try again later"})
+			return
+		}
+	}
+
 	// Get user information
 	user, err := s.store.User().GetByEmail(req.Email)
 	if err != nil {
+		// P2-11: constant-time path — the unknown-email branch burns the SAME
+		// bcrypt cost as the known one so the response time does not reveal
+		// account existence.
+		_ = loginCheckPassword(req.Password, loginDummyHash)
+		apiLoginLimiter.recordFail(now, c.ClientIP())
+		apiLoginLimiter.recordFail(now, req.Email)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Email or password incorrect"})
 		return
 	}
 
 	// Verify password
-	if !auth.CheckPassword(req.Password, user.PasswordHash) {
+	if !loginCheckPassword(req.Password, user.PasswordHash) {
+		apiLoginLimiter.recordFail(now, c.ClientIP())
+		apiLoginLimiter.recordFail(now, req.Email)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Email or password incorrect"})
 		return
 	}
+	// Success resets both keys.
+	apiLoginLimiter.clear(c.ClientIP())
+	apiLoginLimiter.clear(req.Email)
 
 	// Issue token directly after password verification.
 	token, err := auth.GenerateJWT(user.ID, user.Email)
