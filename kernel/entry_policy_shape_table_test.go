@@ -27,15 +27,10 @@ func TestFpEntryPolicyShapeTableGeneratedFromLaw(t *testing.T) {
 	}
 	// Every planned_order-legal condition from the LAW map appears in the table
 	// (a row the map adds must appear without a hand edit).
-	for c, leg := range plannedOrderLegal {
-		legText := "any leg"
-		if leg >= 0 {
-			legText = "leg 0 ONLY"
-		}
+	for c := range plannedOrderLegal {
 		if !strings.Contains(table, c) {
 			t.Fatalf("table misses legal condition %q:\n%s", c, table)
 		}
-		_ = legText
 	}
 	// The prompt sentence reads the table — no hand-rettyped drift.
 	frag := entryPolicyPlannedOrderFrag(true)
