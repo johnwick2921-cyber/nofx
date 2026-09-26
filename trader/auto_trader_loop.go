@@ -86,15 +86,17 @@ func fastMarketATR() float64 {
 	return 1.5
 }
 
-// fastMarketReasoningWire — F3: FAST_MARKET_REASONING, default fast. Fast-tape
-// reads must return fast (<120s target), not deep-think 6-minute answers.
+// fastMarketReasoningWire — F3: FAST_MARKET_REASONING. Default MAX (owner
+// rule A2, 2026-09-26: REASONING=MAX everywhere, fast-market reads included —
+// the old 'fast' default silently ran fast-market reads at effort LOW). An
+// explicit env value still overrides.
 func fastMarketReasoningWire() (string, string) {
-	m, e, _ := reasoningWire(os.Getenv("FAST_MARKET_REASONING"), "fast")
+	m, e, _ := reasoningWire(os.Getenv("FAST_MARKET_REASONING"), "max")
 	return m, e
 }
 
 func fastMarketReasoningLabel() string {
-	_, _, l := reasoningWire(os.Getenv("FAST_MARKET_REASONING"), "fast")
+	_, _, l := reasoningWire(os.Getenv("FAST_MARKET_REASONING"), "max")
 	return l
 }
 
@@ -103,13 +105,13 @@ func fastMarketReasoningLabel() string {
 // last-wins .env value. (The owner's .env carries 4 duplicate
 // FAST_MARKET_REASONING keys; dotenv is last-wins and nothing said so.)
 func fastMarketReasoningWireWithSource() (string, string, string, string) {
-        raw := os.Getenv("FAST_MARKET_REASONING")
-        m, e, l := reasoningWire(raw, "fast")
-        src := "code default (fast)"
-        if strings.TrimSpace(raw) != "" {
-                src = "env FAST_MARKET_REASONING (" + strings.TrimSpace(raw) + ")"
-        }
-        return m, e, l, src
+	raw := os.Getenv("FAST_MARKET_REASONING")
+	m, e, l := reasoningWire(raw, "max")
+	src := "code default (max)"
+	if strings.TrimSpace(raw) != "" {
+		src = "env FAST_MARKET_REASONING (" + strings.TrimSpace(raw) + ")"
+	}
+	return m, e, l, src
 }
 
 // envDupKeyWarning reports duplicate occurrences of one key in a dotenv file
@@ -117,39 +119,40 @@ func fastMarketReasoningWireWithSource() (string, string, string, string) {
 // warning text ("" when <=1 occurrence), the occurrence count and the LAST
 // value. The .env is the owner's — read-only.
 func envDupKeyWarning(path, key string) (string, int, string) {
-        b, err := os.ReadFile(path)
-        if err != nil {
-                return "", 0, ""
-        }
-        n, last := 0, ""
-        for _, line := range strings.Split(string(b), "\n") {
-                line = strings.TrimSpace(line)
-                if line == "" || strings.HasPrefix(line, "#") {
-                        continue
-                }
-                k, v, ok := strings.Cut(line, "=")
-                if !ok || !strings.EqualFold(strings.TrimSpace(k), key) {
-                        continue
-                }
-                n++
-                last = strings.Trim(strings.TrimSpace(v), `"'`)
-        }
-        if n <= 1 {
-                return "", n, last
-        }
-        return fmt.Sprintf("FAST_MARKET_REASONING: %d duplicate keys in .env — dotenv is last-wins, effective = %q", n, last), n, last
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", 0, ""
+	}
+	n, last := 0, ""
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		k, v, ok := strings.Cut(line, "=")
+		if !ok || !strings.EqualFold(strings.TrimSpace(k), key) {
+			continue
+		}
+		n++
+		last = strings.Trim(strings.TrimSpace(v), `"'`)
+	}
+	if n <= 1 {
+		return "", n, last
+	}
+	return fmt.Sprintf("FAST_MARKET_REASONING: %d duplicate keys in .env — dotenv is last-wins, effective = %q", n, last), n, last
 }
 
 // FastMarketReasoningBootLine is the B2 boot line: the effective fast-market
 // reasoning wire, its source, and a WARN when .env carries duplicate keys.
 // Called once from main's boot block, next to the other AI-param lines.
 func FastMarketReasoningBootLine() {
-        _, _, label, src := fastMarketReasoningWireWithSource()
-        logger.Infof("🧠 fast-market reasoning: %s (%s)", label, src)
-        if warn, _, _ := envDupKeyWarning(".env", "FAST_MARKET_REASONING"); warn != "" {
-                logger.Warnf("⚠️ %s", warn)
-        }
+	_, _, label, src := fastMarketReasoningWireWithSource()
+	logger.Infof("🧠 fast-market reasoning: %s (%s)", label, src)
+	if warn, _, _ := envDupKeyWarning(".env", "FAST_MARKET_REASONING"); warn != "" {
+		logger.Warnf("⚠️ %s", warn)
+	}
 }
+
 // "balanced". This is the back-compat guarantee: an empty savedVariant resolves
 // EXACTLY as the pre-Phase-2 code, so strategies with no saved variant are
 // byte-identical. Prompt-layer only — it never touches a risk gate.

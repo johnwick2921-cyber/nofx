@@ -981,8 +981,8 @@ export const settings: GuideSection = {
           body: 'Wake-read fast threshold: |price drift| since the last write > K×ATR5m → fast re-plan.',
         },
         {
-          title: 'FAST_MARKET_REASONING = fast',
-          body: 'The reasoning wire for fast-market wake reads (FAST TAPE).',
+          title: 'FAST_MARKET_REASONING = max',
+          body: 'The reasoning wire for fast-market wake reads (FAST TAPE). Default MAX (owner rule A2, 2026-09-26); an explicit env value still overrides.',
         },
         {
           title: 'BD_MIN_DISP_ATR = 1.0',

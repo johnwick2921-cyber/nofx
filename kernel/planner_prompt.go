@@ -128,7 +128,8 @@ type PlannerInput struct {
 	Warming        string // non-empty → cold-start / WARMING annotation
 	// FastTape (F3 fast-market wake reads, 2026-08-28) — the read fires while
 	// the tape is moving fast; the prompt carries the note and the wire runs
-	// reasoning=medium (FAST_MARKET_REASONING).
+	// reasoning=max by default (FAST_MARKET_REASONING, owner rule A2
+	// 2026-09-26: REASONING=MAX everywhere).
 	FastTape     bool
 	FastTapeNote string
 	// PriorPlanKiller (P0.4-G, 2026-08-25) — when this read re-plans a DEAD

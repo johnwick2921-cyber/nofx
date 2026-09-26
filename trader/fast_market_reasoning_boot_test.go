@@ -20,8 +20,12 @@ func TestFastMarketReasoningBootSource(t *testing.T) {
 
 	t.Setenv("FAST_MARKET_REASONING", "")
 	_, _, label, src = fastMarketReasoningWireWithSource()
-	if label != "fast→low" || !strings.Contains(src, "code default") {
-		t.Fatalf("label=%q src=%q — unset must read the code default and say so", label, src)
+	if label != "max" || !strings.Contains(src, "code default") {
+		t.Fatalf("label=%q src=%q — unset must read the code default (owner rule A2: REASONING=MAX everywhere, fast-market included) and say so", label, src)
+	}
+	// The wire itself is enabled/max when unset — never a downgrade.
+	if m, e := fastMarketReasoningWire(); m != "enabled" || e != "max" {
+		t.Fatalf("unset fast-market wire = %s/%s, want enabled/max (A2)", m, e)
 	}
 }
 

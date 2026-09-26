@@ -33,7 +33,7 @@ export const faq: GuideSection = {
         },
         {
           q: 'What happens on a fast-market wake?',
-          a: 'When price has drifted more than FAST_MARKET_ATR × ATR5m since the last plan write, a wake read re-plans with fast reasoning (FAST TAPE) instead of waiting out the stale plan — the plan gets eyes sooner exactly when the tape is moving.',
+          a: 'When price has drifted more than FAST_MARKET_ATR × ATR5m since the last plan write, a wake read re-plans (FAST TAPE) instead of waiting out the stale plan — the plan gets eyes sooner exactly when the tape is moving. The reasoning wire runs MAX by default (FAST_MARKET_REASONING, owner rule A2), never a downgrade.',
           mechanism:
             'trader/auto_trader_loop.go fastMarket… · FAST_MARKET_REASONING',
           link: '#settings',
