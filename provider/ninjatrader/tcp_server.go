@@ -2047,8 +2047,8 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 				s.retirePending(fill.Seq, fill.SignalID)
 			}
 			// W117 F2 — enqueue to the (symbol,account) owner's worker first
-			// (P2-14: bounded queue — blocks loudly on overflow, never drops).
-			// Owned frames are skipped by the advisory consumer below.
+			// (non-blocking, never drops). Owned frames are skipped by the
+			// advisory consumer below.
 			if s.enqueueOrdered(subKey(fill.Symbol, fill.Account), orderedItem{kind: orderedFill, fill: fill}) {
 				fill.OrderedOwned = true
 			}
@@ -2069,7 +2069,6 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			}
 			// W117 F2 — enqueue to the owner's worker (stamped with the
 			// snapshot watermark for the post-change book gate, R4).
-			// P2-14: bounded queue — blocks loudly on overflow, never drops.
 			if s.enqueueOrdered(subKey(oup.Symbol, oup.Account), orderedItem{kind: orderedOrder, order: oup, snapAt: s.snapSeqFor(oup.Account)}) {
 				oup.OrderedOwned = true
 			}
