@@ -107,8 +107,19 @@ func withImmediateWriteTxBusy(db *gorm.DB, busyMs int64, fn func(tx *gorm.DB) er
 // immediateOrPlainTx chooses the immediate write-lock transaction on SQLite and
 // falls back to GORM's default transaction on other backends (Postgres).
 func (s *PositionStore) immediateOrPlainTx(fn func(tx *gorm.DB) error) error {
-	if s.db.Dialector.Name() != sqlitedriver.DriverName {
-		return s.db.Transaction(fn)
+	return immediateOrPlainTxAny(s.db, fn)
+}
+
+// immediateOrPlainTxAny is the same choice for stores whose write path must not
+// do a deferred read→write upgrade (P2-4, audit 2026-09-26): under WAL, a
+// deferred transaction that reads and then upgrades returns SQLITE_BUSY (and
+// BUSY_SNAPSHOT) the moment another writer commits between the read and the
+// write — busy_timeout cannot help because the snapshot is stale, not the lock
+// held. BEGIN IMMEDIATE takes the write lock before the read, closing the
+// window (the #227 lost-close shape).
+func immediateOrPlainTxAny(db *gorm.DB, fn func(tx *gorm.DB) error) error {
+	if db.Dialector.Name() != sqlitedriver.DriverName {
+		return db.Transaction(fn)
 	}
-	return withImmediateWriteTx(s.db, fn)
+	return withImmediateWriteTx(db, fn)
 }

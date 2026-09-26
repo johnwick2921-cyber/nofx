@@ -133,7 +133,7 @@ func TestLimitFlattenRejectsReplacement(t *testing.T) {
 func TestLimitFlattenStopInvalidatesPendingCallback(t *testing.T) {
 	at, r, p := limitFlattenFixture(t, "LONG")
 	at.isRunning = true
-	at.stopMonitorCh = make(chan struct{})
+	at.setupStopMonitorForTest()
 	at.flattenPosition(p, "test")
 	pending := at.limitFlattens[p.ID]
 	at.Stop()

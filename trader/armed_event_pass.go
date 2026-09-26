@@ -66,9 +66,22 @@ func (l *armedEventLoop) poke() {
 
 func (l *armedEventLoop) close() {
 	l.once.Do(func() { close(l.stop) })
+	// NOTE-leak fix: the old `case <-time.After(5 * time.Second)` armed a timer
+	// on EVERY close — even the instant path — and its delivery goroutine then
+	// blocked forever once the timer fired with no receiver (the select had
+	// already returned via done). Fast path first: no timer is allocated at all
+	// when the loop has already finished; only a genuinely slow pass allocates
+	// one, and it is stopped on return.
 	select {
 	case <-l.done:
-	case <-time.After(5 * time.Second):
+		return
+	default:
+	}
+	t := time.NewTimer(5 * time.Second)
+	defer t.Stop()
+	select {
+	case <-l.done:
+	case <-t.C:
 		logger.Warnf("armed event pass: stop did not finish within 5s (a pass is still running; it re-checks running before placing)")
 	}
 }

@@ -24,13 +24,19 @@ func (at *AutoTrader) startDrawdownMonitor() {
 		ticker := time.NewTicker(1 * time.Minute) // Check every minute
 		defer ticker.Stop()
 
+		// Capture the per-Run stop signal once (the ctx lives for exactly one
+		// Run; a restarted trader creates a fresh one).
+		at.stopMonitorMu.Lock()
+		stopDone := at.stopMonitorCtx.Done()
+		at.stopMonitorMu.Unlock()
+
 		logger.Info("📊 Started position drawdown monitoring (check every minute)")
 
 		for {
 			select {
 			case <-ticker.C:
-				at.monitorTick(time.Now())
-			case <-at.stopMonitorCh:
+				at.runBeatSafely("drawdown monitor", func() { at.monitorTick(time.Now()) })
+			case <-stopDone:
 				logger.Info("⏹ Stopped position drawdown monitoring")
 				return
 			}

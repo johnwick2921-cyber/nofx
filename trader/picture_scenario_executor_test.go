@@ -743,7 +743,7 @@ func TestPictureStopInvalidatesPictureRows(t *testing.T) {
 		r, epoch := newPicRig(t, "w5b-stop-u", nil)
 		picPlan(r, plannerZone("S1", 101, 101.5, 101), picScenario("P1", "opp-stop-u", r.now, epoch, picDefault))
 		picPass(r, 0, 99.6) // both short of their zones: both armed
-		r.at.stopMonitorCh = make(chan struct{})
+		r.at.setupStopMonitorForTest()
 		r.at.Stop()
 		if _, ok := r.at.pictureRunEpoch(); ok {
 			t.Fatal("Stop must clear the run epoch")
@@ -768,7 +768,7 @@ func TestPictureStopInvalidatesPictureRows(t *testing.T) {
 		}
 		// Stop reads the book at the wall clock (it has no pass clock).
 		workingBook(r, time.Now(), sigs[0].SignalID, 100.5)
-		r.at.stopMonitorCh = make(chan struct{})
+		r.at.setupStopMonitorForTest()
 		r.at.Stop()
 		_, cancels := r.drain()
 		if len(cancels) != 1 || cancels[0].SignalID != sigs[0].SignalID {
@@ -1056,7 +1056,7 @@ func TestPictureStopWithADarkBookHoldsCancelPending(t *testing.T) {
 	warns := picWarns(t)
 	// The book was last put at the fixture instant; Stop reads the wall
 	// clock, where that book is stale by days — a dark book.
-	r.at.stopMonitorCh = make(chan struct{})
+	r.at.setupStopMonitorForTest()
 	r.at.Stop()
 	if _, cancels := r.drain(); len(cancels) != 0 {
 		t.Fatalf("no wire cancel may be sent blind on a dark book: %+v", cancels)
@@ -1126,7 +1126,7 @@ func TestPictureStopNeverDeadlocks(t *testing.T) {
 				}
 			}
 			stopped := make(chan struct{})
-			r.at.stopMonitorCh = make(chan struct{})
+			r.at.setupStopMonitorForTest()
 			go func() { r.at.Stop(); close(stopped) }()
 			if c.pass != nil {
 				select {

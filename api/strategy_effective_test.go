@@ -117,6 +117,40 @@ func num(t *testing.T, v any) float64 {
 	return f
 }
 
+// FIX-PLANNER (2026-09-26): the new death_reread_retry_min row shows on the
+// effective-settings API with the PRODUCTION resolver's value and an honest
+// origin: shipped default when absent (nil = wake_min_interval_min, 30), saved
+// when the strategy stored one. The row is LIVE (origin never "folded").
+func TestFpDeathRereadRetryMinRowValueAndOrigin(t *testing.T) {
+	s, st, tok := newEffectiveServer(t)
+	effPutStrategy(t, st, "drr-absent", effUser, `{"strategy_type":"ai_trading","day_plan":{}}`)
+	effPutStrategy(t, st, "drr-saved", effUser, `{"strategy_type":"ai_trading","day_plan":{"death_reread_retry_min":5}}`)
+
+	const path = "day_plan.death_reread_retry_min"
+	cases := []struct {
+		id     string
+		origin string
+		want   float64
+	}{
+		{"drr-absent", store.SourceShippedDefault, store.DefaultWakeMinIntervalMin},
+		{"drr-saved", store.SourceSaved, 5},
+	}
+	for _, tc := range cases {
+		row := effRow(t, effGet(t, s, tok, "/api/strategies/"+tc.id+"/effective"), path)
+		cfg := runtimeConfig(t, st, effUser, tc.id)
+		want := float64(cfg.DayPlan.DeathRereadRetryMinutes())
+		if got := num(t, row.Effective); got != want || got != tc.want {
+			t.Fatalf("%s: effective %v, production resolver says %v, want %v", tc.id, got, want, tc.want)
+		}
+		if row.Origin != tc.origin {
+			t.Fatalf("%s: origin %q, want %q", tc.id, row.Origin, tc.origin)
+		}
+		if !row.Resolved {
+			t.Fatalf("%s: the row must be resolved", tc.id)
+		}
+	}
+}
+
 // MISSING / ZERO / SAVED produce three different origins for one knob, and the
 // value is the one the production resolver returns for the stored row.
 func TestEffectiveMinRROriginsAbsentZeroSaved(t *testing.T) {
@@ -441,4 +475,4 @@ func TestEffectiveCoverageCounted(t *testing.T) {
 
 // effectiveResolvedPin is the number of registered resolvers at this revision
 // (trader/effective_settings.go). Change it ONLY with the table.
-const effectiveResolvedPin = 86 // PLANNER A6 2026-09-25: +1 (planner_fresh_tape); PLANNER B1 2026-09-25: +1 (zone_place_within_pts); W-EXEC-TRUTH W3: +4 (entry_policy_default, zone_max_pts, zone_rest_max_min, min_hold_min)
+const effectiveResolvedPin = 87 // FIX-PLANNER 2026-09-26: +1 (death_reread_retry_min); PLANNER A6 2026-09-25: +1 (planner_fresh_tape); PLANNER B1 2026-09-25: +1 (zone_place_within_pts); W-EXEC-TRUTH W3: +4 (entry_policy_default, zone_max_pts, zone_rest_max_min, min_hold_min)

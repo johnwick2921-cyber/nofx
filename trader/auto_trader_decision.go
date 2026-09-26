@@ -56,7 +56,13 @@ func (at *AutoTrader) saveDecision(record *store.DecisionRecord) error {
 	}
 
 	if err := at.store.Decision().LogDecision(record); err != nil {
-		logger.Infof("⚠️ Failed to save decision record: %v", err)
+		// P1-D (audit 2026-09-26): a lost decision row is never INFO-only — WARN
+		// auto-promotes to the WARN+ DB sink (journald prunes INFO at the 2G cap),
+		// and RecordError makes it queryable on /api/risk/errors. Every discard
+		// site rides this path, so none can drop the failure silently.
+		telemetry.RecordError(at.id, "decision_save_failed", err.Error(), telemetry.CostDecisionLost)
+		logger.Warnf("[trader_id=%s] ⚠️ Failed to save decision record (account=%s plan_id=%s plan_version=%d op=save_decision): %v",
+			record.TraderID, record.Account, record.PlanID, record.PlanVersion, err)
 		return err
 	}
 

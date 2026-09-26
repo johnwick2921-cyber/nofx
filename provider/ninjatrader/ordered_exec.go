@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -15,11 +16,15 @@ import (
 // execution lock can wedge registration. This design instead gives each
 // (symbol, account) owner its OWN worker goroutine:
 //
-//   - The read loop only ENQUEUES — non-blocking, never drops. The queue is an
-//     UNBOUNDED mutex-guarded slice + a coalesced wake channel (say which: a
-//     slice, so a stuck consumer grows memory instead of losing a fill; the
-//     wake channel is cap 1 so a burst of frames still wakes the worker once).
-//     No SQLite work ever runs on the read goroutine.
+//   - The read loop only ENQUEUES. The queue is a BOUNDED mutex-guarded slice
+//     (orderedQueueCap) + a coalesced wake channel (cap 1, so a burst of frames
+//     still wakes the worker once). A frame is NEVER dropped: a full queue
+//     blocks the enqueue (P2-14) with a per-pass timeout that logs ERROR and
+//     bumps a counter, then keeps waiting for room — a stuck durable consumer
+//     stalls the read loop LOUDLY instead of growing memory unbounded; the
+//     server-side heartbeat-receive stall bounds that state at 60s and forces a
+//     reconnect (the AddOn re-syncs its book on reconnect). No SQLite work ever
+//     runs on the read goroutine.
 //   - The worker drains FIFO and calls each handler OUTSIDE any registry lock
 //     (the owner struct is immutable once registered; re-registration replaces
 //     the map entry, the old worker drains and exits).
@@ -69,13 +74,19 @@ type orderedItem struct {
 type orderedOwner struct {
 	queueMu  sync.Mutex
 	queue    []orderedItem
-	wake     chan struct{} // cap 1, coalesced
+	wake     chan struct{} // cap 1, coalesced — new work
+	space    chan struct{} // cap 1, coalesced — room dequeued
 	handlers OrderedExecutionHandlers
 	closed   bool
+
+	// overflowCount counts frames that found the queue full (P2-14); the
+	// ERROR log is rate-limited but every overflowed frame is counted.
+	overflowCount  atomic.Int64
+	lastOverflowAt atomic.Int64 // unix-nano of the last full-queue ERROR log
 }
 
 func newOrderedOwner(h OrderedExecutionHandlers) *orderedOwner {
-	return &orderedOwner{handlers: h, wake: make(chan struct{}, 1)}
+	return &orderedOwner{handlers: h, wake: make(chan struct{}, 1), space: make(chan struct{}, 1)}
 }
 
 // RegisterOrderedExecutionsFor installs (or refuses to replace) the durable
@@ -112,18 +123,30 @@ func (s *TCPServer) RegisterOrderedExecutionsFor(symbol, account string, h Order
 				delete(s.orderedOwners, key)
 			}
 			s.orderedMu.Unlock()
-			// Wake the worker so it observes closed and drains out.
+			// Wake the worker so it observes closed and drains out, and any
+			// overflow-blocked enqueuer so it observes closed and falls back
+			// to the advisory fanout (returns false) instead of waiting on a
+			// worker that has exited.
 			select {
 			case owner.wake <- struct{}{}:
+			default:
+			}
+			select {
+			case owner.space <- struct{}{}:
 			default:
 			}
 		})
 	}, nil
 }
 
-// enqueueOrdered appends one frame to the owner's queue (non-blocking, never
-// drops) and returns whether an owner consumed it. Callers must be the read
-// loop only.
+// enqueueOrdered appends one frame to the owner's queue and returns whether an
+// owner consumed it. Callers must be the read loop only.
+//
+// P2-14: the queue is bounded. A full queue NEVER drops the frame — the
+// enqueue blocks (bounded passes of orderedEnqueueWait, each timing out into an
+// ERROR + a counter) until the worker drains room or the owner closes. A frame
+// arriving while the owner is closed/absent returns false and flows to the
+// advisory fanout exactly as before this bound existed.
 func (s *TCPServer) enqueueOrdered(key string, it orderedItem) bool {
 	s.orderedMu.Lock()
 	owner := s.orderedOwners[key]
@@ -131,23 +154,58 @@ func (s *TCPServer) enqueueOrdered(key string, it orderedItem) bool {
 	if owner == nil {
 		return false
 	}
-	owner.queueMu.Lock()
-	if owner.closed {
+	for first := true; ; first = false {
+		owner.queueMu.Lock()
+		if owner.closed {
+			owner.queueMu.Unlock()
+			return false
+		}
+		if len(owner.queue) < orderedQueueCap {
+			owner.queue = append(owner.queue, it)
+			owner.queueMu.Unlock()
+			select {
+			case owner.wake <- struct{}{}:
+			default:
+			}
+			return true
+		}
+		qlen := len(owner.queue)
 		owner.queueMu.Unlock()
-		return false
+		if first {
+			owner.overflowCount.Add(1)
+		}
+		if now := time.Now(); now.UnixNano()-owner.lastOverflowAt.Load() >= orderedOverflowLogInterval.Nanoseconds() {
+			owner.lastOverflowAt.Store(now.UnixNano())
+			s.logger.Error("tcp_server: ordered-exec queue FULL — read loop blocking; frame is NOT dropped",
+				"key", key, "cap", orderedQueueCap, "len", qlen,
+				"overflow_total", owner.overflowCount.Load())
+		}
+		select {
+		case <-owner.space:
+		case <-time.After(orderedEnqueueWait):
+			// timed out loud; loop re-checks (and re-counts only a NEW frame)
+		}
 	}
-	owner.queue = append(owner.queue, it)
-	owner.queueMu.Unlock()
-	select {
-	case owner.wake <- struct{}{}:
-	default:
-	}
-	return true
 }
 
 // orderedSnapWait bounds how long a worker waits for the post-update
 // order_snapshot watermark before applying with the book suppressed.
 const orderedSnapWait = 2 * time.Second
+
+// orderedQueueCap bounds one owner's FIFO (P2-14). The worker drains at
+// handler speed (SQLite-bound), so 256 frames is minutes of headroom for any
+// real burst; the bound exists so a stalled worker costs LATENCY + loud
+// counters, never unbounded memory.
+const orderedQueueCap = 256
+
+// orderedEnqueueWait is one bounded pass of the never-drop overflow wait. Each
+// elapsed pass logs ERROR and counts; the enqueue then waits again — the frame
+// is applied late, never lost.
+const orderedEnqueueWait = 5 * time.Second
+
+// orderedOverflowLogInterval rate-limits the full-queue ERROR so a stalled
+// worker is loud, not log-flooding.
+const orderedOverflowLogInterval = 2 * time.Second
 
 // runOrderedOwner drains the FIFO until closed-and-empty, calling handlers on
 // THIS goroutine with NO lock held (R3: a handler that re-registers or takes
@@ -169,6 +227,12 @@ func (s *TCPServer) runOrderedOwner(key string, owner *orderedOwner) {
 		// Copy the handler set locally; the callback runs with NO lock held.
 		h := owner.handlers
 		owner.queueMu.Unlock()
+		// P2-14: wake one overflow-blocked enqueuer per dequeued frame
+		// (coalesced cap-1 — several waiters retry on the lock in turn).
+		select {
+		case owner.space <- struct{}{}:
+		default:
+		}
 
 		switch it.kind {
 		case orderedOrder:
