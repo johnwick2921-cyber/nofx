@@ -428,3 +428,69 @@ describe('DayPlanEditor — effective chips (W1 g)', () => {
     )
   })
 })
+
+// ── FIX-KNOBS (DS-105, 2026-09-26): shipped defaults visible, ineffective rows
+// honest. P2-3: the 9 default-ON knobs with no editing surface get READ-ONLY
+// rows showing effective value + origin. P2-8: ineffective knobs show as
+// read-only "no effect" with the reason. ───────────────────────────────────
+
+const SHIPPED_DEFAULT_PATHS = [
+  'day_plan.zone_place_within_pts',
+  'day_plan.planner_contract',
+  'day_plan.planner_fresh_tape',
+  'day_plan.write_time_feasibility',
+  'day_plan.geometry_reference_levels',
+  'day_plan.condition_status',
+  'day_plan.fade_or_wide_k',
+]
+
+const SESSION_OFFSET_PATHS = [
+  'day_plan.sessions.last_entry_offset_min',
+  'day_plan.sessions.eod_flat_offset_min',
+]
+
+function renderRiskCrypto(
+  config: RiskControlConfig = {} as RiskControlConfig,
+  effective: StudioEffective | null = lookup()
+) {
+  const onChange = vi.fn()
+  const utils = render(
+    <RiskControlEditor
+      config={config}
+      onChange={onChange}
+      language="en"
+      isFutures={false}
+      effective={effective ?? undefined}
+    />
+  )
+  return { onChange, ...utils }
+}
+
+describe('FIX-KNOBS — shipped defaults + ineffective rows (P2-3/P2-8)', () => {
+  it('mounts a read-only chip for every shipped-default day_plan knob', () => {
+    renderPlan()
+    for (const p of SHIPPED_DEFAULT_PATHS) {
+      const c = chipAt(p)
+      expect(c, `missing chip ${p}`).not.toBeNull()
+      expect(c!.textContent).toContain('eff')
+    }
+    const ny = sessionBox('NY')
+    for (const p of SESSION_OFFSET_PATHS) {
+      const c = chipAt(p, ny)
+      expect(c, `missing chip ${p}`).not.toBeNull()
+      expect(c!.textContent).toContain('eff')
+    }
+  })
+
+  it('renders the ineffective risk knobs read-only with a no-effect reason (crypto path)', () => {
+    renderRiskCrypto()
+    for (const p of ['max_margin_usage', 'min_position_size']) {
+      expect(screen.getByTestId(`no-effect-${p}`)).toBeInTheDocument()
+      expect(chipAt(RC + p)).not.toBeNull()
+    }
+    // no editable number inputs for either row
+    expect(screen.queryByTestId('input-max_margin_usage')).toBeNull()
+    expect(screen.queryByTestId('input-min_position_size')).toBeNull()
+  })
+})
+
