@@ -19,6 +19,10 @@ const (
 	// From W2 on, authored_unknown counts TAPE unknowns only; events written
 	// before W2 mix both kinds (the boot line says so).
 	LivenessAuthoredGrammarRefusal = "authored_grammar_refusal"
+	// LivenessBornDeadDropped (FIX-PLANNER 2026-09-25) — one event per scenario
+	// dropped at publish by the born-dead salvage (the read still published with
+	// the surviving scenarios). The whole-read refusal stays LivenessBornDeadRefusal.
+	LivenessBornDeadDropped = "born_dead_dropped"
 )
 
 // This is display freshness, never an entry/wake cutoff.
@@ -87,6 +91,7 @@ type PlanLivenessCounts struct {
 	DeathsRecorded     int64
 	ExhaustionWarnings int64
 	BornDeadRefusals   int64
+	BornDeadDropped    int64 // FIX-PLANNER — scenarios salvaged at publish
 	AuthoredUnknown    int64
 	GrammarRefusals    int64 // W2 A1
 }
@@ -105,7 +110,7 @@ func (s *Store) RecordPlanLivenessEventWithCheck(kind, identity string, now time
 		return false, fmt.Errorf("event identity and clock required")
 	}
 	switch kind {
-	case LivenessExhaustionWarning, LivenessBornDeadRefusal, LivenessAuthoredUnknown, LivenessAuthoredGrammarRefusal:
+	case LivenessExhaustionWarning, LivenessBornDeadRefusal, LivenessBornDeadDropped, LivenessAuthoredUnknown, LivenessAuthoredGrammarRefusal:
 	default:
 		return false, fmt.Errorf("unknown liveness event")
 	}
@@ -144,6 +149,7 @@ func (s *Store) PlanLivenessCounts() (PlanLivenessCounts, error) {
 		ScenarioDeathRecordPrefix:                                  &out.DeathsRecorded,
 		LivenessEventPrefix + LivenessExhaustionWarning + ":":      &out.ExhaustionWarnings,
 		LivenessEventPrefix + LivenessBornDeadRefusal + ":":        &out.BornDeadRefusals,
+		LivenessEventPrefix + LivenessBornDeadDropped + ":":        &out.BornDeadDropped,
 		LivenessEventPrefix + LivenessAuthoredUnknown + ":":        &out.AuthoredUnknown,
 		LivenessEventPrefix + LivenessAuthoredGrammarRefusal + ":": &out.GrammarRefusals,
 	} {
