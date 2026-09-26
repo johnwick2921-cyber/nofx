@@ -43,7 +43,7 @@ ai_config.indicators.rsi_periods,,,strategy field (ai_config.indicators.rsi_peri
 ai_config.prompt_sections.decision_process,,,strategy field (ai_config.prompt_sections.decision_process),store/strategy.go:1901,,,open
 ai_config.prompt_sections.entry_standards,,,entry standards prompt text,store/strategy.go:1899,,,open
 ai_config.prompt_sections.role_definition,,,strategy field (ai_config.prompt_sections.role_definition),store/strategy.go:1895,,,open
-ai_config.prompt_sections.trading_frequency,,,"how often the bot should trade (live text claims exits SUSPENDED — stale, see P2-1)",store/strategy.go:1897,,,open
+ai_config.prompt_sections.trading_frequency,,,"how often the bot should trade (live text claims exits SUSPENDED — stale, see P2-1)",store/strategy.go:1897,,,"skip-owned(DS-102 P2-1: saved prompt data, not a label)"
 ai_config.risk_control.altcoin_max_leverage,,,strategy field (ai_config.risk_control.altcoin_max_leverage),store/strategy.go:2020,,,open
 ai_config.risk_control.altcoin_max_position_value_ratio,,,strategy field (ai_config.risk_control.altcoin_max_position_value_ratio),store/strategy.go:2025,,,open
 ai_config.risk_control.blackout_enabled,,,strategy field (ai_config.risk_control.blackout_enabled),store/strategy.go:2097,,,open
