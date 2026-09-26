@@ -194,12 +194,15 @@
 //   provider/ninjatrader/tcp_framing.go — +1 −1: FillPayload.Status's comment
 //     gains "duplicate_ignored" (AddOn seen-signal dedupe). No field, frame or
 //     identifier changed.
-//   provider/ninjatrader/tcp_server.go  — +52 −4: the attempted-replay guard in
+//   provider/ninjatrader/tcp_server.go  — +53 −2: the attempted-replay guard in
 //     the flush path (settle/resend-once/hold/drop before the write), the
 //     writeFrameHook test seam, the accept-time reconnect stamp, the fill-echo
-//     note, and the boot line. The four removed lines are the old write call
+//     note, and the boot line. The two removed lines are the old write call
 //     re-issued with the seam — the stale-age check, the hold checks and the
-//     Sunday-Shield re-queue are intact.
+//     Sunday-Shield re-queue are intact. (Re-pinned once after the first full
+//     -race run caught a botched accept-loop edit — beginConnectionRecord and
+//     the client-connected log were restored byte-for-byte; that fix is inside
+//     the +53.)
 //   ninjascript/VLTraderTCPClient.cs   — +44 −0: the seen-signal set
 //     (SEEN_SIGNAL_TTL_MINUTES 10 / SEEN_SIGNAL_CAP 1024, never cleared on
 //     fill) answering a replayed entry with fill status "duplicate_ignored"
