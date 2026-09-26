@@ -107,14 +107,12 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 				continue
 			}
 			if allowedChatID == 0 {
-				username := update.Message.From.UserName
-				if err := st.TelegramConfig().BindUser(chatID, "@"+username); err != nil {
-					logger.Errorf("Failed to bind Telegram user: %v", err)
-					sendMsg(bot, chatID, "Binding failed. Please try again.")
-					continue
-				}
-				allowedChatID = chatID
-				logger.Infof("Telegram bound to @%s (chatID: %d)", username, chatID)
+				// P2-12 (audit 0926-system): the first /start no longer binds
+				// blindly — the chat must send back the one-time code issued in
+				// the owner-authenticated app.
+				sendMsg(bot, chatID,
+					"Binding requires a one-time code.\nIn the web dashboard (owner session) open the Telegram bind dialog, copy the code, then send it here as:\n\n/bind <code>")
+				continue
 			} else if chatID != allowedChatID {
 				sendMsg(bot, chatID, "This bot is already bound to another account.")
 				continue
@@ -123,6 +121,42 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 			}
 			lang := st.TelegramConfig().GetLanguage()
 			sendMarkdownMsg(bot, chatID, statusMsg(st, ident.userID, cfg.APIServerPort, lang))
+			continue
+		}
+
+		// ── /bind <code> ─────────────────────────────────────────────────────
+		// P2-12: consume the one-time code; on a match this chat becomes the
+		// bound account.
+		if allowedChatID == 0 && strings.HasPrefix(text, "/bind ") {
+			code := strings.TrimSpace(strings.TrimPrefix(text, "/bind "))
+			if code == "" {
+				sendMsg(bot, chatID, "Usage: /bind <code>")
+				continue
+			}
+			ok, err := st.TelegramConfig().ConsumeBindCode(code)
+			if err != nil {
+				logger.Errorf("Failed to verify Telegram bind code: %v", err)
+				sendMsg(bot, chatID, "Bind code check failed. Please try again.")
+				continue
+			}
+			if !ok {
+				sendMsg(bot, chatID, "Invalid or expired bind code.\nIssue a new one from the dashboard, then send /bind <code>.")
+				continue
+			}
+			ident.refresh()
+			if ident.userID == "" {
+				sendMsg(bot, chatID, "No account found.\nOpen the web dashboard to register, then try /bind again.")
+				continue
+			}
+			username := update.Message.From.UserName
+			if err := st.TelegramConfig().BindUser(chatID, "@"+username); err != nil {
+				logger.Errorf("Failed to bind Telegram user: %v", err)
+				sendMsg(bot, chatID, "Binding failed. Please try again.")
+				continue
+			}
+			allowedChatID = chatID
+			logger.Infof("Telegram bound to @%s (chatID: %d) via one-time code", username, chatID)
+			sendMsg(bot, chatID, "Bound successfully. Welcome.")
 			continue
 		}
 
