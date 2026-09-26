@@ -6,6 +6,7 @@ import (
 	"nofx/config"
 	"nofx/kernel"
 	"nofx/logger"
+	"nofx/safe"
 	"nofx/store"
 	"nofx/trader"
 	"os"
@@ -97,12 +98,14 @@ func (tm *TraderManager) StartAll() {
 
 	logger.Info("🚀 Starting all traders...")
 	for id, t := range tm.traders {
-		go func(traderID string, at *trader.AutoTrader) {
+		safe.GoNet("trader-start-all", id, func() {
+			traderID := id
+			at := t
 			logger.Infof("%s ▶️ Starting trader runtime", traderLogTag(traderID, at.GetName()))
 			if err := at.Run(); err != nil {
 				logger.Warnf("%s runtime error: %v", traderLogTag(traderID, at.GetName()), err)
 			}
-		}(id, t)
+		})
 	}
 }
 
@@ -239,7 +242,9 @@ func (tm *TraderManager) getConcurrentTraderData(traders []*trader.AutoTrader) [
 
 	// Concurrently fetch data for each trader
 	for i, t := range traders {
-		go func(index int, trader *trader.AutoTrader) {
+		safe.GoNet("trader-account-fetch", t.GetID(), func() {
+			index := i
+			trader := t
 			// Set timeout to 10 seconds for single trader (increased from 3s for DEX reliability)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
@@ -248,14 +253,14 @@ func (tm *TraderManager) getConcurrentTraderData(traders []*trader.AutoTrader) [
 			accountChan := make(chan map[string]interface{}, 1)
 			errorChan := make(chan error, 1)
 
-			go func() {
+			safe.GoNet("trader-account-info", trader.GetID(), func() {
 				account, err := trader.GetAccountInfo()
 				if err != nil {
 					errorChan <- err
 				} else {
 					accountChan <- account
 				}
-			}()
+			})
 
 			status := trader.GetStatus()
 			var traderData map[string]interface{}
@@ -313,7 +318,7 @@ func (tm *TraderManager) getConcurrentTraderData(traders []*trader.AutoTrader) [
 			}
 
 			resultChan <- traderResult{index: index, data: traderData}
-		}(i, t)
+		})
 	}
 
 	// Collect all results
@@ -752,7 +757,11 @@ func (tm *TraderManager) addTraderFromStore(traderCfg *store.Trader, aiModelCfg 
 	// Auto-start if trader was running before shutdown
 	if traderCfg.IsRunning {
 		logger.Infof("%s 🔄 Auto-starting trader (was running before shutdown)...", traderLogTag(traderCfg.ID, traderCfg.Name))
-		go func(trader *trader.AutoTrader, traderName, traderID, userID string) {
+		safe.GoNet("trader-autostart", traderCfg.ID, func() {
+			trader := at
+			traderName := traderCfg.Name
+			traderID := traderCfg.ID
+			userID := traderCfg.UserID
 			if err := trader.Run(); err != nil {
 				logger.Warnf("%s trader stopped with error: %v", traderLogTag(traderID, traderName), err)
 				// Update database to reflect stopped state
@@ -760,7 +769,7 @@ func (tm *TraderManager) addTraderFromStore(traderCfg *store.Trader, aiModelCfg 
 					_ = st.Trader().UpdateStatus(userID, traderID, false)
 				}
 			}
-		}(at, traderCfg.Name, traderCfg.ID, traderCfg.UserID)
+		})
 		logger.Infof("%s ✅ Trader auto-started successfully", traderLogTag(traderCfg.ID, traderCfg.Name))
 	}
 

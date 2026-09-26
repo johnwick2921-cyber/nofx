@@ -122,11 +122,11 @@ func TrackTrade(event TradeEvent) {
 	}
 
 	// Send asynchronously to not block trading
-	go func() {
+	goTracked("ga4-trade", func() {
 		if err := sendTradeEvent(event); err != nil {
 			IncGA4Failure()
 		}
-	}()
+	})
 }
 
 // sendTradeEvent sends the trade event to GA4
@@ -184,7 +184,7 @@ func TrackStartup(version string) {
 		return
 	}
 
-	go func() {
+	goTracked("ga4-event", func() {
 		client.mu.RLock()
 		installationID := client.installationID
 		client.mu.RUnlock()
@@ -206,7 +206,7 @@ func TrackStartup(version string) {
 		if err := postTelemetryEvent(payload); err != nil {
 			IncGA4Failure()
 		}
-	}()
+	})
 }
 
 func TrackAIUsage(event AIUsageEvent) {
@@ -214,7 +214,7 @@ func TrackAIUsage(event AIUsageEvent) {
 		return
 	}
 
-	go func() {
+	goTracked("ga4-event", func() {
 		client.mu.RLock()
 		installationID := client.installationID
 		client.mu.RUnlock()
@@ -243,6 +243,22 @@ func TrackAIUsage(event AIUsageEvent) {
 		if err := postTelemetryEvent(payload); err != nil {
 			IncGA4Failure()
 		}
+	})
+}
+
+// goTracked runs a fire-and-forget telemetry post in its own goroutine under
+// the panic net: a panic counts a GA4 failure and an error, never kills the
+// process. safe.GoNet cannot be imported here (safe counts via telemetry —
+// an import cycle), so the recover lives inline.
+func goTracked(name string, fn func()) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				IncGA4Failure()
+				RecordError("", "goroutine_panic", name+": "+fmt.Sprint(r), CostNone)
+			}
+		}()
+		fn()
 	}()
 }
 
