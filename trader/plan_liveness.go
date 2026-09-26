@@ -42,6 +42,38 @@ func (at *AutoTrader) validateAuthoredScenariosAt(doc *kernel.PlanDoc, session, 
 	if err == nil {
 		return &r.Check, nil
 	}
+	// FIX-PLANNER (2026-09-25) item 1 — scenario-level born-dead salvage. A
+	// scenario invalidated between read and publish is DROPPED and recorded;
+	// the rest of the plan PUBLISHES when at least one valid scenario remains.
+	// Grammar refusals, a death{} met and a flip{} fired stay whole-read
+	// refusals (a plan-level line already crossed cannot be salvaged away).
+	// Only when NO valid scenario remains does the read die (below).
+	if len(r.Grammar) == 0 && r.Flip == nil && r.Death == nil && len(r.Dead) > 0 {
+		dead := make(map[string]string, len(r.Dead))
+		for _, d := range r.Dead {
+			if id, reason, ok := strings.Cut(d, ": "); ok {
+				dead[id] = reason
+			} else {
+				dead[d] = d // the id IS the entry when the cut fails; never invented
+			}
+		}
+		kept := doc.Scenarios[:0]
+		for _, sc := range doc.Scenarios {
+			if reason, isDead := dead[sc.ID]; isDead {
+				at.logWarnf("💀 born-dead %s dropped at publish: %s", sc.ID, reason)
+				if _, derr := at.store.RecordPlanLivenessEvent(store.LivenessBornDeadDropped, fmt.Sprintf("%s:%s:%s:%s:%d", at.id, tradeDate, session, sc.ID, now.UnixNano()), now, reason); derr != nil {
+					at.logWarnf("plan liveness telemetry write failed: %v", derr)
+				}
+				continue
+			}
+			kept = append(kept, sc)
+		}
+		doc.Scenarios = kept
+		if len(kept) > 0 {
+			return &r.Check, nil // salvaged — the surviving plan publishes
+		}
+		// none remain: fall through to the whole-read born-dead refusal.
+	}
 	if r.BornDead() || r.Flip != nil {
 		at.logWarnf("plan liveness born-dead REFUSAL: %s %s at %s — %v; re-author within existing attempts", tradeDate, session, kernel.FormatCT(now), err)
 		if _, rerr := at.store.RecordPlanLivenessEventWithCheck(store.LivenessBornDeadRefusal, fmt.Sprintf("%s:%s:%s:%d", at.id, tradeDate, session, now.UnixNano()), now, err.Error(), record); rerr != nil {
@@ -83,9 +115,9 @@ func (at *AutoTrader) observePlanExhaustionAt(plan *kernel.ActivePlan, states ma
 func PlanLivenessBootLine(st *store.Store) string {
 	counts, err := st.PlanLivenessCounts()
 	if err != nil {
-		return fmt.Sprintf("plan liveness: tradeable=n/a · exhausted-warnings=UNKNOWN · born-dead refusals=UNKNOWN · deaths recorded=UNKNOWN · invalidation: %s · grammar refusals=UNKNOWN (event store unavailable)", kernel.AuthoredInvalidationPolicy())
+		return fmt.Sprintf("plan liveness: tradeable=n/a · exhausted-warnings=UNKNOWN · born-dead refusals=UNKNOWN · born-dead dropped=UNKNOWN · deaths recorded=UNKNOWN · invalidation: %s · grammar refusals=UNKNOWN (event store unavailable)", kernel.AuthoredInvalidationPolicy())
 	}
-	return fmt.Sprintf("plan liveness: tradeable=n/a · exhausted-warnings=%d · born-dead refusals=%d · deaths recorded=%d · invalidation: %s · grammar refusals=%d · authored UNKNOWN(tape; pre-W2 events mix grammar+tape)=%d · exhaustion=%s · flip→reread=n/a(strategy loads at trader start; W-FLIP-REREAD)", counts.ExhaustionWarnings, counts.BornDeadRefusals, counts.DeathsRecorded, kernel.AuthoredInvalidationPolicy(), counts.GrammarRefusals, counts.AuthoredUnknown, planExhaustionPolicy())
+	return fmt.Sprintf("plan liveness: tradeable=n/a · exhausted-warnings=%d · born-dead refusals=%d · born-dead dropped=%d · deaths recorded=%d · invalidation: %s · grammar refusals=%d · authored UNKNOWN(tape; pre-W2 events mix grammar+tape)=%d · exhaustion=%s · flip→reread=n/a(strategy loads at trader start; W-FLIP-REREAD)", counts.ExhaustionWarnings, counts.BornDeadRefusals, counts.BornDeadDropped, counts.DeathsRecorded, kernel.AuthoredInvalidationPolicy(), counts.GrammarRefusals, counts.AuthoredUnknown, planExhaustionPolicy())
 }
 
 func planExhaustionPolicy() string { return "warn-only" }

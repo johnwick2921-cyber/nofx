@@ -995,6 +995,9 @@ func (at *AutoTrader) maybeRecordClosedTradeAnalyticsAt(now time.Time) {
 // path — the caller needs that to decide whether an "overrun" is a fault or the
 // deliberate backoff (E5, owner ruling 2026-09-07).
 func (at *AutoTrader) tickOnce(isGrid bool) (closedSkip bool) {
+	if panicInTickOnce.Load() {
+		panic("test-injected panic in tickOnce")
+	}
 	// E5: one flag, one lifetime. Cleared at entry and read at every exit, so a
 	// cycle that returns early (grid, stale_dodge, cadence) can never inherit
 	// the previous cycle's closed-market verdict.
