@@ -121,7 +121,14 @@ Outgoing fill notification.
 - `fill_price`: actual average fill price.
 - `fill_time`: RFC3339 UTC.
 - `slippage_ticks`: `(fill_price - entry) / tick_size`, signed (positive = paid more than planned for a long, less than planned for a short).
-- `status`: `filled`, `rejected`, or `partial`. Rejected fills indicate NT8 refused the order; the Go side does NOT retry — manual operator intervention is required.
+- `status`: `filled`, `rejected`, or `partial`. Rejected fills indicate NT8 refused the order; the Go side does NOT retry — manual operato
+- `status: "duplicate_ignored"` (FIX-DOUBLE-ENTRY, 2026-09-26): the AddOn's
+  seen-signal dedupe answered a REPLAYED entry frame — the same `signal_id`
+  already arrived and was submitted (or is still tracked). No order was placed
+  for this frame. The Go side treats this as ALREADY HANDLED: no pending
+  drop, no cached fill, no reject, no re-arm. The original entry's own
+  fill/order_update owns the state. A pre-dedupe AddOn never emits this
+  status, and the Go guard does not depend on it.r intervention is required.
 - `symbol` (P5.2, protocol v2): the order's instrument root (e.g. `"MNQ"`), for multi-symbol attribution. EMPTY/absent = legacy (pre-v2) AddOn → the Go side attributes the fill to the trader's primary symbol. The Go fill consumer REJECTS (warn + drop) a non-empty symbol that doesn't match the trader's instrument — the split-brain defense.
 - `account` (Phase 4): the NT8 account the fill executed on.
 
