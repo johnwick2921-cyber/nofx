@@ -1050,9 +1050,16 @@ namespace NinjaTrader.NinjaScript.AddOns
                 seenSignals[signalId] = DateTime.UtcNow;
                 if (seenSignals.Count > SEEN_SIGNAL_CAP)
                 {
-                    var expired = seenSignals.Where(kv => (DateTime.UtcNow - kv.Value).TotalMinutes >= SEEN_SIGNAL_TTL_MINUTES)
-                                             .Select(kv => kv.Key).ToList();
-                    foreach (var k in expired) seenSignals.Remove(k);
+                    // P3 (DS-101 adversarial review, 2026-09-26): a HARD cap —
+                    // evict oldest-first, TTL or not. A soft cap that removes
+                    // only expired entries is bounded by TTL x rate, not by
+                    // SEEN_SIGNAL_CAP.
+                    var oldest = seenSignals.OrderBy(kv => kv.Value)
+                                            .Take(seenSignals.Count - SEEN_SIGNAL_CAP)
+                                            .Select(kv => kv.Key).ToList();
+                    foreach (var k in oldest) seenSignals.Remove(k);
+                    LogWarn("VLTraderTCPClient: seen-signal set hit its hard cap " + SEEN_SIGNAL_CAP +
+                            " — evicted " + oldest.Count + " oldest entries (oldest-first)");
                 }
             }
 

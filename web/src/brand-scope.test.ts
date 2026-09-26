@@ -237,11 +237,13 @@
 //     first full -race run caught a botched accept-loop edit — beginConnectionRecord
 //     and the client-connected log were restored byte-for-byte; that fix is
 //     inside the +56.)
-//   ninjascript/VLTraderTCPClient.cs   — +44 −0: the seen-signal set
+//   ninjascript/VLTraderTCPClient.cs   — +45 −0: the seen-signal set
 //     (SEEN_SIGNAL_TTL_MINUTES 10 / SEEN_SIGNAL_CAP 1024, never cleared on
 //     fill) answering a replayed entry with fill status "duplicate_ignored"
-//     before CreateOrder. ADDITIVE only: no identifier renamed, no guard
-//     removed, no VL_BUILD_ID bump (the owner compiles + F5s).
+//     before CreateOrder; P3 (DS-101 review) hardened the cap to
+//     oldest-first eviction past the cap + a WARN. ADDITIVE only: no
+//     identifier renamed, no guard removed, no VL_BUILD_ID bump (the owner
+//     compiles + F5s).
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'

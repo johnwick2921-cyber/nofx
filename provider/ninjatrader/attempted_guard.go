@@ -147,23 +147,45 @@ func (s *TCPServer) decideAttemptedEntry(sig SignalPayload, now time.Time) attem
 	if s.attempted.echoedAfter(sig.SignalID, recAt) {
 		return attemptedSettle
 	}
-	// 2. Fresh broker truth taken AFTER the reconnect.
-	snap, recvAt, ok := s.orderSnaps.LatestReceivedAny()
+	// 2. Fresh broker truth taken AFTER the reconnect — from the frame's OWN
+	// account book (P1, DS-101 adversarial review, 2026-09-26): another
+	// account's fresh book must never decide this account's frame. A fresh
+	// EMPTY book for B resend-deciding A's frame would re-open the double
+	// exactly when A's book lags. Only a legacy frame with NO account may use
+	// the any-account book, and that path is logged at WARN.
+	snap, recvAt, ok, legacy := s.freshBookFor(sig, recAt)
 	if ok && recvAt.After(recAt) {
+		if legacy {
+			s.logger.Warn("tcp_server: attempted-entry decision used the any-account book (frame carries no account)",
+				"op", "attempted_entry_legacy_book", "signal_id", sig.SignalID)
+		}
 		for _, o := range snap.Orders {
 			if strings.EqualFold(strings.TrimSpace(o.Name), strings.TrimSpace(sig.SignalID)) {
 				return attemptedSettle
 			}
 		}
-		// A fresh book that does NOT hold the order: the frame never landed.
+		// A fresh OWN book that does NOT hold the order: the frame never landed.
 		// Resend once (checkSignalAge still gates at the write).
 		return attemptedResend
 	}
-	// 3. No fresh snapshot yet: bounded wait, then fail closed.
+	// 3. The frame's own book is not fresh (or absent): bounded wait, then
+	// fail closed. Another account's evidence does not shorten this.
 	if now.Sub(recAt) > s.attemptedWait() {
 		return attemptedDrop
 	}
 	return attemptedHold
+}
+
+// freshBookFor picks the book the guard may trust for this frame: the frame's
+// own account book when Account is set (P1), the any-account book only for
+// legacy empty-account frames (legacy=true).
+func (s *TCPServer) freshBookFor(sig SignalPayload, recAt time.Time) (OrderSnapshotPayload, time.Time, bool, bool) {
+	if strings.TrimSpace(sig.Account) != "" {
+		snap, recvAt, ok := s.orderSnaps.LatestReceived(sig.Account)
+		return snap, recvAt, ok, false
+	}
+	snap, recvAt, ok := s.orderSnaps.LatestReceivedAny()
+	return snap, recvAt, ok, true
 }
 
 // scheduleAttemptedRecheck arms the one-shot re-flush for held frames. It is
@@ -222,6 +244,13 @@ func (s *TCPServer) SetAttemptedVerifyWaitForTest(d time.Duration) {
 // SetReconnectAtForTest stamps the reconnect instant directly.
 func (s *TCPServer) SetReconnectAtForTest(t time.Time) {
 	s.attempted.noteReconnect(t)
+}
+
+// NoteEchoForTest feeds a fill echo straight into the guard's echo memory —
+// the production path is the FrameFill case in the read loop; the seam skips
+// the socket (P2 pin, DS-101 adversarial review 2026-09-26).
+func (s *TCPServer) NoteEchoForTest(signalID string, now time.Time) {
+	s.attempted.noteEcho(signalID, now)
 }
 
 // GateBlockCountForTest exposes the counted refusal for the gate name.

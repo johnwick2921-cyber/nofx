@@ -60,7 +60,7 @@ func sigNow(id string) string { return time.Now().UTC().Format(time.RFC3339Nano)
 func TestAttemptedEntryFoundAtBrokerIsNotResent(t *testing.T) {
 	s, _, send, rearm := newAttemptedHarness(t)
 	s.SetWriteFrameHookForTest(func(c net.Conn, sig SignalPayload) error { return errDeadPipe })
-	send(SignalPayload{SignalID: "e1", Timestamp: sigNow("e1")}) // write fails → attempted, requeued
+	send(SignalPayload{SignalID: "e1", Account: "Sim101", Timestamp: sigNow("e1")}) // write fails → attempted, requeued
 	rearm()
 	if s.PendingSignalCount() != 1 || s.PendingAttemptedCount() != 1 {
 		t.Fatalf("fixture: attempted frame expected in pending: %+v", s.pending)
@@ -85,7 +85,7 @@ func TestAttemptedEntryFoundAtBrokerIsNotResent(t *testing.T) {
 func TestAttemptedEntryAbsentFromFreshSnapshotResendsOnce(t *testing.T) {
 	s, _, send, rearm := newAttemptedHarness(t)
 	s.SetWriteFrameHookForTest(func(c net.Conn, sig SignalPayload) error { return errDeadPipe })
-	send(SignalPayload{SignalID: "e2", Timestamp: sigNow("e2")})
+	send(SignalPayload{SignalID: "e2", Account: "Sim101", Timestamp: sigNow("e2")})
 	cli := rearm()
 	if s.PendingSignalCount() != 1 || s.PendingAttemptedCount() != 1 {
 		t.Fatalf("fixture: attempted frame expected in pending: %+v", s.pending)
@@ -146,7 +146,7 @@ func TestAttemptedEntryNoFreshSnapshotDropsAfterWait(t *testing.T) {
 func TestAttemptedEntryStaleSnapshotTreatedAsNoSnapshot(t *testing.T) {
 	s, _, send, rearm := newAttemptedHarness(t)
 	s.SetWriteFrameHookForTest(func(c net.Conn, sig SignalPayload) error { return errDeadPipe })
-	send(SignalPayload{SignalID: "e4", Timestamp: sigNow("e4")})
+	send(SignalPayload{SignalID: "e4", Account: "Sim101", Timestamp: sigNow("e4")})
 	rearm()
 	rec := time.Now()
 	// A snapshot received BEFORE the reconnect proves nothing about it.
@@ -166,7 +166,7 @@ func TestAttemptedEntryVariantsLimitAndStopEntry(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			s, _, send, rearm := newAttemptedHarness(t)
 			s.SetWriteFrameHookForTest(func(c net.Conn, sig SignalPayload) error { return errDeadPipe })
-			send(SignalPayload{SignalID: "e5-" + kind, OrderType: kind, LimitPrice: 100, StopPrice: 101, Timestamp: sigNow("e5")})
+			send(SignalPayload{SignalID: "e5-" + kind, Account: "Sim101", OrderType: kind, LimitPrice: 100, StopPrice: 101, Timestamp: sigNow("e5")})
 			rearm()
 			rec := time.Now()
 			s.SetReconnectAtForTest(rec)
@@ -225,5 +225,111 @@ func TestAttemptedGuardBootLineValues(t *testing.T) {
 	}
 	if !strings.Contains(attemptedGateName, "attempted_entry") {
 		t.Fatal("gate name drift")
+	}
+}
+
+// P1 pin (DS-101 adversarial review, adopted into the wave, RED first): a
+// frame's decision comes from its OWN account book, never another account's.
+func TestReviewAttemptedFrameDecidesFromItsOwnAccountBook(t *testing.T) {
+	s, _, send, rearm := newAttemptedHarness(t)
+	s.SetWriteFrameHookForTest(func(c net.Conn, sig SignalPayload) error { return errDeadPipe })
+	send(SignalPayload{SignalID: "e-a", Account: "A", TraderID: "t-a", Timestamp: sigNow("e-a")})
+	rearm()
+	rec := time.Now()
+	s.SetReconnectAtForTest(rec)
+	// Account B has a FRESH EMPTY book; account A has NO book. B's evidence
+	// must never resend A's frame — the P1 double.
+	s.orderSnaps.PutAt(OrderSnapshotPayload{Account: "B", Orders: []NT8Order{}}, rec.Add(5*time.Millisecond))
+	wrote := false
+	s.SetWriteFrameHookForTest(func(c net.Conn, sig SignalPayload) error { wrote = true; return nil })
+	if err := s.flushPending(); err != nil {
+		t.Fatal(err)
+	}
+	if wrote {
+		t.Fatal("REVIEW FINDING: frame account=A resend-decided from account B's fresh book — the guard must HOLD, never resend on another account's evidence")
+	}
+	if s.PendingSignalCount() != 1 {
+		t.Fatalf("A's frame must stay HELD on B's evidence: got %d", s.PendingSignalCount())
+	}
+	// Fail closed after the wait: still no A book → drop + count.
+	time.Sleep(400 * time.Millisecond) // past the 200ms wait
+	if err := s.flushPending(); err != nil {
+		t.Fatal(err)
+	}
+	if s.PendingSignalCount() != 0 {
+		t.Fatalf("after the wait the unverified A frame must be DROPPED, got %d", s.PendingSignalCount())
+	}
+	if got := GateBlockCountForTest("t-a", attemptedGateName); got != 1 {
+		t.Fatalf("refusal must be counted (attempted_entry_unverified), got %d", got)
+	}
+}
+
+// P1 positive pin: only A's OWN fresh book releases A's frame.
+func TestAttemptedEntryResendsOnlyOnItsOwnFreshBook(t *testing.T) {
+	s, _, send, rearm := newAttemptedHarness(t)
+	s.SetWriteFrameHookForTest(func(c net.Conn, sig SignalPayload) error { return errDeadPipe })
+	send(SignalPayload{SignalID: "e-ab", Account: "A", TraderID: "t-ab", Timestamp: sigNow("e-ab")})
+	cli := rearm()
+	rec := time.Now()
+	s.SetReconnectAtForTest(rec)
+	// B fresh empty → hold (the negative pin above); then A's OWN fresh empty
+	// book → resend exactly once.
+	s.orderSnaps.PutAt(OrderSnapshotPayload{Account: "B", Orders: []NT8Order{}}, rec.Add(5*time.Millisecond))
+	s.SetWriteFrameHookForTest(nil)
+	frames := make(chan Envelope, 1)
+	go func() {
+		env, err := ReadFrame(cli)
+		if err == nil {
+			frames <- env
+		}
+		close(frames)
+	}()
+	if err := s.flushPending(); err != nil {
+		t.Fatal(err)
+	}
+	if s.PendingSignalCount() != 1 {
+		t.Fatalf("fixture: B's book must not release A's frame, got %d", s.PendingSignalCount())
+	}
+	s.orderSnaps.PutAt(OrderSnapshotPayload{Account: "A", Orders: []NT8Order{}}, rec.Add(15*time.Millisecond))
+	if err := s.flushPending(); err != nil {
+		t.Fatal(err)
+	}
+	if s.PendingSignalCount() != 0 {
+		t.Fatalf("A's own fresh book must release the frame, got %d", s.PendingSignalCount())
+	}
+	select {
+	case env := <-frames:
+		if env.Type != FrameSignal {
+			t.Fatalf("frame type %v, want signal", env.Type)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("A's frame must be resent exactly once on A's OWN fresh book")
+	}
+}
+
+// P2 pin (DS-101): the echo-settle branch is live code — deleting it (M3)
+// must fail this test.
+func TestAttemptedEntryEchoSettlesWithNoFreshBook(t *testing.T) {
+	s, _, send, rearm := newAttemptedHarness(t)
+	s.SetWriteFrameHookForTest(func(c net.Conn, sig SignalPayload) error { return errDeadPipe })
+	send(SignalPayload{SignalID: "e-echo", Account: "A", TraderID: "t-echo", Timestamp: sigNow("e-echo")})
+	rearm()
+	rec := time.Now()
+	s.SetReconnectAtForTest(rec)
+	// A fill echo lands after the reconnect; NO snapshot at all.
+	s.NoteEchoForTest("e-echo", rec.Add(5*time.Millisecond))
+	wrote := false
+	s.SetWriteFrameHookForTest(func(c net.Conn, sig SignalPayload) error { wrote = true; return nil })
+	if err := s.flushPending(); err != nil {
+		t.Fatal(err)
+	}
+	if wrote {
+		t.Fatal("an echoed attempted entry must never be resent")
+	}
+	if s.PendingSignalCount() != 0 {
+		t.Fatalf("echo-settled frame must leave the queue, got %d", s.PendingSignalCount())
+	}
+	if got := GateBlockCountForTest("t-echo", attemptedGateName); got != 0 {
+		t.Fatalf("an echo settle is NOT a refusal, got %d", got)
 	}
 }
