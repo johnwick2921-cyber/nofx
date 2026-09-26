@@ -703,15 +703,6 @@ Server rejects non-SIM accounts (is_sim == false) with HTTP 400.`,
 	MountUI(s.router, ResolvedDistDir())
 }
 
-// handleHealth Health check
-func (s *Server) handleHealth(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"status":   "ok",
-		"time":     c.Request.Context().Value("time"),
-		"revision": kernel.RunningRevision(),
-	})
-}
-
 // handleGetSystemConfig Get system configuration (configuration that client needs to know)
 func (s *Server) handleGetSystemConfig(c *gin.Context) {
 	userCount, _ := s.store.User().Count()
