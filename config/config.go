@@ -299,6 +299,17 @@ func Get() *Config {
 	return global
 }
 
+// JWTSecretIsDefault reports whether the effective JWT secret is the insecure
+// hard-coded fallback (P2-13, audit 0926-system): the boot line must print
+// the READ state — INSECURE DEFAULT vs custom — instead of an unconditional
+// "configured".
+func (c *Config) JWTSecretIsDefault() bool {
+	if c == nil {
+		return true
+	}
+	return strings.TrimSpace(c.JWTSecret) == "" || strings.TrimSpace(c.JWTSecret) == InsecureDefaultJWTSecret
+}
+
 func getEnvOrDefault(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v

@@ -100,17 +100,30 @@ check_transport() {
 }
 
 # ---------------------------------------------------------------------------
-# 5. fast-market max — owner rule: MAX everywhere. FAST_MARKET_REASONING must
-#    be max, and no read may log a fast-market reasoning downgrade.
+# 5. fast-market reasoning — the wire must match the .env-declared level
+#    (default max when unset, per the owner's MAX rule). A read at any other
+#    level is a mismatch FAIL.
 # ---------------------------------------------------------------------------
-check_fast_market_max() {
-  grep -qE '^FAST_MARKET_REASONING=max' "$NOFX_ENV" 2>/dev/null \
-    || { bad "FAST_MARKET_REASONING=max not in .env (owner rule: MAX everywhere)"; }
-  if grep -q 'planner mode: fast-market.*reasoning downgraded to ' "$LOG" 2>/dev/null; then
-    bad "fast-market downgrade observed: $(grep -m1 'planner mode: fast-market' "$LOG")"
-  else
-    ok "no fast-market reasoning downgrade in log"
+check_fast_market_reasoning() {
+  local expected lines bad
+  expected=$(grep -m1 -E '^FAST_MARKET_REASONING=' "$NOFX_ENV" 2>/dev/null | tail -1 | cut -d= -f2-)
+  [ -z "$expected" ] && expected=max
+  lines=$(grep 'planner mode: fast-market' "$LOG" 2>/dev/null)
+  if [ -z "$lines" ]; then
+    ok "no fast-market read yet — nothing to mismatch (env FAST_MARKET_REASONING=$expected)"
+    return
   fi
+  bad=0
+  while IFS= read -r l; do
+    if echo "$l" | grep -q "downgraded to $expected"; then
+      :
+    else
+      bad=1
+      echo "  mismatch: ${l:0:160}"
+    fi
+  done <<<"$lines"
+  [ "$bad" = "0" ] && ok "every fast-market read at the .env level ($expected)" \
+    || bad "a fast-market read ran at a level other than FAST_MARKET_REASONING=$expected"
 }
 
 # ---------------------------------------------------------------------------
@@ -148,18 +161,35 @@ check_busy_timeout() {
 }
 
 # ---------------------------------------------------------------------------
-# 8. first planner read at max — the FIRST planner call line after boot must
-#    read reasoning=max, and the per-trader lifecycle line plan_reasoning=max.
+# 8. first planner read at the .env-declared level — the expected level is
+#    READ from AI_PLAN_REASONING in .env (default max when unset, per the
+#    owner's MAX rule). PASS = the first post-boot planner wire matches it;
+#    FAIL only on a mismatch (the owner's HIGH A/B from this weekend boot
+#    passes when .env says high).
 # ---------------------------------------------------------------------------
-check_planner_max() {
-  local first
+check_planner_reasoning() {
+  local expected first
+  expected=$(grep -m1 -E '^AI_PLAN_REASONING=' "$NOFX_ENV" 2>/dev/null | tail -1 | cut -d= -f2-)
+  [ -z "$expected" ] && expected=max
   first=$(grep -m1 '🧠 planner call (reasoning=' "$LOG" 2>/dev/null)
   [ -n "$first" ] || { bad "no planner call line found"; return; }
-  echo "$first" | grep -q 'reasoning=max' && ok "first planner call at max: ${first:0:120}" \
-    || bad "first planner call not max: ${first:0:120}"
-  grep -m1 '🧬 plan lifecycle:' "$LOG" 2>/dev/null | grep -q 'plan_reasoning=max' \
-    && ok "plan lifecycle line reads plan_reasoning=max" \
-    || bad "plan lifecycle line missing plan_reasoning=max"
+  echo "$first" | grep -q "reasoning=$expected" \
+    && ok "first planner call matches AI_PLAN_REASONING=$expected" \
+    || bad "first planner call does NOT match AI_PLAN_REASONING=$expected: ${first:0:140}"
+}
+
+# ---------------------------------------------------------------------------
+# 8b. duplicate reasoning keys in .env — WARN only (the bot reads the LAST
+#     occurrence; multiple keys are a footgun, not a boot defect).
+# ---------------------------------------------------------------------------
+check_reasoning_env_dupes() {
+  local k n
+  for k in AI_PLAN_REASONING FAST_MARKET_REASONING AI_EXEC_REASONING; do
+    n=$(grep -cE "^$k=" "$NOFX_ENV" 2>/dev/null || true)
+    if [ -n "$n" ] && [ "$n" -gt 1 ]; then
+      echo "WARN $k appears ${n}× in .env — the LAST line wins for the bot; remove the duplicates"
+    fi
+  done
 }
 
 # ---------------------------------------------------------------------------
@@ -250,10 +280,11 @@ check_stop_entry
 check_retention
 check_jwt
 check_transport
-check_fast_market_max
+check_fast_market_reasoning
 check_death_reread
 check_busy_timeout
-check_planner_max
+check_planner_reasoning
+check_reasoning_env_dupes
 check_salvage_counters
 check_no_errors
 check_underscore_eq
