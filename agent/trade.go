@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -112,82 +111,6 @@ func (p *pendingTrades) CleanExpired() {
 		if t.CreatedAt < cutoff {
 			delete(p.trades, id)
 		}
-	}
-}
-
-// parseTradeCommand parses natural language trade commands.
-// Returns nil if the message is not a trade command.
-func parseTradeCommand(text string) *TradeAction {
-	upper := strings.ToUpper(strings.TrimSpace(text))
-
-	// Pattern: "做多 BTC 0.01" / "做空 ETH 0.1" / "long BTC 0.01" / "short ETH 0.1"
-	// Also: "平多 BTC" / "平空 ETH" / "close long BTC" / "close short ETH"
-
-	var action, symbol string
-	var quantity float64
-	var leverage int
-
-	words := strings.Fields(upper)
-	if len(words) < 2 {
-		return nil
-	}
-
-	switch words[0] {
-	case "做多", "LONG", "BUY":
-		action = "open_long"
-	case "做空", "SHORT", "SELL":
-		action = "open_short"
-	case "平多":
-		action = "close_long"
-	case "平空":
-		action = "close_short"
-	case "CLOSE":
-		if len(words) >= 3 {
-			switch words[1] {
-			case "LONG":
-				action = "close_long"
-				words = append(words[:1], words[2:]...) // remove "LONG"
-			case "SHORT":
-				action = "close_short"
-				words = append(words[:1], words[2:]...) // remove "SHORT"
-			}
-		}
-		if action == "" {
-			return nil
-		}
-	default:
-		return nil
-	}
-
-	// Parse symbol
-	if len(words) < 2 {
-		return nil
-	}
-	symbol = chatTradeSymbol(words[1]) // W1b FOLD-5: the one chat-symbol canonicalizer
-
-	// Parse quantity (optional)
-	if len(words) >= 3 {
-		fmt.Sscanf(words[2], "%f", &quantity)
-	}
-
-	// Parse leverage (optional, "x10" or "10x")
-	if len(words) >= 4 {
-		lev := strings.TrimSuffix(strings.TrimPrefix(words[3], "X"), "X")
-		fmt.Sscanf(lev, "%d", &leverage)
-	}
-
-	if action == "" || symbol == "" {
-		return nil
-	}
-
-	return &TradeAction{
-		ID:        fmt.Sprintf("trade_%d", time.Now().UnixNano()),
-		Action:    action,
-		Symbol:    symbol,
-		Quantity:  quantity,
-		Leverage:  leverage,
-		Status:    "pending",
-		CreatedAt: time.Now().Unix(),
 	}
 }
 
@@ -499,65 +422,6 @@ func isBTCETHSymbol(symbol string) bool {
 	return strings.HasPrefix(symbol, "BTC") || strings.HasPrefix(symbol, "ETH")
 }
 
-// formatTradeConfirmation creates a confirmation message for a pending trade.
-func formatTradeConfirmation(trade *TradeAction, lang string) string {
-	actionNames := map[string]string{
-		"open_long":   "做多 (Long)",
-		"open_short":  "做空 (Short)",
-		"close_long":  "平多 (Close Long)",
-		"close_short": "平空 (Close Short)",
-	}
-
-	symbol := trade.Symbol
-	if strings.HasSuffix(symbol, "USDT") {
-		symbol = strings.TrimSuffix(symbol, "USDT")
-	}
-	actionName := actionNames[trade.Action]
-	if actionName == "" {
-		actionName = trade.Action
-	}
-
-	if lang == "zh" {
-		msg := fmt.Sprintf("⚠️ **交易确认**\n\n"+
-			"操作: %s\n"+
-			"品种: %s\n", actionName, symbol)
-		if trade.Quantity > 0 {
-			msg += fmt.Sprintf("数量: %.4f\n", trade.Quantity)
-		}
-		if trade.Leverage > 0 {
-			msg += fmt.Sprintf("杠杆: %dx\n", trade.Leverage)
-		}
-		if trade.EstimatedNotional > 0 {
-			msg += fmt.Sprintf("估算仓位价值: %.2f USDT\n", trade.EstimatedNotional)
-		}
-		if trade.RequiresLargeOrderConfirmation {
-			msg += fmt.Sprintf("\n⚠️ 该订单已触发大额风控，请发送 `"+tradeLargeOrderConfirmCommandZH+"` 执行交易，或忽略取消。", trade.ID)
-			return msg
-		}
-		msg += fmt.Sprintf("\n发送 `确认 %s` 执行交易，或忽略取消。", trade.ID)
-		return msg
-	}
-
-	msg := fmt.Sprintf("⚠️ **Trade Confirmation**\n\n"+
-		"Action: %s\n"+
-		"Symbol: %s\n", actionName, symbol)
-	if trade.Quantity > 0 {
-		msg += fmt.Sprintf("Quantity: %.4f\n", trade.Quantity)
-	}
-	if trade.Leverage > 0 {
-		msg += fmt.Sprintf("Leverage: %dx\n", trade.Leverage)
-	}
-	if trade.EstimatedNotional > 0 {
-		msg += fmt.Sprintf("Estimated notional: %.2f USDT\n", trade.EstimatedNotional)
-	}
-	if trade.RequiresLargeOrderConfirmation {
-		msg += fmt.Sprintf("\n⚠️ This order triggered high-risk protection. Send `"+tradeLargeOrderConfirmCommandEN+"` to execute, or ignore to cancel.", trade.ID)
-		return msg
-	}
-	msg += fmt.Sprintf("\nSend `confirm %s` to execute, or ignore to cancel.", trade.ID)
-	return msg
-}
-
 // handleTradeConfirmation processes a trade confirmation message.
 func (a *Agent) handleTradeConfirmation(ctx context.Context, userID int64, text, lang string) (string, bool) {
 	upper := strings.ToUpper(strings.TrimSpace(text))
@@ -689,10 +553,4 @@ func tradeFailureReply(trade *TradeAction, err error, lang string) string {
 		return fmt.Sprintf("❌ 交易执行失败: %s", err.Error())
 	}
 	return fmt.Sprintf("❌ Trade execution failed: %s", err.Error())
-}
-
-// marshals trade action to JSON for embedding in responses
-func marshalTradeAction(trade *TradeAction) string {
-	b, _ := json.Marshal(trade)
-	return string(b)
 }

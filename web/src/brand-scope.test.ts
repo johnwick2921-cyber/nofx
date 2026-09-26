@@ -50,6 +50,18 @@
 // Bar-feed baselines advanced AGAIN on the dev merge (origin/dev 9c106d0b,
 // #216/#219 touched tcp_server.go): the MERGED bytes pin to sha256 fdb54226…
 //   (re-computed from the merged tree — both pre-merge pins are superseded).
+// Bar-feed baseline advanced 2026-09-26 for FIX-P1A (fix/farside-proof-reconnect,
+// the far-side AddOn build proof must be cleared on disconnect and re-proven by
+// the new connection's hello):
+//   provider/ninjatrader/tcp_server.go — closeConn gains one line
+//     `s.farSideBuild.Store("")` plus its comment (the FIX-P1A retirement of the
+//     proof). Additive; no identifier renamed, no guard removed, the hello/
+//     heartbeat/order_snapshot prove sites are byte-untouched.
+// Baseline advanced AGAIN 2026-09-26 for the FIX-P1A CI-red fix-up (same branch,
+// the CTO's traceability ruling): provider/ninjatrader/tcp_framing.go gains
+//   `ErrFarSideNotProven` (a new sentinel beside ErrAddonBuildTooOld so a
+//   link-down / not-yet-re-proven refusal names its true reason). Additive; no
+//   existing identifier renamed, no wire shape changed.
 // Bar-feed baseline advanced 2026-09-25 for DS-105 DEFAULTS-SANE (#212 fold):
 //   provider/ninjatrader/tcp_server.go — the live-sink age bound's name is
 //     exported for the Picture floor pins (liveFrameMaxAgeMs → LiveFrameMaxAgeMs
@@ -221,6 +233,29 @@
 //     The bar-feed guards this pin protects are byte-untouched by the delta.
 //     Re-pinned at the dev-merge heads against the MERGED bytes (093a40e7 →
 //     9ef5a75b…, 9c106d0b → 664cc10b…).
+// Wire baselines advanced 2026-09-26 for FIX-DOUBLE-ENTRY (fix/double-entry-replay,
+// the reconnect re-send double-entry guard), each delta measured against the
+// wave base 04ae1c2f:
+//   provider/ninjatrader/tcp_framing.go — +1 −1: FillPayload.Status's comment
+//     gains "duplicate_ignored" (AddOn seen-signal dedupe). No field, frame or
+//     identifier changed.
+//   provider/ninjatrader/tcp_server.go  — +56 −2: the attempted-replay guard in
+//     the flush path (settle/resend-once/hold/drop before the write), the
+//     writeFrameHook test seam, the accept-time reconnect stamp, the fill-echo
+//     note, the boot line, and the B2/B3 log hardening (settle/drop WARN with
+//     trader_id + symbol + signal_id + op). The two removed lines are the old
+//     write call re-issued with the seam — the stale-age check, the hold checks
+//     and the Sunday-Shield re-queue are intact. (Re-pinned once after the
+//     first full -race run caught a botched accept-loop edit — beginConnectionRecord
+//     and the client-connected log were restored byte-for-byte; that fix is
+//     inside the +56.)
+//   ninjascript/VLTraderTCPClient.cs   — +45 −0: the seen-signal set
+//     (SEEN_SIGNAL_TTL_MINUTES 10 / SEEN_SIGNAL_CAP 1024, never cleared on
+//     fill) answering a replayed entry with fill status "duplicate_ignored"
+//     before CreateOrder; P3 (DS-101 review) hardened the cap to
+//     oldest-first eviction past the cap + a WARN. ADDITIVE only: no
+//     identifier renamed, no guard removed, no VL_BUILD_ID bump (the owner
+//     compiles + F5s).
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'

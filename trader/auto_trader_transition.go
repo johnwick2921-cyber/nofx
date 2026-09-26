@@ -211,7 +211,7 @@ func (at *AutoTrader) maybeWakePlannerOnMSSAt(now time.Time, session, tradeDate 
 	// W6-C (2026-08-25) — the wake re-read is NON-fatal (a failed read keeps
 	// the active plan; failClosed=false) and runs ASYNC so a slow/timing-out
 	// planner can never stall the decision loop for minutes.
-	go func() {
+	at.goNetted("transition-mss-read", func() {
 		// P15 — the seamed wake hands its OWN instant to the read: the planner
 		// input assembly and the authoring clock below must not re-read the wall.
 		_ = at.runPlannerReadWithTriggerClaimedCtx(now, session, tradeDate, "structure_mss", "structure MSS: "+mss.Detail, priorPlanLevelLines(at, row), false)
@@ -219,5 +219,5 @@ func (at *AutoTrader) maybeWakePlannerOnMSSAt(now time.Time, session, tradeDate 
 		if fresh, fErr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, session, at.id); fErr == nil && fresh != nil && fresh.Version != row.Version {
 			at.carryOwnerEditsInto(fresh.PlanID, row.Version, fresh.Version)
 		}
-	}()
+	})
 }
