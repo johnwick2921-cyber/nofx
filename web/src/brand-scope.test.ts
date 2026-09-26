@@ -175,6 +175,32 @@
 //   The bar-feed guards this pin protects are byte-untouched by both deltas:
 //   SubscribeBarsHistoryFor, the bars_history_request write, and the
 //   bars_history_data / _error fan-out.
+// Ops baselines advanced 2026-09-26 for DS-104 FIX-OPS (fix/ops-observability,
+// CTO-dispatched observability/ops wave) — the wave's P2 items change two pinned
+// files BY DISPATCH, not by drift:
+//   deploy/nofx-db-backup.sh  sha256 6d49d291… — P2-5: dual-DB online backup
+//     (main + 212 GB research.db) via a backup_one(src,prefix) helper, prune
+//     and promote_weekly stages, NOFX_DB_RESEARCH / NOFX_KEEP_RESEARCH_* knobs.
+//     The pre-existing main-DB backup path, quick_check and gzip steps are
+//     preserved byte-for-byte inside backup_one; the script's CLI contract
+//     (daily|weekly|prune) is unchanged.
+//   deploy/nofx-db-backup.sh  sha256 0e9dae38… — REVISED same wave after the
+//     CTO's P0 gate on the first version (a 213 GB research snapshot every
+//     timer run would fill the disk): research is now OPT-IN
+//     (NOFX_BACKUP_RESEARCH=1, default OFF — default run = main DB only),
+//     a disk-space precheck (2.5 × source size AND a NOFX_BACKUP_MIN_FREE_GB
+//     50 GB post-backup floor) refuses loudly with nothing written, and the
+//     opted-in retention defaults to 1/1 instead of mirroring 14/8.
+//     Contract tests: deploy/nofx_db_backup_test.go (fake small DBs + a PATH
+//     df shim) — default-touches-only-main, opt-in-backs-up-research,
+//     refuse-on-low-space, refuse-on-floor; mutation "default ON" fails the
+//     first one.
+//   logger/logger.go          sha256 318022bbb6… — P2-2: logRetentionDays()
+//     (LOG_RETENTION_DAYS, 0 = OFF) and pruneOldLogs(dir, now, days, current)
+//     called once at init; never today's/live file. Default OFF: with the knob
+//     unset the shipped behavior is identical to before the change.
+// The protections these pins exist for are byte-untouched: the NT8 wire
+// (tcp_server.go / tcp_framing.go), the auth guard, and the bar-feed guards.
 // Wire baseline advanced 2026-09-25 for W117 slice B (fix/w117-b-cancel-truth,
 // port of #117 2f4db4f3): tcp_server.go's history-delivery send now holds
 // histSubMu through the nonblocking channel send (teardown closes the channel

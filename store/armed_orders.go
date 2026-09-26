@@ -820,7 +820,8 @@ func (s *ArmedOrderStore) ConfirmCancel(id int64, snapshotID int64, reason strin
 	if snapshotID <= 0 {
 		return fmt.Errorf("cancel confirmation requires a persisted snapshot id")
 	}
-	return s.db.Transaction(func(tx *gorm.DB) error {
+	// P2-4: BEGIN IMMEDIATE, not a deferred read→write upgrade.
+	return immediateOrPlainTxAny(s.db, func(tx *gorm.DB) error {
 		var row ArmedOrderDB
 		if err := tx.First(&row, id).Error; err != nil {
 			return err

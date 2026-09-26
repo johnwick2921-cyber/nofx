@@ -14,6 +14,17 @@ timer (no root, survives logout via linger).
 - **Location & retention** (under `~/nofx-backups/auto/`):
   - `daily/nofx-YYYY-MM-DD_HHMMSS.db.gz` — every run; newest **14** kept.
   - `weekly/nofx-...W##.db.gz` — one per ISO week; newest **8** kept.
+- **Research ledger (data/data.db.research.db, 200+ GB live) is OPT-IN**
+  (`NOFX_BACKUP_RESEARCH=1`). Default run = main DB only. When opted in:
+  `daily/research-*.db.gz` newest **1** kept, `weekly/research-*.db.gz` newest
+  **1** kept (short on purpose — a 213 GB snapshot is a disk, not a record).
+- **Disk precheck on EVERY source (main DB too):** the run REFUSES — loud
+  stderr, non-zero exit, nothing written — when free space on the backup volume
+  is < 2.5 × the source size, or when free-after-backup would drop below
+  `NOFX_BACKUP_MIN_FREE_GB` (default **50**). A full disk breaks the live bot;
+  a refused backup is the correct outcome. Knobs: `NOFX_BACKUP_RESEARCH`,
+  `NOFX_BACKUP_MIN_FREE_GB`, `NOFX_KEEP_RESEARCH_DAILY` (1),
+  `NOFX_KEEP_RESEARCH_WEEKLY` (1).
 
 ## Install / manage (all no-sudo)
 

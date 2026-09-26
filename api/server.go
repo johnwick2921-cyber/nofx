@@ -514,6 +514,12 @@ state is one of: ok | flat | stale | unknown. cadence_ms is 5000 while a positio
 				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>
 Returns: {"trader_id":"<string>","daily_pnl_usd":<float>,"daily_loss_limit_usd":<float>,"concurrent_trades":<int>,"max_concurrent_trades":<int>,"current_notional_usd":<float>,"max_notional_usd":<float>,"kill_switch_armed":<bool>,"last_reset_utc":"<RFC3339>"}`,
 				s.handleRiskStatus)
+			s.routeWithSchema(protected, "GET", "/telemetry", "Process-lifetime telemetry counters (P2-8, read-only)",
+				`No params. Returns the previously write-only counters: far arms,
+repair regression, shadowed arm refusals, research-snapshot drops/rows,
+weekly snapshot, GA4 send failures, log-event drop counts.
+Returns: {"far_arms":{"long":<n>,"short":<n>,"authored":<n>},"repair_regression":<n>,"shadowed_arm_refusals":<n>,"research_snapshot":{"drops":<n>,"rows":<n>},"weekly":"<map>","ga4_send_failures":<n>,"log_event_dropped":{"queue_full":<n>,"write_fails":<n>}}`,
+				s.handleTelemetry)
 			s.routeWithSchema(protected, "GET", "/risk/gate-blocks", "Per-trader/session-day gate-block counters (B6)",
 				`No params. Returns today's tally of how many times each risk/safety gate blocked an entry or cycle.
 Returns: {"session_day_utc":"<RFC3339>","summary":"<one-line>","by_trader":{"<trader_id>":{"<gate>":<count>}}}
@@ -700,15 +706,6 @@ Server rejects non-SIM accounts (is_sim == false) with HTTP 400.`,
 	// matched no API route, and only then may it be a page request. A stale or
 	// missing bundle degrades loudly via the boot line rather than failing here.
 	MountUI(s.router, ResolvedDistDir())
-}
-
-// handleHealth Health check
-func (s *Server) handleHealth(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"status":   "ok",
-		"time":     c.Request.Context().Value("time"),
-		"revision": kernel.RunningRevision(),
-	})
 }
 
 // handleGetSystemConfig Get system configuration (configuration that client needs to know)

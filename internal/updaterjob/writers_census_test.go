@@ -82,9 +82,18 @@ func a() { updaterjob.Read("/d", "job") }`,
 		}
 	}
 
-	// the MUTATION at a real module site: a non-test file of an app package
-	// calling a writer is an offender the full census names.
-	probe := filepath.Join("..", "..", "api", "zz_writers_census_probe.go")
+	// the MUTATION at an app-package site: a non-test file OUTSIDE
+	// internal/updaterjob|internal/updaterworker naming a writer is an
+	// offender the full census names. test-srctree-race: the probe lives in a
+	// t.TempDir() FIXTURE TREE, never in the real api/ — a test that writes
+	// into the source tree races every other package's source scan in the
+	// same `go test -p N` run (the ENOENT DS-102 found).
+	fixture := t.TempDir()
+	apiDir := filepath.Join(fixture, "api")
+	if err := os.MkdirAll(apiDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	probe := filepath.Join(apiDir, "zz_writers_census_probe.go")
 	if err := os.WriteFile(probe, []byte(`package api
 
 import "nofx/internal/updaterjob"
@@ -95,8 +104,7 @@ func zzWritersCensusProbe() error {
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(probe)
-	offenders, _, err = jobFileWriterOffenders("")
+	offenders, _, err = jobFileWriterOffenders(fixture)
 	if err != nil {
 		t.Fatal(err)
 	}
