@@ -112,7 +112,13 @@ func main() {
 	armsFlag := flag.String("arms", "a,b", "arm subset: a,b,c")
 	conc := flag.Int("conc", 3, "max concurrent API calls")
 	out := flag.String("out", "ab_results.csv", "per-row CSV")
+	rejudge := flag.String("rejudge", "", "re-judge the raw outputs in this dir with ZERO new API calls and write -out")
 	flag.Parse()
+
+	if *rejudge != "" {
+		runRejudge(*rejudge, *out)
+		return
+	}
 
 	_ = godotenv.Load(*envPath)
 	config.Init()
@@ -443,6 +449,105 @@ func truncate(s string, n int) string {
 	return s[:n]
 }
 
+// runRejudge (CTO 04:39Z) re-runs the core + write-time judges over the saved
+// raw outputs with ZERO new API calls, and rewrites -out. It exists because a
+// born-dead plan must never read as a pass: the live-run CSV had full_pass=true
+// beside born_dead=yes, and the fix must be applied to the SAVED rows too.
+func runRejudge(rawDir, out string) {
+	dir, err := os.ReadDir(rawDir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "raw dir:", err)
+		os.Exit(2)
+	}
+	st, err := store.New("ab.db")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "store:", err)
+		os.Exit(2)
+	}
+	defer st.Close()
+	corpus, err := st.PlannerRejected().CorpusRows("2026-09-10", 1, 100000)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "corpus:", err)
+		os.Exit(2)
+	}
+	byID := map[int]store.PlannerRejectedPrompt{}
+	for _, r := range corpus {
+		byID[int(r.ID)] = r
+	}
+
+	csvF, err := os.Create(out)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "csv:", err)
+		os.Exit(2)
+	}
+	csvW := csv.NewWriter(csvF)
+	_ = csvW.Write(csvHeader())
+
+	names := []string{}
+	for _, e := range dir {
+		if strings.HasSuffix(e.Name(), ".json") {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Strings(names)
+	var results []result
+	for _, name := range names {
+		b, err := os.ReadFile(rawDir + "/" + name)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", name, err)
+			continue
+		}
+		var rec map[string]any
+		if err := json.Unmarshal(b, &rec); err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", name, err)
+			continue
+		}
+		rowID := int(rec["row_id"].(float64))
+		row, ok := byID[rowID]
+		if !ok {
+			fmt.Fprintf(os.Stderr, "%s: row %d not in corpus\n", name, rowID)
+			continue
+		}
+		opts, maxLevels, scenarioCap, cfg, optErr := resolveJudgeParams(st, row.TraderID)
+		if optErr != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", name, optErr)
+			continue
+		}
+		res := result{
+			RowID: rowID,
+			Arm:   rec["arm"].(string), Model: rec["model"].(string),
+			Cap: int(rec["cap"].(float64)), WallS: rec["wall_s"].(float64),
+			Finish: rec["finish"].(string),
+		}
+		if v, ok := rec["prompt_tok"].(float64); ok {
+			res.PromptTok = int(v)
+		}
+		if v, ok := rec["completion_tok"].(float64); ok {
+			res.CompletionTok = int(v)
+		}
+		if v, ok := rec["reasoning_chars"].(float64); ok {
+			res.ReasoningChars = int(v)
+		}
+		res.rawContent, _ = rec["content"].(string)
+		res.cfg = cfg
+		res.session, res.tradeDate = row.Session, row.TradeDate
+		res.prompt = row.PromptText
+		res.symbol = symbolFromPrompt(row.PromptText)
+		res.readAt = readAtFromPrompt(row.PromptText, row.TradeDate)
+		judge(&res, res.rawContent, row.Facts, opts, maxLevels, scenarioCap)
+		res.judgeExtra(st, cfg)
+		if res.CorePass && res.FullReject == "" {
+			res.FullPass = true
+		}
+		results = append(results, res)
+		_ = csvW.Write(res.csvRow())
+		fmt.Printf("rejudge %s: core=%v full=%v born=%s %s\n", name, res.CorePass, res.FullPass, res.BornDead, truncate(res.FullReject, 80))
+	}
+	csvW.Flush()
+	_ = csvF.Close()
+	printTable(results)
+}
+
 var clockRE = regexp.MustCompile(`clock (\d{1,2}:\d{2}) CT`)
 var symbolRE = regexp.MustCompile(`CME (\w+) futures`)
 
@@ -475,6 +580,7 @@ func (res *result) judgeExtra(st *store.Store, cfg *store.StrategyConfig) {
 		_, berr := trader.ResearchValidateAuthoredScenariosAt(st, res.symbol, res.doc, res.session, res.tradeDate, readAt, publish, bars)
 		if berr != nil {
 			res.Pass = false
+			res.FullPass = false // CTO 04:39Z — a born-dead plan can never read as a pass
 			res.FullReject = "born-dead/flip-met: " + berr.Error()
 			if res.FirstReject == "" {
 				res.FirstReject = res.FullReject
