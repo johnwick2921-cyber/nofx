@@ -2,6 +2,7 @@ package trader
 
 import (
 	"fmt"
+	"nofx/discipline"
 	"nofx/kernel"
 	"nofx/logger"
 	"nofx/market"
@@ -23,6 +24,7 @@ import (
 	ntTrader "nofx/trader/ninjatrader"
 	"nofx/trader/okx"
 	"nofx/wallet"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -934,6 +936,33 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 }
 
 // Run runs the automatic trading main loop
+// panicInTickOnce is the P1-F TEST SEAM (default off): when set, the next
+// run-loop beat panics, so tests can pin the recovery path.
+var panicInTickOnce atomic.Bool
+
+// recoverPanic is the P1-F safety net (audit 2026-09-26): a panic in one
+// trader's loop or monitor must never kill the process. ERROR + stack, the
+// trader FREEZES (admitChain's frozen leg refuses new entries; closes and
+// exits keep working — they bypass admission by design), and the goroutine
+// exits cleanly while the other goroutines (protection monitor, picture
+// consumer) and every other trader keep running.
+func (at *AutoTrader) recoverPanic(where string) {
+	if r := recover(); r != nil {
+		stack := debug.Stack()
+		at.logErrorf("💥 PANIC in %s for trader %s: %v\n%s", where, at.id, r, stack)
+		telemetry.RecordError(at.id, "trader_panic", fmt.Sprintf("%s: %v", where, r), telemetry.CostNone)
+		discipline.FreezeTrader(at.id, fmt.Sprintf("panic in %s: %v", where, r), time.Now().UnixMilli())
+		at.emitAlert("P0", "trader_panic", "panic:"+at.id,
+			"💥 Trader panic — entries frozen (closes still work)", fmt.Sprintf("%s: %v", where, r))
+	}
+}
+
+// runBeatSafely runs one loop/monitor beat under the P1-F recovery.
+func (at *AutoTrader) runBeatSafely(where string, fn func()) {
+	defer at.recoverPanic(where)
+	fn()
+}
+
 func (at *AutoTrader) Run() error {
 	at.limitFlattenMu.Lock()
 	at.limitFlattenStopped = false
@@ -1085,7 +1114,7 @@ func (at *AutoTrader) Run() error {
 	// Execute immediately on first run. Under bar-close cadence (P2.1) this runs
 	// once on the last CLOSED primary-TF bar and sets the watermark, then the loop
 	// idles until the next bar closes; the scan-timer default is unchanged.
-	at.tickOnce(isGridStrategy)
+	at.runBeatSafely("run loop (first beat)", func() { at.tickOnce(isGridStrategy) })
 
 	for {
 		at.isRunningMutex.RLock()
@@ -1098,16 +1127,20 @@ func (at *AutoTrader) Run() error {
 
 		select {
 		case <-ticker.C:
-			// Deterministic two-picture fallback: the event path is the 5m bar
-			// frame; the tick covers a missed boundary (feed stall). Cheap no-op
-			// while the mode is off.
-			at.pictureHtfTickFallback(time.Now())
-			// The loop is single-goroutine: a tick that fires while a cycle is
-			// still running WAITS here (the ticker drops missed ticks), so an
-			// in-flight AI read is structurally never cancelled by the next
-			// tick. Log the overrun so a slow call is visible, not mysterious.
-			tickStart := time.Now()
-			closedSkip := at.tickOnce(isGridStrategy)
+			var tickStart time.Time
+			var closedSkip bool
+			at.runBeatSafely("run loop", func() {
+				// Deterministic two-picture fallback: the event path is the 5m bar
+				// frame; the tick covers a missed boundary (feed stall). Cheap no-op
+				// while the mode is off.
+				at.pictureHtfTickFallback(time.Now())
+				// The loop is single-goroutine: a tick that fires while a cycle is
+				// still running WAITS here (the ticker drops missed ticks), so an
+				// in-flight AI read is structurally never cancelled by the next
+				// tick. Log the overrun so a slow call is visible, not mysterious.
+				tickStart = time.Now()
+				closedSkip = at.tickOnce(isGridStrategy)
+			})
 			if d := time.Since(tickStart); shouldWarnOverrun(d, at.config.ScanInterval, closedSkip) {
 				at.logWarnf("⏱ cycle overran the scan interval (%v > %v) — next tick delayed, in-flight work never cancelled; intervening ticks skipped",
 					d.Round(time.Millisecond), at.config.ScanInterval)
