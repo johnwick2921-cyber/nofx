@@ -845,6 +845,7 @@ func buildEffectiveResolvers() map[string]effResolver {
 	dpInt("scenario_cap", "store.(*DayPlanConfig).ScenarioCapResolved", (*store.DayPlanConfig).ScenarioCapResolved)
 	dpInt("realign_cap", "store.(*DayPlanConfig).RealignCapResolved", (*store.DayPlanConfig).RealignCapResolved)
 	dpInt("wake_min_interval_min", "store.(*DayPlanConfig).WakeMinIntervalMinutes", (*store.DayPlanConfig).WakeMinIntervalMinutes)
+	dpInt("death_reread_retry_min", "store.(*DayPlanConfig).DeathRereadRetryMinutes", (*store.DayPlanConfig).DeathRereadRetryMinutes)
 	add(dpPath+"acceptance_rule", "store.(*DayPlanConfig).AcceptanceRuleFor", func(x *effCtx) effResult {
 		return effResult{value: x.dp().AcceptanceRuleFor(x.session), origin: OriginFolded}
 	})
