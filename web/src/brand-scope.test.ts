@@ -179,6 +179,17 @@
 //     The pre-existing main-DB backup path, quick_check and gzip steps are
 //     preserved byte-for-byte inside backup_one; the script's CLI contract
 //     (daily|weekly|prune) is unchanged.
+//   deploy/nofx-db-backup.sh  sha256 0e9dae38… — REVISED same wave after the
+//     CTO's P0 gate on the first version (a 213 GB research snapshot every
+//     timer run would fill the disk): research is now OPT-IN
+//     (NOFX_BACKUP_RESEARCH=1, default OFF — default run = main DB only),
+//     a disk-space precheck (2.5 × source size AND a NOFX_BACKUP_MIN_FREE_GB
+//     50 GB post-backup floor) refuses loudly with nothing written, and the
+//     opted-in retention defaults to 1/1 instead of mirroring 14/8.
+//     Contract tests: deploy/nofx_db_backup_test.go (fake small DBs + a PATH
+//     df shim) — default-touches-only-main, opt-in-backs-up-research,
+//     refuse-on-low-space, refuse-on-floor; mutation "default ON" fails the
+//     first one.
 //   logger/logger.go          sha256 318022bbb6… — P2-2: logRetentionDays()
 //     (LOG_RETENTION_DAYS, 0 = OFF) and pruneOldLogs(dir, now, days, current)
 //     called once at init; never today's/live file. Default OFF: with the knob
