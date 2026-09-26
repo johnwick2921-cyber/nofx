@@ -979,7 +979,7 @@ func entryPolicyPlannedOrderFrag(on bool) string {
 	if !on {
 		return ""
 	}
-	return "Entry policy: planned_order is legal on reject, fvg_entry and sweep_reclaim leg 0 ONLY (planned_order on breakdown_continue/breakup_continue is REFUSED \u2014 those conditions use market_in_zone); on any other leg or condition planned_order is REFUSED by name. "
+	return "Entry policy: planned_order is legal on reject, fvg_entry and sweep_reclaim leg 0 ONLY (planned_order on breakdown_continue/breakup_continue is REFUSED \u2014 those conditions use market_in_zone); on any other leg or condition planned_order is REFUSED by name. " + EntryPolicyShapeTable() + " "
 }
 
 // rejectComposedStopFrag returns the A3 REJECT composed-stop exception sentence.

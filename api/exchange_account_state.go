@@ -82,12 +82,31 @@ func (c *ExchangeAccountStateCache) Set(userID string, states map[string]Exchang
 		cachedAt: time.Now(),
 	}
 	c.mu.Unlock()
+	c.SweepExpired(time.Now()) // P2-17 — amortized expiry sweep, never grows unbounded
 }
 
 func (c *ExchangeAccountStateCache) Invalidate(userID string) {
 	c.mu.Lock()
 	delete(c.entries, userID)
 	c.mu.Unlock()
+}
+
+// SweepExpired (P2-17) deletes every entry past the TTL — the cache used to
+// expire entries only when the SAME user asked again, so stale per-user maps
+// accumulated for the process lifetime. Called after every Set (the map is
+// user-bounded, so the amortized cost is trivial) and keeps the entry count at
+// the set of recently-active users.
+func (c *ExchangeAccountStateCache) SweepExpired(now time.Time) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	removed := 0
+	for userID, entry := range c.entries {
+		if now.Sub(entry.cachedAt) >= exchangeAccountStateCacheTTL {
+			delete(c.entries, userID)
+			removed++
+		}
+	}
+	return removed
 }
 
 func cloneExchangeAccountStates(states map[string]ExchangeAccountState) map[string]ExchangeAccountState {

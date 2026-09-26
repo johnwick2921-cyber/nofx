@@ -1,10 +1,12 @@
 package kernel
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,7 +28,33 @@ import (
 // acceptanceGuardOffenders is the shared scan: every non-test .go file
 // under root (censuswalk) is checked for raw-counter call sites outside
 // kernel/scenario_facts.go; offenders are returned as "rel:line name" strings.
-func acceptanceGuardOffenders(root string) (offenders []string, err error) {
+func acceptanceGuardOffenders(root string, logf func(format string, args ...any)) (offenders []string, err error) {
+	if logf == nil {
+		logf = func(string, ...any) {}
+	}
+	files, werr := censuswalk.NonTestGoFiles(root)
+	if werr != nil {
+		return nil, werr
+	}
+	for _, cf := range files {
+		offs, vanished, perr := parseAcceptanceFile(cf, logf)
+		if perr != nil {
+			return nil, perr
+		}
+		if vanished {
+			continue
+		}
+		offenders = append(offenders, offs...)
+	}
+	return offenders, nil
+}
+
+// parseAcceptanceFile parses ONE walked file and returns its raw-counter
+// offenders. test-srctree-race: a file that VANISHED between the walk and the
+// parse returns vanished=true (logged) instead of failing the scan — an
+// external editor or a concurrent test writing into the source tree must
+// never flake this guard. Any other parse error is fatal.
+func parseAcceptanceFile(cf censuswalk.File, logf func(format string, args ...any)) (offenders []string, vanished bool, err error) {
 	rawCounters := map[string]bool{
 		"Acceptance":          true,
 		"ClosesBeyond":        true,
@@ -35,39 +63,37 @@ func acceptanceGuardOffenders(root string) (offenders []string, err error) {
 		"acceptanceTFMinutes": true,
 		"acceptanceNeed":      true,
 	}
-	files, werr := censuswalk.NonTestGoFiles(root)
-	if werr != nil {
-		return nil, werr
+	fset := token.NewFileSet()
+	f, perr := parser.ParseFile(fset, cf.Path, nil, 0)
+	if perr != nil {
+		if errors.Is(perr, fs.ErrNotExist) {
+			logf("acceptance guard: skipped vanished file %s (removed mid-scan)", cf.Rel)
+			return nil, true, nil
+		}
+		return nil, false, perr
 	}
-	for _, cf := range files {
-		fset := token.NewFileSet()
-		f, perr := parser.ParseFile(fset, cf.Path, nil, 0)
-		if perr != nil {
-			return nil, perr
-		}
-		if strings.HasSuffix(cf.Rel, "kernel/scenario_facts.go") {
-			continue // the owner of the raw counters; composition lives here
-		}
-		ast.Inspect(f, func(n ast.Node) bool {
-			call, ok := n.(*ast.CallExpr)
-			if !ok {
-				return true
-			}
-			name := ""
-			switch fn := call.Fun.(type) {
-			case *ast.Ident:
-				name = fn.Name
-			case *ast.SelectorExpr:
-				name = fn.Sel.Name
-			}
-			if rawCounters[name] {
-				pos := fset.Position(call.Pos())
-				offenders = append(offenders, fmt.Sprintf("%s:%d: raw bar counter %s() outside kernel/scenario_facts.go — hardcoded acceptance interval; resolve via AcceptanceBars / LevelStillValidOn / EvaluateLevelFacts", cf.Rel, pos.Line, name))
-			}
+	if strings.HasSuffix(cf.Rel, "kernel/scenario_facts.go") {
+		return nil, false, nil // the owner of the raw counters; composition lives here
+	}
+	ast.Inspect(f, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
 			return true
-		})
-	}
-	return offenders, nil
+		}
+		name := ""
+		switch fn := call.Fun.(type) {
+		case *ast.Ident:
+			name = fn.Name
+		case *ast.SelectorExpr:
+			name = fn.Sel.Name
+		}
+		if rawCounters[name] {
+			pos := fset.Position(call.Pos())
+			offenders = append(offenders, fmt.Sprintf("%s:%d: raw bar counter %s() outside kernel/scenario_facts.go — hardcoded acceptance interval; resolve via AcceptanceBars / LevelStillValidOn / EvaluateLevelFacts", cf.Rel, pos.Line, name))
+		}
+		return true
+	})
+	return offenders, false, nil
 }
 
 // TestAcceptanceIntervalNoHardcodedSites is the H10 guard: the raw bar counters
@@ -85,7 +111,7 @@ func TestAcceptanceIntervalNoHardcodedSites(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve repo root: %v", err)
 	}
-	offenders, err := acceptanceGuardOffenders(repoRoot)
+	offenders, err := acceptanceGuardOffenders(repoRoot, t.Logf)
 	if err != nil {
 		t.Fatalf("scan repo: %v", err)
 	}
@@ -114,7 +140,7 @@ func TestAcceptanceCensusSeesNestedSkipNamedDirs(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	offenders, err := acceptanceGuardOffenders(root)
+	offenders, err := acceptanceGuardOffenders(root, t.Logf)
 	if err != nil {
 		t.Fatal(err)
 	}

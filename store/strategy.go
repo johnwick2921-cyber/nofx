@@ -1019,6 +1019,14 @@ type DayPlanConfig struct {
 	// prompt. A POINTER because the default is ON: nil = ON, explicit false =
 	// today's behaviour byte-identical (dormant only).
 	DeathReread *bool `json:"death_reread,omitempty"`
+	// DeathRereadRetryMin (FIX-PLANNER 2026-09-26, item 4): the self-backoff a
+	// FAILED death re-read holds before retrying the same dormant row, in
+	// minutes. nil = today's value (wake_min_interval_min — the shared wake
+	// throttle the hold currently borrows); an explicit value replaces ONLY the
+	// death re-read hold. wake_min_interval_min and every other throttle are
+	// untouched. A POINTER because the default is "today", and 0 is a legal
+	// value (retry next cycle).
+	DeathRereadRetryMin *int `json:"death_reread_retry_min,omitempty"`
 	// PlannerFreshTape (A6, planner-born-dead wave 2026-09-25): when an attempt
 	// is refused born-dead / flip-met, attempt N+1's prompt carries the
 	// COMPLETED bars between the read clock and the refusal (last 30 completed
@@ -1749,6 +1757,20 @@ func (c *DayPlanConfig) PlannerFreshTapeEnabled() bool {
 	return c == nil || c.PlannerFreshTape == nil || *c.PlannerFreshTape
 }
 
+// DeathRereadRetryMinutes is the ONE resolution seam for the death-re-read
+// self-backoff knob (FIX-PLANNER item 4): nil = today's value
+// (wake_min_interval_min); an explicit value (clamped to ≥0) replaces ONLY the
+// death re-read hold. wake_min_interval_min itself is never changed here.
+func (c *DayPlanConfig) DeathRereadRetryMinutes() int {
+	if c == nil || c.DeathRereadRetryMin == nil {
+		return c.WakeMinIntervalMinutes()
+	}
+	if *c.DeathRereadRetryMin < 0 {
+		return 0
+	}
+	return *c.DeathRereadRetryMin
+}
+
 // T1CurrencyAll is the sentinel meaning "every currency hard-blocks" — the
 // pre-W-T1-CURRENCIES behaviour. "*" is accepted on input and canonicalised
 // to this.
@@ -2445,7 +2467,8 @@ func (s *StrategyStore) SetActive(userID, strategyID string) error {
 // copy never lands without its record, nor pairs one source's bytes with
 // another moment's record.
 func (s *StrategyStore) Duplicate(userID, sourceID, newID, newName string) error {
-	return s.db.Transaction(func(tx *gorm.DB) error {
+	// P2-4: BEGIN IMMEDIATE, not a deferred read→write upgrade.
+	return immediateOrPlainTxAny(s.db, func(tx *gorm.DB) error {
 		// get source strategy
 		source, err := getStrategy(tx, userID, sourceID)
 		if err != nil {

@@ -2101,6 +2101,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 		researchTrace.Finish(lastErr)
 		userPrompt := prompt
 		modeLabel := "author"
+		carriedFreshTape := false // FIX-PLANNER — this attempt re-sighted on the fresh tape (see below)
 		if attempt >= 2 && resendIdentical != "" {
 			// CLASS 41 M0 (owner ruling class 37, 2026-09-01; implemented
 			// 2026-09-02): a transport/deadline failure produced NO model
@@ -2133,6 +2134,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 		// fresh completed tape between the read clock and the refusal, so the
 		// re-author reads the market that exists now instead of the stale read.
 		if attempt >= 2 && prevBornDead && at.plannerFreshTapeOn() {
+			carriedFreshTape = true // FIX-PLANNER — gates the one-repair stop below
 			var tape []market.Kline
 			if market.FuturesBarsProvider != nil {
 				tape = market.FuturesBarsProvider(at.futuresSymbol(), "1m", kernel.AISVPBarCount)
@@ -2439,6 +2441,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 		if verr != nil {
 			lastErr = verr
 			repairing := prevReason
+			skipThird := false // FIX-PLANNER — one fresh-tape repair only, then fail-closed
 			if check != nil && bornCheckRefused(check) {
 				// A6 — the market moved during the read: remember the class and
 				// the refusal clock so attempt N+1 carries the fresh tape, and
@@ -2447,6 +2450,16 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 				prevBornDead = true
 				prevPublishAt = authoredAt
 				at.logWarnf("📐 planner attempt %d/3 born-dead/flip-met refusal: read→publish latency %s — attempt %d re-sights on the fresh tape", attempt, authoredAt.Sub(facts.ReadAt), attempt+1)
+				// FIX-PLANNER item 1: a born-dead DEATH goes straight to ONE
+				// fresh-tape repair (the A6 path) instead of burning attempts
+				// 2/3 on the same stale tape. The stop applies only when THIS
+				// attempt already carried the fresh tape (so a first refusal
+				// always gets its repair). Knob OFF: carriedFreshTape is never
+				// set and today's blind retries are byte-identical.
+				if carriedFreshTape {
+					skipThird = true
+					at.logWarnf("📐 planner attempt %d/3 born-dead refusal ON the fresh tape — one fresh-tape repair only; attempt %d is NOT burned (fail-closed instead)", attempt, attempt+1)
+				}
 			}
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastRaw, verr, &prevReason, FactsSnapshotJSON(facts))
@@ -2454,6 +2467,9 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock, publishClock fu
 			rejectHistory = addDistinctReject(rejectHistory, verr)
 			if modeLabel == "repair" {
 				at.recordRepairOutcome(raw, verr, repairing)
+			}
+			if skipThird {
+				break
 			}
 			continue
 		}
