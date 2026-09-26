@@ -7684,3 +7684,24 @@ the close — no receipt, no park). **Probe:** for every SQLite transaction whos
 loss is a lost exit/fill, assert the lock is acquired AT BEGIN (IMMEDIATE), not
 at the first write after reads; for every per-connection PRAGMA issued once via
 a pool handle, prove which pooled connections actually carry it.
+
+## CLASS NN (assigned at merge) — observability that records into a void
+
+**Found:** 2026-09-25, AUDIT-0926 system-pipeline P2 set (DS-107) [A]. Counters
+with live writers and zero readers (far arms, repair regression, shadowed arm
+refusals, research-snapshot, weekly, log-event drops); a GA4 pipe that swallowed
+every non-2xx and transport error; a health endpoint that answered 200 with a
+dead database and a `time` that was always null; prune functions with zero
+production callers (decision_records alone 905 MB); an hourly/daily scheduler
+that skipped its jobs on any missed minute; a cache that only expired entries
+when the same user re-read. Each of these is the same shape: a mechanism exists
+and nothing can observe whether it works.
+**Fixed:** /api/telemetry serves the write-only counters (read-only, auth'd);
+GA4 failures counted + non-2xx returns an error; /api/health probes the DB
+(503 when dead), reports NT8 feed status + bar age + running count + real time;
+retention wired but DISABLED behind RETENTION_*_DAYS=0 (owner ruling: keep the
+database); LOG_RETENTION_DAYS prune (default OFF); scheduler day/hour stamps
+catch up a missed minute; exchange account-state cache swept on Set.
+**Probe:** for every counter, `grep` a reader outside its own package; for every
+"health" endpoint, kill the database underneath it and read the status code; for
+every prune function, name its production caller.

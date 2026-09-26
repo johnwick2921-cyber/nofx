@@ -427,5 +427,10 @@ export const status: GuideSection = {
       kind: 'p',
       text: "GREEN = bot running, gates quiet, plan armed (or flat by plan). AMBER = gates firing repeatedly — read the ledger, don't override. RED = feed down / frozen / boot mismatch — use the emergency checklist (Section 9). The card's NO-TRADE banner is not a light: it is a state.",
     },
+    { kind: 'h', text: 'Health + telemetry reads (FIX-OPS 2026-09-26)' },
+    {
+      kind: 'p',
+      text: "GET /api/health now reports real state, not a liveness constant: db is ok|unavailable|dead (a DEAD database answers 503 — everything else stays 200), nt8 carries each running trader's feed_status and newest-1m-bar age, traders_running counts running traders, and time is a real RFC3339 timestamp (it used to be null). Cutover scripts still read revision from it. GET /api/telemetry (read-only, auth'd) serves the previously write-only counters: far arms, repair regression, shadowed arm refusals, research-snapshot drops/rows, weekly snapshot, GA4 send failures and log-event drop counts. GA4 sends now count every non-2xx and transport failure instead of swallowing them.",
+    },
   ],
 }
