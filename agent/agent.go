@@ -829,10 +829,6 @@ func (a *Agent) gatherContext(storeUserID, text string) string {
 	return strings.Join(parts, "\n")
 }
 
-func (a *Agent) getTradersSummary() string {
-	return a.getTradersSummaryForStoreUser("default")
-}
-
 func (a *Agent) getTradersSummaryForStoreUser(storeUserID string) string {
 	if a.traderManager == nil {
 		return "Traders: none configured"
