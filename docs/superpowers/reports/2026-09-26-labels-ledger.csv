@@ -1,13 +1,13 @@
 row,old_label,new_label,code_truth,code_line,guide_fixed,guard_test,status
-ai_config.coin_source.ai500_limit,,,AI500 coin pool maximum count,store/strategy.go:1915,,strategy-translations.labels.test.ts (5 pins),done-i18n
-ai_config.coin_source.excluded_coins,,,excluded coins list (filtered out from all sources),store/strategy.go:1911,,strategy-translations.labels.test.ts (5 pins),done-i18n
-ai_config.coin_source.oi_low_limit,,,OI Low maximum count,store/strategy.go:1923,,strategy-translations.labels.test.ts (5 pins),done-i18n
-ai_config.coin_source.oi_top_limit,,,OI Top maximum count,store/strategy.go:1919,,strategy-translations.labels.test.ts (5 pins),done-i18n
-ai_config.coin_source.source_type,,,SourceType comment: source type shown in the product editor: static|ai500|oi_top|oi_low,store/strategy.go:1907,,strategy-translations.labels.test.ts (5 pins),done-i18n
-ai_config.coin_source.static_coins,,,static coin list (used when source_type = static),store/strategy.go:1909,,strategy-translations.labels.test.ts (5 pins),done-i18n
-ai_config.coin_source.use_ai500,,,whether to use AI500 coin pool,store/strategy.go:1913,,strategy-translations.labels.test.ts (5 pins),done-i18n
-ai_config.coin_source.use_oi_low,,,"whether to use OI Low (OI decrease ranking, suitable for short positions)",store/strategy.go:1921,,strategy-translations.labels.test.ts (5 pins),done-i18n
-ai_config.coin_source.use_oi_top,,,"whether to use OI Top (OI increase ranking, suitable for long positions)",store/strategy.go:1917,,strategy-translations.labels.test.ts (5 pins),done-i18n
+ai_config.coin_source.ai500_limit,,,AI500 coin pool maximum count,store/strategy.go:1915,"yes (settings.ts coinSource block, 9 KnobSpecs)",strategy-translations.labels.test.ts (5 pins),done
+ai_config.coin_source.excluded_coins,,,excluded coins list (filtered out from all sources),store/strategy.go:1911,"yes (settings.ts coinSource block, 9 KnobSpecs)",strategy-translations.labels.test.ts (5 pins),done
+ai_config.coin_source.oi_low_limit,,,OI Low maximum count,store/strategy.go:1923,"yes (settings.ts coinSource block, 9 KnobSpecs)",strategy-translations.labels.test.ts (5 pins),done
+ai_config.coin_source.oi_top_limit,,,OI Top maximum count,store/strategy.go:1919,"yes (settings.ts coinSource block, 9 KnobSpecs)",strategy-translations.labels.test.ts (5 pins),done
+ai_config.coin_source.source_type,,,SourceType comment: source type shown in the product editor: static|ai500|oi_top|oi_low,store/strategy.go:1907,"yes (settings.ts coinSource block, 9 KnobSpecs)",strategy-translations.labels.test.ts (5 pins),done
+ai_config.coin_source.static_coins,,,static coin list (used when source_type = static),store/strategy.go:1909,"yes (settings.ts coinSource block, 9 KnobSpecs)",strategy-translations.labels.test.ts (5 pins),done
+ai_config.coin_source.use_ai500,,,whether to use AI500 coin pool,store/strategy.go:1913,"yes (settings.ts coinSource block, 9 KnobSpecs)",strategy-translations.labels.test.ts (5 pins),done
+ai_config.coin_source.use_oi_low,,,"whether to use OI Low (OI decrease ranking, suitable for short positions)",store/strategy.go:1921,"yes (settings.ts coinSource block, 9 KnobSpecs)",strategy-translations.labels.test.ts (5 pins),done
+ai_config.coin_source.use_oi_top,,,"whether to use OI Top (OI increase ranking, suitable for long positions)",store/strategy.go:1917,"yes (settings.ts coinSource block, 9 KnobSpecs)",strategy-translations.labels.test.ts (5 pins),done
 ai_config.custom_prompt,,,strategy field (ai_config.custom_prompt),store/strategy.go:735,,,open
 ai_config.indicators.atr_periods,,,strategy field (ai_config.indicators.atr_periods),store/strategy.go:1954,,,open
 ai_config.indicators.boll_periods,,,strategy field (ai_config.indicators.boll_periods),store/strategy.go:1956,,,open

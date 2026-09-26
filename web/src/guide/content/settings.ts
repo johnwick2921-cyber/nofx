@@ -758,6 +758,126 @@ const risk: KnobSpec[] = [
   },
 ]
 
+const coinSource: KnobSpec[] = [
+  {
+    label: 'Source type',
+    where: 'Strategy → Coin source → Source Type',
+    what: 'Which symbol universe the engine trades from: static (the list below) | ai500 (AI500 coin pool) | oi_top (OI increase ranking) | oi_low (OI decrease ranking). An empty stored value reads "static". On CME futures the editor shows only static (AI500/OI rankings are crypto-only feeds) and treats the displayed type as static — the saved data is untouched.',
+    trader:
+      'The engine fetches candidates ONLY from the chosen source; static is the fallback list inside every branch.',
+    consumer:
+      'kernel/engine.go ~456-543 — the SourceType switch + getAI500Coins/getOITopCoins/getOILowCoins + StaticCoins fallback in every branch; default "static" when empty.',
+    range: 'static | ai500 | oi_top | oi_low',
+    systemDefault: 'static (empty string reads static)',
+    recommended:
+      'static for CME futures (MNQ); crypto per your data-source preference.',
+    whenToTouch: 'To change which universe feeds the strategy.',
+    perSession: 'No.',
+  },
+  {
+    label: 'Static coin list',
+    where: 'Strategy → Coin source → Static Coins',
+    what: 'The symbol list used when source_type = static — and the fallback list used by every other source branch when its own fetch is skipped or empty.',
+    trader: 'Symbols traded live (e.g. [MNQ] on the futures path).',
+    consumer:
+      'kernel/engine.go — StaticCoins iterated in every SourceType branch.',
+    range: 'comma-separated symbols',
+    systemDefault: 'empty',
+    recommended: 'Only symbols you actually trade.',
+    whenToTouch: 'To add/remove a traded symbol.',
+    perSession: 'No.',
+  },
+  {
+    label: 'Excluded coins',
+    where: 'Strategy → Coin source → Excluded',
+    what: 'Symbols filtered out of the candidate set from ALL sources (static, AI500, OI rankings). The filter applies to every branch result.',
+    trader:
+      'An excluded symbol never reaches the engine as a candidate, whatever the source.',
+    consumer:
+      'kernel/engine.go filterExcludedCoins — applied to candidates and direct lists in every branch (~470-543).',
+    range: 'comma-separated symbols',
+    systemDefault: 'empty (nothing excluded)',
+    recommended: 'Exclude symbols you never want the strategy to touch.',
+    whenToTouch: 'When a symbol must be banned from all sources.',
+    perSession: 'No.',
+  },
+  {
+    label: 'Use AI500 coin pool',
+    where: 'Strategy → Coin source → AI500 switch',
+    what: 'Whether the engine selects candidates from the AI500 coin pool (when source_type = ai500, and as the AI500 branch).',
+    trader: 'OFF = the AI500 branch falls back to the static list.',
+    consumer: 'kernel/engine.go — UseAI500 guard before getAI500Coins.',
+    range: 'true / false',
+    systemDefault: 'false',
+    recommended: 'OFF unless you trust the AI500 feed.',
+    whenToTouch: 'To switch the AI500 feed on/off.',
+    perSession: 'No.',
+  },
+  {
+    label: 'AI500 pool max count',
+    where: 'Strategy → Coin source → AI500 limit (when AI500 is on)',
+    what: 'Maximum number of coins the AI500 pool selects (the count handed to getAI500Coins).',
+    trader: 'Caps the AI500 candidate list, not the static fallback.',
+    consumer: 'kernel/engine.go getAI500Coins(coinSource.AI500Limit).',
+    range: '1-10 (editor options)',
+    systemDefault: '3 (editor fallback when unset)',
+    recommended:
+      '3-5 — wide enough to diversify, small enough to stay focused.',
+    whenToTouch: 'To widen/narrow the AI500 candidate pool.',
+    perSession: 'No.',
+  },
+  {
+    label: 'Use OI Top',
+    where: 'Strategy → Coin source → OI Top switch',
+    what: 'Whether the engine selects candidates from the OI Top ranking — OI increase ranking, suitable for long positions (when source_type = oi_top).',
+    trader: 'OFF = the OI Top branch falls back to the static list.',
+    consumer: 'kernel/engine.go — UseOITop guard before getOITopCoins.',
+    range: 'true / false',
+    systemDefault: 'false',
+    recommended: 'OFF unless you trade OI-momentum longs.',
+    whenToTouch: 'To switch the OI Top feed on/off.',
+    perSession: 'No.',
+  },
+  {
+    label: 'OI Top max count',
+    where: 'Strategy → Coin source → OI Top limit (when OI Top is on)',
+    what: 'Maximum number of coins the OI Top ranking selects (the count handed to getOITopCoins).',
+    trader: 'Caps the OI Top candidate list.',
+    consumer: 'kernel/engine.go getOITopCoins(coinSource.OITopLimit).',
+    range: 'positive int',
+    systemDefault: 'unset (0)',
+    recommended:
+      '3-5 — wide enough to diversify, small enough to stay focused.',
+    whenToTouch: 'To widen/narrow the OI Top pool.',
+    perSession: 'No.',
+  },
+  {
+    label: 'Use OI Low',
+    where: 'Strategy → Coin source → OI Low switch',
+    what: 'Whether the engine selects candidates from the OI Low ranking — OI decrease ranking, suitable for short positions (when source_type = oi_low).',
+    trader: 'OFF = the OI Low branch falls back to the static list.',
+    consumer: 'kernel/engine.go — UseOILow guard before getOILowCoins.',
+    range: 'true / false',
+    systemDefault: 'false',
+    recommended: 'OFF unless you trade OI-momentum shorts.',
+    whenToTouch: 'To switch the OI Low feed on/off.',
+    perSession: 'No.',
+  },
+  {
+    label: 'OI Low max count',
+    where: 'Strategy → Coin source → OI Low limit (when OI Low is on)',
+    what: 'Maximum number of coins the OI Low ranking selects (the count handed to getOILowCoins).',
+    trader: 'Caps the OI Low candidate list.',
+    consumer: 'kernel/engine.go getOILowCoins(coinSource.OILowLimit).',
+    range: 'positive int',
+    systemDefault: 'unset (0)',
+    recommended:
+      '3-5 — wide enough to diversify, small enough to stay focused.',
+    whenToTouch: 'To widen/narrow the OI Low pool.',
+    perSession: 'No.',
+  },
+]
+
 const sessions: KnobSpec[] = [
   {
     label: 'Session overrides (ASIA / LONDON / NY)',
@@ -956,6 +1076,7 @@ export const settings: GuideSection = {
       ],
     },
     { kind: 'h', text: 'Risk Control knobs' },
+    { kind: 'knobs', knobs: coinSource },
     { kind: 'knobs', knobs: risk },
     { kind: 'h', text: 'Session map' },
     { kind: 'knobs', knobs: sessions },
