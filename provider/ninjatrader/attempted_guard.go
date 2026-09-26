@@ -176,6 +176,17 @@ func isEntrySignal(sig SignalPayload) bool {
 	return true
 }
 
+// attemptedAddonDedupeStatus reads the far-side build id for the boot line.
+// Until an AddOn build shipping the seen-signal dedupe exists, the honest
+// value is n/a — the guard must not claim the far side dedupes.
+func attemptedAddonDedupeStatus(s *TCPServer) string {
+	bid, _ := s.farSideBuild.Load().(string)
+	if strings.TrimSpace(bid) == "" {
+		return "n/a"
+	}
+	return "no (far-side build " + bid + " predates the seen-signal dedupe)"
+}
+
 // --- test seams (nil in production) ---
 
 // SetWriteFrameHookForTest overrides the frame write in the flush path.

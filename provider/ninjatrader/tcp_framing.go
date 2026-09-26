@@ -85,7 +85,7 @@ type FillPayload struct {
 	Side          string  `json:"side"`
 	Quantity      int     `json:"quantity"`
 	SlippageTicks float64 `json:"slippage_ticks"`
-	Status        string  `json:"status"` // "filled" | "rejected" | "partial"
+	Status        string  `json:"status"` // "filled" | "rejected" | "partial" | "duplicate_ignored" (AddOn seen-signal dedupe, FIX-DOUBLE-ENTRY)
 	// A2 (G1, wire v3) — echoed identity from the originating signal. Go verifies
 	// (trader_id, account, seq) against the pending op; a present mismatch freezes the
 	// trader (A4). Empty = pre-v3 AddOn (echo absent) → tolerated in the deploy window.

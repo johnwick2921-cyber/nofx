@@ -361,6 +361,14 @@ func (t *TCPTrader) handleFillInbound(fill ntwire.FillPayload) {
 		}
 		return
 	}
+	// FIX-DOUBLE-ENTRY (CTO ruling, 2026-09-26) — the AddOn-side dedupe answers
+	// a replayed frame with status "duplicate_ignored": the original entry is
+	// already known to it. This is NOT a rejection — no pending drop, no cached
+	// fill, no re-arm. The original fill/update owns the state.
+	if strings.EqualFold(fill.Status, "duplicate_ignored") {
+		logger.Infof("🔄 ninjatrader/tcp: duplicate_ignored fill reply for signal_id=%s — already handled by the AddOn dedupe; no state change", fill.SignalID)
+		return
+	}
 	// C8 (2026-08-25) — a REJECTED entry must never become the
 	// fill-derived position (the phantom-position class). NT8 truth: NO
 	// position exists. Drop the pending marker, clear any cached fill for
