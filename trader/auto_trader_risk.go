@@ -299,13 +299,19 @@ func (at *AutoTrader) enforcePositionValueRatio(positionSizeUSD float64, equity 
 	return positionSizeUSD, false
 }
 
+// minPositionSizeFloorUSDT is the admission floor that replaced the removed
+// min_position_size knob (FIX-KNOBS A): the live 12/60 gate in
+// kernel/engine_position.go is the primary floor, this is the order-path
+// defense-in-depth. Pinned by TestMinPositionFloorRefusesBelowTwelve.
+const minPositionSizeFloorUSDT = 12.0
+
 // enforceMinPositionSize checks minimum position size (CODE ENFORCED)
 func (at *AutoTrader) enforceMinPositionSize(positionSizeUSD float64) error {
 	if at.config.StrategyConfig == nil {
 		return nil
 	}
 
-	minSize := 12.0 // Default: 12 USDT (the dead min_position_size knob was REMOVED — FIX-KNOBS A, 2026-09-26; this is the hardcoded floor behind the live 12/60 gate in kernel/engine_position.go)
+	minSize := minPositionSizeFloorUSDT
 
 	if positionSizeUSD < minSize {
 		return fmt.Errorf("❌ [RISK CONTROL] Position %.2f USDT below minimum (%.2f USDT)", positionSizeUSD, minSize)

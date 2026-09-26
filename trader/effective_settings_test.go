@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"nofx/kernel"
 	"nofx/store"
 )
 
@@ -225,7 +226,7 @@ func TestEffectiveSecretRowsRedacted(t *testing.T) {
 		"nofxos_api_key":"PLANTED-KEY-9c1f",
 		"external_data_sources":[{"name":"feed","url":"https://h.example/?apikey=PLANTED-URL-77",
 			"headers":{"Authorization":"Bearer PLANTED-HDR-42"}}]}}}`
-	x, err := newEffCtx(raw, "ninjatrader", "")
+	x, err := newEffCtx(raw, "ninjatrader", "", kernel.DefaultSessionRegistry())
 	if err != nil {
 		t.Fatal(err)
 	}

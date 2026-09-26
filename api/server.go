@@ -389,8 +389,8 @@ StrategyConfig fields:
   risk_control.altcoin_max_leverage: altcoin leverage (usually lower than BTC leverage)
   risk_control.btc_eth_max_position_value_ratio: max position size as multiple of equity (default 5)
   risk_control.altcoin_max_position_value_ratio: default 1
-  risk_control.max_margin_usage: 0.5-0.95 (default 0.9 = use up to 90% margin)
-  risk_control.min_position_size: minimum USDT per trade (default 12)
+  // (max_margin_usage and min_position_size were REMOVED 2026-09-26 FIX-KNOBS
+  // A: dead knobs — prompt-only and behind the live 12/60 floor.)
   risk_control.min_risk_reward_ratio: minimum profit/loss ratio required (default 3 = 3:1)
   risk_control.min_confidence: minimum AI confidence to open position (default 75, range 60-90)
   prompt_sections.role_definition: describe the AI's trading persona and goal

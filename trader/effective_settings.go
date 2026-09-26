@@ -111,6 +111,7 @@ type effCtx struct {
 	cfg     *store.StrategyConfig
 	clamped *store.StrategyConfig
 	at      *AutoTrader
+	reg     kernel.SessionRegistry // the RUNTIME admin registry (review P2-1)
 	session string
 	venue   string
 	root    json.RawMessage
@@ -145,14 +146,46 @@ func (x *effCtx) rc() store.RiskControlConfig {
 	return x.cfg.RiskControl
 }
 
-// EffectiveSettings resolves every settings row for one stored strategy config.
-// raw is the strategies.config column verbatim; venue is the exchange type the
-// strategy trades on ("" = unknown); session is a canonical session name or "";
+// sessionEnabled is the feed's own session-enablement read against the RUNTIME
+// registry (review P2-1): per-session override, else the admin registry.
+func (x *effCtx) sessionEnabled(session string) bool {
+	if ov := x.dp().SessionOverride(session); ov != nil && ov.Enable != nil {
+		return *ov.Enable
+	}
+	for _, s := range x.reg.Sessions {
+		if strings.EqualFold(s.Name, session) {
+			return s.Enabled
+		}
+	}
+	return false
+}
+
+func (x *effCtx) derivedSessions() []string {
+	var on []string
+	for _, s := range x.reg.Sessions {
+		if x.sessionEnabled(s.Name) {
+			on = append(on, s.Name)
+		}
+	}
+	if on == nil {
+		on = []string{}
+	}
+	return on
+}
+
 // zeros is the strategy's confirmation record (StrategyStore.ExplicitZeroRecordOf)
 // — an explicit 0 on the breaker or the strategy replan cap says in its origin
 // whether a Studio save confirmed it, and when.
 func EffectiveSettings(raw, venue, session string, zeros store.ExplicitZeroRecord) ([]EffectiveKnob, error) {
-	x, err := newEffCtx(raw, venue, session)
+	return EffectiveSettingsWithRegistry(raw, venue, session, zeros, kernel.DefaultSessionRegistry())
+}
+
+// EffectiveSettingsWithRegistry is EffectiveSettings against a caller-supplied
+// admin session registry — the production API passes the RUNTIME registry from
+// system_config (review P2-1), so the derived sessions_enabled row and the
+// per-session enable row can never disagree with the planner schedule's source.
+func EffectiveSettingsWithRegistry(raw, venue, session string, zeros store.ExplicitZeroRecord, reg kernel.SessionRegistry) ([]EffectiveKnob, error) {
+	x, err := newEffCtx(raw, venue, session, reg)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +200,7 @@ func EffectiveSettings(raw, venue, session string, zeros store.ExplicitZeroRecor
 
 // newEffCtx parses the stored row TWICE: once for the typed values the
 // resolvers read (never clamped), once for the engine's clamped steady state.
-func newEffCtx(raw, venue, session string) (*effCtx, error) {
+func newEffCtx(raw, venue, session string, reg kernel.SessionRegistry) (*effCtx, error) {
 	parsed, err := (&store.Strategy{Config: raw}).ParseConfig()
 	if err != nil {
 		return nil, err
@@ -181,6 +214,7 @@ func newEffCtx(raw, venue, session string) (*effCtx, error) {
 		cfg:     parsed,
 		clamped: clamped,
 		at:      &AutoTrader{exchange: venue, config: AutoTraderConfig{StrategyConfig: parsed}},
+		reg:     reg,
 		session: session,
 		venue:   venue,
 		root:    json.RawMessage(raw),
@@ -881,7 +915,7 @@ func buildEffectiveResolvers() map[string]effResolver {
 		return effResult{value: v, origin: store.SourceShippedDefault + " (" + src + ")"}
 	})
 	add(dpPath+"sessions_enabled", "trader.(*AutoTrader).derivedSessionsEnabled (derived from per-session enable)", func(x *effCtx) effResult {
-		on := x.at.derivedSessionsEnabled()
+		on := x.derivedSessions()
 		return effResult{value: on, origin: "derived from per-session enable (sessions_enabled is read-only, FIX-KNOBS B1)"}
 	})
 	add(dpPath+"condition_status", "kernel.ConditionStatusWithSource (= kernel.ConditionStatus) per known condition", func(x *effCtx) effResult {
@@ -970,7 +1004,7 @@ func buildEffectiveResolvers() map[string]effResolver {
 		return effResult{value: v, origin: origin, scope: scopeForSource(src, x.session, ScopeStrategy)}
 	})
 	perSession("enable", "trader.(*AutoTrader).sessionEnabledForStrategy (the admin session registry also gates: sessionRunnable)", func(x *effCtx) effResult {
-		v := x.at.sessionEnabledForStrategy(x.session)
+		v := x.sessionEnabled(x.session)
 		if ov := x.dp().SessionOverride(x.session); ov != nil && ov.Enable != nil {
 			return effResult{value: v, origin: store.SourceSessionOverride, scope: scopeSession(x.session)}
 		}

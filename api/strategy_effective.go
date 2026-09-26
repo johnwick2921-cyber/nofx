@@ -18,6 +18,8 @@ import (
 	"regexp"
 	"strings"
 
+	"nofx/kernel"
+
 	"nofx/config"
 	"nofx/trader"
 
@@ -85,7 +87,17 @@ func (s *Server) handleStrategyEffective(c *gin.Context) {
 	}
 	venue := s.effectiveVenue(c, userID, st.ID)
 
-	rows, err := trader.EffectiveSettings(st.Config, venue, session, s.store.Strategy().ExplicitZeroRecordOf(st.ID))
+	// FIX-KNOBS review P2-1: the feed must read the RUNTIME admin session
+	// registry (system_config), not the compile-time default — otherwise the
+	// derived sessions_enabled row disagrees with the planner schedule.
+	reg := kernel.DefaultSessionRegistry()
+	if raw, gerr := s.store.GetSystemConfig(kernel.SessionRegistryConfigKey); gerr == nil && strings.TrimSpace(raw) != "" {
+		if r, lerr := kernel.LoadSessionRegistry(raw); lerr == nil {
+			reg = r
+		}
+	}
+
+	rows, err := trader.EffectiveSettingsWithRegistry(st.Config, venue, session, s.store.Strategy().ExplicitZeroRecordOf(st.ID), reg)
 	if err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "stored strategy config does not parse"})
 		return

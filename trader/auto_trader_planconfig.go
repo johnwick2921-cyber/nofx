@@ -69,16 +69,19 @@ func (at *AutoTrader) activeSessionName(now time.Time) string {
 // sessionEnabledForStrategy resolves whether THIS strategy runs a session.
 //
 // FIX-KNOBS B1 (2026-09-26) — ONE truth: the per-session sessions[].enable
-// override is authoritative; without one, the admin registry's Enabled flag
-// is the fallback. The stored sessions_enabled list is PARSE-ONLY (old rows
-// keep loading) and gates NOTHING any more — the live owner's rows
-// (list ["NY"] + ASIA/LONDON enable=true) run all three, and the effective
-// list (derivedSessionsEnabled) reports all three instead of lying.
+// override is authoritative; without one, the RUNTIME admin registry's Enabled
+// flag is the fallback (sessionRegistry — the same source the planner schedule
+// uses; review P2-1). The stored sessions_enabled list is PARSE-ONLY (old rows
+// keep loading) and gates NOTHING any more.
 func (at *AutoTrader) sessionEnabledForStrategy(session string) bool {
+	return at.sessionEnabledForStrategyAt(session, time.Now())
+}
+
+func (at *AutoTrader) sessionEnabledForStrategyAt(session string, now time.Time) bool {
 	if ov := at.sessionOverride(session); ov != nil && ov.Enable != nil {
 		return *ov.Enable
 	}
-	for _, s := range kernel.DefaultSessionRegistry().Sessions {
+	for _, s := range at.sessionRegistry(now).Sessions {
 		if strings.EqualFold(s.Name, session) {
 			return s.Enabled
 		}
@@ -87,12 +90,17 @@ func (at *AutoTrader) sessionEnabledForStrategy(session string) bool {
 }
 
 // derivedSessionsEnabled is the EFFECTIVE sessions_enabled list: which
-// registry sessions this strategy actually runs, derived from the per-session
-// enables. The stored list is never consulted.
+// sessions this strategy actually runs, derived from the per-session enables
+// against the RUNTIME registry (review P2-1). The stored list is never
+// consulted.
 func (at *AutoTrader) derivedSessionsEnabled() []string {
+	return at.derivedSessionsEnabledAt(time.Now())
+}
+
+func (at *AutoTrader) derivedSessionsEnabledAt(now time.Time) []string {
 	var on []string
-	for _, s := range kernel.DefaultSessionRegistry().Sessions {
-		if at.sessionEnabledForStrategy(s.Name) {
+	for _, s := range at.sessionRegistry(now).Sessions {
+		if at.sessionEnabledForStrategyAt(s.Name, now) {
 			on = append(on, s.Name)
 		}
 	}
