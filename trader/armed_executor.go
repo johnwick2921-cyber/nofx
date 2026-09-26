@@ -2266,8 +2266,8 @@ func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *st
 		switch strings.ToLower(u.State) {
 		case "filled", "partfilled":
 			at.armLifecycleWrite("set_state(filled)", r, ledger.SetState(r.ID, "filled", "fill@"+strconv.FormatFloat(u.FillPrice, 'f', 2, 64)))
-			_ = ledger.SetFillPrice(r.ID, u.FillPrice)
-			_ = ledger.Touch(r.ID)
+			at.armLifecycleWrite("set_fill_price", r, ledger.SetFillPrice(r.ID, u.FillPrice))
+			at.armLifecycleWrite("touch", r, ledger.Touch(r.ID))
 			at.recordZoneFillReceipt(ledger, r, u.FillPrice) // W3 D17 — policy rows only
 			// F3 (2026-08-30 E7 incident) — materialize the OPEN row at FILL
 			// time, before the stamp: the sub-60s round-trip class (fill →
