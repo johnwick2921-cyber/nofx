@@ -193,6 +193,26 @@ func (c *OrderSnapshotCache) AgeAt(account string, now time.Time) (time.Duration
 	return now.Sub(s.ReceivedAt), true
 }
 
+// LatestReceivedAny returns the newest book among ALL accounts and its receipt
+// instant — the broker truth the attempted-entry guard needs when a frame's
+// account is empty (legacy) or unknown at guard time.
+func (c *OrderSnapshotCache) LatestReceivedAny() (OrderSnapshotPayload, time.Time, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var best cachedSnapshot
+	found := false
+	for _, s := range c.byKey {
+		if !found || s.ReceivedAt.After(best.ReceivedAt) {
+			best = s
+			found = true
+		}
+	}
+	if !found {
+		return OrderSnapshotPayload{}, time.Time{}, false
+	}
+	return best.Payload, best.ReceivedAt, true
+}
+
 // OrderSnapshots exposes the cache so the trader layer can read the broker's
 // book for cutover leg 4 and the override guard.
 func (s *TCPServer) OrderSnapshots() *OrderSnapshotCache { return s.orderSnaps }

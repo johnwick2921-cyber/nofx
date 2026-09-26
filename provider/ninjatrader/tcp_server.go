@@ -25,6 +25,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"nofx/telemetry"
 )
 
 // Wire-protocol constants per spec L4359 + L4408 + L4415 + L4414 + L4376.
@@ -100,6 +102,15 @@ type TCPServer struct {
 	// per snapshot). Optional so the provider package keeps no store import and
 	// the parse path stays testable without a database.
 	orderSnapCB func(OrderSnapshotPayload)
+
+	// FIX-DOUBLE-ENTRY (CTO ruling, 2026-09-26) — reconnect-relative broker
+	// truth for attempted entry frames (see attempted_guard.go). Never cleared
+	// on close; only advanced on accept.
+	attempted attemptedReplayGuard
+	// Test seams (nil in production): writeFrameHook overrides the frame write
+	// in the flush path; attemptedVerifyWaitOverride replaces the env knob.
+	writeFrameHook              func(c net.Conn, sig SignalPayload) error
+	attemptedVerifyWaitOverride time.Duration
 
 	// Inbound fills — TCPTrader subscribes via Fills().
 	fillCh     chan FillPayload
@@ -1202,6 +1213,11 @@ func (s *TCPServer) Start(ctx context.Context) error {
 	s.maint.tick, s.maint.resend = maintenanceTick, maintenanceResend
 	s.maint.mu.Unlock()
 	go s.maintenanceLoop(cctx.Done(), maintenanceTick)
+	// FIX-DOUBLE-ENTRY boot line — READ values only: the guard is always on,
+	// the wait is the env knob, and the AddOn dedupe reads the far-side build
+	// (n/a until an AddOn build with the dedupe ships).
+	s.logger.Info(fmt.Sprintf("🔁 attempted-entry guard: on · wait=%s · addon_dedupe=%s",
+		s.attemptedWait().String(), attemptedAddonDedupeStatus(s)))
 	s.logger.Info("tcp_server: listening", "addr", s.addr)
 	return nil
 }
@@ -1559,6 +1575,7 @@ func (s *TCPServer) acceptLoop(ctx context.Context) {
 		s.lastAckTime = time.Now()
 		s.connMu.Unlock()
 		s.beginConnectionRecord(c, time.Now()) // W-ONE-BUTTON M2 site 7
+		s.attempted.noteReconnect(time.Now())  // FIX-DOUBLE-ENTRY: reconnect instant for fresh-truth checks
 
 		s.logger.Info("tcp_server: client connected", "addr", c.RemoteAddr())
 		s.wg.Add(2)
@@ -2033,7 +2050,13 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			if err := json.Unmarshal(env.Payload, &fill); err != nil {
 				s.logger.Warn("tcp_server: bad fill payload", "err", err)
 				continue
-			} // A2 (G1) — verify the echoed identity against the pending op. A mismatch
+			}
+			// FIX-DOUBLE-ENTRY — a fill frame echoing a signal_id is broker
+			// truth that the attempted-entry guard consults on reconnect.
+			if fill.SignalID != "" {
+				s.attempted.noteEcho(fill.SignalID, time.Now())
+			}
+			// A2 (G1) — verify the echoed identity against the pending op. A mismatch
 			// (forged/cross-wired fill) is NOT processed; the owning trader is frozen.
 			// W3 — pass the frame status: a rejected fill may echo account "" (the C#
 			// guard-reject path); the account leg alone is then tolerated.
@@ -2568,6 +2591,32 @@ func (s *TCPServer) flushPendingReportFor(own string) (map[string]bool, error) {
 			heldDropped = s.reportDrops(toSend[i:], own)
 			return heldDropped, nil
 		}
+		// FIX-DOUBLE-ENTRY — an attempted ENTRY frame is never resent
+		// blindly: fresh post-reconnect broker truth decides (settle /
+		// resend-once / hold / drop). See attempted_guard.go.
+		if queued.attempted && isEntrySignal(sig) {
+			switch s.decideAttemptedEntry(sig, time.Now()) {
+			case attemptedSettle:
+				// B3 (2026-09-26): declining a re-send changes the trade path — WARN, never INFO.
+				s.logger.Warn("🔁 attempted entry found at broker — not resent",
+					"op", "attempted_entry_settle", "trader_id", sig.TraderID, "symbol", sig.Symbol, "signal_id", sig.SignalID)
+				continue
+			case attemptedHold:
+				// Held frames stay queued for the next flush (or the scheduled
+				// recheck); the rest of this batch waits with them.
+				s.pendingMu.Lock()
+				s.pending = append(s.pending, toSend[i:]...)
+				s.pendingMu.Unlock()
+				s.scheduleAttemptedRecheck()
+				return heldDropped, nil
+			case attemptedDrop:
+				telemetry.IncGateBlock(sig.TraderID, attemptedGateName)
+				s.logger.Warn("🔁 attempted entry unverified — no fresh broker truth after reconnect; dropped, never resent",
+					"op", "attempted_entry_drop", "trader_id", sig.TraderID, "symbol", sig.Symbol,
+					"signal_id", sig.SignalID, "wait", s.attemptedWait().String())
+				continue
+			}
+		}
 		s.writeMu.Lock()
 		// W-ONE-BUTTON M2.1 (review F1): re-check the hold WITH the writer held.
 		// Waiting for writeMu (the hello reply, a heartbeat) must not let a
@@ -2584,7 +2633,12 @@ func (s *TCPServer) flushPendingReportFor(own string) (map[string]bool, error) {
 			continue
 		}
 		_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		err := WriteFrame(c, FrameSignal, sig)
+		var err error
+		if s.writeFrameHook != nil {
+			err = s.writeFrameHook(c, sig)
+		} else {
+			err = WriteFrame(c, FrameSignal, sig)
+		}
 		s.writeMu.Unlock()
 		if err != nil {
 			// The write was STARTED: bytes may have reached the AddOn.
@@ -2633,6 +2687,22 @@ func (s *TCPServer) PendingSignalCount() int {
 	s.pendingMu.Lock()
 	defer s.pendingMu.Unlock()
 	return len(s.pending)
+}
+
+// PendingAttemptedCount reports how many queued frames have already had a
+// write STARTED (may be at the AddOn). Same lock as every production mutation
+// of s.pending — the recheck timer writes under it, so unlocked reads of the
+// slice race (found by the full -race gate, race8).
+func (s *TCPServer) PendingAttemptedCount() int {
+	s.pendingMu.Lock()
+	defer s.pendingMu.Unlock()
+	n := 0
+	for _, q := range s.pending {
+		if q.attempted {
+			n++
+		}
+	}
+	return n
 }
 
 func (s *TCPServer) closeConn() {
