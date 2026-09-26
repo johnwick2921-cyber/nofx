@@ -889,7 +889,7 @@ export function DayPlanEditor({
                     label={tp('pictureEntryWindowSec', language)}
                     knob={dpEff('picture_htf.entry_window_sec')}
                     value={cfg.picture_htf?.entry_window_sec}
-                    placeholder="10"
+                    placeholder="360"
                     onChange={(v) =>
                       update('picture_htf', {
                         ...cfg.picture_htf,
@@ -902,7 +902,7 @@ export function DayPlanEditor({
                     label={tp('pictureFreshnessSec', language)}
                     knob={dpEff('picture_htf.freshness_sec')}
                     value={cfg.picture_htf?.freshness_sec}
-                    placeholder="2"
+                    placeholder="30"
                     onChange={(v) =>
                       update('picture_htf', {
                         ...cfg.picture_htf,
