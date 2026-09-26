@@ -1,10 +1,46 @@
 # Full audit and fix report — Saturday 2026-09-26
 
-**For:** the owner. **Written by:** the CTO at 01:00 CT on Saturday 2026-09-26.
+**For:** the owner. **Written by:** the CTO. First version at 01:00 CT Saturday 2026-09-26; **updated 07:00 CT** (see §0).
 
 **Live system:** boot 3, nofx `6cac1b89`, release marker `04ae1c2f`, booted Friday 19:33 CT and restarted at 20:14 CT with `FAST_MARKET_REASONING=max`. The bot is flat. CME is closed until Sunday 17:00 CT.
 
 Evidence tiers: **[A]** means someone ran it or read the exact line. **[B]** means inferred from strong evidence. **[C]** means a guess.
+
+---
+
+## 0. Update at 07:00 CT Saturday: what changed since 01:00
+
+**Merged to dev (6 of the fixes).** Each passed the CTO gate: the required PR sections, CI, and the CTO deliberately breaking the fix to confirm its test catches it. The full test run was repeated where needed.
+
+| PR | Fix | What the CTO checked |
+|---|---|---|
+| #246 | System robustness: DB lock timeout on every connection, loud writes, crash recovery per trader | 3 of 3 broken versions caught; race 51/51 with 0 data races; vitest 660/660 |
+| #249 | Leaks, bounded order queue, "unresolved" P&L | Dropping a frame on a full queue is caught by 2 tests; the conflict with #246 was resolved keeping both |
+| #248 | Planner: dead-setup salvage, repair hints | **Sent back once.** 3 safety checks had no test. Tests were added, and 3 of 3 breaks are now caught |
+| #250 | A flaky test: a test wrote into the source folder | The new guard fails when the old write is put back |
+| #247 | Operations: health, counters, scheduler; retention OFF | **Sent back once.** The new backup would have copied the 213 GB research DB twice a day and **filled the disk**. It is now off unless enabled, with a free-space check; both breaks are caught |
+| #252 | Boot-day check script (read-only, 11 checks) | No writes, kills or restarts; the secret is never printed. Merges on green CI |
+
+**Still in progress:**
+- **DS-102 — duplicate entry (critical; this gates the boot).** Its tests are running on top of the latest dev. Each of the last 3 full runs had one different test fail that passes alone. DS-108 is hunting the cause.
+- **DS-106 — security.** Final test run.
+- **DS-105 — settings.** Also flipped the fast-market reasoning **code default to max**, so the partner machines, which have no `.env` line for it, get max too.
+- **DS-103 — NT8 add-on proof (#243).** **Sent back once.** After a reconnect, the bot refused protective stops until the add-on re-proved itself. DS-103 must prove the stop is retried. Labels: 25 of 105 done.
+- **DS-104 — new.** The pre-boot review found 2 background tasks with no crash protection. You said fix everything, so every long-running task gets protection, plus a guard test.
+- **DS-107 — new.** Removing dead code in 2 packages that no fix touches.
+- **DS-108 — new.** The flaky-test hunt.
+
+**Done on your word:**
+- **Row 618** is fixed: +$19.50, `tp`, with a backup.
+- **The broken empty-id strategy row** is deleted. It was backed up first, and `578ac8f6` is now the only default.
+- **Sessions:** all ON (you set them).
+- **Retention:** OFF, keeping everything.
+
+**Your open question:** should the AI that makes the entry decision every 2 minutes run at **max** reasoning too? Today it defaults to "fast"; only the planner is at max. It stays as it is until you say.
+
+**Your `.env` paste** (the stop-entry comment and the duplicate lines) is in §7. I cannot edit `.env`.
+
+**Boot:** once duplicate entry, security and settings are merged, and before **Sunday 17:00 CT**. You run the command, and then recompile the NT8 AddOn (F5).
 
 ---
 
@@ -100,7 +136,7 @@ Evidence tiers: **[A]** means someone ran it or read the exact line. **[B]** mea
 
 ---
 
-## 5. Fix waves — status at 01:00 CT Saturday
+## 5. Fix waves — status at 01:00 CT Saturday (see §0 for the 07:00 status)
 
 Every fix must meet all of the following before the CTO merges it:
 - a test that FAILS without the fix;
