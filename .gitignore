@@ -171,3 +171,7 @@ data/sandbox.db*
 data/updater/
 /w2w3_replay
 /cmd/w2w3_replay/w2w3_replay
+
+# RESEARCH-FLASH-AB artifacts (research branch)
+ab_raw/
+ab_results.csv

@@ -66,12 +66,17 @@ type result struct {
 	Finish         string
 	Pass           bool
 	FirstReject    string
+	CorePass       bool
+	CoreReject     string
+	FullPass       bool
+	FullReject     string
 	EntryDistsPts  string // per scenario, joined with ';'
 	EntryDistsATR  string // per scenario in xATR5m, joined with ';'
 	BornDead       string // yes/no/na + reason (born-dead leg)
 	Err            string
 	cfg            *store.StrategyConfig // not serialized; stage-2 judge input
 	prompt         string                // the stored verbatim prompt
+	rawContent     string                // the AI's RAW answer, saved per call
 	doc            *kernel.PlanDoc       // parsed doc, for stage-2 judge legs
 	facts          kernel.PlanFacts
 	maxLevels      int
@@ -202,6 +207,10 @@ func main() {
 				judgeMu.Lock()
 				res.judgeExtra(st, cfg)
 				judgeMu.Unlock()
+				if res.CorePass && res.FullReject == "" {
+					res.FullPass = true
+				}
+				res.saveRaw()
 				mu.Lock()
 				results = append(results, res)
 				_ = csvW.Write(res.csvRow())
@@ -303,6 +312,7 @@ func runArm(r store.PlannerRejectedPrompt, a arm, key string, opts kernel.Author
 	}
 	content := ch.Message.Content
 	res.cfg = cfg
+	res.rawContent = content
 	res.session, res.tradeDate = r.Session, r.TradeDate
 	res.prompt = r.PromptText
 	res.symbol = symbolFromPrompt(r.PromptText)
@@ -324,6 +334,7 @@ func judge(res *result, content, factsJSON string, opts kernel.AuthoringOpts, ma
 	d, perr := kernel.ParsePlanDocForAuthoring(content, maxLevels, scenarioCap, opts)
 	if perr != nil {
 		res.FirstReject = "parse: " + perr.Error()
+		res.CoreReject = res.FirstReject
 		return
 	}
 	var facts kernel.PlanFacts
@@ -335,9 +346,11 @@ func judge(res *result, content, factsJSON string, opts kernel.AuthoringOpts, ma
 	}
 	if verr := kernel.ValidatePlanDocWithFactsMachine(d, facts, nil, maxLevels, scenarioCap); verr != nil {
 		res.FirstReject = "facts: " + verr.Error()
+		res.CoreReject = res.FirstReject
 		return
 	}
 	res.Pass = true
+	res.CorePass = true
 	res.doc, res.facts = d, facts
 	res.maxLevels, res.scenarioCap = maxLevels, scenarioCap
 	// Per-scenario entry distance from the read price, in pts and xATR5m
@@ -361,7 +374,7 @@ func judge(res *result, content, factsJSON string, opts kernel.AuthoringOpts, ma
 }
 
 func csvHeader() []string {
-	return []string{"row_id", "arm", "model", "cap", "wall_s", "ttfb_s", "prompt_tok", "completion_tok", "reasoning_chars", "finish", "pass", "first_reject", "entry_dists_pts", "entry_dists_xatr5m", "born_dead", "err"}
+	return []string{"row_id", "arm", "model", "cap", "wall_s", "ttfb_s", "prompt_tok", "completion_tok", "reasoning_chars", "finish", "core_pass", "core_reject", "full_pass", "full_reject", "entry_dists_pts", "entry_dists_xatr5m", "born_dead", "err"}
 }
 
 func (r result) csvRow() []string {
@@ -369,8 +382,28 @@ func (r result) csvRow() []string {
 		strconv.Itoa(r.RowID), r.Arm, r.Model, strconv.Itoa(r.Cap),
 		fmt.Sprintf("%.2f", r.WallS), fmt.Sprintf("%.2f", r.TTFBS),
 		strconv.Itoa(r.PromptTok), strconv.Itoa(r.CompletionTok), strconv.Itoa(r.ReasoningChars),
-		r.Finish, strconv.FormatBool(r.Pass), r.FirstReject, r.EntryDistsPts, r.EntryDistsATR, r.BornDead, r.Err,
+		r.Finish, strconv.FormatBool(r.CorePass), r.CoreReject, strconv.FormatBool(r.FullPass), r.FullReject, r.EntryDistsPts, r.EntryDistsATR, r.BornDead, r.Err,
 	}
+}
+
+// saveRaw persists the call's RAW answer (plan JSON + finish + usage) to
+// ab_raw/<row>-<arm>.json so the outputs can be re-judged offline with zero
+// new API calls (CTO 03:50Z).
+func (r result) saveRaw() {
+	if err := os.MkdirAll("ab_raw", 0o755); err != nil {
+		return
+	}
+	rec := map[string]any{
+		"row_id": r.RowID, "arm": r.Arm, "model": r.Model, "cap": r.Cap,
+		"wall_s": r.WallS, "finish": r.Finish,
+		"prompt_tok": r.PromptTok, "completion_tok": r.CompletionTok,
+		"reasoning_chars": r.ReasoningChars,
+		"core_pass":       r.CorePass, "core_reject": r.CoreReject,
+		"full_pass": r.FullPass, "full_reject": r.FullReject,
+		"born_dead": r.BornDead, "content": r.rawContent,
+	}
+	b, _ := json.MarshalIndent(rec, "", "  ")
+	_ = os.WriteFile(fmt.Sprintf("ab_raw/%d-%s.json", r.RowID, r.Arm), b, 0o644)
 }
 
 func printTable(results []result) {
@@ -433,15 +466,18 @@ func (res *result) judgeExtra(st *store.Store, cfg *store.StrategyConfig) {
 		if feas := trader.ResearchWriteTimeFeasibilityVerdicts(res.symbol, res.doc, atr5m, cfg, res.session); len(feas) > 0 {
 			res.Pass = false
 			res.FirstReject = "write-time feasibility: " + feas[0]
+			res.FullReject = res.FirstReject
 		}
 	}
 	if res.Pass && !readAt.IsZero() && len(bars) > 0 {
+		res.FullPass = true // provisional: cleared by either refusal below
 		publish := readAt.Add(time.Duration(res.WallS * float64(time.Second)))
 		_, berr := trader.ResearchValidateAuthoredScenariosAt(st, res.symbol, res.doc, res.session, res.tradeDate, readAt, publish, bars)
 		if berr != nil {
 			res.Pass = false
+			res.FullReject = "born-dead/flip-met: " + berr.Error()
 			if res.FirstReject == "" {
-				res.FirstReject = "born-dead/flip-met: " + berr.Error()
+				res.FirstReject = res.FullReject
 			}
 			res.BornDead = "yes (" + berr.Error() + ")"
 		} else {
