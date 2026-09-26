@@ -9,6 +9,7 @@ import (
 
 	"nofx/logger"
 	"nofx/market"
+	storepkg "nofx/store"
 
 	"github.com/gin-gonic/gin"
 	"nofx/kernel"
@@ -250,12 +251,43 @@ func (s *Server) handlePositionHistory(c *gin.Context) {
 	// Get direction stats
 	directionStats, _ := store.Position().GetDirectionStats(trader.GetID())
 
+	// Canon class 40: a NULL pnl_corrected is UNRESOLVED — every row carries an
+	// explicit pnl_status and the count is shown, so no consumer can render a
+	// NULL as 0 or blank.
+	rows, unresolved := annotatePositionHistory(positions)
+
 	c.JSON(http.StatusOK, gin.H{
-		"positions":       positions,
-		"stats":           stats,
-		"symbol_stats":    symbolStats,
-		"direction_stats": directionStats,
+		"positions":        rows,
+		"unresolved_count": unresolved,
+		"stats":            stats,
+		"symbol_stats":     symbolStats,
+		"direction_stats":  directionStats,
 	})
+}
+
+// positionHistoryRow is the API shape of one closed position: the store row
+// plus its corrected-column status. Canon class 40: pnl_corrected NULL is
+// UNRESOLVED — surfaced explicitly so no consumer can render it as 0/blank.
+type positionHistoryRow struct {
+	*storepkg.TraderPosition
+	PnlStatus string `json:"pnl_status"` // "resolved" | "unresolved"
+}
+
+// annotatePositionHistory stamps every row with its corrected-column status and
+// counts the unresolved ones (canon class 40: NULL is UNRESOLVED, excluded, and
+// the COUNT is shown — a NULL row must read "unresolved", never 0 or blank).
+func annotatePositionHistory(positions []*storepkg.TraderPosition) ([]positionHistoryRow, int) {
+	rows := make([]positionHistoryRow, 0, len(positions))
+	unresolved := 0
+	for _, p := range positions {
+		status := "resolved"
+		if p == nil || p.PnlCorrected == nil {
+			status = "unresolved"
+			unresolved++
+		}
+		rows = append(rows, positionHistoryRow{TraderPosition: p, PnlStatus: status})
+	}
+	return rows, unresolved
 }
 
 // handleTrades Historical trades list

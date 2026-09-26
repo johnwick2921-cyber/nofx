@@ -1,7 +1,9 @@
 package trader
 
 import (
+	"context"
 	"fmt"
+	"nofx/discipline"
 	"nofx/kernel"
 	"nofx/logger"
 	"nofx/market"
@@ -23,6 +25,7 @@ import (
 	ntTrader "nofx/trader/ninjatrader"
 	"nofx/trader/okx"
 	"nofx/wallet"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -449,10 +452,12 @@ type AutoTrader struct {
 	// flight across a Stop or a restart cannot send for a trader that is
 	// gone. Atomic: read from the live-bar goroutine, written on Run/Stop.
 	pictureGen            atomic.Int64
-	startTime             time.Time             // System start time
-	callCount             int                   // AI call count
-	positionFirstSeenTime map[string]int64      // Position first seen time (symbol_side -> timestamp in milliseconds)
-	stopMonitorCh         chan struct{}         // Used to stop monitoring goroutine
+	startTime             time.Time        // System start time
+	callCount             int              // AI call count
+	positionFirstSeenTime map[string]int64 // Position first seen time (symbol_side -> timestamp in milliseconds)
+	stopMonitorMu         sync.Mutex       // guards stopMonitorCtx/stopMonitorCancel (per-Run)
+	stopMonitorCtx        context.Context
+	stopMonitorCancel     context.CancelFunc
 	monitorWg             sync.WaitGroup        // Used to wait for monitoring goroutine to finish
 	kickCh                chan string           // discard-burn/post-exit: one-shot deferred-cycle kicks into the run loop (reason payload)
 	kickPending           atomic.Bool           // at most one kick armed at a time (CAS)
@@ -900,7 +905,6 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		callCount:             0,
 		isRunning:             false,
 		positionFirstSeenTime: make(map[string]int64),
-		stopMonitorCh:         make(chan struct{}),
 		kickCh:                make(chan string, 4),
 		monitorWg:             sync.WaitGroup{},
 		peakPnLCache:          make(map[string]float64),
@@ -934,6 +938,33 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 }
 
 // Run runs the automatic trading main loop
+// panicInTickOnce is the P1-F TEST SEAM (default off): when set, the next
+// run-loop beat panics, so tests can pin the recovery path.
+var panicInTickOnce atomic.Bool
+
+// recoverPanic is the P1-F safety net (audit 2026-09-26): a panic in one
+// trader's loop or monitor must never kill the process. ERROR + stack, the
+// trader FREEZES (admitChain's frozen leg refuses new entries; closes and
+// exits keep working — they bypass admission by design), and the goroutine
+// exits cleanly while the other goroutines (protection monitor, picture
+// consumer) and every other trader keep running.
+func (at *AutoTrader) recoverPanic(where string) {
+	if r := recover(); r != nil {
+		stack := debug.Stack()
+		at.logErrorf("💥 PANIC in %s for trader %s: %v\n%s", where, at.id, r, stack)
+		telemetry.RecordError(at.id, "trader_panic", fmt.Sprintf("%s: %v", where, r), telemetry.CostNone)
+		discipline.FreezeTrader(at.id, fmt.Sprintf("panic in %s: %v", where, r), time.Now().UnixMilli())
+		at.emitAlert("P0", "trader_panic", "panic:"+at.id,
+			"💥 Trader panic — entries frozen (closes still work)", fmt.Sprintf("%s: %v", where, r))
+	}
+}
+
+// runBeatSafely runs one loop/monitor beat under the P1-F recovery.
+func (at *AutoTrader) runBeatSafely(where string, fn func()) {
+	defer at.recoverPanic(where)
+	fn()
+}
+
 func (at *AutoTrader) Run() error {
 	at.limitFlattenMu.Lock()
 	at.limitFlattenStopped = false
@@ -948,7 +979,12 @@ func (at *AutoTrader) Run() error {
 			return fmt.Errorf("primary_timeframe %q is not in the timeframe table (kernel/timeframes.go) — refusing to run on a corrupt bar clock", at.primaryTimeframe())
 		}
 	}
-	at.stopMonitorCh = make(chan struct{})
+	at.stopMonitorMu.Lock()
+	stopCtx, stopCancel := context.WithCancel(context.Background())
+	at.stopMonitorCtx = stopCtx
+	at.stopMonitorCancel = stopCancel
+	at.stopMonitorMu.Unlock()
+	stopDone := stopCtx.Done()
 	at.kickCh = make(chan string, 4) // fresh kick channel per Run (restart-safe)
 	at.kickPending.Store(false)
 	registerPostExitDispatch(at) // Phase 4: close events → one post-exit rescan
@@ -1078,6 +1114,7 @@ func (at *AutoTrader) Run() error {
 		at.logInfof("🔲 Grid trading strategy detected, initializing grid...")
 		if err := at.InitializeGrid(); err != nil {
 			at.logErrorf("❌ Failed to initialize grid: %v", err)
+			at.cancelStopMonitor() // NOTE-leak fix: the drawdown monitor started above must not orphan on this error path
 			return fmt.Errorf("grid initialization failed: %w", err)
 		}
 	}
@@ -1085,7 +1122,7 @@ func (at *AutoTrader) Run() error {
 	// Execute immediately on first run. Under bar-close cadence (P2.1) this runs
 	// once on the last CLOSED primary-TF bar and sets the watermark, then the loop
 	// idles until the next bar closes; the scan-timer default is unchanged.
-	at.tickOnce(isGridStrategy)
+	at.runBeatSafely("run loop (first beat)", func() { at.tickOnce(isGridStrategy) })
 
 	for {
 		at.isRunningMutex.RLock()
@@ -1098,16 +1135,20 @@ func (at *AutoTrader) Run() error {
 
 		select {
 		case <-ticker.C:
-			// Deterministic two-picture fallback: the event path is the 5m bar
-			// frame; the tick covers a missed boundary (feed stall). Cheap no-op
-			// while the mode is off.
-			at.pictureHtfTickFallback(time.Now())
-			// The loop is single-goroutine: a tick that fires while a cycle is
-			// still running WAITS here (the ticker drops missed ticks), so an
-			// in-flight AI read is structurally never cancelled by the next
-			// tick. Log the overrun so a slow call is visible, not mysterious.
-			tickStart := time.Now()
-			closedSkip := at.tickOnce(isGridStrategy)
+			var tickStart time.Time
+			var closedSkip bool
+			at.runBeatSafely("run loop", func() {
+				// Deterministic two-picture fallback: the event path is the 5m bar
+				// frame; the tick covers a missed boundary (feed stall). Cheap no-op
+				// while the mode is off.
+				at.pictureHtfTickFallback(time.Now())
+				// The loop is single-goroutine: a tick that fires while a cycle is
+				// still running WAITS here (the ticker drops missed ticks), so an
+				// in-flight AI read is structurally never cancelled by the next
+				// tick. Log the overrun so a slow call is visible, not mysterious.
+				tickStart = time.Now()
+				closedSkip = at.tickOnce(isGridStrategy)
+			})
 			if d := time.Since(tickStart); shouldWarnOverrun(d, at.config.ScanInterval, closedSkip) {
 				at.logWarnf("⏱ cycle overran the scan interval (%v > %v) — next tick delayed, in-flight work never cancelled; intervening ticks skipped",
 					d.Round(time.Millisecond), at.config.ScanInterval)
@@ -1121,7 +1162,7 @@ func (at *AutoTrader) Run() error {
 			at.noteKick(reason)
 			at.tickOnce(isGridStrategy)
 			at.cycleTrigger = ""
-		case <-at.stopMonitorCh:
+		case <-stopDone:
 			at.logInfof("⏹ Stop signal received, exiting automatic trading main loop")
 			return nil
 		}
@@ -1141,9 +1182,10 @@ func (at *AutoTrader) Stop() {
 	at.isRunning = false
 	at.isRunningMutex.Unlock()
 
-	unregisterPostExitDispatch(at) // Phase 4: stop routing close events here
-	at.unregisterPictureHtf()      // W4 D25 — no Picture frame after Stop
-	at.stopArmedEventLoop()        // W3 D14 — no event pass after Stop
+	unregisterPostExitDispatch(at)    // Phase 4: stop routing close events here
+	at.unregisterPictureHtf()         // W4 D25 — no Picture frame after Stop
+	at.stopPictureHtfBrokerConsumer() // P2-15 — the order_update consumer goroutine exits, never leaks across restarts
+	at.stopArmedEventLoop()           // W3 D14 — no event pass after Stop
 	// W117 F2 (R5) — the ordered worker's unregister closure is kept and
 	// called HERE (the worker drains its queue, then exits; nothing is lost).
 	at.orderedExecMu.Lock()
@@ -1152,9 +1194,32 @@ func (at *AutoTrader) Stop() {
 		at.orderedExecUnreg = nil
 	}
 	at.orderedExecMu.Unlock()
-	close(at.stopMonitorCh) // Notify monitoring goroutine to stop
-	at.monitorWg.Wait()     // Wait for monitoring goroutine to finish
+	at.cancelStopMonitor()                // Notify monitoring goroutine to stop (idempotent per-Run cancel; the grid-init error path may already have called it)
+	at.monitorWg.Wait()                   // Wait for monitoring goroutine to finish
+	ntTrader.StopLevelStatsNightly(at.id) // NOTE-leak fix: the 24h-idling nightly goroutine exits on Stop
 	logger.Info("⏹ Automatic trading system stopped")
+}
+
+// cancelStopMonitor asks the drawdown monitor (and the run loop's stop select)
+// to exit. Idempotent: the per-Run cancel can be called by Stop AND by the
+// grid-init error path in any order.
+func (at *AutoTrader) cancelStopMonitor() {
+	at.stopMonitorMu.Lock()
+	if at.stopMonitorCancel != nil {
+		at.stopMonitorCancel()
+	}
+	at.stopMonitorMu.Unlock()
+}
+
+// setupStopMonitorForTest pre-arms a per-Run stop signal the way Run does, for
+// tests that drive Stop (or the run loop) without a full Run. Production Run
+// replaces it with its own ctx; cancelStopMonitor is nil-safe regardless.
+func (at *AutoTrader) setupStopMonitorForTest() {
+	at.stopMonitorMu.Lock()
+	ctx, cancel := context.WithCancel(context.Background())
+	at.stopMonitorCtx = ctx
+	at.stopMonitorCancel = cancel
+	at.stopMonitorMu.Unlock()
 }
 
 // GetID gets trader ID

@@ -7705,3 +7705,64 @@ catch up a missed minute; exchange account-state cache swept on Set.
 **Probe:** for every counter, `grep` a reader outside its own package; for every
 "health" endpoint, kill the database underneath it and read the status code; for
 every prune function, name its production caller.
+## CLASS NN (assigned at merge) — AN UNBOUNDED OWNER QUEUE GROWS MEMORY INSTEAD OF BACKPRESSURE
+
+**Found:** 2026-09-26, FIX-LEAKS wave, audit/0926-system-pipeline P2-14 [A].
+`provider/ninjatrader/ordered_exec.go` per-(symbol,account) FIFO was
+append-never-drop with no cap; a stalled durable consumer (SQLite-bound handler)
+grew memory without bound. **Fixed:** cap 256; a full queue NEVER drops —
+the enqueue blocks in bounded 5s passes, each timeout logging ERROR + a
+per-owner counter, until the worker drains or the owner closes (closed returns
+false → advisory fanout). The server-side heartbeat-receive stall bounds a
+wedged state at 60s and forces a reconnect. Pinned by
+`TestOrderedQueueOverflowNeverDrops` + `TestOrderedOverflowEnqueuerReleasedByUnregister`
+(real wire, flood cap+2 with a blocked handler; mutation cap→1<<30 fails
+"overflow counter never moved"). **Probe:** for every durable per-owner queue,
+name its cap and its overflow policy — "never drops" with no bound is the bug,
+not the feature.
+
+## CLASS NN (assigned at merge) — A CONSUMER GOROUTINE WITH NO STOP PATH LEAKS ACROSS RESTARTS
+
+**Found:** 2026-09-26, FIX-LEAKS wave, audit/0926-system-pipeline P2-15 + NOTE
+leaks [A]. The picture-HTF order_update consumer exited only when the server
+subscription died; the level-stats nightly goroutine idled ~24h between 17:05 CT
+runs with no exit at all; `armedEventLoop.close` armed a 5s timer per Stop; the
+grid-init error path orphaned the drawdown monitor. **Fixed:** every one ties to
+a per-trader cancel (ctx/stop channel) called from `AutoTrader.Stop`, with
+CompareAndDelete-on-the-owning-handle so a restarted trader's consumer is never
+evicted by the old instance's exit; the timer fast path allocates no timer and
+the slow path stops it; the grid-init error path calls `cancelStopMonitor`.
+Pinned by `TestPictureHtfConsumerStopsOnTraderStop`,
+`TestStopLevelStatsNightlyStopsTheGoroutine`,
+`TestArmedEventLoopCloseFastPathAllocatesNoTimer`,
+`TestDrawdownMonitorStopsOnCancel` (goroutine-count/alloc tests at the
+production call sites). **Probe:** for every `go func()` that owns a trader,
+find the line that ends it — a stop path that only fires when a peer dies is a
+leak while the peer lives.
+
+## CLASS NN (assigned at merge) — UNSET CONFIG FALLS BACK SILENTLY TO A DEPRECATED PATH
+
+**Found:** 2026-09-26, FIX-LEAKS wave, audit/0926-system-pipeline P2-18 [A].
+`NT_TRANSPORT` unset resolved to the deprecated CSV transport with no line at
+all. **Fixed:** unset prints a WARN boot line naming the effective transport
+(behaviour unchanged — flipping the default would be a trading-behaviour
+change); the explicit `csv` stays silent (chosen) and unknown values keep
+failing fast. Pinned by `TestNewTraderFromEnvUnsetTransportWarns` +
+`TestNewTraderFromEnvExplicitCSVSilentAndUnknownFails` (mutation Warn→Debug
+fails "did not warn … log: \"\""). **Probe:** every env-var router — list its
+cases and ask which one a typo or an absent var lands in silently.
+
+## CLASS NN (assigned at merge) — A NULL CORRECTED P&L RENDERS AS 0 OR BLANK INSTEAD OF UNRESOLVED
+
+**Found:** 2026-09-26, FIX-LEAKS wave, audit/0926-trading-pipeline P2 (row 618
+class) [A]. `pnl_corrected` NULL serialized as an ABSENT field
+(`json:",omitempty"`), so the web fell back to `realized_pnl || 0` and the row
+rendered without P&L — or with a fabricated number. **Fixed:** the API stamps
+every position-history row with `pnl_status: resolved|unresolved` and returns
+`unresolved_count`; the web row renders the word `unresolved` for a NULL
+corrected and the footer shows the count (canon class 40: NULL is UNRESOLVED,
+excluded, count shown). Pinned by `TestAnnotatePositionHistoryMarksNullPnlUnresolved`
++ `TestAnnotatePositionHistoryEmptyIsEmptyArray` (api) and
+`PositionHistory.unresolved.test.tsx` (component vitest). **Probe:** for every
+nullable truth column that a consumer renders, walk the ABSENT path — a
+distinction that serializes away is a fabrication waiting at the consumer.

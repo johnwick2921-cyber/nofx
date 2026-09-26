@@ -376,11 +376,13 @@ const dayPlan: KnobSpec[] = [
     where: 'Strategy → Day Plan → death_reread toggle',
     what: "When the plan's DEATH condition fires, the plan ALWAYS goes dormant first (wick-noise protection — unchanged). ON (the default, nil=ON) adds ONE BUDGETED planner re-read that authors a FRESH plan, bias free, with the death evidence in the read prompt (the dead version, its kill line with the price at death, the direction of the break). Unlike the flip read (free), a death re-read SPENDS one class-35 replan unit — a death is the planner being wrong, and an unbounded loop of dead plans on a trend day must stop; at budget exhausted the plan stays dormant with one WARN naming the budget. The fresh version supersedes the dormant one (superseded:death) and is protected by the same 30-min flip hold anchor plus a 10-minute birth wick (its first death check runs only after 2 full 5m closes post-birth, so the same line's noise cannot kill it). What still gates it: preflight, the class-47 cutoff, one planner stream at a time, one successful read per fired death. OFF = today's behaviour: the plan sleeps until price closes back — and if price never does, the session sits out.",
     trader:
-      'ON = a dead plan re-reads once (budgeted) instead of sitting the session out when price runs away from its line. A read REFUSED before launch is retried on the very next cycle while the row stays dormant; a read that LAUNCHED and wrote nothing backs off from its OWN launch for wake_min_interval_min before retrying. If price closes back first, the old plan re-arms as before and the re-read is skipped. The counter death_reread:<trader>:<date>:<session> records each landed re-read.',
+      "ON = a dead plan re-reads once (budgeted) instead of sitting the session out when price runs away from its line. A read REFUSED before launch is retried on the very next cycle while the row stays dormant; a read that LAUNCHED and wrote nothing backs off from its OWN launch for death_reread_retry_min before retrying. death_reread_retry_min defaults to wake_min_interval_min (today's behaviour: the same 30-minute hold) and replaces ONLY this hold — 0 means retry on the very next cycle; wake_min_interval_min still paces ordinary level wakes as before. If price closes back first, the old plan re-arms as before and the re-read is skipped. The counter death_reread:<trader>:<date>:<session> records each landed re-read.",
     consumer:
-      'trader/death_reread.go maybeRereadAfterDeath + deathBornWickActive · store.DayPlanConfig.DeathRereadEnabled',
-    range: 'ON | OFF',
-    systemDefault: 'ON (unset; nil=ON per the owner ruling)',
+      'trader/death_reread.go maybeRereadAfterDeath + deathRereadHoldMinutes · store.DayPlanConfig.DeathRereadEnabled · store.DayPlanConfig.DeathRereadRetryMinutes',
+    range:
+      'death_reread: ON | OFF · death_reread_retry_min: minutes (unset = wake_min_interval_min)',
+    systemDefault:
+      "death_reread: ON (unset; nil=ON per the owner ruling) · death_reread_retry_min: unset = today's value",
     recommended:
       '⭐ ON — the default; OFF only to reproduce the pre-fix dormant-only behaviour.',
     whenToTouch:
