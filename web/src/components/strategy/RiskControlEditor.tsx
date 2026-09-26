@@ -649,14 +649,11 @@ export function RiskControlEditor({
           </div>
 
           {/* Max Margin Usage — crypto-only + ADVICE-ONLY. Stored as a 0-1
-              fraction, shown/edited as a percent. The value is NOT gate-enforced:
-              it only feeds the AI prompt (engine_prompt.go) as a hint — no code
-              blocks a trade for it (hence the honest "AI-guided" label). The
-              onChange clamps to [0.1,1.0] = [10,100]%, matching ClampLimits
-              (store/strategy.go) so the shown value always equals the saved value.
-              Hidden on futures (like the PVR tiles): "% margin usage" is a crypto-
-              margin concept; futures margin is a per-contract bond, surfaced in the
-              Futures Risk panel below. */}
+              fraction. The value is NOT gate-enforced: it only feeds the AI
+              prompt (engine_prompt.go) as a hint — no code blocks a trade for
+              it. FIX-KNOBS P2-8 (2026-09-26): READ-ONLY — editing it changes
+              nothing that gates a trade; the effective row below shows the
+              value + origin. */}
           {!isFutures && (
             <div
               className="p-4 rounded-lg"
@@ -672,34 +669,15 @@ export function RiskControlEditor({
                 {ts(riskControl.maxMarginUsageDesc, language)}
               </p>
               <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  value={Math.round((config.max_margin_usage ?? 0.9) * 100)}
-                  onChange={(e) =>
-                    updateField(
-                      'max_margin_usage',
-                      Math.min(
-                        1,
-                        Math.max(0.1, (parseFloat(e.target.value) || 90) / 100)
-                      )
-                    )
-                  }
-                  disabled={disabled}
-                  min={10}
-                  max={100}
-                  step={5}
-                  className="w-20 px-3 py-2 rounded font-mono"
-                  style={{
-                    background: '#1E2329',
-                    border: '1px solid #2B3139',
-                    color: '#EAECEF',
-                  }}
-                />
-                <span style={{ color: '#848E9C' }}>%</span>
-                <span className="text-xs" style={{ color: '#F6465D' }}>
-                  AI-guided (not enforced)
+                <span
+                  data-testid="no-effect-max_margin_usage"
+                  className="text-xs"
+                  style={{ color: '#F6465D' }}
+                >
+                  {ts(riskControl.noEffect, language)}
                 </span>
               </div>
+              <EffectiveLine knob={eff('max_margin_usage')} />
             </div>
           )}
         </div>
@@ -736,42 +714,20 @@ export function RiskControlEditor({
                 {ts(riskControl.minPositionSizeDesc, language)}
               </p>
               <div className="flex items-center gap-2">
-                {/* User-set + code-enforced. ClampLimits bounds this to [10,1000]
-                    on save AND at decision time; the trader gate
-                    (enforceMinPositionSize) plus the kernel reject-floor (12 gen /
-                    60 BTC-ETH, engine_position.go) remain as defense-in-depth, so
-                    a user value only ever RAISES the effective minimum — never
-                    below the floor. The onChange clamp keeps shown == saved. */}
-                <input
-                  type="number"
-                  value={config.min_position_size ?? 12}
-                  onChange={(e) =>
-                    updateField(
-                      'min_position_size',
-                      Math.min(
-                        1000,
-                        Math.max(10, parseFloat(e.target.value) || 12)
-                      )
-                    )
-                  }
-                  disabled={disabled}
-                  min={10}
-                  max={1000}
-                  step={1}
-                  className="w-24 px-3 py-2 rounded font-mono"
-                  style={{
-                    background: '#1E2329',
-                    border: '1px solid #2B3139',
-                    color: '#EAECEF',
-                  }}
-                />
-                <span className="ml-1" style={{ color: '#848E9C' }}>
-                  USDT
-                </span>
-                <span className="text-xs" style={{ color: '#848E9C' }}>
-                  user-set · enforced
+                {/* FIX-KNOBS P2-8 (2026-09-26): READ-ONLY — the min-size gate
+                    (enforceMinPositionSize) is a crypto-path hardcode
+                    (12 gen / 60 BTC-ETH, engine_position.go); editing this row
+                    changes nothing that gates a trade. The effective row below
+                    shows the value + origin. */}
+                <span
+                  data-testid="no-effect-min_position_size"
+                  className="text-xs"
+                  style={{ color: '#F6465D' }}
+                >
+                  {ts(riskControl.noEffect, language)}
                 </span>
               </div>
+              <EffectiveLine knob={eff('min_position_size')} />
             </div>
           )}
 

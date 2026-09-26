@@ -21,10 +21,21 @@
       "plan_enabled": true,
       "plan_mode": "advisory",
       "max_levels": 10,
-      "t1_currencies": ["USD", "EUR"],
+      "t1_currencies": [
+        "USD",
+        "EUR"
+      ],
       "sessions": [
-        { "session": "NY", "plan_mode": "strict", "max_trades": 3 },
-        { "session": "ASIA", "enable": true, "replan_cap": 1 }
+        {
+          "session": "NY",
+          "plan_mode": "strict",
+          "max_trades": 3
+        },
+        {
+          "session": "ASIA",
+          "enable": true,
+          "replan_cap": 1
+        }
       ]
     }
   },
@@ -45,7 +56,10 @@
           "path": "ai_config.risk_control.blackout_enabled",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": true },
+          "stored": {
+            "present": true,
+            "value": true
+          },
           "effective": true,
           "origin": "saved value",
           "scope": "strategy",
@@ -56,7 +70,10 @@
           "path": "ai_config.risk_control.blackout_end_ct",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": "13:35" },
+          "stored": {
+            "present": true,
+            "value": "13:35"
+          },
           "effective": "13:35",
           "origin": "saved value",
           "scope": "strategy",
@@ -67,7 +84,10 @@
           "path": "ai_config.risk_control.blackout_start_ct",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": "13:25" },
+          "stored": {
+            "present": true,
+            "value": "13:25"
+          },
           "effective": "13:25",
           "origin": "saved value",
           "scope": "strategy",
@@ -78,7 +98,10 @@
           "path": "ai_config.risk_control.breakeven_enabled",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": true },
+          "stored": {
+            "present": true,
+            "value": true
+          },
           "effective": false,
           "origin": "suspended (EXIT_MECHS_SUSPENDED) — saved true not used",
           "scope": "process env",
@@ -89,7 +112,9 @@
           "path": "ai_config.risk_control.breakeven_trigger_points",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 50,
           "origin": "shipped default",
           "scope": "venue:ninjatrader",
@@ -100,7 +125,9 @@
           "path": "ai_config.risk_control.consecutive_loss_halt",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 5,
           "origin": "env BREAKER_HALT_N",
           "scope": "process env",
@@ -111,7 +138,9 @@
           "path": "ai_config.risk_control.consistency_enabled",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": false,
           "origin": "shipped default",
           "scope": "strategy",
@@ -122,7 +151,9 @@
           "path": "ai_config.risk_control.consistency_max_day_pct",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 0,
           "origin": "shipped default",
           "scope": "strategy",
@@ -133,7 +164,10 @@
           "path": "ai_config.risk_control.daily_loss_enabled",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": true },
+          "stored": {
+            "present": true,
+            "value": true
+          },
           "effective": true,
           "origin": "saved value",
           "scope": "strategy",
@@ -144,7 +178,9 @@
           "path": "ai_config.risk_control.daily_loss_limit_usd",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 400,
           "origin": "env RISK_MAX_DAILY_LOSS_USD",
           "scope": "process env",
@@ -155,7 +191,9 @@
           "path": "ai_config.risk_control.daily_profit_enabled",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": false,
           "origin": "shipped default",
           "scope": "strategy",
@@ -166,7 +204,9 @@
           "path": "ai_config.risk_control.daily_profit_target_usd",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 0,
           "origin": "shipped default",
           "scope": "strategy",
@@ -177,7 +217,10 @@
           "path": "ai_config.risk_control.guardrails_enabled",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": true },
+          "stored": {
+            "present": true,
+            "value": true
+          },
           "effective": true,
           "origin": "saved value",
           "scope": "strategy",
@@ -188,7 +231,10 @@
           "path": "ai_config.risk_control.hold_discipline",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": true },
+          "stored": {
+            "present": true,
+            "value": true
+          },
           "effective": true,
           "origin": "saved value",
           "scope": "strategy",
@@ -199,7 +245,9 @@
           "path": "ai_config.risk_control.max_contracts_per_order",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 1,
           "origin": "clamp (kernel.ClampStageAContracts)",
           "scope": "process env",
@@ -210,7 +258,10 @@
           "path": "ai_config.risk_control.max_daily_trades",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": 4 },
+          "stored": {
+            "present": true,
+            "value": 4
+          },
           "effective": 4,
           "origin": "saved value",
           "scope": "strategy",
@@ -221,7 +272,10 @@
           "path": "ai_config.risk_control.max_daily_trades_enabled",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": true },
+          "stored": {
+            "present": true,
+            "value": true
+          },
           "effective": true,
           "origin": "saved value",
           "scope": "strategy",
@@ -232,7 +286,9 @@
           "path": "ai_config.risk_control.max_notional_leverage",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 20,
           "origin": "shipped default",
           "scope": "venue:ninjatrader",
@@ -243,7 +299,10 @@
           "path": "ai_config.risk_control.max_positions",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": 2 },
+          "stored": {
+            "present": true,
+            "value": 2
+          },
           "effective": 2,
           "origin": "saved value",
           "scope": "strategy",
@@ -254,7 +313,9 @@
           "path": "ai_config.risk_control.min_confidence",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 60,
           "origin": "clamp (StrategyConfig.ClampLimits)",
           "scope": "strategy",
@@ -265,7 +326,10 @@
           "path": "ai_config.risk_control.min_risk_reward_ratio",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": 2.5 },
+          "stored": {
+            "present": true,
+            "value": 2.5
+          },
           "effective": 2.5,
           "origin": "saved value",
           "scope": "strategy",
@@ -276,7 +340,10 @@
           "path": "ai_config.risk_control.reentry_cooldown_minutes",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": 20 },
+          "stored": {
+            "present": true,
+            "value": 20
+          },
           "effective": 20,
           "origin": "saved value",
           "scope": "strategy",
@@ -287,7 +354,9 @@
           "path": "ai_config.risk_control.trailing_arm",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": "after_breakeven",
           "origin": "shipped default",
           "scope": "venue:ninjatrader",
@@ -298,7 +367,9 @@
           "path": "ai_config.risk_control.trailing_arm_points",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 0,
           "origin": "shipped default",
           "scope": "venue:ninjatrader",
@@ -309,7 +380,9 @@
           "path": "ai_config.risk_control.trailing_atr_mult",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 2,
           "origin": "shipped default",
           "scope": "venue:ninjatrader",
@@ -320,7 +393,9 @@
           "path": "ai_config.risk_control.trailing_atr_period",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 14,
           "origin": "shipped default",
           "scope": "venue:ninjatrader",
@@ -331,7 +406,9 @@
           "path": "ai_config.risk_control.trailing_enabled",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": false,
           "origin": "shipped default",
           "scope": "venue:ninjatrader",
@@ -342,7 +419,9 @@
           "path": "day_plan.approval_required",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": false,
           "origin": "shipped default",
           "scope": "strategy",
@@ -353,7 +432,9 @@
           "path": "day_plan.death_reread",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": true,
           "origin": "shipped default",
           "scope": "strategy",
@@ -364,7 +445,9 @@
           "path": "day_plan.flip_reread",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": false,
           "origin": "shipped default",
           "scope": "strategy",
@@ -375,7 +458,9 @@
           "path": "day_plan.htf_seats",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 2,
           "origin": "shipped default",
           "scope": "strategy",
@@ -386,7 +471,10 @@
           "path": "day_plan.max_levels",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": 10 },
+          "stored": {
+            "present": true,
+            "value": 10
+          },
           "effective": 10,
           "origin": "saved value",
           "scope": "strategy",
@@ -397,7 +485,9 @@
           "path": "day_plan.min_scenario_quality",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": "C",
           "origin": "shipped default",
           "scope": "strategy",
@@ -408,7 +498,9 @@
           "path": "day_plan.one_setup_enabled",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": true,
           "origin": "shipped default",
           "scope": "strategy",
@@ -419,7 +511,9 @@
           "path": "day_plan.one_setup_min_grade",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": "B",
           "origin": "shipped default",
           "scope": "strategy",
@@ -430,7 +524,9 @@
           "path": "day_plan.picture_htf.enabled",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": false,
           "origin": "shipped default",
           "scope": "venue:ninjatrader",
@@ -441,7 +537,9 @@
           "path": "day_plan.picture_htf.entry_window_sec",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 90,
           "origin": "shipped default",
           "scope": "venue:ninjatrader",
@@ -452,7 +550,9 @@
           "path": "day_plan.picture_htf.freshness_sec",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 15,
           "origin": "shipped default",
           "scope": "venue:ninjatrader",
@@ -463,7 +563,9 @@
           "path": "day_plan.picture_htf.min_rr",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 2.5,
           "origin": "clamp (trader.pictureMinRR: min_risk_reward_ratio floor)",
           "scope": "venue:ninjatrader",
@@ -474,7 +576,9 @@
           "path": "day_plan.picture_htf.pivot_window",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 120,
           "origin": "shipped default",
           "scope": "venue:ninjatrader",
@@ -485,7 +589,9 @@
           "path": "day_plan.picture_htf.swing_lookback",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 24,
           "origin": "shipped default",
           "scope": "venue:ninjatrader",
@@ -496,7 +602,9 @@
           "path": "day_plan.picture_htf.tick_size",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 0.25,
           "origin": "shipped default",
           "scope": "venue:ninjatrader",
@@ -507,7 +615,10 @@
           "path": "day_plan.plan_enabled",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": true },
+          "stored": {
+            "present": true,
+            "value": true
+          },
           "effective": "n/a — venue unknown (the day plan runs on ninjatrader only)",
           "origin": "n/a",
           "scope": "strategy",
@@ -518,7 +629,10 @@
           "path": "day_plan.plan_mode",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": "advisory" },
+          "stored": {
+            "present": true,
+            "value": "advisory"
+          },
           "effective": "advisory",
           "origin": "strategy value",
           "scope": "strategy",
@@ -529,8 +643,15 @@
           "path": "day_plan.planner_timeframes",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
-          "effective": ["D", "4h", "1h", "15m"],
+          "stored": {
+            "present": false
+          },
+          "effective": [
+            "D",
+            "4h",
+            "1h",
+            "15m"
+          ],
           "origin": "shipped default",
           "scope": "strategy",
           "resolver": "trader.resolveSessionPlanCfg",
@@ -540,7 +661,9 @@
           "path": "day_plan.proximity_filter_atr",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 1.5,
           "origin": "shipped default",
           "scope": "strategy",
@@ -551,7 +674,9 @@
           "path": "day_plan.replan_cap",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 2,
           "origin": "shipped default",
           "scope": "strategy",
@@ -562,7 +687,12 @@
           "path": "day_plan.sessions.enable",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": { "ASIA": true } },
+          "stored": {
+            "present": true,
+            "value": {
+              "ASIA": true
+            }
+          },
           "effective": "n/a — per-session setting; name a session (?session=NY|ASIA|LONDON)",
           "origin": "n/a",
           "scope": "session:n/a",
@@ -573,7 +703,12 @@
           "path": "day_plan.sessions.plan_mode",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": { "NY": "strict" } },
+          "stored": {
+            "present": true,
+            "value": {
+              "NY": "strict"
+            }
+          },
           "effective": "n/a — per-session setting; name a session (?session=NY|ASIA|LONDON)",
           "origin": "n/a",
           "scope": "session:n/a",
@@ -584,7 +719,9 @@
           "path": "day_plan.structural_stop.buffer_points",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 4.5,
           "origin": "shipped default (ResolveStructuralStop:C5_MNQ_default[I])",
           "scope": "venue:ninjatrader",
@@ -595,8 +732,17 @@
           "path": "day_plan.t1_currencies",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": ["USD", "EUR"] },
-          "effective": ["USD", "EUR"],
+          "stored": {
+            "present": true,
+            "value": [
+              "USD",
+              "EUR"
+            ]
+          },
+          "effective": [
+            "USD",
+            "EUR"
+          ],
           "origin": "saved value",
           "scope": "strategy",
           "resolver": "store.(*DayPlanConfig).T1CurrenciesFor",
@@ -606,7 +752,9 @@
           "path": "day_plan.wake_on_level_events",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": true,
           "origin": "shipped default",
           "scope": "strategy",
@@ -617,18 +765,146 @@
           "path": "grid_config.grid_count",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": "n/a — no resolver registered",
           "origin": "unset",
           "scope": "strategy",
           "resolver": "none",
           "resolved": false
+        },
+        {
+          "path": "day_plan.zone_place_within_pts",
+          "status": "live",
+          "ui_label": "live",
+          "stored": {
+            "present": false
+          },
+          "effective": 25,
+          "origin": "shipped default",
+          "scope": "strategy",
+          "resolver": "store.ResolveZonePlaceWithinPts",
+          "resolved": true
+        },
+        {
+          "path": "day_plan.planner_contract",
+          "status": "live",
+          "ui_label": "live",
+          "stored": {
+            "present": false
+          },
+          "effective": true,
+          "origin": "shipped default",
+          "scope": "strategy",
+          "resolver": "store.(*DayPlanConfig).PlannerContractOn",
+          "resolved": true
+        },
+        {
+          "path": "day_plan.planner_fresh_tape",
+          "status": "live",
+          "ui_label": "live",
+          "stored": {
+            "present": false
+          },
+          "effective": true,
+          "origin": "shipped default",
+          "scope": "strategy",
+          "resolver": "store.(*DayPlanConfig).PlannerFreshTapeEnabled",
+          "resolved": true
+        },
+        {
+          "path": "day_plan.write_time_feasibility",
+          "status": "live",
+          "ui_label": "live",
+          "stored": {
+            "present": false
+          },
+          "effective": true,
+          "origin": "shipped default",
+          "scope": "strategy",
+          "resolver": "store.(*DayPlanConfig).WriteTimeFeasibilityEnabled",
+          "resolved": true
+        },
+        {
+          "path": "day_plan.geometry_reference_levels",
+          "status": "live",
+          "ui_label": "live",
+          "stored": {
+            "present": false
+          },
+          "effective": true,
+          "origin": "shipped default",
+          "scope": "strategy",
+          "resolver": "store.(*DayPlanConfig).GeometryRefIDsEnabled",
+          "resolved": true
+        },
+        {
+          "path": "day_plan.condition_status",
+          "status": "live",
+          "ui_label": "live",
+          "stored": {
+            "present": false
+          },
+          "effective": {
+            "hold": "live",
+            "breakout_retest": "live",
+            "reclaim": "live",
+            "fvg_entry": "live"
+          },
+          "origin": "shipped default (rest)",
+          "scope": "strategy",
+          "resolver": "kernel.ConditionStatusWithSource (= kernel.ConditionStatus) per known condition",
+          "resolved": true
+        },
+        {
+          "path": "day_plan.fade_or_wide_k",
+          "status": "live",
+          "ui_label": "live",
+          "stored": {
+            "present": false
+          },
+          "effective": 1.28,
+          "origin": "shipped default (C5)",
+          "scope": "strategy",
+          "resolver": "trader.(*AutoTrader).fadeORWideKResolved",
+          "resolved": true
+        },
+        {
+          "path": "ai_config.risk_control.max_margin_usage",
+          "status": "live",
+          "ui_label": "live",
+          "stored": {
+            "present": true,
+            "value": 0.9
+          },
+          "effective": 0.9,
+          "origin": "saved value",
+          "scope": "strategy",
+          "resolver": "store.(*Strategy).ParseConfig → applyMissingDefaults",
+          "resolved": true
+        },
+        {
+          "path": "ai_config.risk_control.min_position_size",
+          "status": "live",
+          "ui_label": "live",
+          "stored": {
+            "present": true,
+            "value": 12
+          },
+          "effective": 12,
+          "origin": "saved value",
+          "scope": "strategy",
+          "resolver": "store.(*Strategy).ParseConfig → applyMissingDefaults",
+          "resolved": true
         }
       ],
       "coverage": {
         "resolved": 52,
         "total": 53,
-        "unresolved": ["grid_config.grid_count"],
+        "unresolved": [
+          "grid_config.grid_count"
+        ],
         "not_enumerated": []
       }
     },
@@ -641,7 +917,10 @@
           "path": "day_plan.plan_mode",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": "advisory" },
+          "stored": {
+            "present": true,
+            "value": "advisory"
+          },
           "effective": "strict",
           "origin": "session override — saved \"advisory\" not used",
           "scope": "session:NY",
@@ -652,7 +931,9 @@
           "path": "day_plan.sessions.enable",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": true,
           "origin": "shipped default (sessions_enabled [NY])",
           "scope": "strategy",
@@ -663,7 +944,10 @@
           "path": "day_plan.sessions.max_trades",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": 3 },
+          "stored": {
+            "present": true,
+            "value": 3
+          },
           "effective": 3,
           "origin": "session override",
           "scope": "session:NY",
@@ -674,7 +958,9 @@
           "path": "day_plan.sessions.min_grade",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": "",
           "origin": "shipped default",
           "scope": "strategy",
@@ -685,7 +971,9 @@
           "path": "day_plan.sessions.min_scenario_quality",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": "C",
           "origin": "shipped default",
           "scope": "strategy",
@@ -696,7 +984,10 @@
           "path": "day_plan.sessions.plan_mode",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": "strict" },
+          "stored": {
+            "present": true,
+            "value": "strict"
+          },
           "effective": "strict",
           "origin": "session override",
           "scope": "session:NY",
@@ -707,11 +998,39 @@
           "path": "day_plan.sessions.replan_cap",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 2,
           "origin": "shipped default",
           "scope": "strategy",
           "resolver": "store.ResolveReplanCap (DayPlanConfig.ReplanCapFor delegates)",
+          "resolved": true
+        },
+        {
+          "path": "day_plan.sessions.last_entry_offset_min",
+          "status": "live",
+          "ui_label": "live",
+          "stored": {
+            "present": false
+          },
+          "effective": 15,
+          "origin": "shipped default",
+          "scope": "strategy",
+          "resolver": "store.LastEntryOffsetForWithSource (= DayPlanConfig.LastEntryOffsetFor)",
+          "resolved": true
+        },
+        {
+          "path": "day_plan.sessions.eod_flat_offset_min",
+          "status": "live",
+          "ui_label": "live",
+          "stored": {
+            "present": false
+          },
+          "effective": 0,
+          "origin": "shipped default",
+          "scope": "strategy",
+          "resolver": "store.EODFlatOffsetForWithSource (= DayPlanConfig.EODFlatOffsetFor)",
           "resolved": true
         }
       ],
@@ -731,7 +1050,10 @@
           "path": "day_plan.sessions.enable",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": true },
+          "stored": {
+            "present": true,
+            "value": true
+          },
           "effective": true,
           "origin": "session override",
           "scope": "session:ASIA",
@@ -742,7 +1064,9 @@
           "path": "day_plan.sessions.max_trades",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": "no per-session cap",
           "origin": "shipped default",
           "scope": "strategy",
@@ -753,7 +1077,9 @@
           "path": "day_plan.sessions.min_grade",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": "",
           "origin": "shipped default",
           "scope": "strategy",
@@ -764,7 +1090,9 @@
           "path": "day_plan.sessions.min_scenario_quality",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": "C",
           "origin": "shipped default",
           "scope": "strategy",
@@ -775,7 +1103,9 @@
           "path": "day_plan.sessions.plan_mode",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": "advisory",
           "origin": "strategy value",
           "scope": "strategy",
@@ -786,11 +1116,40 @@
           "path": "day_plan.sessions.replan_cap",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": true, "value": 1 },
+          "stored": {
+            "present": true,
+            "value": 1
+          },
           "effective": 1,
           "origin": "session override",
           "scope": "session:ASIA",
           "resolver": "store.ResolveReplanCap (DayPlanConfig.ReplanCapFor delegates)",
+          "resolved": true
+        },
+        {
+          "path": "day_plan.sessions.last_entry_offset_min",
+          "status": "live",
+          "ui_label": "live",
+          "stored": {
+            "present": false
+          },
+          "effective": 15,
+          "origin": "shipped default",
+          "scope": "strategy",
+          "resolver": "store.LastEntryOffsetForWithSource (= DayPlanConfig.LastEntryOffsetFor)",
+          "resolved": true
+        },
+        {
+          "path": "day_plan.sessions.eod_flat_offset_min",
+          "status": "live",
+          "ui_label": "live",
+          "stored": {
+            "present": false
+          },
+          "effective": 0,
+          "origin": "shipped default",
+          "scope": "strategy",
+          "resolver": "store.EODFlatOffsetForWithSource (= DayPlanConfig.EODFlatOffsetFor)",
           "resolved": true
         }
       ],
@@ -810,7 +1169,9 @@
           "path": "day_plan.sessions.enable",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": false,
           "origin": "shipped default (sessions_enabled [NY])",
           "scope": "strategy",
@@ -821,7 +1182,9 @@
           "path": "day_plan.sessions.max_trades",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": "no per-session cap",
           "origin": "shipped default",
           "scope": "strategy",
@@ -832,7 +1195,9 @@
           "path": "day_plan.sessions.min_grade",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": "",
           "origin": "shipped default",
           "scope": "strategy",
@@ -843,7 +1208,9 @@
           "path": "day_plan.sessions.min_scenario_quality",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": "C",
           "origin": "shipped default",
           "scope": "strategy",
@@ -854,7 +1221,9 @@
           "path": "day_plan.sessions.plan_mode",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": "advisory",
           "origin": "strategy value",
           "scope": "strategy",
@@ -865,11 +1234,39 @@
           "path": "day_plan.sessions.replan_cap",
           "status": "live",
           "ui_label": "live",
-          "stored": { "present": false },
+          "stored": {
+            "present": false
+          },
           "effective": 2,
           "origin": "shipped default",
           "scope": "strategy",
           "resolver": "store.ResolveReplanCap (DayPlanConfig.ReplanCapFor delegates)",
+          "resolved": true
+        },
+        {
+          "path": "day_plan.sessions.last_entry_offset_min",
+          "status": "live",
+          "ui_label": "live",
+          "stored": {
+            "present": false
+          },
+          "effective": 15,
+          "origin": "shipped default",
+          "scope": "strategy",
+          "resolver": "store.LastEntryOffsetForWithSource (= DayPlanConfig.LastEntryOffsetFor)",
+          "resolved": true
+        },
+        {
+          "path": "day_plan.sessions.eod_flat_offset_min",
+          "status": "live",
+          "ui_label": "live",
+          "stored": {
+            "present": false
+          },
+          "effective": 0,
+          "origin": "shipped default",
+          "scope": "strategy",
+          "resolver": "store.EODFlatOffsetForWithSource (= DayPlanConfig.EODFlatOffsetFor)",
           "resolved": true
         }
       ],

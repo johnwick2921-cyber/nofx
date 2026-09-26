@@ -249,6 +249,14 @@ const DP_MOUNTED = [
   'picture_htf.entry_window_sec',
   'picture_htf.freshness_sec',
   'picture_htf.min_rr',
+  // FIX-KNOBS P2-3 — the read-only shipped-default rows
+  'zone_place_within_pts',
+  'planner_contract',
+  'planner_fresh_tape',
+  'write_time_feasibility',
+  'geometry_reference_levels',
+  'condition_status',
+  'fade_or_wide_k',
 ].map((l) => 'day_plan.' + l)
 const SESSION_BODY = [
   'min_grade',
@@ -256,6 +264,8 @@ const SESSION_BODY = [
   'max_trades',
   'plan_mode',
   'replan_cap',
+  'last_entry_offset_min',
+  'eod_flat_offset_min',
 ].map((l) => 'day_plan.sessions.' + l)
 
 // The stored day_plan the fixture was resolved from — with the picture knobs

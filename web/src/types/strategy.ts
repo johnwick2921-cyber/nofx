@@ -75,6 +75,12 @@ export interface DayPlanSessionOverride {
   min_grade?: string // A | B | C
   min_scenario_quality?: string // A | B | C (R4, 2026-08-25)
   max_trades?: number
+  /** FIX-KNOBS P2-3 (2026-09-26) — read-only in the Studio; resolved per
+   *  session by store.LastEntryOffsetFor (override → shipped default 15). */
+  last_entry_offset_min?: number
+  /** FIX-KNOBS P2-3 (2026-09-26) — read-only in the Studio; resolved per
+   *  session by store.EODFlatOffsetFor (override → shipped default 0). */
+  eod_flat_offset_min?: number
 }
 
 // DayPlanConfig — mirrors Go store.DayPlanConfig. plan_enabled=false is the
@@ -170,6 +176,24 @@ export interface DayPlanConfig {
   /** W3 — floor (minutes) on the resolved hold of an ARMED market_in_zone
    *  time_hold scenario, refused at write below it. Absent = 3. */
   min_hold_min?: number
+  /** FIX-KNOBS P2-3 (2026-09-26) — WAVE PLANNER B1: beyond-proximity arm band
+   *  (points). nil = 25 (ON); 0 = OFF = legacy. READ-ONLY in the Studio. */
+  zone_place_within_pts?: number
+  /** FIX-KNOBS P2-3 — WAVE PLANNER A3: prompt/validator/executor one contract.
+   *  nil = ON; explicit false = pre-A3 prompt bytes. READ-ONLY in the Studio. */
+  planner_contract?: boolean
+  /** FIX-KNOBS P2-3 — A6: planner reads only a tape fresher than the last
+   *  plan. nil = ON. READ-ONLY in the Studio. */
+  planner_fresh_tape?: boolean
+  /** FIX-KNOBS P2-3 — write-time feasibility gate. nil = ON. READ-ONLY. */
+  write_time_feasibility?: boolean
+  /** FIX-KNOBS P2-3 — geometry reference-levels wiring. nil = ON. READ-ONLY. */
+  geometry_reference_levels?: boolean
+  /** FIX-KNOBS P2-3 — per-condition live/shadow seam map. READ-ONLY. */
+  condition_status?: Record<string, string>
+  /** FIX-KNOBS P2-3 — W2 LABEL knob: exclusion (a)'s k (what is RECORDED).
+   *  Zero = C5 default 1.28. READ-ONLY in the Studio. */
+  fade_or_wide_k?: number
   sessions?: DayPlanSessionOverride[]
 }
 
