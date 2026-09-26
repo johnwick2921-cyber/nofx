@@ -88,6 +88,12 @@ func lawExcerptsFor(errors string) string {
 	if strings.Contains(errors, "not allowed for") || strings.Contains(errors, "fade_requires_touch") {
 		add(RepairEntryConfirmLaw)
 	}
+	// FIX-PLANNER (2026-09-26, item 3) — the entry-policy shape refusal
+	// (EntryPolicyLegal: "entry policy planned_order is not legal on …"): the
+	// repair carries the GENERATED shape table, never hand-rettyped prose.
+	if strings.Contains(errors, "entry policy") || strings.Contains(errors, "not legal on") {
+		add("ENTRY POLICY SHAPES (from the validator's own entry-law table):\n" + EntryPolicyShapeTable())
+	}
 	// W-FLIP-DIRECTION (2026-09-17): a flip side that points the wrong way for
 	// the bias it flips from (plan_doc.go FlipDirectionContradiction).
 	if strings.Contains(errors, "contradicts bias") {
