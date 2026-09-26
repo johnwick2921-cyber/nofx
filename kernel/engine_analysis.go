@@ -600,9 +600,11 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 		// skip so the loop stamps a named risk_check_error.
 		var gateErr *GateRefusalError
 		if errors.As(parseErr, &gateErr) {
+			telemetry.IncGateBlock(ctx.TraderID, "executor_plan_gate")
 			logger.Warnf("🚧 C6 executor plan gate refused (no retry): %s", gateErr.Reason)
 			return &FullDecision{SkipReason: "executor_plan_gate: " + gateErr.Reason, SystemPrompt: systemPrompt, UserPrompt: userPrompt, RawResponse: aiResponse}, nil
 		}
+		telemetry.IncGateBlock(ctx.TraderID, "schema_parse_failed")
 		logger.Warnf("🚫 schema_parse_failed: AI response unparseable after %d attempts — skipping decision cycle (HOLD). Last error: %v",
 			maxParseRetries+1, parseErr)
 		// F10 — a real AI call happened; preserve the prompts/response so the record
