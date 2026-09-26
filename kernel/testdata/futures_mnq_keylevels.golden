@@ -18,6 +18,9 @@
 - leverage: always 1 for futures (margin is contract-based; the broker handles it). Do NOT use crypto leverage tiers.
 - position_size_usd: the contract notional you intend (≈ price × $2 × contracts). Keep it conservative (start with 1 contract).
 
+## Exit Mechanics (live)
+- Breakeven & ATR-trailing: SUSPENDED at the wire (env EXIT_MECHS_SUSPENDED != 0 — triggers evaluate but no move_stop frame is sent; exits are stop/target/EOD-flat/invalidation only).
+
 # Available Data
 Multi-timeframe MNQ bars:
 -  price series

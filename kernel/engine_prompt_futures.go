@@ -145,6 +145,16 @@ func (e *StrategyEngine) buildFuturesPrompt(symbol string, accountEquity float64
 		sb.WriteString("\n\n")
 	}
 
+	// 2c. Exit-mech posture — READ from the live env (FIX-KNOBS P2-1,
+	// 2026-09-26): a stale saved prompt_section claiming SUSPENDED must never
+	// be the only truth the model sees. One line either way, always present.
+	sb.WriteString("## Exit Mechanics (live)\n")
+	if ExitMechsSuspended() {
+		sb.WriteString("- Breakeven & ATR-trailing: SUSPENDED at the wire (env EXIT_MECHS_SUSPENDED != 0 — triggers evaluate but no move_stop frame is sent; exits are stop/target/EOD-flat/invalidation only).\n\n")
+	} else {
+		sb.WriteString("- Breakeven & ATR-trailing: ACTIVE at the wire (env EXIT_MECHS_SUSPENDED=0 — each mechanism still gates on its own strategy toggle).\n\n")
+	}
+
 	// P3.4 — day-plan executor injection (RECON #4 reorder). planActive (day_plan
 	// on + an active plan) joins the byte-stable PLAN BLOCK to the cached prefix
 	// HERE, and moves SVP/KEY-LEVELS + PLAN STATUS to the prompt END. No active

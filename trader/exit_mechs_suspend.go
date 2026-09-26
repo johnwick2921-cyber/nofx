@@ -5,8 +5,6 @@ import (
 
 	"nofx/kernel"
 	"nofx/store"
-	"os"
-	"strings"
 	"sync"
 
 	ntTrader "nofx/trader/ninjatrader"
@@ -32,15 +30,11 @@ import (
 const ExitMechSuspendedLabel = "suspended 2026-09-02 pending MFE data (wave 1A)"
 
 // exitMechsSuspended resolves the suspension (env EXIT_MECHS_SUSPENDED,
-// default TRUE = suspended).
+// default TRUE = suspended). FIX-KNOBS P2-1 (2026-09-26): the ONE canonical
+// reader now lives in kernel (kernel.ExitMechsSuspended) so the rendered
+// system prompt reads the same value the mechanics gate on; this delegates.
 func exitMechsSuspended() bool {
-	if v := strings.TrimSpace(os.Getenv("EXIT_MECHS_SUSPENDED")); v != "" {
-		switch strings.ToLower(v) {
-		case "0", "false", "off", "no":
-			return false
-		}
-	}
-	return true
+	return kernel.ExitMechsSuspended()
 }
 
 // moveStopWire is the LAST hop before the socket: both suspended mechanisms

@@ -18,6 +18,9 @@
 - leverage: always 1 for futures (margin is contract-based; the broker handles it). Do NOT use crypto leverage tiers.
 - position_size_usd: the contract notional you intend (≈ price × $2 × contracts). Keep it conservative (start with 1 contract).
 
+## Exit Mechanics (live)
+- Breakeven & ATR-trailing: SUSPENDED at the wire (env EXIT_MECHS_SUSPENDED != 0 — triggers evaluate but no move_stop frame is sent; exits are stop/target/EOD-flat/invalidation only).
+
 # DAY PLAN (NY) — plan_mode=direction: an entry AGAINST the plan bias is refused; a with-bias setup may be traded on-plan or off-plan (cite "off-plan")
 Bias: long (medium) · flips: 2x5m < 21480
 Levels:
