@@ -36,10 +36,12 @@ func (s *Server) handleTelegramBindCode(c *gin.Context) {
 
 	code, err := generateTelegramBindCode()
 	if err != nil {
+		logger.Errorf("telegram bind-code issue failed (rand): user_id=%q err=%v", c.GetString("user_id"), err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate bind code"})
 		return
 	}
 	if err := s.store.TelegramConfig().IssueBindCode(code, time.Now().Add(telegramBindCodeTTL)); err != nil {
+		logger.Errorf("telegram bind-code issue failed (store): user_id=%q err=%v", c.GetString("user_id"), err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store bind code"})
 		return
 	}
