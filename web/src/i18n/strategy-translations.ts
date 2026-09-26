@@ -504,9 +504,9 @@ export const riskControl = {
     es: 'Mover stop a equilibrio',
   },
   breakevenDesc: {
-    zh: '当浮盈达到设定点数后，把止损移到开仓价（保本），让盈利单不再变亏。仅期货 (NT8)。默认关闭。',
-    en: "Once the trade is this many points in profit, move the stop to your entry (breakeven) so a winner can't turn into a loss. Futures (NT8) only. Default OFF.",
-    es: 'Cuando la operación gane estos puntos, mueve el stop a la entrada (equilibrio). Solo futuros (NT8). Por defecto OFF.',
+    zh: '当浮盈达到设定点数后，把止损移到开仓价（保本）。仅期货 (NT8)。默认关闭。SUSPENDED (0B) — 当前运行中该功能已暂停，开启后不会移动止损。',
+    en: 'Move the stop to your entry (breakeven) after N points in profit. Futures (NT8) only. Default OFF. SUSPENDED (0B) — the running binary does not move the stop.',
+    es: 'Mueve el stop a la entrada tras N puntos. Solo futuros (NT8). OFF por defecto. SUSPENDIDO (0B) — el binario en ejecución no mueve el stop.',
   },
   breakevenTrigger: {
     zh: '触发点数',
@@ -521,9 +521,9 @@ export const riskControl = {
     es: 'Trailing stop',
   },
   trailingDesc: {
-    zh: '启用后：按 最优价 ∓ 倍数×ATR(周期,5m) 逐级收紧止损（只收紧、永不后退；保本触发后永不低于开仓价）。与保本止损共用同一 move_stop 通道。仅期货 (NT8)。默认关闭。',
-    en: 'When ON: the stop ratchets to best-price ∓ mult×ATR(period, 5m) each minute — tighten-only, never backward, never below entry once breakeven fired. Shares the proven move_stop path with auto-breakeven. Futures (NT8) only. Default OFF.',
-    es: 'Cuando está ON: el stop se ajusta a mejor-precio ∓ mult×ATR — solo se aprieta, nunca retrocede, nunca bajo la entrada tras el breakeven. Solo futuros (NT8). Por defecto OFF.',
+    zh: '设计行为：按 最优价 ∓ 倍数×ATR(周期,5m) 逐级收紧止损。仅期货 (NT8)。默认关闭。SUSPENDED (0B) — 计算仍会产生新价位，但不会发到交易所（见 auto_trader_trailing.go）。',
+    en: 'Designed: the stop ratchets to best-price ∓ mult×ATR(period, 5m), tighten-only. Futures (NT8) only. Default OFF. SUSPENDED (0B) — the ratchet computes a new level but the broker is never moved (auto_trader_trailing.go).',
+    es: 'Diseñado: el stop se ajusta a mejor-precio ∓ mult×ATR. Solo futuros (NT8). OFF por defecto. SUSPENDIDO (0B) — el ratchet calcula pero el broker nunca se mueve.',
   },
   trailingMult: {
     zh: 'ATR 倍数',

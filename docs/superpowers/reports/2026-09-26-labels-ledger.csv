@@ -49,8 +49,8 @@ ai_config.risk_control.altcoin_max_position_value_ratio,,,strategy field (ai_con
 ai_config.risk_control.blackout_enabled,,,strategy field (ai_config.risk_control.blackout_enabled),store/strategy.go:2097,,,open
 ai_config.risk_control.blackout_end_ct,,,strategy field (ai_config.risk_control.blackout_end_ct),store/strategy.go:2099,,,open
 ai_config.risk_control.blackout_start_ct,,,strategy field (ai_config.risk_control.blackout_start_ct),store/strategy.go:2098,,,open
-ai_config.risk_control.breakeven_enabled,,,breakeven exit on/off (live false; trigger 40 stored),store/strategy.go:2119,,,open
-ai_config.risk_control.breakeven_trigger_points,,,breakeven trigger points (stored 40; fires only when enabled),store/strategy.go:2120,,,open
+ai_config.risk_control.breakeven_enabled,,,0B SUSPENDED (auto_trader_trailing.go:178),store/strategy.go:2119,,labels.test.ts suspension pins,done-i18n
+ai_config.risk_control.breakeven_trigger_points,,,0B SUSPENDED (auto_trader_trailing.go:178),store/strategy.go:2120,,labels.test.ts suspension pins,done-i18n
 ai_config.risk_control.btc_eth_max_leverage,,,strategy field (ai_config.risk_control.btc_eth_max_leverage),store/strategy.go:2018,,,open
 ai_config.risk_control.btc_eth_max_position_value_ratio,,,strategy field (ai_config.risk_control.btc_eth_max_position_value_ratio),store/strategy.go:2023,,,open
 ai_config.risk_control.consecutive_loss_halt,,,"W1 (f) 2026-09-23: the old cite auto_trader_orders.go:116 was a nil guard inside consecutiveLossHaltedAt, whic",store/strategy.go:2070,,,open
@@ -65,11 +65,11 @@ ai_config.risk_control.max_daily_trades,,,strategy field (ai_config.risk_control
 ai_config.risk_control.max_daily_trades_enabled,,,strategy field (ai_config.risk_control.max_daily_trades_enabled),store/strategy.go:2056,,,open
 ai_config.risk_control.max_notional_leverage,,,strategy field (ai_config.risk_control.max_notional_leverage),store/strategy.go:2090,,,open
 ai_config.risk_control.reentry_cooldown_minutes,,,strategy field (ai_config.risk_control.reentry_cooldown_minutes),store/strategy.go:2077,,,open
-ai_config.risk_control.trailing_arm,,,strategy field (ai_config.risk_control.trailing_arm),store/strategy.go:2131,,,open
-ai_config.risk_control.trailing_arm_points,,,strategy field (ai_config.risk_control.trailing_arm_points),store/strategy.go:2132,,,open
-ai_config.risk_control.trailing_atr_mult,,,strategy field (ai_config.risk_control.trailing_atr_mult),store/strategy.go:2128,,,open
-ai_config.risk_control.trailing_atr_period,,,strategy field (ai_config.risk_control.trailing_atr_period),store/strategy.go:2129,,,open
-ai_config.risk_control.trailing_enabled,,,trailing exit on/off (live false),store/strategy.go:2127,,,open
+ai_config.risk_control.trailing_arm,,,0B SUSPENDED (auto_trader_trailing.go:178),store/strategy.go:2131,,labels.test.ts suspension pins,done-i18n
+ai_config.risk_control.trailing_arm_points,,,0B SUSPENDED (auto_trader_trailing.go:178),store/strategy.go:2132,,labels.test.ts suspension pins,done-i18n
+ai_config.risk_control.trailing_atr_mult,,,0B SUSPENDED (auto_trader_trailing.go:178),store/strategy.go:2128,,labels.test.ts suspension pins,done-i18n
+ai_config.risk_control.trailing_atr_period,,,0B SUSPENDED (auto_trader_trailing.go:178),store/strategy.go:2129,,labels.test.ts suspension pins,done-i18n
+ai_config.risk_control.trailing_enabled,,,0B SUSPENDED (auto_trader_trailing.go:178),store/strategy.go:2127,,labels.test.ts suspension pins,done-i18n
 day_plan.condition_status,,,condition status knob,store/strategy.go:1156,,,open
 day_plan.entry_policy_default,,,default entry policy (market_in_zone),store/strategy.go:1166,,,open
 day_plan.geometry_reference_levels,,,geometry reference levels gate (default ON),store/strategy.go:1144,,,open

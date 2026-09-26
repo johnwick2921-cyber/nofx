@@ -2,7 +2,12 @@
 // they cannot drift again. Code truth for the coin_source fields is the
 // CoinSourceConfig struct comments at store/strategy.go:1905-1930.
 import { describe, expect, it } from 'vitest'
-import { coinSource, gridConfig, indicator } from './strategy-translations'
+import {
+  coinSource,
+  gridConfig,
+  indicator,
+  riskControl,
+} from './strategy-translations'
 
 // The source-type value set the code accepts (store/strategy.go source_type
 // comment: "static" | "ai500" | "oi_top" | "oi_low"). A label that drops or
@@ -91,5 +96,18 @@ describe('gridConfig label truth (pinned to store/strategy.go:1860-1914)', () =>
   it('directionBiasRatio desc states the code default 0.7 = 70%/30%', () => {
     expect(gridConfig.directionBiasRatio.en).toContain('0.7')
     expect(gridConfig.directionBiasRatio.en).toContain('70%/30%')
+  })
+})
+
+// Risk descs pin the 0B suspension truth (trader/auto_trader_trailing.go:178:
+// the ratchet computes a new level; the broker is never moved).
+describe('riskControl suspension truth (pinned to auto_trader_trailing.go 0B)', () => {
+  it('breakeven desc states SUSPENDED (0B)', () => {
+    expect(riskControl.breakevenDesc.en).toContain('SUSPENDED (0B)')
+  })
+
+  it('trailing desc states SUSPENDED (0B) and names the code file', () => {
+    expect(riskControl.trailingDesc.en).toContain('SUSPENDED (0B)')
+    expect(riskControl.trailingDesc.en).toContain('auto_trader_trailing.go')
   })
 })
