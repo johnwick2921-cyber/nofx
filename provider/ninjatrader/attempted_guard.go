@@ -1,0 +1,200 @@
+package ninjatrader
+
+import (
+	"net"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"nofx/telemetry"
+)
+
+// FIX-DOUBLE-ENTRY (CTO ruling, 2026-09-26): an attempted entry frame — one
+// whose write was STARTED and may have reached the AddOn — is NEVER resent
+// blindly. On reconnect, before flushing an attempted ENTRY frame, the guard
+// requires FRESH broker truth taken after the reconnect:
+//
+//   - an order named signal_id is present in a post-reconnect snapshot, or a
+//     fill echoed the signal_id → SETTLE: drop the frame; the broker owns it.
+//   - absent from a fresh snapshot, no echo, inside the original age window →
+//     resend ONCE.
+//   - no fresh snapshot within attemptedEntryVerifyWait → DROP + refusal
+//     (telemetry.IncGateBlock "attempted_entry_unverified") + WARN.
+//
+// A MISSED entry is acceptable; a DOUBLE entry is not. Fail closed.
+//
+// Non-entry frames (cancel, close_position, move_stop) are never queued in
+// s.pending — they ride immediate writes (SendCancelOrder/SendClosePosition/
+// SendMoveStop) and keep today's behaviour: a replayed cancel is idempotent
+// at NT8 and settles via the cancel-confirmation book check; a replayed
+// close is idempotent flattening. Entry frames are the only queued kind, so
+// the guard keys on attempted + entry signal.
+
+const (
+	attemptedEntryVerifyWaitEnv = "ATTEMPTED_ENTRY_VERIFY_WAIT_S"
+	attemptedVerifyWaitDefault  = 10 * time.Second
+	attemptedGateName           = "attempted_entry_unverified"
+	// attemptedEchoTTL bounds the fill-echo memory: an echo older than this
+	// cannot prove the post-reconnect state of an attempted frame.
+	attemptedEchoTTL = 10 * time.Minute
+)
+
+// attemptedReplayGuard carries the reconnect-relative broker-truth state the
+// flush path consults for attempted entry frames.
+type attemptedReplayGuard struct {
+	mu          sync.Mutex
+	reconnectAt time.Time        // last accept instant
+	echoed      map[string]time.Time // signal_id -> fill-receipt instant
+
+	recheckOnce sync.Once
+}
+
+func (g *attemptedReplayGuard) noteReconnect(now time.Time) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.reconnectAt = now
+	if g.echoed == nil {
+		g.echoed = map[string]time.Time{}
+	} else {
+		for id, at := range g.echoed {
+			if now.Sub(at) > attemptedEchoTTL {
+				delete(g.echoed, id)
+			}
+		}
+	}
+}
+
+func (g *attemptedReplayGuard) noteEcho(signalID string, now time.Time) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.echoed == nil {
+		g.echoed = map[string]time.Time{}
+	}
+	g.echoed[signalID] = now
+	if len(g.echoed) > 1024 {
+		for id, at := range g.echoed { // bounded: drop the oldest half
+			if now.Sub(at) > attemptedEchoTTL || len(g.echoed) > 512 {
+				delete(g.echoed, id)
+			}
+		}
+	}
+}
+
+func (g *attemptedReplayGuard) echoedAfter(signalID string, since time.Time) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	at, ok := g.echoed[signalID]
+	return ok && !at.Before(since)
+}
+
+func (g *attemptedReplayGuard) reconnectTime() time.Time {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.reconnectAt
+}
+
+// attemptedVerifyWait reads ATTEMPTED_ENTRY_VERIFY_WAIT_S (default 10s). The
+// guard itself is ALWAYS ON (CTO ruling C): this knob tunes the wait only,
+// and there is no knob that turns the guard off.
+func attemptedVerifyWait() time.Duration {
+	if v := strings.TrimSpace(os.Getenv(attemptedEntryVerifyWaitEnv)); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 1 {
+			return time.Duration(n) * time.Second
+		}
+	}
+	return attemptedVerifyWaitDefault
+}
+
+// attemptedWait is the effective hold window (test override first).
+func (s *TCPServer) attemptedWait() time.Duration {
+	if s.attemptedVerifyWaitOverride > 0 {
+		return s.attemptedVerifyWaitOverride
+	}
+	return attemptedVerifyWait()
+}
+
+type attemptedDecision int
+
+const (
+	attemptedResend attemptedDecision = iota
+	attemptedHold
+	attemptedSettle
+	attemptedDrop
+)
+
+// decideAttemptedEntry answers what the flush may do with an attempted entry
+// frame at now. reconnectAt must be non-zero (an accept happened); if the
+// server has never had a connection the frame is simply flushed (no reconnect
+// context exists to require fresh truth — today's behaviour).
+func (s *TCPServer) decideAttemptedEntry(sig SignalPayload, now time.Time) attemptedDecision {
+	recAt := s.attempted.reconnectTime()
+	if recAt.IsZero() {
+		return attemptedResend
+	}
+	// 1. A fill/order_update echoing the signal after the reconnect → broker
+	// already executed it. Settle.
+	if s.attempted.echoedAfter(sig.SignalID, recAt) {
+		return attemptedSettle
+	}
+	// 2. Fresh broker truth taken AFTER the reconnect.
+	snap, recvAt, ok := s.orderSnaps.LatestReceivedAny()
+	if ok && recvAt.After(recAt) {
+		for _, o := range snap.Orders {
+			if strings.EqualFold(strings.TrimSpace(o.Name), strings.TrimSpace(sig.SignalID)) {
+				return attemptedSettle
+			}
+		}
+		// A fresh book that does NOT hold the order: the frame never landed.
+		// Resend once (checkSignalAge still gates at the write).
+		return attemptedResend
+	}
+	// 3. No fresh snapshot yet: bounded wait, then fail closed.
+	if now.Sub(recAt) > s.attemptedWait() {
+		return attemptedDrop
+	}
+	return attemptedHold
+}
+
+// scheduleAttemptedRecheck arms the one-shot re-flush for held frames. It is
+// idempotent per wait window; the accept-flush and every SendSignal-flush call
+// the guard too, so the timer only needs to cover the quiet period.
+func (s *TCPServer) scheduleAttemptedRecheck() {
+	s.attempted.recheckOnce.Do(func() {
+		time.AfterFunc(s.attemptedWait()+500*time.Millisecond, func() {
+			s.attempted.recheckOnce = sync.Once{}
+			_ = s.flushPending()
+		})
+	})
+}
+
+// isEntrySignal reports whether a queued frame is an ENTRY (the only kind the
+// guard treats specially). Today every SignalPayload is an entry frame;
+// non-entry commands (cancel/close/move_stop) never enter s.pending.
+func isEntrySignal(sig SignalPayload) bool {
+	return true
+}
+
+// --- test seams (nil in production) ---
+
+// SetWriteFrameHookForTest overrides the frame write in the flush path.
+func (s *TCPServer) SetWriteFrameHookForTest(fn func(c net.Conn, sig SignalPayload) error) {
+	s.writeFrameHook = fn
+}
+
+// SetAttemptedVerifyWaitForTest overrides the hold window.
+func (s *TCPServer) SetAttemptedVerifyWaitForTest(d time.Duration) {
+	s.attemptedVerifyWaitOverride = d
+}
+
+// SetReconnectAtForTest stamps the reconnect instant directly.
+func (s *TCPServer) SetReconnectAtForTest(t time.Time) {
+	s.attempted.noteReconnect(t)
+}
+
+// GateBlockCountForTest exposes the counted refusal for the gate name.
+func GateBlockCountForTest(trader, gate string) int {
+	_, table := telemetry.GateBlockSnapshot()
+	return table[trader][gate]
+}

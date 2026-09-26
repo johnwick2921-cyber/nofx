@@ -101,6 +101,15 @@ type TCPServer struct {
 	// the parse path stays testable without a database.
 	orderSnapCB func(OrderSnapshotPayload)
 
+	// FIX-DOUBLE-ENTRY (CTO ruling, 2026-09-26) — reconnect-relative broker
+	// truth for attempted entry frames (see attempted_guard.go). Never cleared
+	// on close; only advanced on accept.
+	attempted attemptedReplayGuard
+	// Test seams (nil in production): writeFrameHook overrides the frame write
+	// in the flush path; attemptedVerifyWaitOverride replaces the env knob.
+	writeFrameHook              func(c net.Conn, sig SignalPayload) error
+	attemptedVerifyWaitOverride time.Duration
+
 	// Inbound fills — TCPTrader subscribes via Fills().
 	fillCh     chan FillPayload
 	closeCh    chan PositionClosePayload
