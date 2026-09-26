@@ -32,7 +32,7 @@ import (
 func TestUnsentStopEntryNeverCancelsTheSiblingArm(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
-		build         string  // "" = the AddOn never proved the stop slot (ErrAddonBuildTooOld)
+		build         string  // "" = no current far-side proof (ErrFarSideNotProven, FIX-P1A; ErrAddonBuildTooOld is only for a REPORTED old build)
 		price         float64 // 29599 rests below the long trigger; 29700 = already through it (guard cancel); 0 = no price (not adjudicated)
 		wantSent      bool
 		wantSiblingIn string // the sibling's state after the pass

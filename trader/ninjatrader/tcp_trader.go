@@ -779,6 +779,14 @@ func (t *TCPTrader) PlaceStopEntry(symbol, side string, quantity float64, stopPx
 	// So the floor is MinAddonBuildStopSlot, not FarSideBuildE7. An AddOn that
 	// only proves the parse is refused — never sent a frame it will mis-execute.
 	if bid := t.server.FarSideBuildID(); !ntwire.FarSideProven(bid, ntwire.MinAddonBuildStopSlot) {
+		if strings.TrimSpace(bid) == "" {
+			// B-rules traceability (FIX-P1A): build "" after a disconnect (or
+			// before any proof) is NOT "the AddOn is too old" — it is "we have
+			// no current proof at all". The refusal names the true reason so a
+			// link-down gap is counted apart from a build-floor refusal.
+			return "", fmt.Errorf("ninjatrader/tcp: refusing stop-entry %s %s trigger=%.2f qty=%.0f [guard=far_side_build] — far side not proven since reconnect (no build_id on the current connection: never reported, or the proving connection disconnected); reconnect NT8 so a hello/heartbeat re-proves the AddOn: %w",
+				side, symbol, stopPx, quantity, ntwire.ErrFarSideNotProven)
+		}
 		return "", fmt.Errorf("ninjatrader/tcp: refusing stop-entry %s %s trigger=%.2f qty=%.0f [guard=far_side_build] — addon build predates the stop-slot fix (build_id=%s, need ≥ %s): does not prove stop_entry support; F5-compile + restart the new AddOn: %w",
 			side, symbol, stopPx, quantity, ntwire.BuildIDForLog(bid), ntwire.MinAddonBuildStopSlot, ntwire.ErrAddonBuildTooOld)
 	}
@@ -1127,6 +1135,12 @@ func (t *TCPTrader) PlaceProtectiveStop(symbol, positionSide string, quantity in
 	// than send into the dark and log a placement that never happened (class 81),
 	// refuse and name the build.
 	if bid := t.server.FarSideBuildID(); !ntwire.FarSideProven(bid, ntwire.MinAddonBuildProtectiveStop) {
+		if strings.TrimSpace(bid) == "" {
+			// B-rules traceability (FIX-P1A): same split as PlaceStopEntry —
+			// a missing proof is a reconnect fact, not a build-floor fact.
+			return fmt.Errorf("ninjatrader/tcp: refusing protective-stop %s %s stop=%.2f qty=%d [guard=far_side_build] — far side not proven since reconnect (no build_id on the current connection: never reported, or the proving connection disconnected); reconnect NT8 so a hello/heartbeat re-proves the AddOn; the position stays UNPROTECTED and this is reported, not silently retried: %w",
+				positionSide, symbol, stopPrice, quantity, ntwire.ErrFarSideNotProven)
+		}
 		return fmt.Errorf("ninjatrader/tcp: refusing protective-stop %s %s stop=%.2f qty=%d [guard=far_side_build] — addon build cannot place a standalone protective stop (build_id=%s, need ≥ %s); the position stays UNPROTECTED and this is reported, not silently retried: %w",
 			positionSide, symbol, stopPrice, quantity, ntwire.BuildIDForLog(bid), ntwire.MinAddonBuildProtectiveStop, ntwire.ErrAddonBuildTooOld)
 	}

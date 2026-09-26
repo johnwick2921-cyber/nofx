@@ -347,6 +347,17 @@ const MinAddonBuildPictureHtf = "2026-09-20-p1"
 // build refusal is counted apart from a transport or account failure.
 var ErrAddonBuildTooOld = errors.New("addon build predates the stop-slot fix")
 
+// ErrFarSideNotProven is the sentinel behind a capability refusal whose cause
+// is NOT an old build but the ABSENCE of a current proof: no hello / heartbeat
+// has carried a build id on the current connection yet, or the connection that
+// proved one has since disconnected — closeConn retires the proof the moment
+// the link drops (FIX-P1A), so build "" after a disconnect means exactly
+// "not proven since reconnect". It is deliberately distinct from
+// ErrAddonBuildTooOld (which means a build DID report and predates the floor):
+// a link-down refusal must not be counted or reported as an AddOn-too-old
+// refusal (B-rules traceability).
+var ErrFarSideNotProven = errors.New("far side not proven since reconnect")
+
 // FarSideProven reports whether the far-side build id satisfies a minimum
 // build requirement. Unknown ("") NEVER satisfies — capability is proven by
 // receipt, not assumed.

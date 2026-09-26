@@ -2712,4 +2712,12 @@ func (s *TCPServer) closeConn() {
 		_ = s.conn.Close()
 		s.conn = nil
 	}
+	// FIX-P1A — the far-side build proof belongs to THIS connection's frames
+	// (hello / heartbeat / order_snapshot). A disconnect retires the proof;
+	// the next connection re-proves with its own hello. A stale proof would
+	// keep stop-slot / protective-stop admission (tcp_trader.go:773,1121)
+	// green against a far side that no longer exists or was replaced by an
+	// older AddOn. Fail closed: until the new connection proves itself,
+	// FarSideBuildID() reads "".
+	s.farSideBuild.Store("")
 }
