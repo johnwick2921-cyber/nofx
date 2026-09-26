@@ -1,7 +1,7 @@
 {
   "auth/auth.go": "548b1fc7baeda784d999f0bcf6e3c2d84ae49f97ef1367e1d7b9c68b30d2a75b",
   "deploy/nofx-claim.sh": "d110a108cb7d1d6f3e92a48a1cca0ef8ab59ec4df320ec519898ead08e7bc236",
-  "deploy/nofx-db-backup.sh": "2f762c1f41fcef933583e570a73acaab6ef4751add3ef6a577939e1d43e99757",
+  "deploy/nofx-db-backup.sh": "0e9dae38e208ba51a81482493474df462d9be73496a61f788c287e07956ec56e",
   "deploy/nofx-lock.sh": "46fcbf76478c43943fb7607bd2929fe3629371ae5b8571ec9da8e1fa6e96c6ab",
   "deploy/nofx-web.service": "10a06fc959623207bcb89280fcea89ee55794e875f3ad72e525b795891e7d377",
   "deploy/nofx.service": "b3d1a0c78d39a4ff9d4e2de16e500b1ee40b403d58dc2ec7e47e3f6843ab4e5d",
@@ -10,7 +10,7 @@
   "deploy/systemd-user/nofx-clock-guard.service": "d4311e270a9fdefeda15bdfc2214e2b69161217dc33229110d64d3e91677095a",
   "deploy/systemd-user/nofx-clock-guard.timer": "a0c9c3c03d9546a76a2f7edba8ad3abb2e769b6893d8a80cea439f0da50bcfc9",
   "go.mod": "d60ef734365523c2fe45a432da51f625bc0f7f33c933ff141e96ea48dcb17030",
-  "logger/logger.go": "2e799bce8b1718cbecc4974b9c1c8746bf10525872a2b641338547e1e5965998",
+  "logger/logger.go": "318022bbb63f9576bd567b1580ec6eab0b27bf82157d11e42da1cbae551795c2",
   "ninjascript/VLTraderTCPClient.cs": "28eeb4c458a95571fb8e1dba59afe17b70fec205d1770a638b1ec94b8e276451",
   "provider/ninjatrader/tcp_framing.go": "c16243a9b9596f6eee281dc1351e8f2830d4e98e89ffddb6aebbfa3f8a0de8ca",
   "provider/ninjatrader/tcp_server.go": "ef3c445365f008d0b730aaf5972054f3f1b515d445e63142827856fb36e6640a",

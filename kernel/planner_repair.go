@@ -26,6 +26,10 @@ func BuildPlannerRepairPrompt(rejectedOutput string, errors string, live []strin
 	b.WriteString(repairReturnContract)
 	b.WriteString("\n\n## Validator errors (verbatim)\n")
 	b.WriteString(errors)
+	if omitted := RenderOmittedSeatedLevels(errors); omitted != "" {
+		b.WriteString("\n")
+		b.WriteString(omitted)
+	}
 	b.WriteString("\n\n## Rejected plan output (verbatim)\n")
 	b.WriteString(rejectedOutput)
 	b.WriteString("\n\n## Applicable law (excerpts for the violated rules only)\n")
@@ -77,12 +81,32 @@ func lawExcerptsFor(errors string) string {
 			strings.Contains(errors, "not allowed for")) {
 		add(RepairConfirmVocabLaw)
 	}
+	// FOLD (2) — re-aimed item 3: the confirm SIDE shape (the real entry-shape
+	// kill, ids 412-414: `scenario[0].confirm.side "" invalid (above|below)`).
+	// The author prompt states it (PromptContract row 346); the repair had no
+	// case and fell to the generic excerpt.
+	if strings.Contains(errors, "confirm.side") {
+		add(`"confirm": {"side": "above" | "below"} — side is a STRING enum, exactly one of above|below (never empty, never a number).`)
+	}
 	// CLASS 46 RIDER (owner ruling 2026-09-02) — see lawExcerptsForDoc: the
 	// enum is also attached whenever the DOCUMENT carries a confirm object,
 	// not only when the incoming error names one.
 	// Entry-law: a confirm rule legal in the field but illegal for THIS play.
 	if strings.Contains(errors, "not allowed for") || strings.Contains(errors, "fade_requires_touch") {
 		add(RepairEntryConfirmLaw)
+	}
+	// FIX-PLANNER (2026-09-26, item 3) — the entry-policy shape refusal
+	// (EntryPolicyLegal: "entry policy planned_order is not legal on …"): the
+	// repair carries the GENERATED shape table, never hand-rettyped prose.
+	if strings.Contains(errors, "entry policy") || strings.Contains(errors, "not legal on") {
+		add("ENTRY POLICY SHAPES (from the validator's own entry-law table):\n" + EntryPolicyShapeTable())
+	}
+	// FOLD from DS-104 cross-check (PR #242) — schema_json killer: a plan JSON
+	// unmarshal failure carries an unmarshal-specific excerpt that QUOTES the
+	// exact decode error (field path + expected type) and the minimal schema
+	// for that field — never the generic excerpt (ids 357-359 / 391-393).
+	if strings.Contains(errors, "plan JSON unmarshal") || strings.Contains(errors, "cannot unmarshal") {
+		add(repairUnmarshalExcerpt(errors))
 	}
 	// W-FLIP-DIRECTION (2026-09-17): a flip side that points the wrong way for
 	// the bias it flips from (plan_doc.go FlipDirectionContradiction).
@@ -167,4 +191,85 @@ func lawExcerptsForDoc(errors, rejectedOutput string) string {
 // or confirm2 object at all — the trigger for the rider above.
 func docHasConfirmObject(doc string) bool {
 	return strings.Contains(doc, "\"confirm\"") || strings.Contains(doc, "\"confirm2\"")
+}
+
+// RenderOmittedSeatedLevels (FIX-PLANNER 2026-09-26, item 2) extracts every
+// "obstacle chain: omits …" clause from the verbatim validator errors and
+// renders the omitted seated levels as a per-level copy list — each with the
+// id, price and the three legal roles the validator accepts. The text is
+// parsed from the PRODUCTION error builder's output (scenario_write_truth.go
+// obstacleChainWriteIssues), never retyped: a change to that format is a change
+// here, pinned by TestFpRepairPromptListsOmittedSeatedLevelsWithRoles.
+// No matching clause (or a malformed one) renders nothing.
+func RenderOmittedSeatedLevels(errors string) string {
+	const clause = "obstacle chain: omits "
+	const clauseEnd = " — list every seated level between entry "
+	var items []string
+	rest := errors
+	for {
+		i := strings.Index(rest, clause)
+		if i < 0 {
+			break
+		}
+		tail := rest[i+len(clause):]
+		j := strings.Index(tail, clauseEnd)
+		if j < 0 {
+			break
+		}
+		for _, item := range strings.Split(tail[:j], ", ") {
+			if item = strings.TrimSpace(item); item != "" {
+				items = append(items, item)
+			}
+		}
+		rest = tail[j:]
+	}
+	if len(items) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("## Omitted seated levels (copy EXACTLY, with their ids, into economics.path_levels)\n")
+	for _, item := range items {
+		b.WriteString("- " + item + " → legal roles: pass_through | reduce | exit\n")
+	}
+	return b.String()
+}
+
+// repairUnmarshalSchemaFor maps the durable tail of a decode-error field path
+// to the minimal schema for that field, taken from the PlanDoc JSON contract
+// (the SAME struct tags the unmarshal reads). Unknown fields get the generic
+// type-only line — the decode error above still quotes the exact path and type.
+var repairUnmarshalSchemaFor = []struct {
+	path, schema string
+}{
+	{"breakdown.level", `"breakdown": {"level": <number>, "entry_mode": "pullback" | "immediate"} — level is a NUMBER (never a string); write the level as a plain numeric price.`},
+}
+
+// repairUnmarshalExcerpt quotes the exact decode error (field path + expected
+// type, parsed from the production fmt.Errorf("plan JSON unmarshal: %w") text)
+// and attaches the minimal schema for the offending field when one is known.
+// Parsed, never retyped: a change to the decode error's shape is a change here,
+// pinned by TestFpUnmarshalRepairExcerptQuotesDecodeErrorAndSchema.
+func repairUnmarshalExcerpt(errors string) string {
+	head := "PLAN JSON SHAPE: the model output failed to decode. Fix the field exactly as named."
+	i := strings.Index(errors, "cannot unmarshal")
+	if i < 0 {
+		return head
+	}
+	field := ""
+	tail := errors[i:]
+	if j := strings.Index(tail, " of type "); j >= 0 {
+		field = strings.TrimSpace(tail[strings.Index(tail, " into Go struct field ")+len(" into Go struct field ") : j])
+	}
+	if field == "" {
+		return head
+	}
+	quote := strings.TrimSpace(strings.SplitN(tail, " of type ", 2)[0])
+	schema := "make that field the type the decode error names: the value is " + strings.TrimSpace(strings.SplitN(tail, " of type ", 2)[1]) + "."
+	for _, s := range repairUnmarshalSchemaFor {
+		if strings.Contains(field, s.path) {
+			schema = "minimal schema for " + s.path + ": " + s.schema
+			break
+		}
+	}
+	return head + "\n" + "decode error (verbatim): " + quote + " of type " + strings.TrimSpace(strings.SplitN(tail, " of type ", 2)[1]) + "\nfield: " + field + " → " + schema
 }

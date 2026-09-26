@@ -25,7 +25,7 @@ func e6OldInstance(at *AutoTrader) *AutoTrader {
 	old.isRunningMutex.Lock()
 	old.isRunning = true
 	old.isRunningMutex.Unlock()
-	old.stopMonitorCh = make(chan struct{})
+	old.setupStopMonitorForTest()
 	return old
 }
 
@@ -63,7 +63,7 @@ func TestPictureOldInstanceStopNeverClearsTheNewRunsEpoch(t *testing.T) {
 	newAt.isRunningMutex.Lock() // the event loop reads it through runningNow
 	newAt.isRunning = true
 	newAt.isRunningMutex.Unlock()
-	newAt.stopMonitorCh = make(chan struct{})
+	newAt.setupStopMonitorForTest()
 	newAt.Stop()
 	if _, ok := newAt.pictureRunEpoch(); ok {
 		t.Fatal("the owner's Stop must clear its own run epoch")
