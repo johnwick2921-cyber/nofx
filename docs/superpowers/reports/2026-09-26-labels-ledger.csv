@@ -44,27 +44,27 @@ ai_config.prompt_sections.decision_process,,,strategy field (ai_config.prompt_se
 ai_config.prompt_sections.entry_standards,,,entry standards prompt text,store/strategy.go:1899,,,open
 ai_config.prompt_sections.role_definition,,,strategy field (ai_config.prompt_sections.role_definition),store/strategy.go:1895,,,open
 ai_config.prompt_sections.trading_frequency,,,"how often the bot should trade (live text claims exits SUSPENDED — stale, see P2-1)",store/strategy.go:1897,,,"skip-owned(DS-102 P2-1: saved prompt data, not a label)"
-ai_config.risk_control.altcoin_max_leverage,,,strategy field (ai_config.risk_control.altcoin_max_leverage),store/strategy.go:2020,,,open
-ai_config.risk_control.altcoin_max_position_value_ratio,,,strategy field (ai_config.risk_control.altcoin_max_position_value_ratio),store/strategy.go:2025,,,open
-ai_config.risk_control.blackout_enabled,,,strategy field (ai_config.risk_control.blackout_enabled),store/strategy.go:2097,,,open
-ai_config.risk_control.blackout_end_ct,,,strategy field (ai_config.risk_control.blackout_end_ct),store/strategy.go:2099,,,open
-ai_config.risk_control.blackout_start_ct,,,strategy field (ai_config.risk_control.blackout_start_ct),store/strategy.go:2098,,,open
+ai_config.risk_control.altcoin_max_leverage,,save clamps 1-20 (AI guided),save clamps 1-20 (AI guided),store/strategy.go:171-175,pending,yes (labels.test.ts guardrail block),done-i18n
+ai_config.risk_control.altcoin_max_position_value_ratio,,"CODE ENFORCED, default 1","CODE ENFORCED, default 1",store/strategy.go:2042,pending,yes (labels.test.ts guardrail block),done-i18n
+ai_config.risk_control.blackout_enabled,,toggle default OFF; no decisions in window,toggle default OFF; no decisions in window,store/strategy.go:2117-2120,pending,yes (labels.test.ts guardrail block),done-i18n
+ai_config.risk_control.blackout_end_ct,,window America/Chicago,window America/Chicago,store/strategy.go:2119,pending,yes (labels.test.ts guardrail block),done-i18n
+ai_config.risk_control.blackout_start_ct,,window America/Chicago,window America/Chicago,store/strategy.go:2118,pending,yes (labels.test.ts guardrail block),done-i18n
 ai_config.risk_control.breakeven_enabled,,,0B SUSPENDED (auto_trader_trailing.go:178),store/strategy.go:2119,,labels.test.ts suspension pins,done-i18n
 ai_config.risk_control.breakeven_trigger_points,,,0B SUSPENDED (auto_trader_trailing.go:178),store/strategy.go:2120,,labels.test.ts suspension pins,done-i18n
-ai_config.risk_control.btc_eth_max_leverage,,,strategy field (ai_config.risk_control.btc_eth_max_leverage),store/strategy.go:2018,,,open
-ai_config.risk_control.btc_eth_max_position_value_ratio,,,strategy field (ai_config.risk_control.btc_eth_max_position_value_ratio),store/strategy.go:2023,,,open
-ai_config.risk_control.consecutive_loss_halt,,,"W1 (f) 2026-09-23: the old cite auto_trader_orders.go:116 was a nil guard inside consecutiveLossHaltedAt, whic",store/strategy.go:2070,,,open
-ai_config.risk_control.consistency_enabled,,,strategy field (ai_config.risk_control.consistency_enabled),store/strategy.go:2106,,,open
-ai_config.risk_control.consistency_max_day_pct,,,strategy field (ai_config.risk_control.consistency_max_day_pct),store/strategy.go:2105,,,open
-ai_config.risk_control.daily_loss_limit_usd,,,strategy field (ai_config.risk_control.daily_loss_limit_usd),store/strategy.go:2046,,,open
-ai_config.risk_control.daily_profit_enabled,,,strategy field (ai_config.risk_control.daily_profit_enabled),store/strategy.go:2052,,,open
-ai_config.risk_control.daily_profit_target_usd,,,strategy field (ai_config.risk_control.daily_profit_target_usd),store/strategy.go:2051,,,open
-ai_config.risk_control.hold_discipline,,,hold-discipline flag (live true),store/strategy.go:2113,,,open
-ai_config.risk_control.max_contracts_per_order,,,futures contract cap per order (live 2),store/strategy.go:2081,,,open
-ai_config.risk_control.max_daily_trades,,,strategy field (ai_config.risk_control.max_daily_trades),store/strategy.go:2055,,,open
-ai_config.risk_control.max_daily_trades_enabled,,,strategy field (ai_config.risk_control.max_daily_trades_enabled),store/strategy.go:2056,,,open
-ai_config.risk_control.max_notional_leverage,,,strategy field (ai_config.risk_control.max_notional_leverage),store/strategy.go:2090,,,open
-ai_config.risk_control.reentry_cooldown_minutes,,,strategy field (ai_config.risk_control.reentry_cooldown_minutes),store/strategy.go:2077,,,open
+ai_config.risk_control.btc_eth_max_leverage,,save clamps 1-20 (AI guided),save clamps 1-20 (AI guided),store/strategy.go:165-169,pending,yes (labels.test.ts guardrail block),done-i18n
+ai_config.risk_control.btc_eth_max_position_value_ratio,,"CODE ENFORCED, default 5","CODE ENFORCED, default 5",store/strategy.go:2039,pending,yes (labels.test.ts guardrail block),done-i18n
+ai_config.risk_control.consecutive_loss_halt,,"presence-aware: inherit (default 8, ON); 0 = OFF; not master","presence-aware: inherit (default 8, ON); 0 = OFF; not master-gated",store/strategy.go:2082-2091,pending,yes (labels.test.ts guardrail block),done-i18n
+ai_config.risk_control.consistency_enabled,,default OFF,default OFF,store/strategy.go:2128-2132,pending,yes (labels.test.ts guardrail block),done-i18n
+ai_config.risk_control.consistency_max_day_pct,,day <= pct of all-time total; needs prior-day profit,day <= pct of all-time total; needs prior-day profit,store/strategy.go:2128-2132,pending,yes (labels.test.ts guardrail block),done-i18n
+ai_config.risk_control.daily_loss_limit_usd,,default ON; blank = RISK_MAX_DAILY_LOSS_USD,default ON; blank = RISK_MAX_DAILY_LOSS_USD,store/strategy.go:2065-2068,pending,yes (labels.test.ts guardrail block),done-i18n
+ai_config.risk_control.daily_profit_enabled,,default OFF,default OFF,store/strategy.go:2071-2074,pending,yes (labels.test.ts guardrail block),done-i18n
+ai_config.risk_control.daily_profit_target_usd,,profit >= target stops entries; default OFF,profit >= target stops entries; default OFF,store/strategy.go:2072-2073,pending,yes (labels.test.ts guardrail block),done-i18n
+ai_config.risk_control.hold_discipline,,AI closes gated; Emergency Flat + drawdown bypass; default O,AI closes gated; Emergency Flat + drawdown bypass; default OFF,store/strategy.go:2127-2131,pending,yes (labels.test.ts guardrail block),done-i18n
+ai_config.risk_control.max_contracts_per_order,,"default 2, always-on clamp; old toggle never read","default 2, always-on clamp; old toggle never read",store/strategy.go:2096-2102,pending,yes (labels.test.ts guardrail block),done-i18n
+ai_config.risk_control.max_daily_trades,,entries per session-day; default OFF,entries per session-day; default OFF,store/strategy.go:2076-2078,pending,yes (labels.test.ts guardrail block),done-i18n
+ai_config.risk_control.max_daily_trades_enabled,,default OFF,default OFF,store/strategy.go:2077,pending,yes (labels.test.ts guardrail block),done-i18n
+ai_config.risk_control.max_notional_leverage,,"default 20, safety backstop, toggle default ON","default 20, safety backstop, toggle default ON",store/strategy.go:2088-2093,pending,yes (labels.test.ts guardrail block),done-i18n
+ai_config.risk_control.reentry_cooldown_minutes,,default 20; 0 = OFF; not master-gated,default 20; 0 = OFF; not master-gated,store/strategy.go:2093-2098,pending,yes (labels.test.ts guardrail block),done-i18n
 ai_config.risk_control.trailing_arm,,,0B SUSPENDED (auto_trader_trailing.go:178),store/strategy.go:2131,,labels.test.ts suspension pins,done-i18n
 ai_config.risk_control.trailing_arm_points,,,0B SUSPENDED (auto_trader_trailing.go:178),store/strategy.go:2132,,labels.test.ts suspension pins,done-i18n
 ai_config.risk_control.trailing_atr_mult,,,0B SUSPENDED (auto_trader_trailing.go:178),store/strategy.go:2128,,labels.test.ts suspension pins,done-i18n

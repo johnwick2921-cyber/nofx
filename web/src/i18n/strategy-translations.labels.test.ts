@@ -113,6 +113,70 @@ describe('riskControl suspension truth (pinned to auto_trader_trailing.go 0B)', 
   })
 })
 
+// Risk-control guardrail label truth (pinned to the RiskControlConfig struct
+// comments at store/strategy.go:2020-2113).
+describe('riskControl guardrail label truth (pinned to store/strategy.go:2020-2113)', () => {
+  it('leverage descs state AI-guided with the 1-20 save clamp', () => {
+    expect(riskControl.btcEthLeverageDesc.en).toContain('1–20')
+    expect(riskControl.altcoinLeverageDesc.en).toContain('1–20')
+  })
+
+  it('position-value descs state CODE ENFORCED with defaults 5 (BTC/ETH) and 1 (alt)', () => {
+    expect(riskControl.btcEthPositionValueRatioDesc.en).toContain('default 5')
+    expect(riskControl.altcoinPositionValueRatioDesc.en).toContain('default 1')
+  })
+
+  it('daily loss limit states default ON + env fallback; profit target default OFF', () => {
+    expect(riskControl.dailyLossLimit.en).toContain('default ON')
+    expect(riskControl.dailyLossLimit.en).toContain('RISK_MAX_DAILY_LOSS_USD')
+    expect(riskControl.dailyProfitTarget.en).toContain('default OFF')
+  })
+
+  it('max daily trades states default OFF', () => {
+    expect(riskControl.maxDailyTrades.en).toContain('default OFF')
+  })
+
+  it('consecutive-loss halt states presence-aware inherit 8 / explicit 0 / not master-gated', () => {
+    const en = riskControl.consecutiveLossHalt.en
+    expect(en).toContain('presence-aware')
+    expect(en).toContain('8')
+    expect(en).toContain('0 = OFF')
+    expect(en).toContain('NOT gated')
+  })
+
+  it('re-entry cooldown states default 20, 0 = OFF, not master-gated', () => {
+    const en = riskControl.reentryCooldown.en
+    expect(en).toContain('default 20')
+    expect(en).toContain('0 = OFF')
+    expect(en).toContain('NOT gated')
+  })
+
+  it('max contracts states default 2 always-on; notional cap default 20 backstop', () => {
+    expect(riskControl.maxContractsField.en).toContain('default 2')
+    expect(riskControl.maxContractsField.en).toContain('always-on')
+    expect(riskControl.notionalCapField.en).toContain('default 20')
+    expect(riskControl.notionalCapField.en).toContain('safety backstop')
+  })
+
+  it('blackout start/end state toggle default OFF + NT8 SL/TP + Chicago window', () => {
+    expect(riskControl.blackoutStart.en).toContain('default OFF')
+    expect(riskControl.blackoutStart.en).toContain('NT8-side SL/TP')
+    expect(riskControl.blackoutEnd.en).toContain('America/Chicago')
+  })
+
+  it('consistency cap states default OFF + prior-day profit requirement', () => {
+    expect(riskControl.consistencyPctField.en).toContain('default OFF')
+    expect(riskControl.consistencyPctField.en).toContain('prior-day profit')
+  })
+
+  it('hold discipline desc states Emergency Flat + drawdown bypass + default OFF', () => {
+    const en = riskControl.holdDisciplineDesc.en
+    expect(en.toLowerCase()).toContain('emergency flat')
+    expect(en).toContain('drawdown')
+    expect(en.toLowerCase()).toContain('default off')
+  })
+})
+
 // Picture HTF labels pin the code defaults (store/strategy.go:921-922
 // PictureHtfDefaultEntryWindowSec=360, PictureHtfDefaultFreshnessSec=30).
 describe('picture HTF label truth (pinned to store/strategy.go:921-922)', () => {
