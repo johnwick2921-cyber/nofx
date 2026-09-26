@@ -43,6 +43,13 @@
 // Bar-feed baselines advanced AGAIN on the dev merge (origin/dev 9c106d0b,
 // #216/#219 touched tcp_server.go): the MERGED bytes pin to sha256 fdb54226…
 //   (re-computed from the merged tree — both pre-merge pins are superseded).
+// Bar-feed baseline advanced 2026-09-26 for FIX-P1A (fix/farside-proof-reconnect,
+// the far-side AddOn build proof must be cleared on disconnect and re-proven by
+// the new connection's hello):
+//   provider/ninjatrader/tcp_server.go — closeConn gains one line
+//     `s.farSideBuild.Store("")` plus its comment (the FIX-P1A retirement of the
+//     proof). Additive; no identifier renamed, no guard removed, the hello/
+//     heartbeat/order_snapshot prove sites are byte-untouched.
 // Bar-feed baseline advanced 2026-09-25 for DS-105 DEFAULTS-SANE (#212 fold):
 //   provider/ninjatrader/tcp_server.go — the live-sink age bound's name is
 //     exported for the Picture floor pins (liveFrameMaxAgeMs → LiveFrameMaxAgeMs
