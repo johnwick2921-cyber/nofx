@@ -80,7 +80,7 @@ func TestShortReadWarnIsDedupedAndCounted(t *testing.T) {
 	if n := bhCountLines(lines, "bar horizon"); n != 3 {
 		t.Fatalf("after the session-day rollover: %d emitted lines, want 3: %v", n, lines)
 	}
-	if bhCountLines(lines, "suppressed=5") != 0 {
+	if n := bhCountRe(lines, suppressedFiveRe); n != 0 {
 		t.Fatalf("the CME session-day rollover did not clear the suppression state: %v", lines)
 	}
 }

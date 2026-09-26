@@ -2,6 +2,7 @@ package ninjatrader
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -63,6 +64,31 @@ func bhCountLines(lines []string, subs ...string) int {
 			}
 		}
 		if ok {
+			n++
+		}
+	}
+	return n
+}
+
+// suppressedFiveRe is the rollover discriminator: the 5-read fresh run before
+// the rollover would show as "suppressed=5" in the rollover line if the state
+// had not cleared. `[^0-9]` bounds it: the cumulative totals line can reach
+// "suppressed=591" under -count=N, and "suppressed=5" is a prefix of it — the
+// exact-5 form never matches a 5xx total.
+var suppressedFiveRe = regexp.MustCompile(`suppressed=5[^0-9]`)
+
+// suppressedSinceRe is the re-armed dedupe marker: "suppressed=N since T".
+var suppressedSinceRe = regexp.MustCompile(`suppressed=[0-9]+ since `)
+
+// bhCountRe counts lines matching the regexp exactly. The cumulative
+// "totals(since boot)" counters keep rising under -count=N, so a substring
+// assert like "suppressed=5" would match "suppressed=591" inside a totals line
+// (the -count=5 flake DS-108 reproduced). The re-armed dedupe marker is
+// `suppressed=<digits> since ` — matched exactly, never by the totals.
+func bhCountRe(lines []string, re *regexp.Regexp) int {
+	n := 0
+	for _, l := range lines {
+		if re.MatchString(l) {
 			n++
 		}
 	}
