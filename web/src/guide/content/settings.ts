@@ -828,6 +828,97 @@ const risk: KnobSpec[] = [
   },
 ]
 
+// AI-prompt and regime knobs (FIX-LABELS 2026-09-26): the editable System
+// Prompt sections, the custom prompt, the language, and the regime HTF veto.
+const prompt: KnobSpec[] = [
+  {
+    label: 'Custom prompt',
+    where: 'Strategy → AI config → custom_prompt (ai_config field)',
+    what: 'Extra prompt text appended to the System Prompt for a personalized trading style. Empty = nothing appended; the output format and the risk rules are fixed and cannot be overridden from here.',
+    trader:
+      'The appended text rides verbatim into every live/planner prompt for this strategy.',
+    consumer:
+      'store/strategy.go:792 (ai_config.custom_prompt) · merged into the prompt at build',
+    range: 'free text · empty = nothing appended',
+    systemDefault: 'empty',
+    recommended: '⭐ keep it short — it appends verbatim to the prompt.',
+    whenToTouch: 'To add a personal trading-style instruction.',
+    perSession: 'No — strategy-level.',
+  },
+  {
+    label: 'Language (prompt + data formatting)',
+    where: 'Strategy → language (ai_config field)',
+    what: '"zh" for Chinese, "en" for English — this determines the language used for data formatting AND prompt generation.',
+    trader: 'The prompt and every formatted data block follow this language.',
+    consumer: 'store/strategy.go:721-723 (StrategyConfig.Language)',
+    range: 'en | zh',
+    systemDefault: 'en',
+    recommended: '⭐ en — the planner reads English structure best.',
+    whenToTouch: 'Switch for a Chinese-language prompt + formatted data.',
+    perSession: 'No — strategy-level.',
+  },
+  {
+    label: 'Role definition (prompt section)',
+    where: 'Strategy → AI config → prompt_sections.role_definition',
+    what: 'The editable role-definition section of the System Prompt (title + description): the AI identity and core objectives.',
+    trader:
+      'Author the persona; the fixed parts (output format, risk rules) stay.',
+    consumer:
+      'store/strategy.go:1915-1917 (PromptSectionsConfig.RoleDefinition)',
+    range: 'free text',
+    systemDefault: 'shipped default section text',
+    recommended:
+      '⭐ keep the shipped identity unless you want a different persona.',
+    whenToTouch: 'To change the AI persona wording.',
+    perSession: 'No — strategy-level.',
+  },
+  {
+    label: 'Entry standards (prompt section)',
+    where: 'Strategy → AI config → prompt_sections.entry_standards',
+    what: 'The editable entry-standards section: entry signal conditions and avoidances.',
+    trader:
+      'Author what qualifies as an entry; the risk gates still hard-block.',
+    consumer:
+      'store/strategy.go:1920-1921 (PromptSectionsConfig.EntryStandards)',
+    range: 'free text',
+    systemDefault: 'shipped default section text',
+    recommended:
+      '⭐ keep the shipped standards unless you have a specific setup.',
+    whenToTouch: 'To tighten or loosen the authored entry criteria.',
+    perSession: 'No — strategy-level.',
+  },
+  {
+    label: 'Decision process (prompt section)',
+    where: 'Strategy → AI config → prompt_sections.decision_process',
+    what: 'The editable decision-process section: how the AI reasons to a decision.',
+    trader:
+      'Author the reasoning path; the validator and risk gates still decide.',
+    consumer:
+      'store/strategy.go:1922-1923 (PromptSectionsConfig.DecisionProcess)',
+    range: 'free text',
+    systemDefault: 'shipped default section text',
+    recommended:
+      '⭐ keep the shipped process unless you want a different reasoning style.',
+    whenToTouch: 'To change the authored reasoning steps.',
+    perSession: 'No — strategy-level.',
+  },
+  {
+    label: 'HTF trend veto (regime G1)',
+    where: 'Strategy → Regime → htf_veto (API/config field)',
+    what: 'Refuse NEW entries opposing the CONFIRMED HTF trend (G2 structure). nil → ON (shipped default, dispatch 1.3); false = pre-wave behaviour (no trend veto).',
+    trader:
+      'ON = counter-trend entries are refused while the HTF trend is confirmed.',
+    consumer:
+      'store/strategy.go:764-768 (RegimeConfig.HTFVeto) · ResolveHTFVeto',
+    range: 'ON | OFF',
+    systemDefault: 'ON (nil/absent = ON)',
+    recommended:
+      '⭐ ON — the shipped default; OFF only to reproduce pre-wave behaviour.',
+    whenToTouch: 'Turn OFF only for a pre-wave comparison study.',
+    perSession: 'No — strategy-level.',
+  },
+]
+
 const coinSource: KnobSpec[] = [
   {
     label: 'Source type',
@@ -1633,6 +1724,8 @@ export const settings: GuideSection = {
       ],
     },
     { kind: 'h', text: 'Risk Control knobs' },
+    { kind: 'h', text: 'AI prompt knobs' },
+    { kind: 'knobs', knobs: prompt },
     { kind: 'knobs', knobs: coinSource },
     { kind: 'knobs', knobs: indicators },
     { kind: 'knobs', knobs: grid },

@@ -6,9 +6,11 @@ import {
   coinSource,
   gridConfig,
   indicator,
+  promptSections,
   riskControl,
 } from './strategy-translations'
 import { planStrings } from './plan-translations'
+import { translations } from './translations'
 
 // The source-type value set the code accepts (store/strategy.go source_type
 // comment: "static" | "ai500" | "oi_top" | "oi_low"). A label that drops or
@@ -188,6 +190,38 @@ describe('dayPlan label truth (pinned to store/strategy.go + resolve_source.go)'
   it('plannerModel label states empty falls back to the primary model (RECON #9)', () => {
     expect(planStrings.plannerModel.en).toContain('strategy primary model')
     expect(planStrings.plannerModel.en).toContain('RECON #9')
+  })
+})
+
+// Prompt-section + language + custom-prompt truth (store/strategy.go:721-723,
+// 1915-1923, 792).
+describe('prompt section + language label truth', () => {
+  it('the three prompt-section descs name the editable System Prompt sections', () => {
+    for (const k of [
+      promptSections.roleDefinitionDesc,
+      promptSections.entryStandardsDesc,
+      promptSections.decisionProcessDesc,
+    ]) {
+      expect(k.en).toContain('editable System Prompt section')
+    }
+    expect(promptSections.roleDefinitionDesc.en).toContain('identity')
+    expect(promptSections.entryStandardsDesc.en).toContain('signal')
+    expect(promptSections.decisionProcessDesc.en).toContain('decision')
+  })
+
+  it('custom prompt desc states appended to the System Prompt', () => {
+    expect(translations.en.strategyStudio.customPromptDesc).toContain(
+      'appended'
+    )
+    expect(translations.en.strategyStudio.customPromptDesc).toContain(
+      'System Prompt'
+    )
+  })
+
+  it('language label states prompt + data formatting with en/zh', () => {
+    expect(translations.en.language).toContain('prompt')
+    expect(translations.en.language).toContain('en/zh')
+    expect(translations.zh.language).toContain('提示词')
   })
 })
 

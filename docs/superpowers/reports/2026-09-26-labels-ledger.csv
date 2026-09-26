@@ -8,7 +8,7 @@ ai_config.coin_source.static_coins,,,static coin list (used when source_type = s
 ai_config.coin_source.use_ai500,,,whether to use AI500 coin pool,store/strategy.go:1913,"yes (settings.ts coinSource block, 9 KnobSpecs)",strategy-translations.labels.test.ts (5 pins),done
 ai_config.coin_source.use_oi_low,,,"whether to use OI Low (OI decrease ranking, suitable for short positions)",store/strategy.go:1921,"yes (settings.ts coinSource block, 9 KnobSpecs)",strategy-translations.labels.test.ts (5 pins),done
 ai_config.coin_source.use_oi_top,,,"whether to use OI Top (OI increase ranking, suitable for long positions)",store/strategy.go:1917,"yes (settings.ts coinSource block, 9 KnobSpecs)",strategy-translations.labels.test.ts (5 pins),done
-ai_config.custom_prompt,,,strategy field (ai_config.custom_prompt),store/strategy.go:735,,,open
+ai_config.custom_prompt,,extra text appended to the System Prompt; empty = nothing; f,extra text appended to the System Prompt; empty = nothing; format/risk rules fixed,store/strategy.go:792,yes (prompt array),yes (census 114 + prompt/language pins),done
 ai_config.indicators.atr_periods,,,strategy field (ai_config.indicators.atr_periods),store/strategy.go:1954,yes (settings.ts indicators block),,done
 ai_config.indicators.boll_periods,,,strategy field (ai_config.indicators.boll_periods),store/strategy.go:1956,yes (settings.ts indicators block),,done
 ai_config.indicators.ema_periods,,,strategy field (ai_config.indicators.ema_periods),store/strategy.go:1950,yes (settings.ts indicators block),,done
@@ -40,9 +40,9 @@ ai_config.indicators.oi_ranking_limit,,,strategy field (ai_config.indicators.oi_
 ai_config.indicators.price_ranking_duration,,,strategy field (ai_config.indicators.price_ranking_duration),store/strategy.go:1981,yes (settings.ts indicators block),,done
 ai_config.indicators.price_ranking_limit,,,strategy field (ai_config.indicators.price_ranking_limit),store/strategy.go:1982,yes (settings.ts indicators block),,done
 ai_config.indicators.rsi_periods,,,strategy field (ai_config.indicators.rsi_periods),store/strategy.go:1952,yes (settings.ts indicators block),,done
-ai_config.prompt_sections.decision_process,,,strategy field (ai_config.prompt_sections.decision_process),store/strategy.go:1901,,,open
-ai_config.prompt_sections.entry_standards,,,entry standards prompt text,store/strategy.go:1899,,,open
-ai_config.prompt_sections.role_definition,,,strategy field (ai_config.prompt_sections.role_definition),store/strategy.go:1895,,,open
+ai_config.prompt_sections.decision_process,,editable System Prompt section: decision steps + thinking,editable System Prompt section: decision steps + thinking,store/strategy.go:1922-1923,yes (prompt array),yes (census 114 + prompt/language pins),done
+ai_config.prompt_sections.entry_standards,,editable System Prompt section: entry signals + avoidances,editable System Prompt section: entry signals + avoidances,store/strategy.go:1920-1921,yes (prompt array),yes (census 114 + prompt/language pins),done
+ai_config.prompt_sections.role_definition,,editable System Prompt section (title + description),editable System Prompt section (title + description),store/strategy.go:1915-1917,yes (prompt array),yes (census 114 + prompt/language pins),done
 ai_config.prompt_sections.trading_frequency,,,"how often the bot should trade (live text claims exits SUSPENDED — stale, see P2-1)",store/strategy.go:1897,,,"skip-owned(DS-102 P2-1: saved prompt data, not a label)"
 ai_config.risk_control.altcoin_max_leverage,,save clamps 1-20 (AI guided),save clamps 1-20 (AI guided),store/strategy.go:171-175,pending,yes (labels.test.ts guardrail block),done-i18n
 ai_config.risk_control.altcoin_max_position_value_ratio,,"CODE ENFORCED, default 1","CODE ENFORCED, default 1",store/strategy.go:2042,pending,yes (labels.test.ts guardrail block),done-i18n
@@ -102,5 +102,5 @@ grid_config.total_investment,,,"GridStrategyConfig comment, store/strategy.go:18
 grid_config.upper_price,,,"GridStrategyConfig comment, store/strategy.go:1860-1890",store/strategy.go:1869,yes (settings.ts grid block),,done
 grid_config.use_atr_bounds,,,"GridStrategyConfig comment, store/strategy.go:1860-1890",store/strategy.go:1873,yes (settings.ts grid block),,done
 grid_config.use_maker_only,,,"GridStrategyConfig comment, store/strategy.go:1860-1890",store/strategy.go:1885,yes (settings.ts grid block),,done
-language,,,prompt language variant (en/zh); used at prompt build,store/strategy.go:722,,,open
-regime.htf_veto,,,regime-level HTF veto (nil-driven ON),store/strategy.go:767,,,open
+language,,en/zh; determines data-formatting AND prompt language,en/zh; determines data-formatting AND prompt language,store/strategy.go:721-723,yes (prompt array),yes (census 114 + prompt/language pins),done
+regime.htf_veto,,nil = ON (dispatch 1.3): refuse entries vs CONFIRMED HTF tre,nil = ON (dispatch 1.3): refuse entries vs CONFIRMED HTF trend; false = pre-wave,store/strategy.go:764-768,yes (prompt array),yes (census 114 + prompt/language pins),done

@@ -681,9 +681,9 @@ export const promptSections = {
     es: 'Definición de Rol',
   },
   roleDefinitionDesc: {
-    zh: '定义 AI 的身份和核心目标',
-    en: 'Define AI identity and core objectives',
-    es: 'Definir identidad AI',
+    zh: '定义 AI 的身份和核心目标（System Prompt 可编辑段落）',
+    en: 'Define AI identity and core objectives (editable System Prompt section)',
+    es: 'Definir identidad AI (sección editable del System Prompt)',
   },
   tradingFrequency: {
     zh: '交易频率',
@@ -701,9 +701,9 @@ export const promptSections = {
     es: 'Estándares de Entrada',
   },
   entryStandardsDesc: {
-    zh: '定义开仓信号条件和避免事项',
-    en: 'Define entry signal conditions and avoidances',
-    es: 'Definir señales de entrada',
+    zh: '定义开仓信号条件和避免事项（System Prompt 可编辑段落）',
+    en: 'Define entry signal conditions and avoidances (editable System Prompt section)',
+    es: 'Definir señales de entrada (sección editable del System Prompt)',
   },
   decisionProcess: {
     zh: '决策流程',
@@ -711,9 +711,9 @@ export const promptSections = {
     es: 'Proceso de Decisión',
   },
   decisionProcessDesc: {
-    zh: '设定决策步骤和思考流程',
-    en: 'Set decision steps and thinking process',
-    es: 'Establecer proceso',
+    zh: '设定决策步骤和思考流程（System Prompt 可编辑段落）',
+    en: 'Set decision steps and thinking process (editable System Prompt section)',
+    es: 'Establecer proceso (sección editable del System Prompt)',
   },
   resetToDefault: {
     zh: '重置为默认',
