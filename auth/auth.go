@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"strings"
@@ -23,6 +25,47 @@ var tokenBlacklist = struct {
 // maxBlacklistEntries is the maximum capacity threshold for blacklist
 const maxBlacklistEntries = 100_000
 
+// TokenBlacklistStore is the OPTIONAL persistence backend for the logout
+// blacklist (P2-10, audit 0926-system). With no store set the blacklist is
+// memory-only, exactly as before. With a store set, BlacklistToken writes a
+// fingerprint+expiry row and IsTokenBlacklisted falls back to it after the
+// in-memory map — a restart can no longer revive a logged-out token.
+type TokenBlacklistStore interface {
+	Save(tokenID string, expiresAt time.Time) error
+	IsRevoked(tokenID string) (bool, error)
+	PruneExpired(now time.Time) error
+}
+
+var blacklistStoreMu sync.RWMutex
+var blacklistStore TokenBlacklistStore
+
+// SetTokenBlacklistStore installs the persistence backend (called once at
+// boot from main.go with the DB-backed store).
+func SetTokenBlacklistStore(s TokenBlacklistStore) {
+	blacklistStoreMu.Lock()
+	defer blacklistStoreMu.Unlock()
+	blacklistStore = s
+}
+
+func currentBlacklistStore() TokenBlacklistStore {
+	blacklistStoreMu.RLock()
+	defer blacklistStoreMu.RUnlock()
+	return blacklistStore
+}
+
+// BlacklistStoreEnabled reports whether a persistence backend is installed —
+// READ from live state for the boot line (B6).
+func BlacklistStoreEnabled() bool {
+	return currentBlacklistStore() != nil
+}
+
+// TokenFingerprint is the key a revoked token is stored under: the hex SHA-256
+// of the token string. The full token is never persisted.
+func TokenFingerprint(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
 // ClockLeeway is the clock skew ValidateJWT forgives on iat, nbf and exp
 // (CTO ruling 1790243040753): a token whose iat is more than ClockLeeway
 // ahead of the server's clock is refused everywhere; a clock step back of up
@@ -40,10 +83,26 @@ func SetJWTSecret(secret string) {
 // BlacklistToken adds token to blacklist until expiration — its exp PLUS
 // ClockLeeway, the last instant ValidateJWT can still admit it (an entry
 // dropped at exp would bring a logged-out token back for that last minute).
+// With a persistence store set, the fingerprint+expiry is ALSO written to the
+// DB (best effort — a write failure logs and the memory entry still holds for
+// this process).
 func BlacklistToken(token string, exp time.Time) {
+	until := exp.Add(ClockLeeway)
 	tokenBlacklist.Lock()
-	defer tokenBlacklist.Unlock()
-	tokenBlacklist.items[token] = exp.Add(ClockLeeway)
+	tokenBlacklist.items[token] = until
+	tokenBlacklist.Unlock()
+
+	if store := currentBlacklistStore(); store != nil {
+		if err := store.Save(TokenFingerprint(token), until); err != nil {
+			log.Printf("auth: persist logout revocation failed: fp=%s err=%v", TokenFingerprint(token), err)
+		} else {
+			// Opportunistic prune (P2-10): expired rows never accumulate
+			// without a restart.
+			if err := store.PruneExpired(time.Now()); err != nil {
+				log.Printf("auth: prune expired revocations failed: err=%v", err)
+			}
+		}
+	}
 
 	// If exceeds capacity threshold, perform expired cleanup; if still over limit, log warning
 	if len(tokenBlacklist.items) > maxBlacklistEntries {
@@ -60,16 +119,38 @@ func BlacklistToken(token string, exp time.Time) {
 	}
 }
 
-// IsTokenBlacklisted checks if token is in blacklist (auto cleanup on expiration)
+// IsTokenBlacklisted checks if token is in blacklist (auto cleanup on expiration).
+// The in-memory map is authoritative for tokens revoked in this process; the
+// persistence store (if set) catches tokens revoked before a restart. A store
+// READ error degrades to the memory answer with a WARN — a transient DB blip
+// must not hard-lock every request out of the API.
 func IsTokenBlacklisted(token string) bool {
 	tokenBlacklist.Lock()
-	defer tokenBlacklist.Unlock()
 	if exp, ok := tokenBlacklist.items[token]; ok {
+		tokenBlacklist.Unlock()
 		if time.Now().After(exp) {
+			tokenBlacklist.Lock()
 			delete(tokenBlacklist.items, token)
+			tokenBlacklist.Unlock()
 			return false
 		}
 		return true
+	}
+	tokenBlacklist.Unlock()
+
+	if store := currentBlacklistStore(); store != nil {
+		revoked, err := store.IsRevoked(TokenFingerprint(token))
+		if err != nil {
+			log.Printf("auth: blacklist store read failed (%v) — falling back to memory-only", err)
+			return false
+		}
+		if revoked {
+			// Cache the store's answer so the next check stays in memory.
+			tokenBlacklist.Lock()
+			tokenBlacklist.items[token] = time.Now().Add(24 * time.Hour)
+			tokenBlacklist.Unlock()
+			return true
+		}
 	}
 	return false
 }

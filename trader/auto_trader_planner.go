@@ -258,7 +258,7 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) []SessionReadFired {
 			// same pattern as the W6/MSS wake re-reads. The plan-store dedupe
 			// keeps it one read per session-day.
 			fired = append(fired, SessionReadFired{Session: s.Name, TradeDate: tradeDate})
-			go at.runPlannerRead(s.Name, tradeDate)
+			at.goNetted("planner-read", func() { at.runPlannerRead(s.Name, tradeDate) })
 			continue
 		}
 		// PLAN-LIFECYCLE WAVE (2026-08-27) — DEACTIVATE-AND-REARM: a plan whose
@@ -389,7 +389,7 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) []SessionReadFired {
 				// call blocked the cycle 19m33s (the 02:14 overrun). Async, same
 				// pattern as the W6/MSS wake re-reads; the plan-store's single-
 				// writer queue serializes the writes.
-				go at.runDeathReplan(now, s.Name, tradeDate, existing, detail.Killer)
+				at.goNetted("death-replan", func() { at.runDeathReplan(now, s.Name, tradeDate, existing, detail.Killer) })
 			}
 		}
 		if !handledDeath {
@@ -924,7 +924,7 @@ func (at *AutoTrader) maybeRereadAfterFlip(now time.Time, session, tradeDate str
 	// Non-fatal and async, exactly like the level-event wake: a read that
 	// does not land a newer active version keeps the dormant plan and clears
 	// the once-key so the dormant branch retries next cycle.
-	go func() {
+	at.goNetted("flip-reread", func() {
 		defer flipRereadInFlight.Delete(inflightKey)
 		// BLOCKER 3(b) — the row may have been re-armed between the dormant
 		// write and this goroutine's first instruction (or, on the retry
@@ -969,7 +969,7 @@ func (at *AutoTrader) maybeRereadAfterFlip(now time.Time, session, tradeDate str
 			at.logInfof("🗓️ plan %s %s v%d SUPERSEDED by the structure_flip read (new v%d).", tradeDate, session, row.Version, fresh.Version)
 		}
 		at.carryOwnerEditsInto(fresh.PlanID, row.Version, fresh.Version)
-	}()
+	})
 }
 
 // lastWakeAuthoredVersionAge returns whole minutes since the session's latest
