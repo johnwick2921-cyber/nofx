@@ -177,6 +177,20 @@ describe('riskControl guardrail label truth (pinned to store/strategy.go:2020-21
   })
 })
 
+// Day-plan label truth (pinned to store/strategy.go:968-1184 + resolve_source.go
+// shipped defaults + structural_geometry.go C5).
+describe('dayPlan label truth (pinned to store/strategy.go + resolve_source.go)', () => {
+  it('htfSeats label states unset = default 2 (legacy constant) and 0 = none', () => {
+    expect(planStrings.htfSeats.en).toContain('default 2')
+    expect(planStrings.htfSeats.en).toContain('0 = no HTF seating')
+  })
+
+  it('plannerModel label states empty falls back to the primary model (RECON #9)', () => {
+    expect(planStrings.plannerModel.en).toContain('strategy primary model')
+    expect(planStrings.plannerModel.en).toContain('RECON #9')
+  })
+})
+
 // Picture HTF labels pin the code defaults (store/strategy.go:921-922
 // PictureHtfDefaultEntryWindowSec=360, PictureHtfDefaultFreshnessSec=30).
 describe('picture HTF label truth (pinned to store/strategy.go:921-922)', () => {

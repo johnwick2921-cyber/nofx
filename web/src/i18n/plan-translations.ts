@@ -417,7 +417,11 @@ export const planStrings = {
     zh: '启用日计划',
     id: 'Aktifkan Rencana Harian',
   },
-  plannerModel: { en: 'Planner model', zh: '规划模型', id: 'Model perencana' },
+  plannerModel: {
+    en: 'Planner model — empty falls back to the strategy primary model (RECON #9)',
+    zh: '规划模型 — 留空则回退到策略主模型 (RECON #9)',
+    id: 'Model perencana — kosong memakai model utama strategi (RECON #9)',
+  },
   planMode: { en: 'Plan mode', zh: '计划模式', id: 'Mode rencana' },
   modeAdvisory: { en: 'ADVISORY', zh: '顾问', id: 'SARAN' },
   modeDirection: { en: 'DIRECTION', zh: '定向', id: 'ARAH' },
@@ -438,9 +442,9 @@ export const planStrings = {
   proximity: { en: 'Proximity', zh: '邻近度', id: 'Kedekatan' },
   maxLevels: { en: 'Max levels', zh: '最大价位数', id: 'Maks level' },
   htfSeats: {
-    en: 'HTF seats (structure-first, S3)',
-    zh: 'HTF 席位 (结构优先, S3)',
-    id: 'Kursi HTF',
+    en: 'HTF seats (structure-first, S3) — unset = default 2 (legacy constant); 0 = no HTF seating',
+    zh: 'HTF 席位 (结构优先, S3) — 未设置 = 默认 2（旧常量）；0 = 不设 HTF 席位',
+    id: 'Kursi HTF — kosong = default 2 (konstanta lama); 0 = tanpa kursi HTF',
   },
   flipReread: {
     en: 'Flip re-read — when the flip condition fires, the plan still goes dormant, then ONE free re-read authors the flipped direction',

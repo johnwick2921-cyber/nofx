@@ -112,7 +112,8 @@ const dayPlan: KnobSpec[] = [
     consumer:
       'kernel/levels_score.go seatHTF/seatHTFLegacy · trader/auto_trader_planner.go resolveSessionPlanCfg',
     range: '0 – 6 · unset = legacy',
-    systemDefault: 'unset (legacy, byte-identical to pre-S3)',
+    systemDefault:
+      'unset → legacy path = 2 seats (kernel.LegacyHtfSeats); saved 0 = no HTF seating',
     recommended:
       '⭐ leave UNSET until the S4 measurement decides whether HTF promotion helps.',
     whenToTouch:
@@ -456,6 +457,73 @@ const dayPlan: KnobSpec[] = [
     whenToTouch:
       'When activating the two-picture setup in SIM, or tightening the freshness/window to the tape.',
     perSession: 'No.',
+  },
+  {
+    label: 'Day plan master switch',
+    where: 'Strategy → Day Plan → plan_enabled (API/config field)',
+    what: 'The master switch for the day-plan engine on this strategy. Default false = off.',
+    trader: 'OFF = no planner authoring, no session machine for this strategy.',
+    consumer: 'store.DayPlanConfig.PlanEnabled (store/strategy.go:968)',
+    range: 'true | false',
+    systemDefault: 'false (off)',
+    recommended: '⭐ ON once the day-plan flow is configured — OFF until then.',
+    whenToTouch: 'Turn ON to enable day-plan authoring for this strategy.',
+    perSession: 'No — strategy-level.',
+  },
+  {
+    label: 'Planner model',
+    where: 'Strategy → Day Plan → planner_model (API/config field)',
+    what: 'The reasoner binding from the multi-key registry used for planner reads; empty falls back to the strategy primary model (RECON #9).',
+    trader: 'Leave empty unless a dedicated planner reasoner is provisioned.',
+    consumer: 'store.DayPlanConfig.PlannerModel (store/strategy.go:969-971)',
+    range: 'any registered model id · empty = strategy primary',
+    systemDefault: 'empty → strategy primary model (RECON #9)',
+    recommended: '⭐ empty — the primary model is the shipped default.',
+    whenToTouch:
+      'Set it only when a dedicated planner reasoner is provisioned.',
+    perSession: 'No — strategy-level.',
+  },
+  {
+    label: 'Condition status (live/shadow, 0C)',
+    where: 'Strategy → Day Plan → condition_status map (API/config field)',
+    what: 'Per-condition live|shadow map, resolved session override → base → LIVE → SHADOW env → defaults (fvg_entry and breakout_retest default SHADOW per owner ruling). The ARM SEAM is the only enforcement point; authoring/validation/E8 scoring stay untouched.',
+    trader: 'SHADOW conditions author and validate but never arm.',
+    consumer:
+      'store.DayPlanConfig.ConditionStatus (store/strategy.go:1154-1158)',
+    range: 'live | shadow per condition',
+    systemDefault:
+      'LIVE except fvg_entry and breakout_retest (SHADOW, owner ruling)',
+    recommended: '⭐ shipped defaults — no evidence yet argues another map.',
+    whenToTouch: 'Only to shadow-demote a condition whose arms misfire.',
+    perSession: 'Yes — session override wins; nil inherits the base map.',
+  },
+  {
+    label: 'Session condition status override (0C)',
+    where: 'Strategy → Day Plan → sessions[] → condition_status map',
+    what: 'Per-session live|shadow override of the strategy-level condition_status map; nil inherits the strategy-level map.',
+    trader: 'Use it to shadow a condition in one session only.',
+    consumer:
+      'store.DayPlanSessionOverride.ConditionStatus (store/strategy.go:1213)',
+    range: 'live | shadow per condition · nil = inherit',
+    systemDefault: 'nil (inherit the base map)',
+    recommended: '⭐ inherit — per-session overrides only with evidence.',
+    whenToTouch: 'Only when one session needs a stricter map than the rest.',
+    perSession: 'Yes — this IS the per-session field.',
+  },
+  {
+    label: 'Structural stop buffer (points)',
+    where:
+      'Strategy → Day Plan → structural_stop.buffer_points (API/config field)',
+    what: 'Research buffer beyond the frozen zone, composed into the stop (line − buffer). MNQ unset = 4.5 pt: the C5 calibration (6,181 in-sample HELD first touches, p95 far-edge penetration 4.3675648248 pt rounded OUTWARD to the MNQ tick — a chosen tolerance, not a validated universal buffer). A saved value overrides with owner_override[I]; a missing/uncalibrated saved value refuses.',
+    trader: 'The stop composes at the frozen zone line minus this buffer.',
+    consumer:
+      'store.ResolveStructuralStop / StructuralBufferMNQDefault (store/structural_geometry.go:32-59)',
+    range: 'points (> 0) · unset = C5 4.5',
+    systemDefault: '4.5 (C5-H12-IS-6181-p95-20260912, MNQ only)',
+    recommended: '⭐ leave unset — the C5 calibration is the shipped default.',
+    whenToTouch:
+      'Only to record an owner-researched buffer as an explicit override.',
+    perSession: 'No — strategy-level.',
   },
 ]
 

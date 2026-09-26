@@ -70,26 +70,26 @@ ai_config.risk_control.trailing_arm_points,,,0B SUSPENDED (auto_trader_trailing.
 ai_config.risk_control.trailing_atr_mult,,,0B SUSPENDED (auto_trader_trailing.go:178),store/strategy.go:2128,,labels.test.ts suspension pins,done-i18n
 ai_config.risk_control.trailing_atr_period,,,0B SUSPENDED (auto_trader_trailing.go:178),store/strategy.go:2129,,labels.test.ts suspension pins,done-i18n
 ai_config.risk_control.trailing_enabled,,,0B SUSPENDED (auto_trader_trailing.go:178),store/strategy.go:2127,,labels.test.ts suspension pins,done-i18n
-day_plan.condition_status,,,condition status knob,store/strategy.go:1156,,,open
-day_plan.entry_policy_default,,,default entry policy (market_in_zone),store/strategy.go:1166,,,open
-day_plan.geometry_reference_levels,,,geometry reference levels gate (default ON),store/strategy.go:1144,,,open
-day_plan.htf_seats,,,HTF seat count (default 2),store/strategy.go:1022,,,open
-day_plan.min_hold_min,,,minimum hold minutes (default 3),store/strategy.go:1184,,,open
+day_plan.condition_status,,live|shadow map; arm seam only; fvg_entry+breakout_retest de,live|shadow map; arm seam only; fvg_entry+breakout_retest default SHADOW,store/strategy.go:1154-1158,yes (dayPlan array tightened/added),yes (census 108 + htfSeats/plannerModel pins),done
+day_plan.entry_policy_default,,stamped at parse on NEW plans; market_in_zone|planned_order|,stamped at parse on NEW plans; market_in_zone|planned_order|legacy; empty/illegal → market_in_zone,store/strategy.go:1160-1166 + resolve_source.go:234-245,yes (dayPlan array tightened/added),yes (census 108 + htfSeats/plannerModel pins),done
+day_plan.geometry_reference_levels,,nil = ON (owner ruling); explicit false = legacy,nil = ON (owner ruling); explicit false = legacy,store/strategy.go:1132-1144,yes (dayPlan array tightened/added),yes (census 108 + htfSeats/plannerModel pins),done
+day_plan.htf_seats,,nil = legacy path = 2 (kernel.LegacyHtfSeats); 0 = no HTF se,nil = legacy path = 2 (kernel.LegacyHtfSeats); 0 = no HTF seating; 0-6,store/strategy.go:1019-1022,yes (dayPlan array tightened/added),yes (census 108 + htfSeats/plannerModel pins),done
+day_plan.min_hold_min,,floor on resolved hold of ARMED time_hold; nil/<=0 = 3,floor on resolved hold of ARMED time_hold; nil/<=0 = 3,store/strategy.go:1181-1184,yes (dayPlan array tightened/added),yes (census 108 + htfSeats/plannerModel pins),done
 day_plan.picture_htf.entry_window_sec,,,"PictureHtfResolved defaults (store/strategy.go:921-922, 931-936)",store/strategy.go:934,yes (settings.ts pictureHtf block),,done
 day_plan.picture_htf.freshness_sec,,,"PictureHtfResolved defaults (store/strategy.go:921-922, 931-936)",store/strategy.go:935,yes (settings.ts pictureHtf block),,done
 day_plan.picture_htf.min_rr,,,"PictureHtfResolved defaults (store/strategy.go:921-922, 931-936)",store/strategy.go:936,yes (settings.ts pictureHtf block),,done
 day_plan.picture_htf.pivot_window,,,"PictureHtfResolved defaults (store/strategy.go:921-922, 931-936)",store/strategy.go:932,yes (settings.ts pictureHtf block),,done
 day_plan.picture_htf.swing_lookback,,,"PictureHtfResolved defaults (store/strategy.go:921-922, 931-936)",store/strategy.go:933,yes (settings.ts pictureHtf block),,done
 day_plan.picture_htf.tick_size,,,"PictureHtfResolved defaults (store/strategy.go:921-922, 931-936)",store/strategy.go:931,yes (settings.ts pictureHtf block),,done
-day_plan.plan_enabled,,,day-plan master switch (live true),store/strategy.go:968,,,open
-day_plan.planner_fresh_tape,,,planner fresh-tape knob (nil=ON; A6),store/strategy.go:1047,,,open
-day_plan.planner_model,,,planner model binding,store/strategy.go:971,,,open
-day_plan.sessions.condition_status,,,W1 (f) 2026-09-23: the old cite auto_trader_planner.go:1481 is clockHoldDeferLine — not a reader.,store/strategy.go:1213,,,open
-day_plan.structural_stop.buffer_points,,,Research buffer beyond frozen zone; missing uncalibrated value refuses.,store/structural_geometry.go:12,,,open
-day_plan.write_time_feasibility,,,write-time feasibility gate (default ON),store/strategy.go:1131,,,open
-day_plan.zone_max_pts,,,zone max points (default 10),store/strategy.go:1169,,,open
-day_plan.zone_place_within_pts,,,zone placement band (default 25),store/strategy.go:1180,,,open
-day_plan.zone_rest_max_min,,,zone rest cap minutes (default 30),store/strategy.go:1173,,,open
+day_plan.plan_enabled,,master switch default false = off,master switch default false = off,store/strategy.go:968,yes (dayPlan array tightened/added),yes (census 108 + htfSeats/plannerModel pins),done
+day_plan.planner_fresh_tape,,nil = ON (A6 born-dead retry fresh tape); explicit false = b,nil = ON (A6 born-dead retry fresh tape); explicit false = blind retry,store/strategy.go:1040-1047,yes (dayPlan array tightened/added),yes (census 108 + htfSeats/plannerModel pins),done
+day_plan.planner_model,,reasoner binding; empty falls back to strategy primary (RECO,reasoner binding; empty falls back to strategy primary (RECON #9),store/strategy.go:969-971,yes (dayPlan array tightened/added),yes (census 108 + htfSeats/plannerModel pins),done
+day_plan.sessions.condition_status,,per-session live|shadow override; nil inherits base map,per-session live|shadow override; nil inherits base map,store/strategy.go:1213,yes (dayPlan array tightened/added),yes (census 108 + htfSeats/plannerModel pins),done
+day_plan.structural_stop.buffer_points,,MNQ unset = 4.5 (C5 6181-sample p95); saved = owner_override,MNQ unset = 4.5 (C5 6181-sample p95); saved = owner_override[I]; missing/uncalibrated refuses,"store/structural_geometry.go:12,32-59",yes (dayPlan array tightened/added),yes (census 108 + htfSeats/plannerModel pins),done
+day_plan.write_time_feasibility,,nil = ON (owner default); explicit false = WARN-only legacy,nil = ON (owner default); explicit false = WARN-only legacy,store/strategy.go:1124-1131,yes (dayPlan array tightened/added),yes (census 108 + htfSeats/plannerModel pins),done
+day_plan.zone_max_pts,,widest entry_zone pts; nil/<=0 = 10,widest entry_zone pts; nil/<=0 = 10,store/strategy.go:1167-1169,yes (dayPlan array tightened/added),yes (census 108 + htfSeats/plannerModel pins),done
+day_plan.zone_place_within_pts,,nil = 25 (placement band); 0 = OFF legacy,nil = 25 (placement band); 0 = OFF legacy,store/strategy.go:1174-1180,yes (dayPlan array tightened/added),yes (census 108 + htfSeats/plannerModel pins),done
+day_plan.zone_rest_max_min,,resting limit older than N min cancelled; nil/<=0 = 30,resting limit older than N min cancelled; nil/<=0 = 30,store/strategy.go:1170-1173,yes (dayPlan array tightened/added),yes (census 108 + htfSeats/plannerModel pins),done
 grid_config.atr_multiplier,,,"GridStrategyConfig comment, store/strategy.go:1860-1890",store/strategy.go:1875,yes (settings.ts grid block),,done
 grid_config.daily_loss_limit_pct,,,"GridStrategyConfig comment, store/strategy.go:1860-1890",store/strategy.go:1883,yes (settings.ts grid block),,done
 grid_config.direction_bias_ratio,,,"GridStrategyConfig comment, store/strategy.go:1860-1890",store/strategy.go:1889,yes (settings.ts grid block),,done
