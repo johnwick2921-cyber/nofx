@@ -1076,5 +1076,22 @@ export const settings: GuideSection = {
         },
       ],
     },
+    { kind: 'h', text: 'Auth & API hardening (FIX-SEC, 2026-09-26)' },
+    {
+      kind: 'p',
+      text: 'Logout blacklists the session in the database now, not just in memory — a restart can no longer revive a logged-out token for the rest of its 24-hour life (fingerprints only; the token itself is never stored). Expired revocations are pruned at boot and on every new logout.',
+    },
+    {
+      kind: 'p',
+      text: 'Login is rate-limited per IP and per account: five failed attempts within five minutes arm a one-minute block, ten arm a fifteen-minute block, and the 429 names Retry-After. The unknown-email path burns the same password cost as the known one, so response time no longer reveals whether an account exists. A successful login resets both counters.',
+    },
+    {
+      kind: 'p',
+      text: 'Telegram binding now needs a one-time code: in the dashboard (owner session) open the Telegram bind dialog, copy the 8-character code, and send /bind <code> from the chat. The first /start no longer binds blindly; the code is single-use and expires after 10 minutes.',
+    },
+    {
+      kind: 'p',
+      text: 'The beginner claw402 onboarding route is owner-only (the first-created account, no machine tokens) and is refused outright on the futures build — claw402 is crypto-era. The boot line now prints the JWT secret state truthfully: configured (custom) or INSECURE DEFAULT with a warning.',
+    },
   ],
 }

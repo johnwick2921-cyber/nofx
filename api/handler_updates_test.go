@@ -98,6 +98,9 @@ func newUpdEnv(t *testing.T) *updEnv {
 	e := &updEnv{t: t, st: st, dataDir: dataDir}
 	e.s = NewServer(manager.NewTraderManager(), st, nil, "127.0.0.1", 0)
 	e.tok = mintJWT(t, updAdminID, updAdminEmail, time.Now().Add(-5*time.Second), time.Now().Add(time.Hour), updSecret)
+	// P2-11: the login limiter is process-global; every env starts clean so
+	// one test's failed logins cannot block another's (the IP key is shared).
+	resetLoginLimiter()
 	return e
 }
 
