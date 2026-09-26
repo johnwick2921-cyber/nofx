@@ -8,6 +8,7 @@ import {
   indicator,
   riskControl,
 } from './strategy-translations'
+import { planStrings } from './plan-translations'
 
 // The source-type value set the code accepts (store/strategy.go source_type
 // comment: "static" | "ai500" | "oi_top" | "oi_low"). A label that drops or
@@ -109,5 +110,17 @@ describe('riskControl suspension truth (pinned to auto_trader_trailing.go 0B)', 
   it('trailing desc states SUSPENDED (0B) and names the code file', () => {
     expect(riskControl.trailingDesc.en).toContain('SUSPENDED (0B)')
     expect(riskControl.trailingDesc.en).toContain('auto_trader_trailing.go')
+  })
+})
+
+// Picture HTF labels pin the code defaults (store/strategy.go:921-922
+// PictureHtfDefaultEntryWindowSec=360, PictureHtfDefaultFreshnessSec=30).
+describe('picture HTF label truth (pinned to store/strategy.go:921-922)', () => {
+  it('entry window label states default 360', () => {
+    expect(planStrings.pictureEntryWindowSec.en).toContain('360')
+  })
+
+  it('freshness label states default 30', () => {
+    expect(planStrings.pictureFreshnessSec.en).toContain('30')
   })
 })

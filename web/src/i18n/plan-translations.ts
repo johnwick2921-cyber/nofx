@@ -483,14 +483,14 @@ export const planStrings = {
     id: 'Lookback swing (bar 5m)',
   },
   pictureEntryWindowSec: {
-    en: 'Entry window (s)',
-    zh: '入场窗口（秒）',
-    id: 'Jendela masuk (detik)',
+    en: 'Entry window (s) — default 360',
+    zh: '入场窗口（秒，默认 360）',
+    id: 'Jendela masuk (detik, default 360)',
   },
   pictureFreshnessSec: {
-    en: 'Freshness limit (s)',
-    zh: '数据新鲜上限（秒）',
-    id: 'Batas kesegaran (detik)',
+    en: 'Freshness limit (s) — default 30',
+    zh: '数据新鲜上限（秒，默认 30）',
+    id: 'Batas kesegaran (detik, default 30)',
   },
   pictureMinRR: {
     en: 'Minimum R:R (blank = inherit risk control)',

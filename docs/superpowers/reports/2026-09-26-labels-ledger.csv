@@ -75,12 +75,12 @@ day_plan.entry_policy_default,,,default entry policy (market_in_zone),store/stra
 day_plan.geometry_reference_levels,,,geometry reference levels gate (default ON),store/strategy.go:1144,,,open
 day_plan.htf_seats,,,HTF seat count (default 2),store/strategy.go:1022,,,open
 day_plan.min_hold_min,,,minimum hold minutes (default 3),store/strategy.go:1184,,,open
-day_plan.picture_htf.entry_window_sec,,,submission allowed within N seconds of the new 5m interval (default 360).,store/strategy.go:934,,,open
-day_plan.picture_htf.freshness_sec,,,max accepted age of the freshest bar frame at evaluation and send (default 30s).,store/strategy.go:935,,,open
-day_plan.picture_htf.min_rr,,,0 = the strategy's configured minimum R:R; the nearest eligible zone is never skipped to fix R:R.,store/strategy.go:936,,,open
-day_plan.picture_htf.pivot_window,,,latest N completed 4H candles for body-pivot discovery (default 120).,store/strategy.go:932,,,open
-day_plan.picture_htf.swing_lookback,,,preceding N completed 5m candles for the structural swing stop (default 24).,store/strategy.go:933,,,open
-day_plan.picture_htf.tick_size,,,one instrument tick (default 0.25 MNQ); the H1 close must cross by at least one tick.,store/strategy.go:931,,,open
+day_plan.picture_htf.entry_window_sec,,,"PictureHtfResolved defaults (store/strategy.go:921-922, 931-936)",store/strategy.go:934,yes (settings.ts pictureHtf block),,done
+day_plan.picture_htf.freshness_sec,,,"PictureHtfResolved defaults (store/strategy.go:921-922, 931-936)",store/strategy.go:935,yes (settings.ts pictureHtf block),,done
+day_plan.picture_htf.min_rr,,,"PictureHtfResolved defaults (store/strategy.go:921-922, 931-936)",store/strategy.go:936,yes (settings.ts pictureHtf block),,done
+day_plan.picture_htf.pivot_window,,,"PictureHtfResolved defaults (store/strategy.go:921-922, 931-936)",store/strategy.go:932,yes (settings.ts pictureHtf block),,done
+day_plan.picture_htf.swing_lookback,,,"PictureHtfResolved defaults (store/strategy.go:921-922, 931-936)",store/strategy.go:933,yes (settings.ts pictureHtf block),,done
+day_plan.picture_htf.tick_size,,,"PictureHtfResolved defaults (store/strategy.go:921-922, 931-936)",store/strategy.go:931,yes (settings.ts pictureHtf block),,done
 day_plan.plan_enabled,,,day-plan master switch (live true),store/strategy.go:968,,,open
 day_plan.planner_fresh_tape,,,planner fresh-tape knob (nil=ON; A6),store/strategy.go:1047,,,open
 day_plan.planner_model,,,planner model binding,store/strategy.go:971,,,open
