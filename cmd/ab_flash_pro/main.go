@@ -26,6 +26,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,7 +36,9 @@ import (
 	"nofx/config"
 	"nofx/crypto"
 	"nofx/kernel"
+	"nofx/market"
 	"nofx/store"
+	"nofx/trader"
 
 	"github.com/joho/godotenv"
 )
@@ -65,8 +68,18 @@ type result struct {
 	FirstReject    string
 	EntryDistsPts  string // per scenario, joined with ';'
 	EntryDistsATR  string // per scenario in xATR5m, joined with ';'
-	BornDead       string // v1: "n/a (bars leg pending)" — see report
+	BornDead       string // yes/no/na + reason (born-dead leg)
 	Err            string
+	cfg            *store.StrategyConfig // not serialized; stage-2 judge input
+	prompt         string                // the stored verbatim prompt
+	doc            *kernel.PlanDoc       // parsed doc, for stage-2 judge legs
+	facts          kernel.PlanFacts
+	maxLevels      int
+	scenarioCap    int
+	symbol         string
+	session        string
+	tradeDate      string
+	readAt         time.Time
 }
 
 type apiUsage struct {
@@ -170,10 +183,11 @@ func main() {
 
 	sem := make(chan struct{}, *conc)
 	var mu sync.Mutex
+	var judgeMu sync.Mutex // the shims swap a package-global bars provider
 	var results []result
 	var wg sync.WaitGroup
 	for _, r := range rows {
-		opts, maxLevels, scenarioCap, optErr := resolveJudgeParams(st, r.TraderID)
+		opts, maxLevels, scenarioCap, cfg, optErr := resolveJudgeParams(st, r.TraderID)
 		if optErr != nil {
 			fmt.Fprintf(os.Stderr, "row %d: judge params: %v\n", r.ID, optErr)
 			continue
@@ -183,15 +197,18 @@ func main() {
 			go func(r store.PlannerRejectedPrompt, a arm) {
 				defer wg.Done()
 				sem <- struct{}{}
-				res := runArm(r, a, key, opts, maxLevels, scenarioCap)
+				res := runArm(r, a, key, opts, maxLevels, scenarioCap, cfg)
 				<-sem
+				judgeMu.Lock()
+				res.judgeExtra(st, cfg)
+				judgeMu.Unlock()
 				mu.Lock()
 				results = append(results, res)
 				_ = csvW.Write(res.csvRow())
 				csvW.Flush()
 				mu.Unlock()
-				fmt.Printf("row %d arm %s: pass=%v wall=%.1fs finish=%s %s\n",
-					r.ID, a.label, res.Pass, res.WallS, res.Finish, truncate(res.FirstReject, 80))
+				fmt.Printf("row %d arm %s: pass=%v wall=%.1fs finish=%s born=%s %s\n",
+					r.ID, a.label, res.Pass, res.WallS, res.Finish, res.BornDead, truncate(res.FirstReject, 80))
 			}(r, a)
 		}
 	}
@@ -205,18 +222,18 @@ func main() {
 // resolveJudgeParams re-resolves the live write-site judge inputs from the
 // strategy row bound to the trader (the CTO's harness gap): AuthoringOpts
 // {MinRR, EntryPolicyDefault, MinHoldMin}, maxLevels and scenarioCap.
-func resolveJudgeParams(st *store.Store, traderID string) (kernel.AuthoringOpts, int, int, error) {
+func resolveJudgeParams(st *store.Store, traderID string) (kernel.AuthoringOpts, int, int, *store.StrategyConfig, error) {
 	tr, err := st.Trader().GetByID(traderID)
 	if err != nil || tr == nil {
-		return kernel.AuthoringOpts{}, 0, 0, fmt.Errorf("trader %s: %v", traderID, err)
+		return kernel.AuthoringOpts{}, 0, 0, nil, fmt.Errorf("trader %s: %v", traderID, err)
 	}
 	strategy, err := st.Strategy().Get(tr.UserID, tr.StrategyID)
 	if err != nil || strategy == nil {
-		return kernel.AuthoringOpts{}, 0, 0, fmt.Errorf("strategy %s: %v", tr.StrategyID, err)
+		return kernel.AuthoringOpts{}, 0, 0, nil, fmt.Errorf("strategy %s: %v", tr.StrategyID, err)
 	}
 	var cfg store.StrategyConfig
 	if err := json.Unmarshal([]byte(strategy.Config), &cfg); err != nil {
-		return kernel.AuthoringOpts{}, 0, 0, fmt.Errorf("strategy config: %v", err)
+		return kernel.AuthoringOpts{}, 0, 0, nil, fmt.Errorf("strategy config: %v", err)
 	}
 	dp := cfg.DayPlan
 	policy, _ := store.ResolveEntryPolicyDefault(dp)
@@ -231,11 +248,11 @@ func resolveJudgeParams(st *store.Store, traderID string) (kernel.AuthoringOpts,
 	if dp != nil {
 		scenarioCap = dp.ScenarioCapResolved()
 	}
-	return opts, maxLevels, scenarioCap, nil
+	return opts, maxLevels, scenarioCap, &cfg, nil
 }
 
 // runArm makes ONE call and runs the offline judge on the answer.
-func runArm(r store.PlannerRejectedPrompt, a arm, key string, opts kernel.AuthoringOpts, maxLevels, scenarioCap int) result {
+func runArm(r store.PlannerRejectedPrompt, a arm, key string, opts kernel.AuthoringOpts, maxLevels, scenarioCap int, cfg *store.StrategyConfig) result {
 	res := result{RowID: int(r.ID), Arm: a.label, Model: a.model, Cap: a.cap}
 	body := map[string]any{
 		"model": a.model,
@@ -285,6 +302,11 @@ func runArm(r store.PlannerRejectedPrompt, a arm, key string, opts kernel.Author
 		res.Finish = *ch.FinishReason
 	}
 	content := ch.Message.Content
+	res.cfg = cfg
+	res.session, res.tradeDate = r.Session, r.TradeDate
+	res.prompt = r.PromptText
+	res.symbol = symbolFromPrompt(r.PromptText)
+	res.readAt = readAtFromPrompt(r.PromptText, r.TradeDate)
 	judge(&res, content, r.Facts, opts, maxLevels, scenarioCap)
 	return res
 }
@@ -316,6 +338,8 @@ func judge(res *result, content, factsJSON string, opts kernel.AuthoringOpts, ma
 		return
 	}
 	res.Pass = true
+	res.doc, res.facts = d, facts
+	res.maxLevels, res.scenarioCap = maxLevels, scenarioCap
 	// Per-scenario entry distance from the read price, in pts and xATR5m
 	// (facts.DATR is the read-time daily ATR proxy the live gate uses).
 	var pts, atrs []string
@@ -334,7 +358,6 @@ func judge(res *result, content, factsJSON string, opts kernel.AuthoringOpts, ma
 	}
 	res.EntryDistsPts = strings.Join(pts, ";")
 	res.EntryDistsATR = strings.Join(atrs, ";")
-	res.BornDead = "n/a (bars leg pending)"
 }
 
 func csvHeader() []string {
@@ -385,4 +408,100 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n]
+}
+
+var clockRE = regexp.MustCompile(`clock (\d{1,2}:\d{2}) CT`)
+var symbolRE = regexp.MustCompile(`CME (\w+) futures`)
+
+// judgeExtra runs the write-time legs that need the DB copy's bars and the
+// research shims: ATR5m from the copy's 1m tape, the REAL write-time
+// feasibility + zone verdicts, and the REAL born-dead check with the publish
+// clock = read time + this call's wall time. Caller holds judgeMu (the shims
+// swap the package-global bars provider).
+func (res *result) judgeExtra(st *store.Store, cfg *store.StrategyConfig) {
+	if !res.Pass || res.doc == nil {
+		res.BornDead = "na (never reached the write-time legs)"
+		return
+	}
+	readAt := res.readAt
+	if readAt.IsZero() {
+		res.BornDead = "na (read clock not recoverable from the prompt)"
+	}
+	bars := fetchBars(st, res.symbol, readAt, res.WallS)
+	atr5m := trader.ResearchArmSeamATR5mFromBars(bars)
+	if atr5m > 0 {
+		if feas := trader.ResearchWriteTimeFeasibilityVerdicts(res.symbol, res.doc, atr5m, cfg, res.session); len(feas) > 0 {
+			res.Pass = false
+			res.FirstReject = "write-time feasibility: " + feas[0]
+		}
+	}
+	if res.Pass && !readAt.IsZero() && len(bars) > 0 {
+		publish := readAt.Add(time.Duration(res.WallS * float64(time.Second)))
+		_, berr := trader.ResearchValidateAuthoredScenariosAt(st, res.symbol, res.doc, res.session, res.tradeDate, readAt, publish, bars)
+		if berr != nil {
+			res.Pass = false
+			if res.FirstReject == "" {
+				res.FirstReject = "born-dead/flip-met: " + berr.Error()
+			}
+			res.BornDead = "yes (" + berr.Error() + ")"
+		} else {
+			res.BornDead = "no"
+		}
+	}
+}
+
+// symbolFromPrompt reads the instrument from the prompt header
+// ("# DAY-PLAN READER — CME MNQ futures"); empty on a shape mismatch (the
+// harness then skips the bars-dependent legs and names it).
+func symbolFromPrompt(prompt string) string {
+	if m := symbolRE.FindStringSubmatch(prompt); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
+// readAtFromPrompt recovers the read clock: the stored facts snapshot cannot
+// hold ReadAt (json:"-"), so it is parsed from the prompt's own clock line
+// ("clock 16:33 CT (21:33 UTC)") plus the row's trade date. Zero on any shape
+// mismatch — the bars-dependent legs are skipped and the row says so.
+func readAtFromPrompt(prompt, tradeDate string) time.Time {
+	m := clockRE.FindStringSubmatch(prompt)
+	if m == nil {
+		return time.Time{}
+	}
+	loc, err := time.LoadLocation("America/Chicago")
+	if err != nil {
+		return time.Time{}
+	}
+	t, err := time.ParseInLocation("2006-01-02 15:04", tradeDate+" "+m[1], loc)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}
+
+// fetchBars reads 1m bars for the symbol from the DB COPY around the read
+// window (30m lookback for the ATR + the call's wall time after the read).
+func fetchBars(st *store.Store, symbol string, readAt time.Time, wallS float64) []market.Kline {
+	if st == nil || readAt.IsZero() {
+		return nil
+	}
+	from := readAt.Add(-30 * time.Minute).UnixMilli()
+	to := readAt.Add(time.Duration(wallS*float64(time.Second)) + 5*time.Minute).UnixMilli()
+	rows, err := st.GormDB().Raw(
+		"SELECT open_time_ms, o, h, l, c FROM bars WHERE symbol = ? AND tf = '1m' AND open_time_ms BETWEEN ? AND ? ORDER BY open_time_ms",
+		symbol, from, to).Rows()
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var out []market.Kline
+	for rows.Next() {
+		var ms int64
+		var o, h, l, c float64
+		if rows.Scan(&ms, &o, &h, &l, &c) == nil {
+			out = append(out, market.Kline{OpenTime: ms, CloseTime: ms + 59_999, Open: o, High: h, Low: l, Close: c})
+		}
+	}
+	return out
 }
