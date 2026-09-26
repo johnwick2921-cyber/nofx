@@ -654,7 +654,7 @@
           "ui_label": "live",
           "stored": { "present": false },
           "effective": true,
-          "origin": "shipped default (sessions_enabled [NY])",
+          "origin": "shipped default (registry enabled)",
           "scope": "strategy",
           "resolver": "trader.(*AutoTrader).sessionEnabledForStrategy (the admin session registry also gates: sessionRunnable)",
           "resolved": true
@@ -812,7 +812,7 @@
           "ui_label": "live",
           "stored": { "present": false },
           "effective": false,
-          "origin": "shipped default (sessions_enabled [NY])",
+          "origin": "shipped default (registry enabled)",
           "scope": "strategy",
           "resolver": "trader.(*AutoTrader).sessionEnabledForStrategy (the admin session registry also gates: sessionRunnable)",
           "resolved": true
