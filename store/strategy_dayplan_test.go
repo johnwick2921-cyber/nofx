@@ -3,6 +3,7 @@ package store
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -96,6 +97,25 @@ func TestDayPlanWakeKnobDefaults(t *testing.T) {
 	}
 	if d := DefaultDayPlanConfig(); !d.WakeOnLevelEventsEnabled() || d.WakeOnHTFOrderBlocks() || d.WakeMinIntervalMinutes() != 30 || d.WakeOnLevelEvents != nil {
 		t.Fatalf("DefaultDayPlanConfig must not seed the folded knobs and must resolve ON/OFF/30")
+	}
+}
+
+// FIX-KNOBS C (2026-09-26): the per-session acceptance_rule is FOLDED (one
+// rule: 5m_close). A stored session value that is not the rule must be logged
+// once by FoldedKnobLines, like its strategy-level sibling.
+func TestFoldedKnobLinesIncludeSessionAcceptanceRule(t *testing.T) {
+	rule := "2x5m"
+	c := &DayPlanConfig{Sessions: []DayPlanSessionOverride{{Session: "NY", AcceptanceRule: &rule}}}
+	lines := c.FoldedKnobLines()
+	joined := strings.Join(lines, "\n")
+	if !strings.Contains(joined, "acceptance_rule") || !strings.Contains(joined, "NY") {
+		t.Fatalf("a stored per-session acceptance rule that is not the one rule must be logged, got %v", lines)
+	}
+	// A stored default produces nothing (same as the strategy-level line).
+	def := DefaultAcceptanceRule
+	c = &DayPlanConfig{Sessions: []DayPlanSessionOverride{{Session: "NY", AcceptanceRule: &def}}}
+	if got := c.FoldedKnobLines(); len(got) != 0 {
+		t.Fatalf("a stored default session rule must not log, got %v", got)
 	}
 }
 

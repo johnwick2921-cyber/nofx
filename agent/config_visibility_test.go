@@ -202,47 +202,45 @@ func TestToolManageStrategyUpdateRejectsOutOfRangeLeverageBeforeSave(t *testing.
 	}
 }
 
-func TestToolManageStrategyRejectsFixedMinPositionSizeUpdates(t *testing.T) {
-	dbPath := filepath.Join(t.TempDir(), "strategy-fixed-min-position.db")
-	st, err := store.New(dbPath)
-	if err != nil {
-		t.Fatalf("create store: %v", err)
-	}
-	a := New(nil, st, DefaultConfig(), slog.Default())
+func TestToolManageStrategyRejectsRemovedMinPositionSizeUpdates(t *testing.T) {
+        dbPath := filepath.Join(t.TempDir(), "strategy-fixed-min-position.db")
+        st, err := store.New(dbPath)
+        if err != nil {
+                t.Fatalf("create store: %v", err)
+        }
+        a := New(nil, st, DefaultConfig(), slog.Default())
 
-	cfg := store.GetDefaultStrategyConfig("zh")
-	rawCfg, err := json.Marshal(cfg)
-	if err != nil {
-		t.Fatalf("marshal strategy config: %v", err)
-	}
-	strategy := &store.Strategy{
-		ID:            "strategy-fixed-min-position",
-		UserID:        "default",
-		Name:          "固定最小开仓策略",
-		Description:   "test",
-		IsPublic:      false,
-		ConfigVisible: true,
-		Config:        string(rawCfg),
-	}
-	if err := st.Strategy().Create(strategy); err != nil {
-		t.Fatalf("create strategy: %v", err)
-	}
+        cfg := store.GetDefaultStrategyConfig("zh")
+        rawCfg, err := json.Marshal(cfg)
+        if err != nil {
+                t.Fatalf("marshal strategy config: %v", err)
+        }
+        strategy := &store.Strategy{
+                ID:            "strategy-fixed-min-position",
+                UserID:        "default",
+                Name:          "固定最小开仓策略",
+                Description:   "test",
+                IsPublic:      false,
+                ConfigVisible: true,
+                Config:        string(rawCfg),
+        }
+        if err := st.Strategy().Create(strategy); err != nil {
+                t.Fatalf("create strategy: %v", err)
+        }
 
-	resp := a.toolManageStrategy("default", `{"action":"update","strategy_id":"strategy-fixed-min-position","config":{"risk_control":{"min_position_size":20}}}`)
-	if !strings.Contains(resp, "固定值 12 USDT") {
-		t.Fatalf("expected fixed min position size rejection, got: %s", resp)
-	}
+        resp := a.toolManageStrategy("default", `{"action":"update","strategy_id":"strategy-fixed-min-position","config":{"risk_control":{"min_position_size":20}}}`)
+        // FIX-KNOBS A (2026-09-26): min_position_size was REMOVED as a dead knob —
+        // the patch must be refused as removed, not silently accepted.
+        if !strings.Contains(resp, "已被移除") {
+                t.Fatalf("expected the removed-knob rejection, got: %s", resp)
+        }
 
-	updated, err := st.Strategy().Get("default", strategy.ID)
-	if err != nil {
-		t.Fatalf("reload strategy: %v", err)
-	}
-	parsed, err := updated.ParseConfig()
-	if err != nil {
-		t.Fatalf("parse updated strategy config: %v", err)
-	}
-	if parsed.RiskControl.MinPositionSize != 12 {
-		t.Fatalf("expected stored min position size to remain fixed at 12, got %v", parsed.RiskControl.MinPositionSize)
+        updated, err := st.Strategy().Get("default", strategy.ID)
+        if err != nil {
+                t.Fatalf("reload strategy: %v", err)
+        }
+        if strings.Contains(updated.Config, `"min_position_size"`) {
+                t.Fatalf("a removed dead knob was written back into the stored config: %s", updated.Config)
 	}
 }
 

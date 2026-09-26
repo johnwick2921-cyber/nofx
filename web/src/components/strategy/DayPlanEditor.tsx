@@ -423,14 +423,14 @@ export function DayPlanEditor({
     update('sessions', list)
   }
 
-  // Mirrors trader.sessionRunnable: an explicit per-session enable wins; otherwise
-  // inherit the registry default AND the sessions_enabled subset (default [NY]).
+  // Mirrors trader.sessionRunnable (FIX-KNOBS B1, 2026-09-26): an explicit
+  // per-session enable wins; otherwise the registry default. The stored
+  // sessions_enabled list is parse-only and gates nothing — ONE truth.
   const sessionRunnableUI = (s: SessionName): boolean => {
     const ov = cfg.sessions?.find((x) => x.session === s)
     if (ov?.enable !== undefined) return ov.enable
     const band = SESSION_BANDS.find((b) => b.name === s)
-    const subset = cfg.sessions_enabled ?? ['NY']
-    return !!band?.enabled && subset.some((x) => x.toUpperCase() === s)
+    return !!band?.enabled
   }
 
   // planner-reads multiselect: toggle a TF in/out, preserving PLANNER_TFS order.
@@ -955,8 +955,8 @@ export function DayPlanEditor({
                 <div className="w-full flex items-center gap-2 px-2.5 py-1.5">
                   {/* PART A — the per-session ENABLE toggle. Explicit ON/OFF is
                       authoritative for this strategy (🔸override); clearing it
-                      returns the row to ⚪inherit (registry + sessions_enabled).
-                      ASIA/LONDON inherit OFF, so they stay off until switched on. */}
+                      returns the row to ⚪inherit (registry default — FIX-KNOBS
+                      B1: the sessions_enabled list is parse-only). */}
                   <Toggle
                     testId={`session-enable-${s}`}
                     ariaLabel={`${s} session enabled`}

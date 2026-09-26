@@ -7,25 +7,22 @@ import (
 	"nofx/store"
 )
 
-// 6.4 (ruling B) — the clamps stay enforced with the deprecated toggles stored
-// FALSE (the owner's live values): the toggle can not disable venue safety.
-func TestSizeCapsIgnoreDeprecatedToggles(t *testing.T) {
-	off := false
-	rc := store.RiskControlConfig{
-		MaxContractsEnabled: &off,
-		NotionalCapEnabled:  &off,
-		// no explicit values → the researched defaults
-	}
-	// 0B (2026-09-02): the always-on intent is unchanged — the toggle still can
-	// not disable the clamp — but the resolved ceiling is now the Stage-A 1.
-	if got := kernel.ResolveMaxContracts(rc.MaxContractsPerOrder, 2); got != 1 {
-		t.Errorf("contracts clamp = %d with toggle false, want 1 (always-on, Stage-A ceiling)", got)
-	}
-	if got := kernel.ResolveNotionalLeverage(rc.MaxNotionalLeverage, 20); got != 20 {
-		t.Errorf("notional cap = %.0f with toggle false, want 20 (always-on)", got)
-	}
-	// Explicit per-strategy values still win (the VALUE is live, only the
-	// toggle was dead).
+// 6.4 (ruling B) + FIX-KNOBS A (2026-09-26) — the always-on clamps. The dead
+// toggles (max_contracts_enabled / notional_cap_enabled) are REMOVED, so the
+// venue-safety clamps are now always-on BY CONSTRUCTION: no stored value can
+// disable them, because no field carries a disable. Resolvers still honour the
+// live VALUE knobs (max_contracts_per_order / max_notional_leverage) and the
+// Stage-A ceiling.
+func TestSizeCapsAlwaysOnAfterToggleRemoval(t *testing.T) {
+        rc := store.RiskControlConfig{}
+        // no toggles exist to store — the clamps resolve regardless.
+        if got := kernel.ResolveMaxContracts(rc.MaxContractsPerOrder, 2); got != 1 {
+                t.Errorf("contracts clamp = %d, want 1 (always-on, Stage-A ceiling)", got)
+        }
+        if got := kernel.ResolveNotionalLeverage(rc.MaxNotionalLeverage, 20); got != 20 {
+                t.Errorf("notional cap = %.0f, want 20 (always-on)", got)
+        }
+        // Explicit per-strategy values still win (the VALUE is live).
 	rc.MaxContractsPerOrder = 1
 	rc.MaxNotionalLeverage = 10
 	if got := kernel.ResolveMaxContracts(rc.MaxContractsPerOrder, 2); got != 1 {

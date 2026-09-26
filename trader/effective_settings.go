@@ -320,9 +320,6 @@ func compactJSON(v json.RawMessage) string {
 var secretLeafRe = regexp.MustCompile(`(?i)(api_?key|secret|token|password|passphrase|private_?key|credential)`)
 
 func isSecretPath(path string) bool {
-	if strings.Contains(path, "external_data_sources.headers") || strings.Contains(path, "external_data_sources.url") {
-		return true
-	}
 	leaf := path
 	if i := strings.LastIndex(path, "."); i >= 0 {
 		leaf = path[i+1:]
@@ -870,17 +867,9 @@ func buildEffectiveResolvers() map[string]effResolver {
 		}
 		return effResult{value: v, origin: store.SourceShippedDefault + " (" + src + ")"}
 	})
-	add(dpPath+"sessions_enabled", "trader.(*AutoTrader).sessionEnabledForStrategy (per registry session)", func(x *effCtx) effResult {
-		var on []string
-		for _, s := range kernel.DefaultSessionRegistry().Sessions {
-			if x.at.sessionEnabledForStrategy(s.Name) {
-				on = append(on, s.Name)
-			}
-		}
-		if on == nil {
-			on = []string{}
-		}
-		return effResult{value: on, origin: presenceOrigin(x, on, store.SourceShippedDefault)}
+	add(dpPath+"sessions_enabled", "trader.(*AutoTrader).derivedSessionsEnabled (derived from per-session enable)", func(x *effCtx) effResult {
+		on := x.at.derivedSessionsEnabled()
+		return effResult{value: on, origin: "derived from per-session enable (sessions_enabled is read-only, FIX-KNOBS B1)"}
 	})
 	add(dpPath+"condition_status", "kernel.ConditionStatusWithSource (= kernel.ConditionStatus) per known condition", func(x *effCtx) effResult {
 		return conditionStatusRow(x)
@@ -972,10 +961,7 @@ func buildEffectiveResolvers() map[string]effResolver {
 		if ov := x.dp().SessionOverride(x.session); ov != nil && ov.Enable != nil {
 			return effResult{value: v, origin: store.SourceSessionOverride, scope: scopeSession(x.session)}
 		}
-		if x.dp() != nil && len(x.dp().SessionsEnabled) > 0 {
-			return effResult{value: v, origin: store.SourceStrategyValue + " (sessions_enabled)"}
-		}
-		return effResult{value: v, origin: store.SourceShippedDefault + " (sessions_enabled [NY])"}
+		return effResult{value: v, origin: store.SourceShippedDefault + " (registry enabled)"}
 	})
 	perSession("acceptance_rule", "store.(*DayPlanConfig).AcceptanceRuleFor", func(x *effCtx) effResult {
 		return effResult{value: x.dp().AcceptanceRuleFor(x.session), origin: OriginFolded}

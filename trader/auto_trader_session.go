@@ -49,7 +49,8 @@ func (at *AutoTrader) sessionEntryBlockedT1At(now time.Time) (string, bool, *[]k
 	reg := at.sessionRegistry(now)
 	// W9 + PART A — the strategy's session enable gates ENTRIES too (not just reads),
 	// through the SAME resolver the read scheduler uses: an explicit per-session
-	// toggle wins, otherwise registry + sessions_enabled. A session the owner
+	// toggle wins, otherwise the registry default (FIX-KNOBS B1: the
+	// sessions_enabled list is parse-only). A session the owner
 	// switched off admits no entries even in advisory mode.
 	if sess, ok := reg.ActiveSession(now); ok {
 		if runnable, why := at.sessionRunnable(sess); !runnable {

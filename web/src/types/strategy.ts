@@ -119,6 +119,8 @@ export interface DayPlanConfig {
   /** W1 PRESENCE-AWARE — re-plans per session 0-4: absent/null = the shipped
    *  default 2; an explicit 0 = no re-plan. Send null to clear a stored value. */
   replan_cap?: number | null
+  /** PARSE-ONLY (FIX-KNOBS B1 2026-09-26): per-session enable is the one truth;
+   *  the effective list is derived server-side. */
   sessions_enabled?: string[]
   approval_required?: boolean
   /** FOLDED (W-KNOB-PRUNE 2026-09-18): constant OFF unless stored true. */
@@ -263,7 +265,6 @@ export interface IndicatorConfig {
   rsi_periods?: number[]
   atr_periods?: number[]
   boll_periods?: number[]
-  external_data_sources?: ExternalDataSource[]
 
   // ========== NofxOS 数据源统一配置 ==========
   // Unified NofxOS API Key - used for all NofxOS data sources
@@ -300,16 +301,6 @@ export interface KlineConfig {
   selected_timeframes?: string[]
 }
 
-export interface ExternalDataSource {
-  name: string
-  type: 'api' | 'webhook'
-  url: string
-  method: string
-  headers?: Record<string, string>
-  data_path?: string
-  refresh_secs?: number
-}
-
 export interface RiskControlConfig {
   // Max number of coins held simultaneously (CODE ENFORCED)
   max_positions: number
@@ -324,8 +315,8 @@ export interface RiskControlConfig {
   altcoin_max_position_value_ratio?: number // default: 1 (Altcoin max position = 1x equity)
 
   // Risk Parameters
-  max_margin_usage: number // Max margin utilization, e.g. 0.9 = 90% (CODE ENFORCED)
-  min_position_size: number // Min position size in USDT (CODE ENFORCED)
+  // (max_margin_usage / min_position_size were REMOVED as dead knobs —
+  //  FIX-KNOBS A 2026-09-26: prompt-only / behind-the-hardcode, respectively.)
   min_risk_reward_ratio: number // Min take_profit / stop_loss ratio (CODE ENFORCED, Chunk 1)
   min_confidence: number // Min AI confidence to open position (CODE ENFORCED, Chunk 1)
 
@@ -357,9 +348,7 @@ export interface RiskControlConfig {
   consecutive_loss_halt?: number | null
   reentry_cooldown_minutes?: number // B7: after a stop-loss, block same-dir re-entry for N min or until price moves ≥1×ATR15 from the stop (0=off; futures-only)
   max_contracts_per_order?: number // futures contracts-per-order clamp
-  max_contracts_enabled?: boolean // default ON
   max_notional_leverage?: number // futures notional ceiling = equity × this (default 20)
-  notional_cap_enabled?: boolean // default ON
   blackout_enabled?: boolean // default OFF
   blackout_start_ct?: string // HH:MM, America/Chicago
   blackout_end_ct?: string // HH:MM, America/Chicago

@@ -66,39 +66,51 @@ func (at *AutoTrader) activeSessionName(now time.Time) string {
 	return ""
 }
 
-// sessionEnabledForStrategy gates which sessions THIS trader runs (on top of the
-// registry Enabled flag): the SessionsEnabled subset (default [NY]). A per-session
-// Enable override wins over the subset.
+// sessionEnabledForStrategy resolves whether THIS strategy runs a session.
+//
+// FIX-KNOBS B1 (2026-09-26) — ONE truth: the per-session sessions[].enable
+// override is authoritative; without one, the admin registry's Enabled flag
+// is the fallback. The stored sessions_enabled list is PARSE-ONLY (old rows
+// keep loading) and gates NOTHING any more — the live owner's rows
+// (list ["NY"] + ASIA/LONDON enable=true) run all three, and the effective
+// list (derivedSessionsEnabled) reports all three instead of lying.
 func (at *AutoTrader) sessionEnabledForStrategy(session string) bool {
 	if ov := at.sessionOverride(session); ov != nil && ov.Enable != nil {
 		return *ov.Enable
 	}
-	dp := at.dayPlanCfg()
-	if dp == nil || len(dp.SessionsEnabled) == 0 {
-		return strings.EqualFold(session, kernel.SessionNY) // default [NY]
-	}
-	for _, s := range dp.SessionsEnabled {
-		if strings.EqualFold(strings.TrimSpace(s), session) {
-			return true
+	for _, s := range kernel.DefaultSessionRegistry().Sessions {
+		if strings.EqualFold(s.Name, session) {
+			return s.Enabled
 		}
 	}
 	return false
 }
 
-// sessionRunnable resolves whether THIS strategy runs a session, combining the two
-// enable layers the spec defines, with the inherit/override model the accordion
-// chips already show:
+// derivedSessionsEnabled is the EFFECTIVE sessions_enabled list: which
+// registry sessions this strategy actually runs, derived from the per-session
+// enables. The stored list is never consulted.
+func (at *AutoTrader) derivedSessionsEnabled() []string {
+	var on []string
+	for _, s := range kernel.DefaultSessionRegistry().Sessions {
+		if at.sessionEnabledForStrategy(s.Name) {
+			on = append(on, s.Name)
+		}
+	}
+	if on == nil {
+		on = []string{}
+	}
+	return on
+}
+
+// sessionRunnable resolves whether THIS strategy runs a session:
 //
 //	EXPLICIT per-session override (sessions[].enable) → authoritative. 🔸override
-//	otherwise → inherit: the admin registry's Enabled AND the sessions_enabled
-//	                     subset (default [NY]).                            ⚪inherit
+//	otherwise → the admin registry's Enabled flag.                    ⚪inherit
 //
-// Before this, the read scheduler ANDed the registry flag in unconditionally, so a
-// strategy-level "turn ASIA on" could never take effect — the hardcoded
-// DefaultSessionRegistry (ASIA/LONDON false) vetoed it forever. That is what made
-// the session toggle dead on arrival. The registry still owns the CLOCK (window /
-// read / flat / killzones) and still supplies the default; an explicit owner choice
-// now wins for that strategy.
+// FIX-KNOBS B1 (2026-09-26): the sessions_enabled subset no longer gates —
+// ONE truth (the per-session enable), so the list can never lie again. The
+// registry still owns the CLOCK (window / read / flat / killzones) and the
+// default; an explicit owner choice wins for that strategy.
 //
 // Returns (runnable, why) — why is a short reason for the gate log when false.
 func (at *AutoTrader) sessionRunnable(s *kernel.SessionDef) (bool, string) {
@@ -113,9 +125,6 @@ func (at *AutoTrader) sessionRunnable(s *kernel.SessionDef) (bool, string) {
 	}
 	if !s.Enabled {
 		return false, s.Name + " not enabled in the session registry"
-	}
-	if !at.sessionEnabledForStrategy(s.Name) {
-		return false, s.Name + " not in this strategy's sessions_enabled"
 	}
 	return true, ""
 }

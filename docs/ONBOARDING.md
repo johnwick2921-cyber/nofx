@@ -131,7 +131,8 @@ Environment variables in `.env` at repo root:
 JWT_SECRET=...                            # openssl rand -base64 64
 TRADING_MODE=futures                      # or "crypto" for the legacy path
 DATABENTO_API_KEY=...                     # required when TRADING_MODE=futures
-DATABENTO_DATASET=GLBX.MDP3               # CME Globex (default)
+# (DATABENTO_DATASET REMOVED 2026-09-26: zero readers — dataset is the code
+# constant DefaultDataset = GLBX.MDP3 in provider/databento/client.go.)
 NINJATRADER_DATA_DIR=/mnt/c/Users/<u>/NofxTrader/data
 RISK_MAX_DAILY_LOSS_USD=500
 RISK_MAX_CONCURRENT_TRADES=2

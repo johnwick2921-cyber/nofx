@@ -198,8 +198,10 @@ func main() {
 		logger.Warnf("⚠️ AI params at UNSET defaults (nobody chose these explicitly): %v — set them in .env if the defaults are not what you intend", unset)
 	}
 
-	// WebSocket market monitor is NO LONGER USED
-	// Crypto K-lines come from CoinAnk; the CME futures path reads the NT8
+        // FIX-KNOBS B2 (2026-09-26) — FAST_MARKET_REASONING boot line: the
+        // effective wire + its source, and a WARN when .env carries duplicate
+        // keys (dotenv is last-wins; the owner's .env has 4).
+        trader.FastMarketReasoningBootLine()
 	// BarCache only (see the 📊 market data boot line after trader load).
 	// Commented out to reduce unnecessary connections:
 	// go market.NewWSMonitor(150).Start(nil)

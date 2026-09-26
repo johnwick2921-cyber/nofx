@@ -469,10 +469,7 @@ func validateTradeAction(
 		return fmt.Errorf("leverage exceeds configured limit (%dx > %dx)", trade.Leverage, maxLeverage)
 	}
 
-	minPositionSize := riskControl.MinPositionSize
-	if minPositionSize <= 0 {
-		minPositionSize = 12
-	}
+	minPositionSize := 12.0 // the dead min_position_size knob was REMOVED (FIX-KNOBS A); the floor is the hardcoded 12/60 gate in kernel/engine_position.go
 	if positionValue < minPositionSize {
 		return fmt.Errorf("position value %.2f USDT is below configured minimum %.2f USDT", positionValue, minPositionSize)
 	}

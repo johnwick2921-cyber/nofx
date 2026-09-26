@@ -435,14 +435,6 @@ export function TraderConfigModal({
                                     ? 'OI Low'
                                     : '-'}
                           </div>
-                          <div>
-                            {t('marginLimit', language)}:{' '}
-                            {(
-                              (aiConfig.risk_control?.max_margin_usage || 0.9) *
-                              100
-                            ).toFixed(0)}
-                            %
-                          </div>
                         </div>
                       )
                     })()

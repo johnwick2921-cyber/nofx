@@ -324,7 +324,7 @@ describe('DayPlanEditor — effective chips (W1 g)', () => {
     const london = sessionBox('LONDON')
     for (const p of SESSION_BODY) expect(chipAt(p, london)).not.toBeNull()
     expect(chipAt('day_plan.sessions.enable', london)).toHaveTextContent(
-      'eff off · shipped default (sessions_enabled [NY]) · strategy'
+      'eff off · shipped default (registry enabled) · strategy'
     )
   })
 
@@ -338,7 +338,7 @@ describe('DayPlanEditor — effective chips (W1 g)', () => {
       'eff 3 · session override · session:NY'
     )
     expect(chipAt('day_plan.sessions.enable', ny)).toHaveTextContent(
-      'eff on · shipped default (sessions_enabled [NY]) · strategy'
+      'eff on · shipped default (registry enabled) · strategy'
     )
     // The global plan-mode row is answered by the read WITHOUT a session —
     // never by the NY read's "strict · session override".

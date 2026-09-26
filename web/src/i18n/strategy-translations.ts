@@ -427,36 +427,10 @@ export const riskControl = {
     en: 'Minimum profit ratio for entry',
     es: 'Ratio mínimo para entrada',
   },
-  maxMarginUsage: {
-    zh: '最大保证金使用率（AI 提示，非强制）',
-    en: 'Max Margin Usage (AI-guided, not enforced)',
-    es: 'Uso Máximo de Margen (guía AI)',
-  },
-  maxMarginUsageDesc: {
-    zh: '保证金使用率上限（AI 提示，非代码强制）',
-    en: 'Max margin utilization — AI-guided hint, not code-enforced',
-    es: 'Uso máximo de margen (guía AI, no forzado)',
-  },
   entryRequirements: {
     zh: '开仓要求',
     en: 'Entry Requirements',
     es: 'Requisitos de Entrada',
-  },
-  minPositionSize: {
-    zh: '最小开仓金额',
-    en: 'Min Position Size',
-    es: 'Tamaño Mínimo',
-  },
-  minPositionSizeDesc: {
-    zh: 'USDT 最小名义价值',
-    en: 'Minimum notional value in USDT',
-    es: 'Valor mínimo en USDT',
-  },
-  // CME futures settle in USD — shown instead of the USDT description above.
-  minPositionSizeDescFutures: {
-    zh: 'USD 最小名义价值',
-    en: 'Minimum notional value in USD',
-    es: 'Valor mínimo en USD',
   },
   minConfidence: {
     zh: '最小信心度',

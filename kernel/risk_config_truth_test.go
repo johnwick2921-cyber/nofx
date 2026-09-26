@@ -26,28 +26,28 @@ import (
 // riskFields is every risk field whose loss or drift changes what the bot trades.
 var riskFields = []string{
 	"min_risk_reward_ratio", "min_confidence", "max_positions",
-	"max_contracts_per_order", "max_contracts_enabled",
-	"hold_discipline", "breakeven_enabled", "breakeven_trigger_points",
-	"guardrails_enabled", "daily_loss_limit_usd", "daily_loss_enabled",
-	"daily_profit_target_usd", "daily_profit_enabled",
-	"max_daily_trades", "max_daily_trades_enabled",
-	"consecutive_loss_halt", "reentry_cooldown_minutes",
-	"max_margin_usage", "min_position_size",
+        "max_contracts_per_order",
+        "hold_discipline", "breakeven_enabled", "breakeven_trigger_points",
+        "guardrails_enabled", "daily_loss_limit_usd", "daily_loss_enabled",
+        "daily_profit_target_usd", "daily_profit_enabled",
+        "max_daily_trades", "max_daily_trades_enabled",
+        "consecutive_loss_halt", "reentry_cooldown_minutes",
 }
 
-func fullRiskConfig() store.RiskControlConfig {
-	tr := func(b bool) *bool { return &b }
+// FIX-KNOBS A (2026-09-26): the four dead knobs (max_contracts_enabled,
+// notional_cap_enabled, max_margin_usage, min_position_size) were REMOVED —
+// pinned absent by store/dead_knobs_removed_test.go.
+func fullRiskConfig() store.RiskControlConfig {	tr := func(b bool) *bool { return &b }
 	return store.RiskControlConfig{
 		MaxPositions: 3, BTCETHMaxLeverage: 5, AltcoinMaxLeverage: 5,
 		BTCETHMaxPositionValueRatio: 5, AltcoinMaxPositionValueRatio: 1,
-		MaxMarginUsage: 0.9, MinPositionSize: 12,
 		MinRiskRewardRatio: 3, MinConfidence: 65,
 		GuardrailsEnabled: tr(false),
 		DailyLossLimitUSD: 450, DailyLossEnabled: tr(true),
 		DailyProfitTargetUSD: 900, DailyProfitEnabled: tr(true),
 		MaxDailyTrades: 3, MaxDailyTradesEnabled: tr(true),
 		ConsecutiveLossHalt: store.IntPtr(2), ReentryCooldownMinutes: 20,
-		MaxContractsPerOrder: 2, MaxContractsEnabled: tr(true),
+		MaxContractsPerOrder: 2,
 		HoldDisciplineEnabled: tr(true),
 		BreakevenEnabled:      tr(true), BreakevenTriggerPoints: 50,
 	}
@@ -100,7 +100,6 @@ func TestEveryRiskFieldSurvivesBothCodecHalves(t *testing.T) {
 		"hold_discipline":          {want.HoldDisciplineEnabled, got.HoldDisciplineEnabled},
 		"breakeven_enabled":        {want.BreakevenEnabled, got.BreakevenEnabled},
 		"guardrails_enabled":       {want.GuardrailsEnabled, got.GuardrailsEnabled},
-		"max_contracts_enabled":    {want.MaxContractsEnabled, got.MaxContractsEnabled},
 		"daily_loss_enabled":       {want.DailyLossEnabled, got.DailyLossEnabled},
 		"max_daily_trades_enabled": {want.MaxDailyTradesEnabled, got.MaxDailyTradesEnabled},
 	} {

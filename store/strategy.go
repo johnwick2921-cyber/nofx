@@ -53,10 +53,6 @@ const (
 	MaxPositionRatio  = 10.0
 	MinRiskReward     = 1.0
 	MaxRiskReward     = 10.0
-	MinMarginUsage    = 0.1
-	MaxMarginUsage    = 1.0
-	MinPositionSize   = 10.0
-	MaxPositionSize   = 1000.0
 	MinConfidence     = 50
 	MaxConfidence     = 100
 )
@@ -201,18 +197,6 @@ func (c *StrategyConfig) ClampLimits() {
 	}
 	if c.RiskControl.MinRiskRewardRatio > MaxRiskReward {
 		c.RiskControl.MinRiskRewardRatio = MaxRiskReward
-	}
-	if c.RiskControl.MaxMarginUsage < MinMarginUsage {
-		c.RiskControl.MaxMarginUsage = MinMarginUsage
-	}
-	if c.RiskControl.MaxMarginUsage > MaxMarginUsage {
-		c.RiskControl.MaxMarginUsage = MaxMarginUsage
-	}
-	if c.RiskControl.MinPositionSize < MinPositionSize {
-		c.RiskControl.MinPositionSize = MinPositionSize
-	}
-	if c.RiskControl.MinPositionSize > MaxPositionSize {
-		c.RiskControl.MinPositionSize = MaxPositionSize
 	}
 	if c.RiskControl.MinConfidence == 0 {
 		c.RiskControl.MinConfidence = SafeDefaultMinConfidence
@@ -684,8 +668,6 @@ func StrategyClampWarnings(before, after StrategyConfig, lang string) []string {
 	appendFloat("BTC/ETH 最大仓位价值倍数", "btc_eth_max_position_value_ratio", before.RiskControl.BTCETHMaxPositionValueRatio, after.RiskControl.BTCETHMaxPositionValueRatio)
 	appendFloat("山寨币最大仓位价值倍数", "altcoin_max_position_value_ratio", before.RiskControl.AltcoinMaxPositionValueRatio, after.RiskControl.AltcoinMaxPositionValueRatio)
 	appendFloat("最小盈亏比", "min_risk_reward_ratio", before.RiskControl.MinRiskRewardRatio, after.RiskControl.MinRiskRewardRatio)
-	appendFloat("最大保证金使用率", "max_margin_usage", before.RiskControl.MaxMarginUsage, after.RiskControl.MaxMarginUsage)
-	appendFloat("最小开仓金额", "min_position_size", before.RiskControl.MinPositionSize, after.RiskControl.MinPositionSize)
 	appendInt("最低置信度", "min_confidence", before.RiskControl.MinConfidence, after.RiskControl.MinConfidence)
 	return warnings
 }
@@ -1064,8 +1046,10 @@ type DayPlanConfig struct {
 	// stored (omitempty dropped it) and the resolver read a hand-set 0 as 2.
 	// Resolved ONLY by ResolveReplanCap (store/resolve_source.go).
 	ReplanCap *int `json:"replan_cap,omitempty"`
-	// SessionsEnabled: subset of NY | ASIA | LONDON (default [NY]); each other
-	// session earns enablement via replay + NY match-rate evidence.
+	// SessionsEnabled: PARSE-ONLY since FIX-KNOBS B1 (2026-09-26) — the
+	// per-session sessions[].enable is the ONE truth and this list gates
+	// nothing. Kept so old stored rows keep loading; the effective list is
+	// derived by trader.(*AutoTrader).derivedSessionsEnabled().
 	SessionsEnabled []string `json:"sessions_enabled,omitempty"`
 	// ApprovalRequired: OFF (default) = fully automatic.
 	ApprovalRequired bool `json:"approval_required"`
@@ -1730,6 +1714,18 @@ func (c *DayPlanConfig) FoldedKnobLines() []string {
 	if r := strings.TrimSpace(c.AcceptanceRule); r != "" && r != DefaultAcceptanceRule {
 		out = append(out, fmt.Sprintf("⚙ folded knob acceptance_rule=%s stored — NOT honoured, the one rule is %s (has been since 2026-08-30)", r, DefaultAcceptanceRule))
 	}
+
+	// FIX-KNOBS C (2026-09-26): the per-session acceptance_rule is folded too —
+	// a stored session value that is not the one rule must log, or the owner's
+	// stored value vanishes silently.
+	for _, ov := range c.Sessions {
+		if ov.AcceptanceRule == nil {
+			continue
+		}
+		if r := strings.TrimSpace(*ov.AcceptanceRule); r != "" && r != DefaultAcceptanceRule {
+			out = append(out, fmt.Sprintf("⚙ folded knob sessions[%s].acceptance_rule=%s stored — NOT honoured, the one rule is %s (has been since 2026-08-30)", ov.Session, r, DefaultAcceptanceRule))
+		}
+	}
 	if c.WakeOnLevelEvents == nil && c.hasLegacyWakeFields() {
 		add("wake_on_15m_zone/htf_zone/htf_ob/seated_invalidation/ifvg → wake_on_level_events", c.WakeOnLevelEventsEnabled())
 		if c.WakeOnHTFOB {
@@ -1955,7 +1951,6 @@ type IndicatorConfig struct {
 	// BOLL period configuration (period, standard deviation multiplier is fixed at 2)
 	BOLLPeriods []int `json:"boll_periods,omitempty"` // default [20] - can select multiple timeframes
 	// external data sources
-	ExternalDataSources []ExternalDataSource `json:"external_data_sources,omitempty"`
 
 	// ========== NofxOS Unified API Configuration ==========
 	// Unified API Key for all NofxOS data sources
@@ -1998,17 +1993,6 @@ type KlineConfig struct {
 	SelectedTimeframes []string `json:"selected_timeframes,omitempty"`
 }
 
-// ExternalDataSource external data source configuration
-type ExternalDataSource struct {
-	Name        string            `json:"name"`   // data source name
-	Type        string            `json:"type"`   // type: "api" | "webhook"
-	URL         string            `json:"url"`    // API URL
-	Method      string            `json:"method"` // HTTP method
-	Headers     map[string]string `json:"headers,omitempty"`
-	DataPath    string            `json:"data_path,omitempty"`    // JSON data path
-	RefreshSecs int               `json:"refresh_secs,omitempty"` // refresh interval (seconds)
-}
-
 // RiskControlConfig risk control configuration
 type RiskControlConfig struct {
 	// Max number of coins held simultaneously (CODE ENFORCED)
@@ -2025,10 +2009,17 @@ type RiskControlConfig struct {
 	AltcoinMaxPositionValueRatio float64 `json:"altcoin_max_position_value_ratio"`
 
 	// Max margin utilization (e.g. 0.9 = 90%) (CODE ENFORCED)
-	MaxMarginUsage float64 `json:"max_margin_usage"`
-	// Min position size in USDT (CODE ENFORCED)
-	MinPositionSize float64 `json:"min_position_size"`
+	// Max margin utilization was REMOVED (FIX-KNOBS A, 2026-09-26): the
+	// futures path enforces equity×max_notional_leverage (D3 always-on)
+	// and the crypto prompt line was advisory only — a knob that looks
+	// active and gates nothing is a defect.
 
+	// Min position size in USDT (CODE ENFORCED)
+	// min_position_size was REMOVED (FIX-KNOBS A, 2026-09-26): the live
+	// floor is the hardcoded 12/60 in kernel/engine_position.go and the
+	// 12-USDT default in the order path; a configurable floor behind a
+	// hardcode mostly did nothing. Old stored rows still load (unknown
+	// JSON keys are ignored).
 	// Min take_profit / stop_loss ratio (AI guided)
 	MinRiskRewardRatio float64 `json:"min_risk_reward_ratio"`
 	// Min AI confidence to open position (AI guided)
@@ -2082,16 +2073,11 @@ type RiskControlConfig struct {
 	// Deprecated (6.4 ruling B): the enabled toggle never had a reader — the
 	// contracts clamp is always-on venue safety. Field kept so old stored
 	// configs still parse; nothing reads it, the UI no longer writes it.
-	MaxContractsEnabled *bool `json:"max_contracts_enabled,omitempty"`
-
-	// Chunk 3 — futures NOTIONAL ceiling multiplier: max position notional =
-	// equity × this. Unset → 20 (the prior hidden const futuresMaxNotionalLeverage),
-	// now VISIBLE + EDITABLE. Toggle default ON (safety backstop).
+	// REMOVED 2026-09-26 FIX-KNOBS A (owner "no cosmetic"): a knob that looks
+	// active and gates nothing is a defect; old stored rows still load.
 	MaxNotionalLeverage float64 `json:"max_notional_leverage,omitempty"`
 	// Deprecated (6.4 ruling B): same as MaxContractsEnabled — parse-only.
-	NotionalCapEnabled *bool `json:"notional_cap_enabled,omitempty"`
-
-	// Chunk 4 — time/news BLACKOUT window (daily, HH:MM in America/Chicago). When
+	// REMOVED 2026-09-26 FIX-KNOBS A; old stored rows still load.
 	// enabled, the bot makes no new decisions inside [start,end] CT (NT8-side SL/TP
 	// still protect open positions). New guardrail → toggle defaults OFF.
 	BlackoutEnabled *bool  `json:"blackout_enabled,omitempty"`
@@ -2231,8 +2217,6 @@ func GetDefaultStrategyConfig(lang string) StrategyConfig {
 			AltcoinMaxLeverage:           5,   // Altcoin exchange leverage (AI guided)
 			BTCETHMaxPositionValueRatio:  5.0, // BTC/ETH: max position = 5x equity (CODE ENFORCED)
 			AltcoinMaxPositionValueRatio: 1.0, // Altcoin: max position = 1x equity (CODE ENFORCED)
-			MaxMarginUsage:               0.9, // Max 90% margin usage (CODE ENFORCED)
-			MinPositionSize:              12,  // Min 12 USDT per position (CODE ENFORCED)
 			MinRiskRewardRatio:           3.0, // Min 3:1 profit/loss ratio (AI guided)
 			MinConfidence:                75,  // Min 75% confidence (AI guided)
 		},

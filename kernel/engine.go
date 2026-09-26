@@ -2,20 +2,15 @@ package kernel
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"nofx/config"
 	"nofx/logger"
 	"nofx/market"
 	"nofx/provider/databento"
 	"nofx/provider/hyperliquid"
 	"nofx/provider/nofxos"
-	"nofx/security"
 	"nofx/store"
 	"os"
-	"strings"
 	"time"
 )
 
@@ -792,83 +787,6 @@ func (e *StrategyEngine) getHyperMainCoins(limit int) ([]CandidateCoin, error) {
 // FetchMarketData fetches market data based on strategy configuration
 func (e *StrategyEngine) FetchMarketData(symbol string) (*market.Data, error) {
 	return market.Get(symbol)
-}
-
-// FetchExternalData fetches external data sources
-func (e *StrategyEngine) FetchExternalData() (map[string]interface{}, error) {
-	externalData := make(map[string]interface{})
-
-	for _, source := range e.config.Indicators.ExternalDataSources {
-		data, err := e.fetchSingleExternalSource(source)
-		if err != nil {
-			logger.Infof("⚠️  Failed to fetch external data source [%s]: %v", source.Name, err)
-			continue
-		}
-		externalData[source.Name] = data
-	}
-
-	return externalData, nil
-}
-
-func (e *StrategyEngine) fetchSingleExternalSource(source store.ExternalDataSource) (interface{}, error) {
-	// SSRF Protection: Validate URL before making request
-	if err := security.ValidateURL(source.URL); err != nil {
-		return nil, fmt.Errorf("external source URL validation failed: %w", err)
-	}
-
-	timeout := time.Duration(source.RefreshSecs) * time.Second
-	if timeout == 0 {
-		timeout = 30 * time.Second
-	}
-
-	// Use SSRF-safe HTTP client
-	client := security.SafeHTTPClient(timeout)
-
-	req, err := http.NewRequest(source.Method, source.URL, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	for k, v := range source.Headers {
-		req.Header.Set(k, v)
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var result interface{}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, err
-	}
-
-	if source.DataPath != "" {
-		result = extractJSONPath(result, source.DataPath)
-	}
-
-	return result, nil
-}
-
-func extractJSONPath(data interface{}, path string) interface{} {
-	parts := strings.Split(path, ".")
-	current := data
-
-	for _, part := range parts {
-		if m, ok := current.(map[string]interface{}); ok {
-			current = m[part]
-		} else {
-			return nil
-		}
-	}
-
-	return current
 }
 
 // FetchQuantData fetches quantitative data for a single coin

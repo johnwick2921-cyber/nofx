@@ -285,31 +285,22 @@ func TestSchemaKeySetSurvivesTheUnmarshalMarshalRoundTrip(t *testing.T) {
 	}
 }
 
-// external_data_sources' children are INEFFECTIVE, by an EXACT entry. Through
-// the leaf fallback they would borrow the unrelated live "name" / "type" rows
-// and the url/method/… rows that cite FetchExternalData, which no production
-// code calls.
-func TestExternalDataSourcesChildrenClassifyIneffective(t *testing.T) {
-	set := enumeratedSet(t)
-	for _, leaf := range []string{"name", "type", "url", "method", "headers", "data_path", "refresh_secs"} {
-		p := "ai_config.indicators.external_data_sources." + leaf
-		if !set[p] {
-			t.Errorf("%s is not enumerated — the walk no longer reaches external_data_sources", p)
-			continue
-		}
-		e, ok, how := lookupKnob(p)
-		if !ok {
-			t.Errorf("%s: unclassified", p)
-			continue
-		}
-		if how != knobExact {
-			t.Errorf("%s: classified by match kind %d, want an EXACT entry (the leaf %q means something else elsewhere)", p, how, leaf)
-		}
-		if e.Status != KnobIneffective {
-			t.Errorf("%s: status %q, want ineffective — its parent has zero engine consumers", p, e.Status)
-		}
-		if e.Note == "" {
-			t.Errorf("%s: a non-live knob must carry the reason", p)
+// external_data_sources was REMOVED (FIX-KNOBS A, 2026-09-26): FetchExternalData
+// had no production caller, so the whole family is gone from the struct, the
+// registry and the schema walk — pinned by TestExternalDataSourcesAbsentFromStruct.
+func TestExternalDataSourcesAbsentFromRegistryAndWalk(t *testing.T) {
+	for _, p := range []string{
+		"ai_config.indicators.external_data_sources",
+		"ai_config.indicators.external_data_sources.name",
+		"ai_config.indicators.external_data_sources.type",
+		"ai_config.indicators.external_data_sources.url",
+		"ai_config.indicators.external_data_sources.method",
+		"ai_config.indicators.external_data_sources.headers",
+		"ai_config.indicators.external_data_sources.data_path",
+		"ai_config.indicators.external_data_sources.refresh_secs",
+	} {
+		if _, ok, _ := lookupKnob(p); ok {
+			t.Errorf("%s still classified after the removal — the walk must no longer reach it", p)
 		}
 	}
 }

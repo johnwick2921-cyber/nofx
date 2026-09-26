@@ -645,16 +645,6 @@ func strategyConfigFieldDisplayName(field, lang string) string {
 			return "山寨币最大仓位价值倍数"
 		}
 		return "altcoin max position value ratio"
-	case "max_margin_usage":
-		if lang == "zh" {
-			return "最大保证金使用率"
-		}
-		return "max margin usage"
-	case "min_position_size":
-		if lang == "zh" {
-			return "最小开仓金额"
-		}
-		return "min position size"
 	case "enable_ema":
 		if lang == "zh" {
 			return "EMA"
@@ -977,10 +967,8 @@ func applyStrategyConfigPatch(cfg *store.StrategyConfig, field, value string) er
 		return fmt.Errorf("%s", strategyLockedFieldError("zh", field))
 	case "altcoin_max_position_value_ratio":
 		return fmt.Errorf("%s", strategyLockedFieldError("zh", field))
-	case "max_margin_usage":
-		return fmt.Errorf("%s", strategyLockedFieldError("zh", field))
-	case "min_position_size":
-		return fmt.Errorf("%s", strategyLockedFieldError("zh", field))
+	case "max_margin_usage", "min_position_size":
+		return fmt.Errorf("%s 已被移除（FIX-KNOBS A 2026-09-26：无效旋钮，不再可配置）", field)
 	case "primary_timeframe":
 		cfg.Indicators.Klines.PrimaryTimeframe = value
 	case "primary_count":
@@ -1348,8 +1336,6 @@ func strategyFieldKeywords(field string) []string {
 		return []string{"btc/eth仓位价值倍数", "btc eth position value", "主流币仓位价值倍数"}
 	case "altcoin_max_position_value_ratio":
 		return []string{"山寨币仓位价值倍数", "altcoin position value"}
-	case "max_margin_usage":
-		return []string{"最大保证金使用率", "max margin usage"}
 	default:
 		return nil
 	}
@@ -1411,8 +1397,6 @@ func strategyFieldExplicitlyMentioned(text, field string) bool {
 			keywords = []string{"btc/eth仓位价值倍数", "btc eth position value", "主流币仓位价值倍数"}
 		case "altcoin_max_position_value_ratio":
 			keywords = []string{"山寨币仓位价值倍数", "altcoin position value"}
-		case "max_margin_usage":
-			keywords = []string{"最大保证金使用率", "max margin usage"}
 		case "primary_timeframe":
 			keywords = []string{"主周期", "主时间周期", "primary timeframe"}
 		case "primary_count":
@@ -2914,7 +2898,9 @@ Your job:
 - Do not expose evidence-package wording, tool names, raw logs, HTTP status codes, backend internals, or engineering troubleshooting unless the user explicitly asked for technical logs.
 - Do not invent subscriptions, data services, websites, missing product fields, or unsupported actions.
 - Never say "subscription expired" unless the evidence explicitly contains a confirmed subscription state.
-- If an order is blocked because the amount is too small, explain it as account size/order minimum/system limit. Do not suggest editing position_size_usd, min_position_size, max_positions, position value ratios, or other System enforced fields.
+- If an order is blocked because the amount is too small, explain it as account size/order minimum/system limit. Do not suggest editing position_size_usd,
+max_positions, position value ratios, or other System enforced fields.
+(min_position_size was REMOVED as a dead knob — FIX-KNOBS A 2026-09-26.)
 - If the latest decision is wait/hold, explain that the trader is running and the AI chose to wait because the entry standard was not met.
 - If evidence is insufficient, say what is missing and the next concrete check.
 

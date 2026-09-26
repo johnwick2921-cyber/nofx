@@ -913,19 +913,24 @@ func TestAIStrategySystemEnforcedFieldsAreDisplayedButNotEditable(t *testing.T) 
 		},
 	}
 	reply := formatStrategyCreateFinalConfirmation("zh", session, cfg)
-	// Max Margin is displayed as an advisory ("AI 提示，非代码强制") in the create
-	// summary — it was reclassified from code-enforced to advisory — yet the Agent
-	// still cannot patch it (asserted below). The other three remain System enforced.
-	for _, want := range []string{"最大持仓数（System enforced）", "BTC/ETH 单币仓位上限（System enforced）", "最大保证金使用率（AI 提示，非代码强制）", "最小开仓金额（System enforced）"} {
-		if !strings.Contains(reply, want) {
-			t.Fatalf("expected final summary to display %q, got: %s", want, reply)
-		}
-	}
+        // FIX-KNOBS A (2026-09-26): the dead knobs (max_margin_usage,
+        // min_position_size) were REMOVED — the create summary no longer
+        // advertises a knob that gates nothing.
+        for _, want := range []string{"最大持仓数（System enforced）", "BTC/ETH 单币仓位上限（System enforced）"} {
+                if !strings.Contains(reply, want) {
+                        t.Fatalf("expected final summary to display %q, got: %s", want, reply)
+                }
+        }
+        for _, gone := range []string{"最大保证金使用率", "最小开仓金额"} {
+                if strings.Contains(reply, gone) {
+                        t.Fatalf("the removed dead knob %q must not appear in the create summary, got: %s", gone, reply)
+                }
+        }
 
-	resp := applyStrategyConfigPatch(&cfg, "max_margin_usage", "0.5")
-	if resp == nil || !strings.Contains(resp.Error(), "System enforced") {
-		t.Fatalf("expected system enforced edit to be rejected, got: %v", resp)
-	}
+        resp := applyStrategyConfigPatch(&cfg, "max_margin_usage", "0.5")
+        if resp == nil || !strings.Contains(resp.Error(), "已被移除") {
+                t.Fatalf("expected the removed-knob rejection, got: %v", resp)
+        }
 }
 
 func TestStrategyCreateNaturalLanguageDoesNotBypassTemplateType(t *testing.T) {

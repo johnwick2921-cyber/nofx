@@ -222,11 +222,9 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) []SessionReadFired {
 		if !okOpen || !kernel.IsCMEOpen(instOpen) {
 			continue
 		}
-		// W9 — the strategy's sessions_enabled subset (default [NY]) + per-session
-		// Enable override gate which sessions THIS trader reads, on top of the
-		// registry Enabled flag.
-		// PART A — one resolver for both enable layers (explicit per-session override
-		// wins; else registry + sessions_enabled). Enabling a session NEVER backfills
+		// FIX-KNOBS B1 — ONE truth: explicit per-session override
+		// wins; else the registry Enabled flag (the sessions_enabled list
+		// is parse-only). Enabling a session NEVER backfills
 		// a past read: the read still only fires inside this session's own read
 		// window, and the plan-store dedupe keeps it to once per session-day.
 		if runnable, _ := at.sessionRunnable(s); !runnable {

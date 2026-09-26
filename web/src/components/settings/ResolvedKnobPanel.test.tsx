@@ -25,14 +25,6 @@ const payload = {
   },
   knobs: [
     {
-      path: 'risk_control.max_margin_usage',
-      status: 'ineffective',
-      ui_label:
-        'read; does not take effect (prompt text only — advisory, never a gate (engine_prompt.go))',
-      consumers: ['kernel/engine_prompt.go:412'],
-      dual_level: false,
-    },
-    {
       path: 'day_plan.wake_on_ifvg',
       status: 'candidate-unverified',
       ui_label: 'no known reader — pending verification',
@@ -99,21 +91,22 @@ describe('ResolvedKnobPanel', () => {
     expect(lines[2].textContent).toContain('(unset) → true · shipped default')
   })
 
-  // The whole point of the two labels: they must not read the same, and neither
-  // may read as "dead".
-  it('keeps the two ineffective/candidate labels distinct and never says dead', async () => {
+  // FIX-KNOBS A (2026-09-26): the 'ineffective' label died with the knobs it
+  // described (all eight external_data_sources rows removed). The remaining
+  // label that needs explaining is 'candidate' — and it must never read as
+  // "dead".
+  it('keeps the candidate label honest and never says dead', async () => {
     stubFetch(payload)
     render(<ResolvedKnobPanel traderId="t1" session="NY" />)
 
     // Only knobs that need explaining are listed — a live knob's behaviour is
-    // the knob itself, and listing all 167 would bury the 23 that mislead.
+    // the knob itself.
     await waitFor(() =>
-      expect(screen.getAllByTestId('knob-row').length).toBe(2)
+      expect(screen.getAllByTestId('knob-row').length).toBe(1)
     )
     const body = screen.getByTestId('resolved-panel').textContent ?? ''
     expect(body).not.toContain('risk_control.min_risk_reward_ratio\n')
 
-    expect(body).toContain('read; does not take effect')
     expect(body).toContain('no known reader — pending verification')
     expect(body).not.toMatch(/\bdead\b/i)
     expect(body).not.toMatch(/\bunused\b/i)
