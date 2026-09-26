@@ -11,7 +11,7 @@ import (
 const backendName = "modernc.org/sqlite + gorm.io/driver/sqlite (cgo)"
 
 func gormDialector(dsn string) gorm.Dialector {
-	return gormsqlite.Open(dsn)
+	return gormsqlite.Open(busyTimeoutDSN(dsn, "_busy_timeout=5000"))
 }
 
 func dialectorConn(conn gorm.ConnPool) gorm.Dialector {
