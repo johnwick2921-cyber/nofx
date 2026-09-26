@@ -22,6 +22,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"nofx/internal/installpath"
 )
 
 // Release is one versioned runtime on disk: NOFX_RELEASE_DIR/<sha>/.
@@ -80,6 +82,29 @@ func (r Receipt) done() (Receipt, error) {
 	r.EndedAt = time.Now()
 	r.OK = true
 	return r, nil
+}
+
+// RefuseFlatLayout is the FIX-KNOBS P1-C guard (2026-09-26). Activation verbs
+// move VERSIONED releases under NOFX_RELEASE_DIR. The live install is FLAT —
+// repo root nofx-bin + deploy/RELEASE + web/dist, no release directory — and
+// moving its files is exactly what the main-tree law forbids. So when
+// NOFX_RELEASE_DIR is unset, every mutating verb fails LOUD with the v6 deploy
+// path printed, instead of a cryptic "no readable manifest.json".
+func RefuseFlatLayout() error {
+	if installpath.ReleaseDir() != "" {
+		return nil
+	}
+	return fmt.Errorf(`FLAT install — activation refuses (FIX-KNOBS P1-C)
+NOFX_RELEASE_DIR is unset, so the live install is the FLAT layout:
+    nofx-bin  +  deploy/RELEASE  +  web/dist   in the repo root (~/nofx).
+nofx-activate moves versioned releases (NOFX_RELEASE_DIR/<sha>/{...});
+there is nothing here for it to activate.
+
+v6 deploy path for this install (owner-present, flat/safe window only):
+    1. rebuild:  go build -o nofx-bin .
+    2. SIGKILL:  kill -9 <running PID>   # systemd Restart=on-failure boots
+                  the new binary; SIGTERM exits 0 and does NOT relaunch
+    (see AGENTS.md "Deploy = rebuild + kill -9 <PID>")`)
 }
 
 // Resolve reads a release directory and refuses one that cannot be trusted.

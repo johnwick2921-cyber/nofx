@@ -185,12 +185,28 @@ if [ "$DRY" -eq 1 ]; then
   exit 0
 fi
 
-die "unattended activation is not enabled in v7 from this script.
+if [ -n "${NOFX_RELEASE_DIR:-}" ]; then
+  die "unattended activation is not enabled in v7 from this script.
     Run the steps explicitly with the owner present, each printing its receipt:
       nofx-activate backup   -db $INSTALL/data/data.db
       nofx-activate activate -release $RELEASES/$NEW_SHA -prev $RELEASES/$OLD_SHA
       nofx-activate watch    -release $RELEASES/$NEW_SHA    # -log defaults to the NEWEST data/nofx_*.log; do NOT build it from today's date
       nofx-activate rollback -prev $RELEASES/$OLD_SHA        # if watch refuses
+    NO UNATTENDED DEPLOYS is canon: a cutover needs the owner reachable and
+    acking the boot line, or a tested auto-rollback. The worker (3b-B) is the
+    supported unattended path, and it is not built yet."
+fi
+
+die "THIS INSTALL IS FLAT (FIX-KNOBS P1-C, 2026-09-26): NOFX_RELEASE_DIR is unset,
+    so the live layout is repo-root nofx-bin + deploy/RELEASE + web/dist — not a
+    versioned release tree. nofx-activate activate/watch/rollback REFUSE the flat
+    layout loudly (internal/activation.RefuseFlatLayout); there is nothing here
+    for them to activate.
+
+    The v6 deploy path for this install (owner-present, flat/safe window only):
+      1. rebuild:  go build -o nofx-bin .
+      2. SIGKILL:  kill -9 <running PID>   # systemd Restart=on-failure boots
+                   the new binary; SIGTERM exits 0 and does NOT relaunch
     NO UNATTENDED DEPLOYS is canon: a cutover needs the owner reachable and
     acking the boot line, or a tested auto-rollback. The worker (3b-B) is the
     supported unattended path, and it is not built yet."

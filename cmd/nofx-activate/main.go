@@ -86,6 +86,9 @@ func run(cmd string, o opts) (activation.Receipt, error) {
 		return activation.Backup(o.dbPath, dest)
 
 	case "watch":
+		if err := activation.RefuseFlatLayout(); err != nil {
+			return activation.Receipt{Step: cmd, OK: false, Err: err.Error()}, err
+		}
 		rel, err := activation.Resolve(o.relDir)
 		if err != nil {
 			return activation.Receipt{Step: cmd, OK: false, Err: err.Error()}, err
@@ -114,6 +117,9 @@ func run(cmd string, o opts) (activation.Receipt, error) {
 		})
 
 	case "activate":
+		if err := activation.RefuseFlatLayout(); err != nil {
+			return activation.Receipt{Step: cmd, OK: false, Err: err.Error()}, err
+		}
 		rel, err := activation.Resolve(o.relDir)
 		if err != nil {
 			return activation.Receipt{Step: cmd, OK: false, Err: err.Error()}, err
@@ -130,6 +136,9 @@ func run(cmd string, o opts) (activation.Receipt, error) {
 		return rc, err
 
 	case "rollback":
+		if err := activation.RefuseFlatLayout(); err != nil {
+			return activation.Receipt{Step: cmd, OK: false, Err: err.Error()}, err
+		}
 		prev, err := activation.Resolve(o.prevDir)
 		if err != nil {
 			return activation.Receipt{Step: cmd, OK: false, Err: err.Error()}, err
