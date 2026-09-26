@@ -43,6 +43,32 @@ func knownCondition(c string) bool {
 	return false
 }
 
+// EntryPolicyShapeTable (FIX-PLANNER 2026-09-26, item 3) renders the legal
+// (condition × policy × legs) shapes as a compact table GENERATED from the
+// validator's own law — plannedOrderLegal and KnownConditions — never retyped
+// by hand. The prompt sentence (entryPolicyPlannedOrderFrag) and the repair law
+// (planner_repair.go routing) both embed it; a change to the law is a change to
+// both renderings. Pinned by TestFpEntryPolicyShapeTableGeneratedFromLaw.
+func EntryPolicyShapeTable() string {
+	var b strings.Builder
+	b.WriteString("LEGAL ENTRY-POLICY SHAPES (condition → policy → legs):\n")
+	b.WriteString(fmt.Sprintf("  market_in_zone — legal on EVERY known condition (%s) on every leg: the arm is a LIMIT at the far edge of the authored entry zone.\n", strings.Join(KnownConditions(), ", ")))
+	b.WriteString("  legacy (policy absent) — today's arm kinds on every known condition.\n")
+	for _, c := range KnownConditions() {
+		leg, ok := plannedOrderLegal[c]
+		if !ok {
+			continue
+		}
+		legText := "any leg"
+		if leg >= 0 {
+			legText = fmt.Sprintf("leg %d ONLY", leg)
+		}
+		b.WriteString(fmt.Sprintf("  planned_order — legal on %s (%s).\n", c, legText))
+	}
+	b.WriteString("  planned_order — REFUSED on every condition not listed above and on any other leg (use market_in_zone there).")
+	return b.String()
+}
+
 // EntryPolicyLegal reports whether policy is legal for the condition on the
 // given leg (0 for a single arm). An absent policy is legacy: always legal.
 func EntryPolicyLegal(condition, policy string, legIdx int) error {

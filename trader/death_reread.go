@@ -30,6 +30,17 @@ import (
 // first death check runs only after 2 full 5m closes post-birth.
 func deathRereadBirthWickMinutes() int { return 10 }
 
+// deathRereadHoldMinutes (FIX-PLANNER 2026-09-26, item 4) is the ONE resolution
+// seam the death-re-read self-backoff reads: nil config/knob = today's value
+// (wake_min_interval_min); an explicit death_reread_retry_min replaces ONLY the
+// death re-read hold. Pinned by TestFpDeathRereadRetryKnobResolves.
+func deathRereadHoldMinutes(cfg *store.DayPlanConfig) int {
+	if cfg == nil {
+		return store.DefaultWakeMinIntervalMin
+	}
+	return cfg.DeathRereadRetryMinutes()
+}
+
 // deathRereadDoneKey keys the once-per-fired-death re-read in system_config.
 // Written with a timestamp ONLY after the read's goroutine has decided success
 // by the STORE (a newer active version exists) — never at launch, exactly like
@@ -263,12 +274,16 @@ func (at *AutoTrader) maybeRereadAfterDeath(now time.Time, session, tradeDate st
 			tradeDate, session, row.Version, exempt)
 	}
 	// Self-backoff only: a previous death LAUNCH for this row that wrote
-	// nothing holds the retry for wake_min_interval_min, measured from that
-	// launch. Shares the launch map with the flip read, keyed per kind.
+	// nothing holds the retry for death_reread_retry_min (default =
+	// wake_min_interval_min, today's value), measured from that launch. Shares
+	// the launch map with the flip read, keyed per kind. FIX-PLANNER item 4:
+	// the knob replaces ONLY this hold — wake_min_interval_min itself is
+	// untouched and still throttles ordinary wakes.
+	retryMin := deathRereadHoldMinutes(cfg)
 	if v, ok := at.flipRereadLaunchAt.Load(inflightKey); ok {
-		if last, isT := v.(time.Time); isT && now.Sub(last) < time.Duration(cfg.WakeMinIntervalMinutes())*time.Minute {
-			at.logWarnf("🗓️ death re-read %s %s v%d — retry held: %.0fm since this row's last death launch that wrote nothing < wake_min_interval_min (%dm); refusals never start this clock.",
-				tradeDate, session, row.Version, now.Sub(last).Minutes(), cfg.WakeMinIntervalMinutes())
+		if last, isT := v.(time.Time); isT && now.Sub(last) < time.Duration(retryMin)*time.Minute {
+			at.logWarnf("🗓️ death re-read %s %s v%d — retry held: %.0fm since this row's last death launch that wrote nothing < death_reread_retry_min (%dm; default = wake_min_interval_min); refusals never start this clock.",
+				tradeDate, session, row.Version, now.Sub(last).Minutes(), retryMin)
 			return
 		}
 	}
