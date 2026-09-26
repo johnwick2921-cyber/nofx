@@ -1141,9 +1141,10 @@ func (at *AutoTrader) Stop() {
 	at.isRunning = false
 	at.isRunningMutex.Unlock()
 
-	unregisterPostExitDispatch(at) // Phase 4: stop routing close events here
-	at.unregisterPictureHtf()      // W4 D25 — no Picture frame after Stop
-	at.stopArmedEventLoop()        // W3 D14 — no event pass after Stop
+	unregisterPostExitDispatch(at)    // Phase 4: stop routing close events here
+	at.unregisterPictureHtf()         // W4 D25 — no Picture frame after Stop
+	at.stopPictureHtfBrokerConsumer() // P2-15 — the order_update consumer goroutine exits, never leaks across restarts
+	at.stopArmedEventLoop()           // W3 D14 — no event pass after Stop
 	// W117 F2 (R5) — the ordered worker's unregister closure is kept and
 	// called HERE (the worker drains its queue, then exits; nothing is lost).
 	at.orderedExecMu.Lock()
