@@ -94,6 +94,13 @@ func lawExcerptsFor(errors string) string {
 	if strings.Contains(errors, "entry policy") || strings.Contains(errors, "not legal on") {
 		add("ENTRY POLICY SHAPES (from the validator's own entry-law table):\n" + EntryPolicyShapeTable())
 	}
+	// FOLD from DS-104 cross-check (PR #242) — schema_json killer: a plan JSON
+	// unmarshal failure carries an unmarshal-specific excerpt that QUOTES the
+	// exact decode error (field path + expected type) and the minimal schema
+	// for that field — never the generic excerpt (ids 357-359 / 391-393).
+	if strings.Contains(errors, "plan JSON unmarshal") || strings.Contains(errors, "cannot unmarshal") {
+		add(repairUnmarshalExcerpt(errors))
+	}
 	// W-FLIP-DIRECTION (2026-09-17): a flip side that points the wrong way for
 	// the bias it flips from (plan_doc.go FlipDirectionContradiction).
 	if strings.Contains(errors, "contradicts bias") {
@@ -218,4 +225,44 @@ func RenderOmittedSeatedLevels(errors string) string {
 		b.WriteString("- " + item + " → legal roles: pass_through | reduce | exit\n")
 	}
 	return b.String()
+}
+
+// repairUnmarshalSchemaFor maps the durable tail of a decode-error field path
+// to the minimal schema for that field, taken from the PlanDoc JSON contract
+// (the SAME struct tags the unmarshal reads). Unknown fields get the generic
+// type-only line — the decode error above still quotes the exact path and type.
+var repairUnmarshalSchemaFor = []struct {
+	path, schema string
+}{
+	{"breakdown.level", `"breakdown": {"level": <number>, "entry_mode": "pullback" | "immediate"} — level is a NUMBER (never a string); write the level as a plain numeric price.`},
+}
+
+// repairUnmarshalExcerpt quotes the exact decode error (field path + expected
+// type, parsed from the production fmt.Errorf("plan JSON unmarshal: %w") text)
+// and attaches the minimal schema for the offending field when one is known.
+// Parsed, never retyped: a change to the decode error's shape is a change here,
+// pinned by TestFpUnmarshalRepairExcerptQuotesDecodeErrorAndSchema.
+func repairUnmarshalExcerpt(errors string) string {
+	head := "PLAN JSON SHAPE: the model output failed to decode. Fix the field exactly as named."
+	i := strings.Index(errors, "cannot unmarshal")
+	if i < 0 {
+		return head
+	}
+	field := ""
+	tail := errors[i:]
+	if j := strings.Index(tail, " of type "); j >= 0 {
+		field = strings.TrimSpace(tail[strings.Index(tail, " into Go struct field ")+len(" into Go struct field ") : j])
+	}
+	if field == "" {
+		return head
+	}
+	quote := strings.TrimSpace(strings.SplitN(tail, " of type ", 2)[0])
+	schema := "make that field the type the decode error names: the value is " + strings.TrimSpace(strings.SplitN(tail, " of type ", 2)[1]) + "."
+	for _, s := range repairUnmarshalSchemaFor {
+		if strings.Contains(field, s.path) {
+			schema = "minimal schema for " + s.path + ": " + s.schema
+			break
+		}
+	}
+	return head + "\n" + "decode error (verbatim): " + quote + " of type " + strings.TrimSpace(strings.SplitN(tail, " of type ", 2)[1]) + "\nfield: " + field + " → " + schema
 }
