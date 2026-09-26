@@ -81,6 +81,13 @@ func lawExcerptsFor(errors string) string {
 			strings.Contains(errors, "not allowed for")) {
 		add(RepairConfirmVocabLaw)
 	}
+	// FOLD (2) — re-aimed item 3: the confirm SIDE shape (the real entry-shape
+	// kill, ids 412-414: `scenario[0].confirm.side "" invalid (above|below)`).
+	// The author prompt states it (PromptContract row 346); the repair had no
+	// case and fell to the generic excerpt.
+	if strings.Contains(errors, "confirm.side") {
+		add(`"confirm": {"side": "above" | "below"} — side is a STRING enum, exactly one of above|below (never empty, never a number).`)
+	}
 	// CLASS 46 RIDER (owner ruling 2026-09-02) — see lawExcerptsForDoc: the
 	// enum is also attached whenever the DOCUMENT carries a confirm object,
 	// not only when the incoming error names one.
