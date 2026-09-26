@@ -1,6 +1,7 @@
 package ninjatrader
 
 import (
+	"log/slog"
 	"net"
 	"os"
 	"strconv"
@@ -99,11 +100,18 @@ func (g *attemptedReplayGuard) reconnectTime() time.Time {
 // attemptedVerifyWait reads ATTEMPTED_ENTRY_VERIFY_WAIT_S (default 10s). The
 // guard itself is ALWAYS ON (CTO ruling C): this knob tunes the wait only,
 // and there is no knob that turns the guard off.
+var attemptedEnvWarnOnce sync.Once
+
 func attemptedVerifyWait() time.Duration {
 	if v := strings.TrimSpace(os.Getenv(attemptedEntryVerifyWaitEnv)); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 1 {
 			return time.Duration(n) * time.Second
 		}
+		// B1 (2026-09-26): a knob value the guard refuses must say so once, out loud.
+		attemptedEnvWarnOnce.Do(func() {
+			slog.Warn("tcp_server: ATTEMPTED_ENTRY_VERIFY_WAIT_S unparseable or <1s — using the default",
+				"op", "attempted_wait_parse", "raw", v, "default", attemptedVerifyWaitDefault.String())
+		})
 	}
 	return attemptedVerifyWaitDefault
 }
@@ -173,7 +181,11 @@ func (s *TCPServer) scheduleAttemptedRecheck() {
 		s.attempted.recheckMu.Lock()
 		s.attempted.recheckArmed = false
 		s.attempted.recheckMu.Unlock()
-		_ = s.flushPending()
+		if err := s.flushPending(); err != nil {
+			// B1 (2026-09-26): the re-flush refused or failed is a WARN, never silent.
+			s.logger.Warn("tcp_server: attempted-entry recheck flush failed",
+				"op", "attempted_entry_recheck_flush", "err", err)
+		}
 	})
 }
 

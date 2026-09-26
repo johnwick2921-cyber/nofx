@@ -2597,7 +2597,9 @@ func (s *TCPServer) flushPendingReportFor(own string) (map[string]bool, error) {
 		if queued.attempted && isEntrySignal(sig) {
 			switch s.decideAttemptedEntry(sig, time.Now()) {
 			case attemptedSettle:
-				s.logger.Info("🔁 attempted entry found at broker — not resent", "signal_id", sig.SignalID)
+				// B3 (2026-09-26): declining a re-send changes the trade path — WARN, never INFO.
+				s.logger.Warn("🔁 attempted entry found at broker — not resent",
+					"op", "attempted_entry_settle", "trader_id", sig.TraderID, "symbol", sig.Symbol, "signal_id", sig.SignalID)
 				continue
 			case attemptedHold:
 				// Held frames stay queued for the next flush (or the scheduled
@@ -2610,6 +2612,7 @@ func (s *TCPServer) flushPendingReportFor(own string) (map[string]bool, error) {
 			case attemptedDrop:
 				telemetry.IncGateBlock(sig.TraderID, attemptedGateName)
 				s.logger.Warn("🔁 attempted entry unverified — no fresh broker truth after reconnect; dropped, never resent",
+					"op", "attempted_entry_drop", "trader_id", sig.TraderID, "symbol", sig.Symbol,
 					"signal_id", sig.SignalID, "wait", s.attemptedWait().String())
 				continue
 			}
