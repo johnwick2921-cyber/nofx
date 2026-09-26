@@ -1,5 +1,5 @@
 {
-  "auth/auth.go": "548b1fc7baeda784d999f0bcf6e3c2d84ae49f97ef1367e1d7b9c68b30d2a75b",
+  "auth/auth.go": "ce7e284f454352832843a42aa7f57844918aeb8ee60b91add36106718fea6cf8",
   "deploy/nofx-claim.sh": "d110a108cb7d1d6f3e92a48a1cca0ef8ab59ec4df320ec519898ead08e7bc236",
   "deploy/nofx-db-backup.sh": "0e9dae38e208ba51a81482493474df462d9be73496a61f788c287e07956ec56e",
   "deploy/nofx-lock.sh": "46fcbf76478c43943fb7607bd2929fe3629371ae5b8571ec9da8e1fa6e96c6ab",
