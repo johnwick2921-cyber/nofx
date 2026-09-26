@@ -80,8 +80,11 @@ func Backend() string {
 // backend-specific: _busy_timeout for mattn, _pragma=busy_timeout(5000) for
 // modernc/glebarez.
 func busyTimeoutDSN(dsn, param string) string {
-	if strings.Contains(dsn, "_busy_timeout") || strings.Contains(dsn, "_pragma") {
-		return dsn // already explicit
+	if strings.Contains(dsn, "_busy_timeout") || strings.Contains(dsn, "_pragma") || strings.Contains(dsn, ":memory:") {
+		// already explicit, or an in-memory database whose driver-level default
+		// covers every connection; never rewrite special DSN forms (":memory:"
+		// must not become a file on disk).
+		return dsn
 	}
 	if !strings.HasPrefix(dsn, "file:") {
 		if abs, err := filepath.Abs(dsn); err == nil {
