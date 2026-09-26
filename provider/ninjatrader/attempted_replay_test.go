@@ -62,7 +62,7 @@ func TestAttemptedEntryFoundAtBrokerIsNotResent(t *testing.T) {
 	s.SetWriteFrameHookForTest(func(c net.Conn, sig SignalPayload) error { return errDeadPipe })
 	send(SignalPayload{SignalID: "e1", Timestamp: sigNow("e1")}) // write fails → attempted, requeued
 	rearm()
-	if len(s.pending) != 1 || !s.pending[0].attempted {
+	if s.PendingSignalCount() != 1 || s.PendingAttemptedCount() != 1 {
 		t.Fatalf("fixture: attempted frame expected in pending: %+v", s.pending)
 	}
 	rec := time.Now()
@@ -77,7 +77,7 @@ func TestAttemptedEntryFoundAtBrokerIsNotResent(t *testing.T) {
 	if wrote {
 		t.Fatal("attempted entry found at the broker must NOT be resent")
 	}
-	if len(s.pending) != 0 {
+	if s.PendingSignalCount() != 0 {
 		t.Fatalf("settled frame must leave the queue: %+v", s.pending)
 	}
 }
@@ -87,7 +87,7 @@ func TestAttemptedEntryAbsentFromFreshSnapshotResendsOnce(t *testing.T) {
 	s.SetWriteFrameHookForTest(func(c net.Conn, sig SignalPayload) error { return errDeadPipe })
 	send(SignalPayload{SignalID: "e2", Timestamp: sigNow("e2")})
 	cli := rearm()
-	if len(s.pending) != 1 || !s.pending[0].attempted {
+	if s.PendingSignalCount() != 1 || s.PendingAttemptedCount() != 1 {
 		t.Fatalf("fixture: attempted frame expected in pending: %+v", s.pending)
 	}
 	rec := time.Now()
@@ -105,7 +105,7 @@ func TestAttemptedEntryAbsentFromFreshSnapshotResendsOnce(t *testing.T) {
 	if err := s.flushPending(); err != nil {
 		t.Fatal(err)
 	}
-	if len(s.pending) != 0 {
+	if s.PendingSignalCount() != 0 {
 		t.Fatalf("resent frame must leave the queue: %+v", s.pending)
 	}
 	select {
@@ -128,15 +128,15 @@ func TestAttemptedEntryNoFreshSnapshotDropsAfterWait(t *testing.T) {
 	if err := s.flushPending(); err != nil {
 		t.Fatal(err)
 	}
-	if len(s.pending) != 1 {
-		t.Fatalf("within the wait the frame must be HELD, got %d", len(s.pending))
+	if s.PendingSignalCount() != 1 {
+		t.Fatalf("within the wait the frame must be HELD, got %d", s.PendingSignalCount())
 	}
 	time.Sleep(400 * time.Millisecond) // past the 200ms wait → fail closed
 	if err := s.flushPending(); err != nil {
 		t.Fatal(err)
 	}
-	if len(s.pending) != 0 {
-		t.Fatalf("after the wait the unverified frame must be DROPPED, got %d", len(s.pending))
+	if s.PendingSignalCount() != 0 {
+		t.Fatalf("after the wait the unverified frame must be DROPPED, got %d", s.PendingSignalCount())
 	}
 	if got := GateBlockCountForTest("t3", attemptedGateName); got != 1 {
 		t.Fatalf("refusal must be counted (attempted_entry_unverified), got %d", got)
@@ -156,8 +156,8 @@ func TestAttemptedEntryStaleSnapshotTreatedAsNoSnapshot(t *testing.T) {
 	if err := s.flushPending(); err != nil {
 		t.Fatal(err)
 	}
-	if len(s.pending) != 1 {
-		t.Fatalf("a pre-reconnect snapshot must be treated as NO snapshot (hold), got %d", len(s.pending))
+	if s.PendingSignalCount() != 1 {
+		t.Fatalf("a pre-reconnect snapshot must be treated as NO snapshot (hold), got %d", s.PendingSignalCount())
 	}
 }
 
@@ -180,7 +180,7 @@ func TestAttemptedEntryVariantsLimitAndStopEntry(t *testing.T) {
 			if wrote {
 				t.Fatalf("%s attempted entry found at broker must NOT be resent", kind)
 			}
-			if len(s.pending) != 0 {
+			if s.PendingSignalCount() != 0 {
 				t.Fatalf("%s settled frame must leave the queue", kind)
 			}
 		})
@@ -200,8 +200,8 @@ func TestFreshEntryFlushesWithoutGuard(t *testing.T) {
 		close(frames)
 	}()
 	send(SignalPayload{SignalID: "e6", Timestamp: sigNow("e6")})
-	if len(s.pending) != 0 {
-		t.Fatalf("fresh frame should flush immediately, got %d queued", len(s.pending))
+	if s.PendingSignalCount() != 0 {
+		t.Fatalf("fresh frame should flush immediately, got %d queued", s.PendingSignalCount())
 	}
 	select {
 	case env := <-frames:

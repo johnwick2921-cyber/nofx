@@ -2689,6 +2689,22 @@ func (s *TCPServer) PendingSignalCount() int {
 	return len(s.pending)
 }
 
+// PendingAttemptedCount reports how many queued frames have already had a
+// write STARTED (may be at the AddOn). Same lock as every production mutation
+// of s.pending — the recheck timer writes under it, so unlocked reads of the
+// slice race (found by the full -race gate, race8).
+func (s *TCPServer) PendingAttemptedCount() int {
+	s.pendingMu.Lock()
+	defer s.pendingMu.Unlock()
+	n := 0
+	for _, q := range s.pending {
+		if q.attempted {
+			n++
+		}
+	}
+	return n
+}
+
 func (s *TCPServer) closeConn() {
 	s.connMu.Lock()
 	defer s.connMu.Unlock()
