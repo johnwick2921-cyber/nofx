@@ -68,7 +68,10 @@ func WireLevelStatsNightly(st *store.Store, traderID string) {
 	job := &levelStatsJob{stop: make(chan struct{})}
 	levelStatsJobs.Store(traderID, job)
 	go func() {
-		_, _ = runLevelStatsDayWithStop(st, ls, traderID, job.stop)
+		// B1: the run's error is LOGGED (with the trader id) — never discarded.
+		if _, err := runLevelStatsDayWithStop(st, ls, traderID, job.stop); err != nil {
+			logger.Warnf("level_stats: nightly evaluation trader=%s failed: %v", traderID, err)
+		}
 		for {
 			// Next 17:05 CT boundary (the daily roll + 5m settling time).
 			next := kernel.NextSessionRollCT(time.Now()).Add(5 * time.Minute)
@@ -79,7 +82,9 @@ func WireLevelStatsNightly(st *store.Store, traderID string) {
 				return // FIX-LEAKS NOTE: the trader's Stop ends the nightly job
 			case <-t.C:
 			}
-			_, _ = runLevelStatsDayWithStop(st, ls, traderID, job.stop)
+			if _, err := runLevelStatsDayWithStop(st, ls, traderID, job.stop); err != nil {
+				logger.Warnf("level_stats: nightly evaluation trader=%s failed: %v", traderID, err)
+			}
 		}
 	}()
 }
