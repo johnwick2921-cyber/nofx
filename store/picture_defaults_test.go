@@ -9,8 +9,8 @@ import "testing"
 // rebuilt copy of the values.
 func TestPictureHtfResolvedDefaultsAreSane(t *testing.T) {
 	cases := map[string]*PictureHtfConfig{
-		"nil config":  nil,
-		"zero struct": {},
+		"nil config":   nil,
+		"zero struct":  {},
 		"enabled only": {Enabled: true},
 	}
 	for name, c := range cases {
