@@ -96,6 +96,21 @@ func (s *PlannerRejectedStore) SaveRejectedPromptWithFacts(traderID, tradeDate, 
 
 // Latest returns the newest stored rejected prompt (nil, gorm.ErrRecordNotFound
 // when empty).
+// CorpusRows (RESEARCH-FLASH-AB, research-only accessor) lists the rejected
+// attempts matching the offline A/B corpus filter: the given attempt number,
+// prompt longer than minLen, created at-or-after since. Production never calls
+// this; it exists so the offline harness reads the corpus through the store
+// type instead of re-implementing the row shape.
+func (s *PlannerRejectedStore) CorpusRows(since string, attempt, minLen int) ([]PlannerRejectedPrompt, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	var rows []PlannerRejectedPrompt
+	err := s.db.Where("attempt = ? AND length(prompt_text) > ? AND created_at >= ?", attempt, minLen, since).
+		Order("id").Find(&rows).Error
+	return rows, err
+}
+
 func (s *PlannerRejectedStore) Latest() (*PlannerRejectedPrompt, error) {
 	if s == nil || s.db == nil {
 		return nil, nil
