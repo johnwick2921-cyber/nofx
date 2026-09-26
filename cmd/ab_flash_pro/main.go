@@ -157,6 +157,17 @@ func main() {
 		}
 	}
 
+	// Incremental CSV: every result lands on disk the moment its call returns,
+	// so a mid-run crash loses nothing (the full-run is hours long).
+	csvF, err := os.Create(*out)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "csv:", err)
+		os.Exit(2)
+	}
+	csvW := csv.NewWriter(csvF)
+	_ = csvW.Write(csvHeader())
+	csvW.Flush()
+
 	sem := make(chan struct{}, *conc)
 	var mu sync.Mutex
 	var results []result
@@ -176,6 +187,8 @@ func main() {
 				<-sem
 				mu.Lock()
 				results = append(results, res)
+				_ = csvW.Write(res.csvRow())
+				csvW.Flush()
 				mu.Unlock()
 				fmt.Printf("row %d arm %s: pass=%v wall=%.1fs finish=%s %s\n",
 					r.ID, a.label, res.Pass, res.WallS, res.Finish, truncate(res.FirstReject, 80))
@@ -183,8 +196,9 @@ func main() {
 		}
 	}
 	wg.Wait()
+	csvW.Flush()
+	_ = csvF.Close()
 
-	writeCSV(*out, results)
 	printTable(results)
 }
 
@@ -323,23 +337,16 @@ func judge(res *result, content, factsJSON string, opts kernel.AuthoringOpts, ma
 	res.BornDead = "n/a (bars leg pending)"
 }
 
-func writeCSV(path string, results []result) {
-	f, err := os.Create(path)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "csv:", err)
-		return
-	}
-	defer f.Close()
-	w := csv.NewWriter(f)
-	defer w.Flush()
-	_ = w.Write([]string{"row_id", "arm", "model", "cap", "wall_s", "ttfb_s", "prompt_tok", "completion_tok", "reasoning_chars", "finish", "pass", "first_reject", "entry_dists_pts", "entry_dists_xatr5m", "born_dead", "err"})
-	for _, r := range results {
-		_ = w.Write([]string{
-			strconv.Itoa(r.RowID), r.Arm, r.Model, strconv.Itoa(r.Cap),
-			fmt.Sprintf("%.2f", r.WallS), fmt.Sprintf("%.2f", r.TTFBS),
-			strconv.Itoa(r.PromptTok), strconv.Itoa(r.CompletionTok), strconv.Itoa(r.ReasoningChars),
-			r.Finish, strconv.FormatBool(r.Pass), r.FirstReject, r.EntryDistsPts, r.EntryDistsATR, r.BornDead, r.Err,
-		})
+func csvHeader() []string {
+	return []string{"row_id", "arm", "model", "cap", "wall_s", "ttfb_s", "prompt_tok", "completion_tok", "reasoning_chars", "finish", "pass", "first_reject", "entry_dists_pts", "entry_dists_xatr5m", "born_dead", "err"}
+}
+
+func (r result) csvRow() []string {
+	return []string{
+		strconv.Itoa(r.RowID), r.Arm, r.Model, strconv.Itoa(r.Cap),
+		fmt.Sprintf("%.2f", r.WallS), fmt.Sprintf("%.2f", r.TTFBS),
+		strconv.Itoa(r.PromptTok), strconv.Itoa(r.CompletionTok), strconv.Itoa(r.ReasoningChars),
+		r.Finish, strconv.FormatBool(r.Pass), r.FirstReject, r.EntryDistsPts, r.EntryDistsATR, r.BornDead, r.Err,
 	}
 }
 
