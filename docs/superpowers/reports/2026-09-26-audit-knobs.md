@@ -173,3 +173,53 @@ Source: `docs/superpowers/reports/2026-09-18-knob-prune.md` (knob table rows 1-1
 | — | KEEP (17) | keep | all 17 still present + gated (plan_enabled, planner_model, plan_mode, planner_timeframes, sessions, structural_stop, proximity_filter_atr, max_levels, htf_seats, one_setup_enabled+min_grade, min_scenario_quality, replan_cap, approval_required, flip_reread, wake collapse pair, t1_currencies) | ✓ (t1_currencies added as 18th keep by the wave) |
 
 Verdict: the parked prune list matches today's code exactly; the only drift is additive (picture_htf, planner_contract, planner_fresh_tape, W3 zone knobs landed later with their own registry rows).
+
+---
+
+## 8. CENSUS DELIVERABLE (CTO 04:14Z spec) — 2026-09-26
+
+**File: `docs/superpowers/reports/2026-09-26-audit-knobs-census.csv` — one row per setting.**
+
+Columns exactly as specified: `name, kind, defined_at, type, code_default, ui_fallback, live_value, origin, readers, controls, label_guide_match, status`.
+
+Generation (all in-branch, reproducible): `scripts/audit0926fields` (Go AST walk of the StrategyConfig graph + config.Config — 187 + 29 rows; leaf set matches the production marshaller's 174 schema paths EXACTLY, zero drift) · `scripts/audit0926/scan_env.py` (195 env call sites + fallbacks) · `scripts/audit0926/build_census.py` (merges the knob registry's 200 rows, the marshalled defaults, the live strategy row `a5b7662e`, the masked `.env`, and the reader/UI/guide greps). Hand-filled: `controls` and the label/guide verdicts per row.
+
+**Row counts:** 419 total — strategy 187 · env 203 · system_config 29.
+**By status:** LIVE 387 · DEAD 16 · SHADOWED 13 · CONFLICT 3.
+**Origins:** owner-set strategy rows (O) 94 · env-set rows (E) 30 · the rest shipped defaults.
+**label_guide_match:** yes 75 · no 110 (incl. guide-only and UI-only) · n/a 234.
+
+Status legend: LIVE = read by non-test code · DEAD = no reader anywhere (or registry-ineffective) · SHADOWED = folded (stored value honoured, control removed) · CONFLICT = two sources disagree · UNREGISTERED = no registry row (zero rows today).
+
+The three CONFLICT rows are the three live contradictions the census pins: `day_plan.sessions_enabled` (P2-6), env `STOP_ENTRY_SEAM` (P1-1), env `FAST_MARKET_REASONING` (4 duplicate `.env` keys).
+
+## 9. REFUTE PASS (CTO 04:14Z) — P1-1 and P2-6
+
+### P1-1 — the owner ruling itself, quoted with date + path
+
+- **`docs/superpowers/reports/2026-09-05-wave-b-stop-entry.md` (~:247), 2026-09-05**: *"THE LINE THIS BOOT WILL ACTUALLY PRINT (owner ruling, 2026-09-05). The cutover runs with `STOP_ENTRY_SEAM=off` … `🎯 stop-entry: seam=OFF — NO stop entry is placed (owner ruling 2026-09-05: cancel-confirmation wave owed; broker-side stacking)`."* Same report :516 *"`STOP_ENTRY_SEAM=off` is in force"*; :541 records the original sin — *"`STOP_ENTRY_SEAM=on` in `/home/hoang/nofx/.env`. This is a LIVE path, not a dormant one — that is how 21 malformed orders reached a broker."*
+- **`.env` :39-43 (inline comment)**: *"TURNED OFF 2026-09-05 by owner ruling: the cancel path is unconfirmed … Stays off until a cancel-confirmation wave lands."* — and the line directly below it reads `STOP_ENTRY_SEAM=on`.
+- **`docs/superpowers/SYSTEM-MAP.md:282` (MAPCHECK)**: *"`stopEntrySeamOn` (:92 — OFF at the 2026-09-05 cutover by owner ruling: NO stop entry is placed at all)"*.
+- **`kernel/entry_law.go:138`**: the reader — `strings.EqualFold(strings.TrimSpace(os.Getenv("STOP_ENTRY_SEAM")), "on")`.
+
+**Both sides, no decision:**
+- FOR "accidental/stale": every written artefact (`.env` comment, SYSTEM-MAP MAPCHECK, entry-law comment, wave-B report) still says OFF; nothing anywhere records a re-enable ruling.
+- FOR "deliberate re-enable": the ruling's own condition was *"Stays off until a cancel-confirmation wave lands"* — and W117-B cancel-truth (PR #216: F8-F12, ConfirmCancel tx, cancel-confirmation timeout, book-settled cancels) merged into dev 2026-09-25, BEFORE boot 3's restart (20:14:24 CT). The boot-3 RELEASE marker also carries *"addon proven 2026-09-23-m21"*. Both halves of the stay condition are arguably met, and the restart with `FAST_MARKET_REASONING=max` was an owner session where the seam could have been flipped deliberately.
+- Harm today: 0 stop-entry placements since boot 3 [A]. Owner confirmation required (unchanged from the draft).
+
+### P2-6 — contradicting call sites: none found
+
+- `sessionEnabledForStrategy` (`trader/auto_trader_planconfig.go:72-88`): *"A per-session Enable override wins over the subset"* — override first, subset as fallback, default [NY].
+- `sessionRunnable` (`:105-118`): explicit per-session override → authoritative; otherwise inherit registry Enabled AND the `sessions_enabled` subset. The comment documents the *"inherit/override model the accordion chips already show"* — the UI surprise is designed-in, not accidental.
+- All three non-test readers of the knob — `auto_trader_planconfig.go:117`, `auto_trader_planner.go:225-229`, `auto_trader_session.go:52` — go through the override-first resolvers. No call site reads the top-level subset as authoritative.
+- Verdict: the finding STANDS as written (P2, UI surprise: Studio checklist reads NY-only while ASIA/LONDON run via their `enable: true` overrides). No code conflict.
+
+## 10. FINDINGS ADDED BY THE CENSUS (new in this round)
+
+- **P2-9 — two more dead `.env` keys:** `NOFX_BACKEND_PORT=8080` and `NOFX_FRONTEND_PORT=3000` have zero readers anywhere in non-test Go [A] (ports come from elsewhere at boot). Extends the P2-2 dead-key class (now five dead keys incl. `DATABENTO_DATASET`, whose load was removed per `config/config.go:211` 6.8 note).
+- **P2-10 — `max_trades` registry row is stale (confirmed by the census):** the CSV row `day_plan.sessions.max_trades` is LIVE (readers: `MaxTradesFor` resolver + `sessionTradeCapBlocked`) while the registry still files it `candidate-unverified` — NOTE-1 now has the per-row evidence in the CSV. Same for `last_entry_offset_min`/`eod_flat_offset_min` (method readers `LastEntryOffsetFor`/`EODFlatOffsetFor`).
+- **Re-checked against the CSV:** P1-1 (CONFLICT row present) ✓ · P2-1 (env EXIT_MECHS_SUSPENDED LIVE row, prompt text stale) ✓ · P2-2 ✓ · P2-3 (9 no-control rows confirmed, all default-ON) ✓ · P2-4 (`planner_contract` absent from guide) ✓ · P2-5 (`wake_on_htf_ob` SHADOWED row) ✓ · P2-6 ✓ · P2-7 (strategy rows `is_default` — DB-level, outside CSV) ✓ · P2-8 (4 ineffective DEAD rows still UI-visible) ✓.
+
+## 11. ETA
+
+The CSV is generated and committed with this update. Remaining: your review. If the controls column needs deeper per-row prose for a subset, name the rows and I'll fill them; a full second pass over all 419 controls is ~1-2 h more if you want every row hand-written rather than family-mapped (the family maps cover the trading-law families explicitly).
