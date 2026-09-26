@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	ntwire "nofx/provider/ninjatrader"
+	"nofx/safe"
 	"nofx/store"
 	ntTrader "nofx/trader/ninjatrader"
 )
@@ -398,7 +399,10 @@ func (at *AutoTrader) ensurePictureHtfBrokerConsumer() {
 	// that was live when the trader registered, and never re-reads a var a
 	// test's Cleanup may restore while it starts up.
 	listen := pictureHtfBrokerListen
-	go func() {
+	// panic-net-complete: the order-update consumer is LONG-LIVED — a panic
+	// must freeze the owning trader (entries refuse, exits keep working) and
+	// exit cleanly; a new consumer binds on the next evaluator build.
+	safe.GoNet("picture-order-updates-"+at.id, at.id, func() {
 		// CompareAndDelete, never Delete: the trader may have restarted under
 		// the same id; the old consumer must not evict the new one's entry.
 		defer pictureHtfBrokerConsumers.CompareAndDelete(at.id, h)
@@ -421,7 +425,7 @@ func (at *AutoTrader) ensurePictureHtfBrokerConsumer() {
 				pictureHtfConsumeOrderUpdate(at, u)
 			}
 		}
-	}()
+	})
 }
 
 // stopPictureHtfBrokerConsumer cancels THIS trader instance's consumer (P2-15).

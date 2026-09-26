@@ -11,6 +11,7 @@ import (
 	"nofx/logger"
 	"nofx/market"
 	ntwire "nofx/provider/ninjatrader"
+	"nofx/safe"
 	"nofx/store"
 	"nofx/store/sqlitedriver"
 	"nofx/telemetry"
@@ -41,7 +42,7 @@ func (t *TCPTrader) StartCloseSync(traderID, exchangeID, exchangeType string, st
 		closes := t.server.SubscribeClosesFor(t.symbol, t.boundAccount)
 		rejects := t.server.SubscribeRejectsFor(t.symbol, t.boundAccount)
 		instruments := t.server.SubscribeInstrumentInfoFor(t.symbol, t.boundAccount)
-		go func() {
+		safe.GoNet("nt8-close-sync", "traderID", func() {
 			defer close(done) // drain all queued receipts before stopping reconcile
 			for p := range closes {
 				// W117 F2 — the ordered worker owns this frame's durable close; the
@@ -57,7 +58,7 @@ func (t *TCPTrader) StartCloseSync(traderID, exchangeID, exchangeType string, st
 				// beats the 30s positions-snapshot heartbeat on a non-active account).
 				t.MarkCloseConfirmed(p.Symbol, p.PositionSide)
 			}
-		}()
+		})
 		// Rejected exit/flatten watcher. The SIM/broker refused a close (e.g. "no
 		// market data" with the feed down). The position is STILL OPEN in NT8 — do
 		// NOT record a close; raise a loud alarm. Because decision-driven closes no
@@ -65,18 +66,18 @@ func (t *TCPTrader) StartCloseSync(traderID, exchangeID, exchangeType string, st
 		// position simply stays open: the next decision cycle re-issues the close (a
 		// natural bounded retry) and the periodic reconcile keeps the DB anchored to
 		// NT8 truth, so the orphan can't be netted onto by the next entry.
-		go func() {
+		safe.GoNet("nt8-reject-watch", "traderID", func() {
 			for r := range rejects { // P5.4 router-fed (per-symbol)
 				logger.Warnf("🚨 NT close REJECTED: %s %s — STILL OPEN in NT8, NOT recording closed (reason: %q, account: %s). Will retry on next decision cycle / reconnect.",
 					r.Symbol, r.PositionSide, r.Reason, r.Account)
 			}
-		}()
+		})
 		// Instrument-info watcher (Phase 4): NT8 reports the RESOLVED instrument's
 		// real specs. Cross-check the hardcoded tables — they are CME-correct, so a
 		// divergence is a drift signal worth surfacing. For a parked/unknown symbol
 		// (no table entry) NT8 is the only source. The tables stay authoritative for
 		// the math; this is defense-in-depth + drift detection.
-		go func() {
+		safe.GoNet("nt8-instrument-watch", "traderID", func() {
 			for in := range instruments { // P5.4 router-fed (per-symbol)
 				tablePV := market.FuturesPointValue(in.Symbol)
 				tableTick := market.FuturesTickSize(in.Symbol)
@@ -92,7 +93,7 @@ func (t *TCPTrader) StartCloseSync(traderID, exchangeID, exchangeType string, st
 						in.Symbol, in.Contract, in.PointValue, in.TickSize)
 				}
 			}
-		}()
+		})
 		logger.Infof("🔄 NinjaTrader close-sync started (records SL/TP + manual exits; alarms on rejected flattens; cross-checks NT8 instrument specs)")
 	})
 }

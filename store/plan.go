@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"nofx/logger"
+	"nofx/safe"
 	"strings"
 	"sync"
 	"time"
@@ -217,7 +218,7 @@ func (s *PlanStore) initTables() error {
 // enqueue runs fn on the single writer goroutine and blocks for its result.
 func (s *PlanStore) enqueue(fn func(*gorm.DB) error) error {
 	s.startOnce.Do(func() {
-		go s.writerLoop()
+		safe.GoNet("plan-writer", "", func() { s.writerLoop() })
 	})
 	req := planWriteReq{fn: fn, reply: make(chan error, 1)}
 	select {
