@@ -26,6 +26,10 @@ func BuildPlannerRepairPrompt(rejectedOutput string, errors string, live []strin
 	b.WriteString(repairReturnContract)
 	b.WriteString("\n\n## Validator errors (verbatim)\n")
 	b.WriteString(errors)
+	if omitted := RenderOmittedSeatedLevels(errors); omitted != "" {
+		b.WriteString("\n")
+		b.WriteString(omitted)
+	}
 	b.WriteString("\n\n## Rejected plan output (verbatim)\n")
 	b.WriteString(rejectedOutput)
 	b.WriteString("\n\n## Applicable law (excerpts for the violated rules only)\n")
@@ -167,4 +171,45 @@ func lawExcerptsForDoc(errors, rejectedOutput string) string {
 // or confirm2 object at all — the trigger for the rider above.
 func docHasConfirmObject(doc string) bool {
 	return strings.Contains(doc, "\"confirm\"") || strings.Contains(doc, "\"confirm2\"")
+}
+
+// RenderOmittedSeatedLevels (FIX-PLANNER 2026-09-26, item 2) extracts every
+// "obstacle chain: omits …" clause from the verbatim validator errors and
+// renders the omitted seated levels as a per-level copy list — each with the
+// id, price and the three legal roles the validator accepts. The text is
+// parsed from the PRODUCTION error builder's output (scenario_write_truth.go
+// obstacleChainWriteIssues), never retyped: a change to that format is a change
+// here, pinned by TestFpRepairPromptListsOmittedSeatedLevelsWithRoles.
+// No matching clause (or a malformed one) renders nothing.
+func RenderOmittedSeatedLevels(errors string) string {
+	const clause = "obstacle chain: omits "
+	const clauseEnd = " — list every seated level between entry "
+	var items []string
+	rest := errors
+	for {
+		i := strings.Index(rest, clause)
+		if i < 0 {
+			break
+		}
+		tail := rest[i+len(clause):]
+		j := strings.Index(tail, clauseEnd)
+		if j < 0 {
+			break
+		}
+		for _, item := range strings.Split(tail[:j], ", ") {
+			if item = strings.TrimSpace(item); item != "" {
+				items = append(items, item)
+			}
+		}
+		rest = tail[j:]
+	}
+	if len(items) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("## Omitted seated levels (copy EXACTLY, with their ids, into economics.path_levels)\n")
+	for _, item := range items {
+		b.WriteString("- " + item + " → legal roles: pass_through | reduce | exit\n")
+	}
+	return b.String()
 }
