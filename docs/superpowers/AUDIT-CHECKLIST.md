@@ -7746,3 +7746,18 @@ excluded, count shown). Pinned by `TestAnnotatePositionHistoryMarksNullPnlUnreso
 `PositionHistory.unresolved.test.tsx` (component vitest). **Probe:** for every
 nullable truth column that a consumer renders, walk the ABSENT path — a
 distinction that serializes away is a fabrication waiting at the consumer.
+
+## CLASS NN (assigned at merge) — A TEST THAT WRITES INTO THE SOURCE TREE RACES EVERY OTHER PACKAGE'S SCAN
+
+**Found:** 2026-09-26, test-srctree-race wave, DS-102 [B]. A writers-census test
+planted `api/zz_writers_census_probe.go` and removed it while the kernel
+acceptance guard walked `api/*.go` in the same `go test -p N` run → `open
+api/zz_writers_census_probe.go: no such file`. **Fixed:** the probe lives in a
+`t.TempDir()` fixture tree; the scanner skips + logs a file that vanishes
+between walk and parse (`parseAcceptanceFile`); and a NEW guard
+`TestNoTestWritesIntoTheSourceTree` greps every repo `*_test.go` for
+os.WriteFile/Create/MkdirAll/Remove/Rename with a repo-relative (`..`) path —
+literals, `filepath.Join` calls, and variables assigned such a Join — and fails
+on them. **Probe:** for every test that creates a file, ask where the path
+points — a source tree is a shared fixture no test owns; only TempDir/testdata
+are private.
