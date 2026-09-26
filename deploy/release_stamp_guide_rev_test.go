@@ -33,7 +33,10 @@ func TestStampGuideRevIsDeletedAndNeverRerouted(t *testing.T) {
 	}
 
 	// zero references anywhere outside the historical reports archive
-	out, err := exec.Command("grep", "-rIn", "stamp-guide-rev", root).Output()
+	// The grep is hermetic: --exclude-dir=.git keeps OTHER LANES' worktree
+	// reflogs (which quote the deleting commit's message) out of the scan — the
+	// contract is about the TREE, not git metadata (FIX-KNOBS, 2026-09-26).
+	out, err := exec.Command("grep", "-rIn", "--exclude-dir=.git", "stamp-guide-rev", root).Output()
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); !ok || ee.ExitCode() != 1 {
 			t.Fatalf("grep failed: %v", err)
