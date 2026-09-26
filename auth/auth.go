@@ -53,6 +53,12 @@ func currentBlacklistStore() TokenBlacklistStore {
 	return blacklistStore
 }
 
+// BlacklistStoreEnabled reports whether a persistence backend is installed —
+// READ from live state for the boot line (B6).
+func BlacklistStoreEnabled() bool {
+	return currentBlacklistStore() != nil
+}
+
 // TokenFingerprint is the key a revoked token is stored under: the hex SHA-256
 // of the token string. The full token is never persisted.
 func TokenFingerprint(token string) string {
@@ -88,12 +94,12 @@ func BlacklistToken(token string, exp time.Time) {
 
 	if store := currentBlacklistStore(); store != nil {
 		if err := store.Save(TokenFingerprint(token), until); err != nil {
-			log.Printf("auth: persist logout revocation failed: %v", err)
+			log.Printf("auth: persist logout revocation failed: fp=%s err=%v", TokenFingerprint(token), err)
 		} else {
 			// Opportunistic prune (P2-10): expired rows never accumulate
 			// without a restart.
 			if err := store.PruneExpired(time.Now()); err != nil {
-				log.Printf("auth: prune expired revocations failed: %v", err)
+				log.Printf("auth: prune expired revocations failed: err=%v", err)
 			}
 		}
 	}

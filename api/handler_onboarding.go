@@ -12,6 +12,7 @@ import (
 	"nofx/config"
 	"nofx/logger"
 	"nofx/mcp/payment"
+	"nofx/telemetry"
 	"nofx/wallet"
 
 	gethcrypto "github.com/ethereum/go-ethereum/crypto"
@@ -89,6 +90,8 @@ func (s *Server) handleBeginnerOnboarding(c *gin.Context) {
 	// registration closes after the first user) and must not be a machine
 	// token. Fail closed: any doubt → 403.
 	if !s.requireOwner(c) {
+		telemetry.IncGateBlock("", "onboarding_beginner_owner_gate")
+		logger.Warnf("🔒 beginner onboarding refused: non-owner actor user_id=%q", userID)
 		c.JSON(http.StatusForbidden, gin.H{"error": "beginner onboarding is owner-only"})
 		return
 	}
@@ -96,6 +99,8 @@ func (s *Server) handleBeginnerOnboarding(c *gin.Context) {
 	// refused outright — configuring it would write a dead path into the
 	// process env and .env.
 	if tradingModeIsFutures() {
+		telemetry.IncGateBlock("", "onboarding_beginner_futures_refused")
+		logger.Warnf("🔒 beginner onboarding refused on futures build: user_id=%q trading_mode=futures", userID)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "claw402 beginner onboarding is crypto-era and is disabled on this futures build"})
 		return
 	}

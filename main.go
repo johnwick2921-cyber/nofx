@@ -110,6 +110,18 @@ func main() {
 	if err := st.RevokedTokens().PruneExpired(time.Now()); err != nil {
 		logger.Warnf("⚠️  prune expired token revocations failed: %v", err)
 	}
+	// B6 — the boot line READS the live state: persistence is read from the
+	// installed store (auth.BlacklistStoreEnabled), and the row count is what
+	// the table holds right now (n/a when unreadable).
+	persistState := "off"
+	if auth.BlacklistStoreEnabled() {
+		persistState = "on(db)"
+	}
+	if n, err := st.RevokedTokens().Count(); err == nil {
+		logger.Infof("🛡 auth hardening (FIX-SEC): login-rate-limit=on(per-ip+per-account) · onboarding-beginner=owner-only · telegram-bind-code=owner-gated · logout-revocations=%s rows=%d", persistState, n)
+	} else {
+		logger.Warnf("🛡 auth hardening (FIX-SEC): login-rate-limit=on(per-ip+per-account) · onboarding-beginner=owner-only · telegram-bind-code=owner-gated · logout-revocations=%s rows=n/a (read failed: %v)", persistState, err)
+	}
 
 	// P6 (ledger-close 2026-08-19) — WARN+ERROR→DB log shipping. Attached
 	// AFTER the store exists (the logger boots first); non-blocking by the

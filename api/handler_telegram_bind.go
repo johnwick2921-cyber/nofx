@@ -6,6 +6,9 @@ import (
 	"net/http"
 	"time"
 
+	"nofx/logger"
+	"nofx/telemetry"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -25,6 +28,8 @@ const telegramBindCodeLen = 8
 // machine token or a second account.
 func (s *Server) handleTelegramBindCode(c *gin.Context) {
 	if !s.requireOwner(c) {
+		telemetry.IncGateBlock("", "telegram_bind_code_owner_gate")
+		logger.Warnf("🔒 telegram bind-code refused: non-owner actor user_id=%q", c.GetString("user_id"))
 		c.JSON(http.StatusForbidden, gin.H{"error": "telegram bind code is owner-only"})
 		return
 	}

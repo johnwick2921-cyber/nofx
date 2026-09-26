@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -67,7 +68,11 @@ func (s *RevokedTokenStore) IsRevoked(tokenID string) (bool, error) {
 	if !time.Now().After(row.ExpiresAt) {
 		return true, nil
 	}
-	_ = s.db.Delete(&row).Error // expired — remove and report not revoked
+	// Expired: remove it and report not revoked. The delete failure is
+	// returned — never swallowed (B1: no silent failure).
+	if err := s.db.Delete(&row).Error; err != nil {
+		return false, fmt.Errorf("store: delete expired revocation %q: %w", tokenID, err)
+	}
 	return false, nil
 }
 

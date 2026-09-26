@@ -69,8 +69,18 @@ var loginCheckPassword = auth.CheckPassword
 var loginLimiterClock = time.Now
 
 // loginDummyHash is a fixed bcrypt hash of a fixed string: the unknown-email
-// path compares against it so both paths cost one bcrypt compare.
-var loginDummyHash, _ = auth.HashPassword("nofx-login-dummy-constant-time-v1")
+// path compares against it so both paths cost one bcrypt compare. It MUST
+// exist for the constant-time path — a failed init would reopen the timing
+// oracle silently, so init fails loud (B1).
+var loginDummyHash = mustLoginDummyHash()
+
+func mustLoginDummyHash() string {
+	h, err := auth.HashPassword("nofx-login-dummy-constant-time-v1")
+	if err != nil {
+		panic(fmt.Sprintf("api: dummy login hash init failed: %v", err))
+	}
+	return h
+}
 
 type loginLimiterEntry struct {
 	fails        int
@@ -131,6 +141,15 @@ func (l *loginLimiter) clear(key string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	delete(l.m, key)
+}
+
+// keyLabel renders a limiter key for logs without printing an account name
+// (L12: emails are never logged).
+func keyLabel(key string) string {
+	if strings.Contains(key, "@") {
+		return "email(hidden)"
+	}
+	return key
 }
 
 // handleLogout Add current token to blacklist
@@ -269,6 +288,8 @@ func (s *Server) handleLogin(c *gin.Context) {
 	now := loginLimiterClock()
 	for _, key := range []string{c.ClientIP(), req.Email} {
 		if d, blocked := apiLoginLimiter.blocked(now, key); blocked {
+			telemetry.IncGateBlock("", "login_rate_limited")
+			logger.Warnf("🔒 login rate-limited: key=%s remaining=%s", keyLabel(key), d.Round(time.Second))
 			c.Header("Retry-After", fmt.Sprintf("%.0f", math.Ceil(d.Seconds())))
 			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many login attempts — try again later"})
 			return

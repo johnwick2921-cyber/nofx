@@ -190,11 +190,19 @@ func (s *telegramConfigStore) ConsumeBindCode(code string) (bool, error) {
 		return s.db.Save(&cfg).Error
 	}
 	if !cfg.BindCodeExpiresAt.IsZero() && time.Now().After(cfg.BindCodeExpiresAt) {
-		_ = clear()
+		if err := clear(); err != nil {
+			return false, fmt.Errorf("store: clear expired bind code: %w", err)
+		}
 		return false, nil
 	}
 	if subtle.ConstantTimeCompare([]byte(stored), []byte(strings.TrimSpace(code))) == 1 {
-		return true, clear()
+		if err := clear(); err != nil {
+			// The code MATCHED; the clear failed, so it stays valid and a
+			// retry can still consume it. The error is surfaced, never
+			// swallowed (B1).
+			return true, fmt.Errorf("store: bind code matched but clearing failed: %w", err)
+		}
+		return true, nil
 	}
 	return false, nil
 }
