@@ -1574,7 +1574,10 @@ func (s *TCPServer) acceptLoop(ctx context.Context) {
 		s.conn = c
 		s.lastAckTime = time.Now()
 		s.connMu.Unlock()
-			s.attempted.noteReconnect(time.Now()) // FIX-DOUBLE-ENTRY: reconnect instant for fresh-truth checks
+		s.beginConnectionRecord(c, time.Now()) // W-ONE-BUTTON M2 site 7
+		s.attempted.noteReconnect(time.Now())  // FIX-DOUBLE-ENTRY: reconnect instant for fresh-truth checks
+
+		s.logger.Info("tcp_server: client connected", "addr", c.RemoteAddr())
 		s.wg.Add(2)
 		go s.readLoop(ctx, c)
 		go s.heartbeatLoop(ctx, c)

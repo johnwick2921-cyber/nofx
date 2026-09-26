@@ -45,10 +45,11 @@ const (
 // flush path consults for attempted entry frames.
 type attemptedReplayGuard struct {
 	mu          sync.Mutex
-	reconnectAt time.Time        // last accept instant
+	reconnectAt time.Time            // last accept instant
 	echoed      map[string]time.Time // signal_id -> fill-receipt instant
 
-	recheckOnce sync.Once
+	recheckMu    sync.Mutex
+	recheckArmed bool
 }
 
 func (g *attemptedReplayGuard) noteReconnect(now time.Time) {
@@ -161,11 +162,18 @@ func (s *TCPServer) decideAttemptedEntry(sig SignalPayload, now time.Time) attem
 // idempotent per wait window; the accept-flush and every SendSignal-flush call
 // the guard too, so the timer only needs to cover the quiet period.
 func (s *TCPServer) scheduleAttemptedRecheck() {
-	s.attempted.recheckOnce.Do(func() {
-		time.AfterFunc(s.attemptedWait()+500*time.Millisecond, func() {
-			s.attempted.recheckOnce = sync.Once{}
-			_ = s.flushPending()
-		})
+	s.attempted.recheckMu.Lock()
+	if s.attempted.recheckArmed {
+		s.attempted.recheckMu.Unlock()
+		return
+	}
+	s.attempted.recheckArmed = true
+	s.attempted.recheckMu.Unlock()
+	time.AfterFunc(s.attemptedWait()+500*time.Millisecond, func() {
+		s.attempted.recheckMu.Lock()
+		s.attempted.recheckArmed = false
+		s.attempted.recheckMu.Unlock()
+		_ = s.flushPending()
 	})
 }
 
