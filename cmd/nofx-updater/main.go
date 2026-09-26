@@ -39,6 +39,7 @@ import (
 	"nofx/internal/updaterwire"
 	"nofx/internal/updaterwire/wireserver"
 	"nofx/internal/updaterworker"
+	"nofx/safe"
 )
 
 // Seams (tests only).
@@ -192,7 +193,7 @@ func serve(t updaterworker.Target, stderr io.Writer) int {
 	fmt.Fprintf(stderr, "🔧 nofx-updater: serving %s · install %s · data %s · active=%s · recovery_needed=%s · stale_at_start=%s\n",
 		path, t.InstallDir, t.DataDir, na(rep.Active), na(strings.Join(rep.Recovery, ",")), na(strings.Join(rep.StaleAtStart, ",")))
 	done := make(chan error, 1)
-	go func() { done <- ln.Serve(w.Handle) }()
+	safe.GoNamed("updater-http-serve", func() { done <- ln.Serve(w.Handle) })
 	select {
 	case <-ctx.Done():
 		ln.Close()

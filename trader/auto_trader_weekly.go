@@ -209,10 +209,10 @@ func (at *AutoTrader) maybeRunWeeklyRead(now time.Time) {
 		return
 	}
 	at.logInfof("📅 WEEKLY READ starting for week %s (boot_backfill=%v)", monday, bootBackfill)
-	go func() {
+	at.goNetted("weekly-read", func() {
 		defer releaseWeeklyRead(key)
 		at.runWeeklyRead(now, monday, bootBackfill)
-	}()
+	})
 }
 
 // runWeeklyRead performs ONE read attempt pair (initial + one retry with the

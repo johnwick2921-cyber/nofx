@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"nofx/mcp"
+	"nofx/safe"
 	"nofx/store"
 )
 
@@ -2624,7 +2625,7 @@ func (a *Agent) runPostResponseMaintenanceAsync(userID int64) {
 	if a == nil || a.aiClient == nil || a.history == nil {
 		return
 	}
-	go func() {
+	safe.GoNamed("post-response-maintenance", func() {
 		defer func() {
 			if r := recover(); r != nil {
 				a.log().Warn("post-response maintenance panicked", "user_id", userID, "panic", r)
@@ -2640,7 +2641,7 @@ func (a *Agent) runPostResponseMaintenanceAsync(userID int64) {
 		}
 		a.maybeUpdateTaskStateIncrementally(ctx, userID)
 		a.maybeCompressHistory(ctx, userID)
-	}()
+	})
 }
 
 func (a *Agent) prepareExecutionState(ctx context.Context, storeUserID string, userID int64, lang, text, contextMode string) (ExecutionState, error) {
