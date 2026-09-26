@@ -485,10 +485,10 @@ func (at *AutoTrader) maybeManageArmedOrdersAtOpts(snap map[string]kernel.Struct
 							if cerr := nt.CancelOrder(rr.SignalID); cerr != nil {
 								at.logWarnf("✕ armed cancel SEND failed (condition_shadowed): %s %s signal=%s: %v", plan.Session, sc.ID, rr.SignalID, cerr)
 							}
-							_ = ledger.RequestCancel(rr.ID, "condition_shadowed", now.UnixMilli())
+							at.armLifecycleWrite("request_cancel(condition_shadowed)", rr, ledger.RequestCancel(rr.ID, "condition_shadowed", now.UnixMilli()))
 							at.logWarnf("✕ armed cancel REQUESTED (condition_shadowed): %s %s signal=%s — pending broker confirmation", plan.Session, sc.ID, rr.SignalID)
 						} else {
-							_ = ledger.SetState(rr.ID, "shadowed", "condition_shadowed")
+							at.armLifecycleWrite("set_state(shadowed)", rr, ledger.SetState(rr.ID, "shadowed", "condition_shadowed"))
 						}
 					}
 				}
@@ -518,7 +518,7 @@ func (at *AutoTrader) maybeManageArmedOrdersAtOpts(snap map[string]kernel.Struct
 					}
 				}
 				if row.ID != 0 {
-					_ = ledger.SetState(row.ID, "shadowed", "condition_shadowed")
+					at.armLifecycleWrite("set_state(shadowed)", *row, ledger.SetState(row.ID, "shadowed", "condition_shadowed"))
 				}
 				if err := ledger.UpsertArm(row); err != nil {
 					at.logWarnf("⚔️ shadowed arm write failed %s %s leg %d: %v", plan.Session, sc.ID, li+1, err)
@@ -702,7 +702,7 @@ func (at *AutoTrader) maybeManageArmedOrdersAtOpts(snap map[string]kernel.Struct
 								if cerr := nt.CancelOrder(r.SignalID); cerr != nil {
 									at.logWarnf("✕ armed cancel SEND failed (gate changed): %s %s: %v", plan.Session, sc.ID, cerr)
 								}
-								_ = ledger.RequestCancel(r.ID, "gate changed: "+armRefusalClass(verdict), now.UnixMilli())
+								at.armLifecycleWrite("request_cancel(gate_changed)", r, ledger.RequestCancel(r.ID, "gate changed: "+armRefusalClass(verdict), now.UnixMilli()))
 								at.logWarnf("✕ armed cancel REQUESTED (gate changed %s): %s %s — pending broker confirmation", armRefusalClass(verdict), plan.Session, sc.ID)
 							}
 						}
@@ -773,7 +773,7 @@ func (at *AutoTrader) maybeManageArmedOrdersAtOpts(snap map[string]kernel.Struct
 									if cerr := nt.CancelOrder(rr.SignalID); cerr != nil {
 										at.logWarnf("✕ armed cancel SEND failed (one_live_arm_guard): %s %s leg %d: %v", plan.Session, sc.ID, li+1, cerr)
 									}
-									_ = ledger.RequestCancel(rr.ID, "one_live_arm_guard", now.UnixMilli())
+									at.armLifecycleWrite("request_cancel(one_live_arm_guard)", rr, ledger.RequestCancel(rr.ID, "one_live_arm_guard", now.UnixMilli()))
 									at.logWarnf("✕ armed cancel REQUESTED (one_live_arm_guard): %s %s leg %d — pending broker confirmation", plan.Session, sc.ID, li+1)
 								}
 							}
@@ -819,7 +819,7 @@ func (at *AutoTrader) maybeManageArmedOrdersAtOpts(snap map[string]kernel.Struct
 								if cerr := nt.CancelOrder(rr.SignalID); cerr != nil {
 									at.logWarnf("✕ armed cancel SEND failed (entry_gate): %s %s leg %d: %v", plan.Session, sc.ID, li+1, cerr)
 								}
-								_ = ledger.RequestCancel(rr.ID, "entry_gate: "+armRefusalClass(greason), now.UnixMilli())
+								at.armLifecycleWrite("request_cancel(entry_gate)", rr, ledger.RequestCancel(rr.ID, "entry_gate: "+armRefusalClass(greason), now.UnixMilli()))
 								at.logWarnf("✕ armed cancel REQUESTED (entry_gate): %s %s leg %d — pending broker confirmation", plan.Session, sc.ID, li+1)
 							}
 						}
@@ -1229,7 +1229,7 @@ func (at *AutoTrader) cancelSplitSiblingOnStopOut(ledger *store.ArmedOrderStore,
 			if sibling.SignalID == "" {
 				// Still just an authorization — kill it in the ledger; placement
 				// will never fire for it.
-				_ = ledger.SetState(sibling.ID, "cancelled", reason)
+				at.armLifecycleWrite("set_state(cancelled)", sibling, ledger.SetState(sibling.ID, "cancelled", reason))
 				at.logWarnf("✕ armed cancel %s %s leg %d: %s", sibling.Session, sibling.Scenario, sibling.LegIndex+1, reason)
 			}
 		}
@@ -1427,7 +1427,7 @@ func (at *AutoTrader) runArmedPlacementAt(bars []market.Kline, sinceMs int64, no
 				// accepted through the level — a limit would fill INSTANTLY at
 				// a worse price (the S2 re-place loop: fill → stop-out →
 				// re-arm → fill…). Cancel the arm; manual-cancel-wins.
-				_ = ledger.SetState(r.ID, "cancelled", "level accepted through — marketable, never placed")
+				at.armLifecycleWrite("set_state(cancelled)", r, ledger.SetState(r.ID, "cancelled", "level accepted through — marketable, never placed"))
 				at.logWarnf("✕ armed %s cancelled — price %.2f already %s entry %.2f (marketable, never placed)", r.Scenario, price, throughWord(side), r.EntryPx)
 				continue
 			}
@@ -1449,6 +1449,13 @@ func (at *AutoTrader) runArmedPlacementAt(bars []market.Kline, sinceMs int64, no
 				}
 				if g := at.armSlotGuard(rows, r, now); !g.Allowed() {
 					at.refuseSlot(r, g, "limit", now)
+					continue
+				}
+				// P1-E fail-closed: the slot's last lifecycle write FAILED —
+				// no placement on top of a ledger the broker no longer matches.
+				if armSlotBlockedForPlacement(r) {
+					at.logWarnf("🧷 armed placement REFUSED for %s/%s leg %d — the slot's last lifecycle write FAILED; reconcile must clear it first", r.PlanID, r.Scenario, r.LegIndex+1)
+					telemetry.IncGateBlock(at.id, "armed_ledger_write_failed")
 					continue
 				}
 				registered := false
@@ -1762,7 +1769,7 @@ func (at *AutoTrader) placeOneStopEntry(pl stopEntryPlacer, ledger armStateWrite
 	}
 	switch d.Action {
 	case stopEntryCancel:
-		_ = ledger.SetState(r.ID, "cancelled", d.Why+" — never placed")
+		at.armLifecycleWrite("set_state(cancelled)", r, ledger.SetState(r.ID, "cancelled", d.Why+" — never placed"))
 		at.logWarnf("✕ armed %s stop-entry CANCELLED [guard=stop-side verdict=%s action=%s] %s stop-market trigger=%.2f price=%.2f — %s (never placed)",
 			r.Scenario, d.Verdict, d.Action, strings.ToUpper(d.Side), d.Trigger, price, d.Why)
 		return stopPlaceNotSent
@@ -1791,6 +1798,13 @@ func (at *AutoTrader) placeOneStopEntry(pl stopEntryPlacer, ledger armStateWrite
 	// was malformed — which Wave B has now fixed.
 	if !guard.Allowed() {
 		at.refuseSlot(r, guard, "stop-entry", now)
+		return stopPlaceNotSent
+	}
+	// P1-E fail-closed: the slot's last lifecycle write FAILED — no placement
+	// on top of a ledger the broker no longer matches.
+	if armSlotBlockedForPlacement(r) {
+		at.logWarnf("🧷 armed placement REFUSED for %s/%s leg %d — the slot's last lifecycle write FAILED; reconcile must clear it first", r.PlanID, r.Scenario, r.LegIndex+1)
+		telemetry.IncGateBlock(at.id, "armed_ledger_write_failed")
 		return stopPlaceNotSent
 	}
 	// stamped: the ledger row was moved to place_pending under this signal,
@@ -2125,7 +2139,7 @@ func (at *AutoTrader) reconcileStaleWorking(ledger *store.ArmedOrderStore, rows 
 			if r.SignalID != "" && cancelFn != nil {
 				cancelFn(r.SignalID)
 			}
-			_ = ledger.SetState(r.ID, "cancelled", "absent from a fresh NT8 order_snapshot (reconciled to the broker)")
+			at.armLifecycleWrite("set_state(cancelled)", r, ledger.SetState(r.ID, "cancelled", "absent from a fresh NT8 order_snapshot (reconciled to the broker)"))
 			at.logWarnf("✕ armed %s cancelled — %s", r.Scenario, why)
 		}
 	}
@@ -2251,7 +2265,7 @@ func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *st
 		}
 		switch strings.ToLower(u.State) {
 		case "filled", "partfilled":
-			_ = ledger.SetState(r.ID, "filled", "fill@"+strconv.FormatFloat(u.FillPrice, 'f', 2, 64))
+			at.armLifecycleWrite("set_state(filled)", r, ledger.SetState(r.ID, "filled", "fill@"+strconv.FormatFloat(u.FillPrice, 'f', 2, 64)))
 			_ = ledger.SetFillPrice(r.ID, u.FillPrice)
 			_ = ledger.Touch(r.ID)
 			at.recordZoneFillReceipt(ledger, r, u.FillPrice) // W3 D17 — policy rows only
@@ -2264,7 +2278,7 @@ func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *st
 			at.stampArmedFillLineage(r, u.FillPrice)
 			at.logInfof("⚡ armed fill %s @ %.2f (entry_class=armed_fill — stale_reeval NOT applied)", r.Scenario, u.FillPrice)
 		case "cancelled":
-			_ = ledger.SetState(r.ID, "cancelled", "cancelled in NT8")
+			at.armLifecycleWrite("set_state(cancelled)", r, ledger.SetState(r.ID, "cancelled", "cancelled in NT8"))
 			at.logInfof("✕ armed %s cancelled in NT8", r.Scenario)
 		default:
 			// A received live ENTRY state proves placement. Preserve pending
@@ -2675,7 +2689,7 @@ func (at *AutoTrader) cancelArmedOrdersSyncWith(reason string, timeout time.Dura
 		// id) where a missed one is a live order we have stopped watching.
 		if r.SignalID == "" {
 			// Never placed: nothing at the broker, so this may go terminal.
-			_ = ledger.SetState(r.ID, "cancelled", reason)
+			at.armLifecycleWrite("set_state(cancelled)", r, ledger.SetState(r.ID, "cancelled", reason))
 			n++
 			continue
 		}
@@ -2702,7 +2716,7 @@ func (at *AutoTrader) cancelArmedOrdersSyncWith(reason string, timeout time.Dura
 			// to declare the outcome. The row goes cancel_pending (non-terminal,
 			// so the slot stays taken and the settlement pass reconciles it) and
 			// is counted as UNACKED, which is what it is.
-			_ = ledger.RequestCancel(r.ID, reason+" (no broker link — intent recorded, never settled)", p.nowMs())
+			at.armLifecycleWrite("request_cancel(no_link)", r, ledger.RequestCancel(r.ID, reason+" (no broker link — intent recorded, never settled)", p.nowMs()))
 			p.sent(r.ID)
 			at.logWarnf("✕ armed cancel UNSENDABLE (%s): signal=%s — no broker link; row held cancel_pending, never promoted", reason, shortID(r.SignalID))
 			unacked++
@@ -2777,7 +2791,7 @@ func (at *AutoTrader) cancelArmedOrdersSyncWith(reason string, timeout time.Dura
 			//
 			// This is the same ruling the no-broker-link branch above already
 			// follows — a missing answer records the INTENT, never the outcome.
-			_ = ledger.RequestCancel(r.ID, reason+" (ack timeout — unconfirmed, settlement pass owns it)", p.nowMs())
+			at.armLifecycleWrite("request_cancel(ack_timeout)", r, ledger.RequestCancel(r.ID, reason+" (ack timeout — unconfirmed, settlement pass owns it)", p.nowMs()))
 			unacked++
 			at.logWarnf("⚠️ armed sync cancel UNACKED %s signal=%s after retry — held cancel_pending, NOT promoted; the flatten proceeds and the settlement pass will confirm or re-request",
 				r.Scenario, shortID(r.SignalID))
@@ -2972,7 +2986,7 @@ func (at *AutoTrader) TestArmCancel(signalID string) error {
 	rows, _ := ledger.ListNonTerminal(at.id)
 	for _, r := range rows {
 		if r.TraderID == at.id && r.SignalID == signalID {
-			_ = ledger.SetState(r.ID, "cancelled", "test seam cancel")
+			at.armLifecycleWrite("set_state(cancelled)", r, ledger.SetState(r.ID, "cancelled", "test seam cancel"))
 			at.logInfof("🧪 TEST-E2 cancel sent signal=%s (row %d → cancelled)", signalID, r.ID)
 		}
 	}
