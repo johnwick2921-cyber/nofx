@@ -67,10 +67,12 @@ func TestW15SessionRunnable(t *testing.T) {
 	if ok, _ := inherit.sessionRunnable(ny); !ok {
 		t.Fatal("NY in the subset + registry-enabled must run")
 	}
-	// subset that excludes NY turns it off (inherit path)
+	// FIX-KNOBS B1 (2026-09-26): the stored sessions_enabled list is
+	// PARSE-ONLY — excluding NY from it must NOT gate. One truth: the
+	// per-session enable, else the registry default.
 	sub := dpWith(nil, []string{"LONDON"})
-	if ok, _ := sub.sessionRunnable(ny); ok {
-		t.Fatal("NY excluded from sessions_enabled must not run")
+	if ok, _ := sub.sessionRunnable(ny); !ok {
+		t.Fatal("B1: NY excluded from sessions_enabled must still run — the list is parse-only")
 	}
 
 	// ── nil session is never runnable (defensive)

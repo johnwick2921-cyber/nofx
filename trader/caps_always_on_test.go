@@ -14,15 +14,15 @@ import (
 // live VALUE knobs (max_contracts_per_order / max_notional_leverage) and the
 // Stage-A ceiling.
 func TestSizeCapsAlwaysOnAfterToggleRemoval(t *testing.T) {
-        rc := store.RiskControlConfig{}
-        // no toggles exist to store — the clamps resolve regardless.
-        if got := kernel.ResolveMaxContracts(rc.MaxContractsPerOrder, 2); got != 1 {
-                t.Errorf("contracts clamp = %d, want 1 (always-on, Stage-A ceiling)", got)
-        }
-        if got := kernel.ResolveNotionalLeverage(rc.MaxNotionalLeverage, 20); got != 20 {
-                t.Errorf("notional cap = %.0f, want 20 (always-on)", got)
-        }
-        // Explicit per-strategy values still win (the VALUE is live).
+	rc := store.RiskControlConfig{}
+	// no toggles exist to store — the clamps resolve regardless.
+	if got := kernel.ResolveMaxContracts(rc.MaxContractsPerOrder, 2); got != 1 {
+		t.Errorf("contracts clamp = %d, want 1 (always-on, Stage-A ceiling)", got)
+	}
+	if got := kernel.ResolveNotionalLeverage(rc.MaxNotionalLeverage, 20); got != 20 {
+		t.Errorf("notional cap = %.0f, want 20 (always-on)", got)
+	}
+	// Explicit per-strategy values still win (the VALUE is live).
 	rc.MaxContractsPerOrder = 1
 	rc.MaxNotionalLeverage = 10
 	if got := kernel.ResolveMaxContracts(rc.MaxContractsPerOrder, 2); got != 1 {

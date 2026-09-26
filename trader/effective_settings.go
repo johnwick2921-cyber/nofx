@@ -320,6 +320,12 @@ func compactJSON(v json.RawMessage) string {
 var secretLeafRe = regexp.MustCompile(`(?i)(api_?key|secret|token|password|passphrase|private_?key|credential)`)
 
 func isSecretPath(path string) bool {
+	// FIX-KNOBS A (2026-09-26): external_data_sources is REMOVED from the
+	// struct, but OLD stored rows keep loading — their headers/URLs are
+	// secrets and must stay redacted forever, knob dead or not.
+	if strings.Contains(path, "external_data_sources.headers") || strings.Contains(path, "external_data_sources.url") {
+		return true
+	}
 	leaf := path
 	if i := strings.LastIndex(path, "."); i >= 0 {
 		leaf = path[i+1:]

@@ -60,8 +60,14 @@ func TestW9Resolvers(t *testing.T) {
 	if at.planModeFor("NY") != "strict" || at.proximityFilterATR() != 2.0 || at.scenarioCap() != 2 || at.replanCapFor("NY") != 4 {
 		t.Fatal("strategy-level values must be read")
 	}
-	if !at.sessionEnabledForStrategy("LONDON") || at.sessionEnabledForStrategy("ASIA") {
-		t.Fatal("sessions_enabled subset must be honored")
+	// FIX-KNOBS B1 (2026-09-26): the stored sessions_enabled list is
+	// PARSE-ONLY — session enablement resolves per-session enable, else
+	// the registry default (NY enabled; ASIA/LONDON registry-disabled).
+	if !at.sessionEnabledForStrategy("NY") {
+		t.Fatal("NY must resolve ON via the registry default")
+	}
+	if at.sessionEnabledForStrategy("LONDON") || at.sessionEnabledForStrategy("ASIA") {
+		t.Fatal("ASIA/LONDON resolve via the registry (off) — the stored subset no longer gates")
 	}
 	if at.eveningDigestEnabled() || !at.approvalRequired() {
 		t.Fatal("evening_digest off + approval_required on must be read")
