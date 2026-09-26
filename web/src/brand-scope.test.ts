@@ -1,4 +1,9 @@
 // Dispatch 102 freezes load-bearing identifiers, including their surrounding guards.
+// Auth baseline advanced 2026-09-26 for FIX-SEC (fix/sec-0926-auth, DS-106,
+// audit 0926-system): auth/auth.go adds the TokenBlacklistStore interface +
+// fingerprint (P2-10 persistence behind the memory map). The protected guards
+// are byte-untouched: the HMAC signing-method check, `&& token.Valid`, the
+// Issuer, and the blacklist lookup. No identifier renamed.
 // Lock baseline advanced after the separately authorized lock-keeper wave:
 // deploy/nofx-lock.sh @ ace51598 (fix/lock-defects-release-meta-halfbuilt),
 // following keeper @ 97a6525cb6d10d6c8898b2d277c0fe7581872c24.
