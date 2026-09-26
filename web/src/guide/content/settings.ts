@@ -1003,6 +1003,14 @@ export const settings: GuideSection = {
           body: 'Planner completion budget — truncation is a 🚨 WARN, never silent.',
         },
         {
+          title: 'RETENTION_DECISION_DAYS / RETENTION_EQUITY_DAYS / RETENTION_NT8_SNAPSHOT_DAYS / RETENTION_LEVEL_STATS_DAYS = 0',
+          body: 'Table retention — WIRED but DISABLED (owner ruling 2026-09-26: "keep the database, we are testing"). 0 = keep forever; a value N runs the daily prune against decision_records / equity snapshots / NT8 order snapshots / level_stats. Trades, fills, receipts and plans are NEVER prunable. The boot line reads the resolved knobs and live row counts.',
+        },
+        {
+          title: 'LOG_RETENTION_DAYS = 0',
+          body: 'Age-based prune of data/nofx_YYYY-MM-DD.log at logger init. 0 = keep every file (the default — the owner has not ruled on logs). Never deletes today\'s or the running boot\'s file.',
+        },
+        {
           title: 'PERSIST_STALL_WATCHDOG_S = 60',
           body: 'Bar-persist silence alarm: no successful flush for N seconds while live bar frames are FLOWING → loud ERROR (the Friday ~2h GORM stall can never go silent again). Frame-aware: an idle wire (weekend, the daily break, NT8 closed) stays silent — no cry-wolf.',
         },

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 	"nofx/config"
 	"nofx/crypto"
 	"nofx/expectancy"
+	"nofx/internal/retention"
 	"nofx/kernel"
 	"nofx/logger"
 	"nofx/manager"
@@ -113,6 +115,16 @@ func main() {
 			TraderID: traderID, Message: message, FieldsJSON: fieldsJSON,
 		})
 	})
+	// P2-1 — table retention: WIRED but DISABLED (owner ruling 2026-09-26:
+	// "keep the database, we are testing"). Every RETENTION_*_DAYS knob defaults
+	// to 0 = keep forever, so the boot run prunes nothing; the boot line READS
+	// the resolved knobs and the live row counts. Trades/fills/receipts/plans
+	// are never prunable.
+	rc := retention.ResolveConfig()
+	report := retention.RunDaily(st, time.Now(), rc)
+	logger.Infof("%s", report.BootLine(rc))
+	retention.StartDaily(context.Background(), st)
+
 	logger.Infof("🧾 log-shipping active: WARN+ → log_events (retention %s days; async, drop-on-overload)",
 		func() string {
 			if v := os.Getenv("LOG_DB_RETENTION_DAYS"); v != "" {
