@@ -12,22 +12,22 @@ ai_config.custom_prompt,,,strategy field (ai_config.custom_prompt),store/strateg
 ai_config.indicators.atr_periods,,,strategy field (ai_config.indicators.atr_periods),store/strategy.go:1954,,,open
 ai_config.indicators.boll_periods,,,strategy field (ai_config.indicators.boll_periods),store/strategy.go:1956,,,open
 ai_config.indicators.ema_periods,,,strategy field (ai_config.indicators.ema_periods),store/strategy.go:1950,,,open
-ai_config.indicators.enable_atr,,,ATR block on/off (14) — feeds stop/anchor sizing,store/strategy.go:1943,,,open
-ai_config.indicators.enable_boll,,,Bollinger band block on/off (OFF live),store/strategy.go:1944,,,open
-ai_config.indicators.enable_ema,,,EMA indicator block on/off (50/200 periods stored),store/strategy.go:1940,,,open
-ai_config.indicators.enable_funding_rate,,,funding-rate block on/off,store/strategy.go:1947,,,open
-ai_config.indicators.enable_macd,,,MACD block on/off (OFF live),store/strategy.go:1941,,,open
-ai_config.indicators.enable_netflow_ranking,,,strategy field (ai_config.indicators.enable_netflow_ranking),store/strategy.go:1975,,,open
-ai_config.indicators.enable_oi,,,open-interest block on/off (OFF live),store/strategy.go:1946,,,open
-ai_config.indicators.enable_oi_ranking,,,strategy field (ai_config.indicators.enable_oi_ranking),store/strategy.go:1970,,,open
-ai_config.indicators.enable_price_ranking,,,rankings block on/off (OFF live),store/strategy.go:1980,,,open
-ai_config.indicators.enable_quant_data,,,quant analysis block on/off (OFF live),store/strategy.go:1965,,,open
-ai_config.indicators.enable_quant_netflow,,,strategy field (ai_config.indicators.enable_quant_netflow),store/strategy.go:1967,,,open
-ai_config.indicators.enable_quant_oi,,,strategy field (ai_config.indicators.enable_quant_oi),store/strategy.go:1966,,,open
-ai_config.indicators.enable_raw_klines,,,raw price bars on/off,store/strategy.go:1938,,,open
-ai_config.indicators.enable_rsi,,,RSI block on/off (14),store/strategy.go:1942,,,open
-ai_config.indicators.enable_svp,,,session-volume-profile block on/off,store/strategy.go:1948,,,open
-ai_config.indicators.enable_volume,,,volume profile block on/off,store/strategy.go:1945,,,open
+ai_config.indicators.enable_atr,,,ATR block on/off (14) — feeds stop/anchor sizing,store/strategy.go:1943,,"labels.test.ts pins (ema 20,50 / rsi 7,14 / atr 14 / boll 20 fixed-2 / svp OFF / raw always-on)",done-i18n
+ai_config.indicators.enable_boll,,,Bollinger band block on/off (OFF live),store/strategy.go:1944,,"labels.test.ts pins (ema 20,50 / rsi 7,14 / atr 14 / boll 20 fixed-2 / svp OFF / raw always-on)",done-i18n
+ai_config.indicators.enable_ema,,,EMA indicator block on/off (50/200 periods stored),store/strategy.go:1940,,"labels.test.ts pins (ema 20,50 / rsi 7,14 / atr 14 / boll 20 fixed-2 / svp OFF / raw always-on)",done-i18n
+ai_config.indicators.enable_funding_rate,,,funding-rate block on/off,store/strategy.go:1947,,"labels.test.ts pins (ema 20,50 / rsi 7,14 / atr 14 / boll 20 fixed-2 / svp OFF / raw always-on)",done-i18n
+ai_config.indicators.enable_macd,,,MACD block on/off (OFF live),store/strategy.go:1941,,"labels.test.ts pins (ema 20,50 / rsi 7,14 / atr 14 / boll 20 fixed-2 / svp OFF / raw always-on)",done-i18n
+ai_config.indicators.enable_netflow_ranking,,,strategy field (ai_config.indicators.enable_netflow_ranking),store/strategy.go:1975,,"labels.test.ts pins (ema 20,50 / rsi 7,14 / atr 14 / boll 20 fixed-2 / svp OFF / raw always-on)",done-i18n
+ai_config.indicators.enable_oi,,,open-interest block on/off (OFF live),store/strategy.go:1946,,"labels.test.ts pins (ema 20,50 / rsi 7,14 / atr 14 / boll 20 fixed-2 / svp OFF / raw always-on)",done-i18n
+ai_config.indicators.enable_oi_ranking,,,strategy field (ai_config.indicators.enable_oi_ranking),store/strategy.go:1970,,"labels.test.ts pins (ema 20,50 / rsi 7,14 / atr 14 / boll 20 fixed-2 / svp OFF / raw always-on)",done-i18n
+ai_config.indicators.enable_price_ranking,,,rankings block on/off (OFF live),store/strategy.go:1980,,"labels.test.ts pins (ema 20,50 / rsi 7,14 / atr 14 / boll 20 fixed-2 / svp OFF / raw always-on)",done-i18n
+ai_config.indicators.enable_quant_data,,,quant analysis block on/off (OFF live),store/strategy.go:1965,,"labels.test.ts pins (ema 20,50 / rsi 7,14 / atr 14 / boll 20 fixed-2 / svp OFF / raw always-on)",done-i18n
+ai_config.indicators.enable_quant_netflow,,,strategy field (ai_config.indicators.enable_quant_netflow),store/strategy.go:1967,,"labels.test.ts pins (ema 20,50 / rsi 7,14 / atr 14 / boll 20 fixed-2 / svp OFF / raw always-on)",done-i18n
+ai_config.indicators.enable_quant_oi,,,strategy field (ai_config.indicators.enable_quant_oi),store/strategy.go:1966,,"labels.test.ts pins (ema 20,50 / rsi 7,14 / atr 14 / boll 20 fixed-2 / svp OFF / raw always-on)",done-i18n
+ai_config.indicators.enable_raw_klines,,,raw price bars on/off,store/strategy.go:1938,,"labels.test.ts pins (ema 20,50 / rsi 7,14 / atr 14 / boll 20 fixed-2 / svp OFF / raw always-on)",done-i18n
+ai_config.indicators.enable_rsi,,,RSI block on/off (14),store/strategy.go:1942,,"labels.test.ts pins (ema 20,50 / rsi 7,14 / atr 14 / boll 20 fixed-2 / svp OFF / raw always-on)",done-i18n
+ai_config.indicators.enable_svp,,,session-volume-profile block on/off,store/strategy.go:1948,,"labels.test.ts pins (ema 20,50 / rsi 7,14 / atr 14 / boll 20 fixed-2 / svp OFF / raw always-on)",done-i18n
+ai_config.indicators.enable_volume,,,volume profile block on/off,store/strategy.go:1945,,"labels.test.ts pins (ema 20,50 / rsi 7,14 / atr 14 / boll 20 fixed-2 / svp OFF / raw always-on)",done-i18n
 ai_config.indicators.klines.enable_multi_timeframe,,,strategy field (ai_config.indicators.klines.enable_multi_timeframe),store/strategy.go:1996,,,open
 ai_config.indicators.klines.primary_count,,,strategy field (ai_config.indicators.klines.primary_count),store/strategy.go:1990,,,open
 ai_config.indicators.klines.primary_timeframe,,,primary decision timeframe,store/strategy.go:1988,,,open
