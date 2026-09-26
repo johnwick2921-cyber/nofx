@@ -441,4 +441,4 @@ func TestEffectiveCoverageCounted(t *testing.T) {
 
 // effectiveResolvedPin is the number of registered resolvers at this revision
 // (trader/effective_settings.go). Change it ONLY with the table.
-const effectiveResolvedPin = 86 // PLANNER A6 2026-09-25: +1 (planner_fresh_tape); PLANNER B1 2026-09-25: +1 (zone_place_within_pts); W-EXEC-TRUTH W3: +4 (entry_policy_default, zone_max_pts, zone_rest_max_min, min_hold_min)
+const effectiveResolvedPin = 87 // PLANNER A6 2026-09-25: +1 (planner_fresh_tape); PLANNER B1 2026-09-25: +1 (zone_place_within_pts); W-EXEC-TRUTH W3: +4 (entry_policy_default, zone_max_pts, zone_rest_max_min, min_hold_min); FIX-KNOBS 2026-09-26: +1 (planner_contract resolver — kept as real wiring, feeds the boot-line truth)

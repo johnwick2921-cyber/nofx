@@ -96,17 +96,20 @@ func TestConfigResolvedCarriesBothLabelsDistinctly(t *testing.T) {
 
 	ineff, hasIneff := labels[string(store.KnobIneffective)]
 	cand, hasCand := labels[string(store.KnobCandidate)]
-	if !hasIneff || !hasCand {
-		t.Fatalf("payload must expose both labels; ineffective=%v candidate=%v", hasIneff, hasCand)
+	// FIX-KNOBS A (2026-09-26): every ineffective knob was a DEAD knob
+	// (max_contracts_enabled, notional_cap_enabled, max_margin_usage,
+	// min_position_size, external_data_sources×8) — all REMOVED. So the
+	// ineffective class must be ABSENT from the payload, not relabeled.
+	// A dead knob that ships a label is a defect; zero dead knobs is the
+	// fix (pinned by store/dead_knobs_removed_test.go).
+	if hasIneff {
+		t.Fatalf("the ineffective class must be gone after the dead-knob removal, got label %q", ineff)
 	}
-	if ineff == cand {
-		t.Fatalf("the two tests collapsed into one label: %q", ineff)
+	if !hasCand {
+		t.Fatalf("payload must still expose the candidate label; candidate=%v", hasCand)
 	}
 	if !strings.Contains(cand, "pending verification") {
 		t.Errorf("candidate label must read as unverified, not dead; got %q", cand)
-	}
-	if !strings.Contains(ineff, "does not take effect") {
-		t.Errorf("ineffective label must say it cannot take effect; got %q", ineff)
 	}
 }
 
