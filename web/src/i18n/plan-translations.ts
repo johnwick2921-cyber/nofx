@@ -650,6 +650,11 @@ export const planStrings = {
     zh: '收盘平仓偏移（时段结束前分钟）',
     id: 'Offset EOD-flat (menit sebelum sesi selesai)',
   },
+  wakeOnHtfOb: {
+    en: 'Legacy HTF order-block wake (folded — a stored true still runs the OB class)',
+    zh: '旧版 HTF 订单块唤醒（已折叠 — 存储为 true 时仍运行 OB 类）',
+    id: 'Wake HTF order-block lama (terlipat — true tersimpan tetap menjalankan kelas OB)',
+  },
 
   // W15.C follow-up — the owner door only opens on the LIVE session, because every
   // mutating endpoint resolves the active session server-side.

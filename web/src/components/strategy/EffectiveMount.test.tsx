@@ -257,6 +257,8 @@ const DP_MOUNTED = [
   'geometry_reference_levels',
   'condition_status',
   'fade_or_wide_k',
+  // FIX-KNOBS P2-5 — folded-but-independent OB-class switch, shown read-only
+  'wake_on_htf_ob',
 ].map((l) => 'day_plan.' + l)
 const SESSION_BODY = [
   'min_grade',
@@ -452,6 +454,9 @@ const SHIPPED_DEFAULT_PATHS = [
   'day_plan.geometry_reference_levels',
   'day_plan.condition_status',
   'day_plan.fade_or_wide_k',
+  // FIX-KNOBS P2-5 — the folded switch whose independent OB-class effect stays
+  // visible in the Studio instead of a surprise.
+  'day_plan.wake_on_htf_ob',
 ]
 
 const SESSION_OFFSET_PATHS = [
@@ -503,4 +508,3 @@ describe('FIX-KNOBS — shipped defaults + ineffective rows (P2-3/P2-8)', () => 
     expect(screen.queryByTestId('input-min_position_size')).toBeNull()
   })
 })
-

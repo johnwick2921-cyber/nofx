@@ -893,6 +893,21 @@ export function DayPlanEditor({
                   {tp('readOnly', language)}
                 </span>
               </FieldRow>
+              {/* FIX-KNOBS P2-5 (2026-09-26) — the folded switch that KEEPS an
+                  independent effect: a stored true still runs the HTF
+                  order-block wake class even though the toggle is folded. The
+                  row makes the coupling visible instead of a surprise. */}
+              <FieldRow
+                label={tp('wakeOnHtfOb', language)}
+                knob={dpEff('wake_on_htf_ob')}
+              >
+                <span
+                  className="text-[10px] uppercase"
+                  style={{ color: 'var(--vl-faint)' }}
+                >
+                  {tp('readOnly', language)}
+                </span>
+              </FieldRow>
             </div>
             {/* W-PICTURE-HTF (2026-09-20) — the two-picture mode. The toggle
                 materializes the knob row; blanks inherit the Go resolved
