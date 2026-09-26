@@ -73,26 +73,14 @@ func pathInJSON(v any, path string) bool {
 // must be reachable by the enumeration — a leaf by exact path, a container by
 // at least one child. At 853981d2 (tag walk, skips json:"-") this found 0 of 4.
 func TestAuditDeadKnobsAreInTheSchemaWalk(t *testing.T) {
+	// FIX-KNOBS A (2026-09-26): the audit's dead knobs were REMOVED — the
+	// walk must NO LONGER contain them (the struct fields are gone), so
+	// the pin flips from presence to absence.
 	set := enumeratedSet(t)
-	var missing []string
 	for _, p := range AuditDeadKnobs2026_09_03 {
 		if set[p] {
-			continue
+			t.Errorf("%s is still in the schema walk — the removed field must not be enumerated", p)
 		}
-		child := false
-		for q := range set {
-			if strings.HasPrefix(q, p+".") {
-				child = true
-				break
-			}
-		}
-		if !child {
-			missing = append(missing, p)
-		}
-	}
-	if len(missing) > 0 {
-		t.Fatalf("%d of %d audit-dead knob paths are not in the schema walk — schema= and UNCLASSIFIED cannot see them:\n  %s",
-			len(missing), len(AuditDeadKnobs2026_09_03), strings.Join(missing, "\n  "))
 	}
 }
 
@@ -288,7 +276,11 @@ func TestSchemaKeySetSurvivesTheUnmarshalMarshalRoundTrip(t *testing.T) {
 // external_data_sources was REMOVED (FIX-KNOBS A, 2026-09-26): FetchExternalData
 // had no production caller, so the whole family is gone from the struct, the
 // registry and the schema walk — pinned by TestExternalDataSourcesAbsentFromStruct.
+// The leaf fallback can still classify a hand-built dotted path (name/type/url
+// leaves are live rows for OTHER knobs), so the pin is the WALK: the removed
+// field must not be enumerated any more.
 func TestExternalDataSourcesAbsentFromRegistryAndWalk(t *testing.T) {
+	set := enumeratedSet(t)
 	for _, p := range []string{
 		"ai_config.indicators.external_data_sources",
 		"ai_config.indicators.external_data_sources.name",
@@ -299,9 +291,12 @@ func TestExternalDataSourcesAbsentFromRegistryAndWalk(t *testing.T) {
 		"ai_config.indicators.external_data_sources.data_path",
 		"ai_config.indicators.external_data_sources.refresh_secs",
 	} {
-		if _, ok, _ := lookupKnob(p); ok {
-			t.Errorf("%s still classified after the removal — the walk must no longer reach it", p)
+		if set[p] {
+			t.Errorf("%s is still enumerated — the walk must no longer reach the removed field", p)
 		}
+	}
+	if _, ok, _ := lookupKnob("ai_config.indicators.external_data_sources"); ok {
+		t.Error("the external_data_sources parent must not be classified after the removal")
 	}
 }
 

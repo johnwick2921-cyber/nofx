@@ -3242,15 +3242,19 @@ func strategyLockedFieldError(lang, field string) string {
 		}
 		return "Altcoin position value ratio is System enforced in the strategy editor and cannot be changed by the agent."
 	case "max_margin_usage":
+		// FIX-KNOBS A (2026-09-26): the knob was REMOVED — the honest
+		// rejection names the removal, not a System-enforced lie.
 		if lang == "zh" {
-			return "最大保证金使用率是 System enforced 字段，策略编辑页不提供普通输入控件，Agent 不能修改。"
+			return "最大保证金使用率已被移除（FIX-KNOBS A：无效旋钮，不再可配置）。"
 		}
-		return "Max margin usage is System enforced in the strategy editor and cannot be changed by the agent."
+		return "Max margin usage was removed (FIX-KNOBS A: a dead knob — no longer configurable)."
 	case "min_position_size":
+		// FIX-KNOBS A (2026-09-26): removed — the live floor is the
+		// hardcoded 12/60 gate in kernel/engine_position.go.
 		if lang == "zh" {
-			return "最小开仓金额是系统固定值 12 USDT，手动面板里也是 System enforced，Agent 不能修改。"
+			return "最小开仓金额已被移除（FIX-KNOBS A：无效旋钮，不再可配置）。"
 		}
-		return "The minimum position size is a fixed system value of 12 USDT. It is System enforced in the manual panel and cannot be changed by the agent."
+		return "Min position size was removed (FIX-KNOBS A: a dead knob — no longer configurable)."
 	default:
 		if lang == "zh" {
 			return "这个字段是系统固定项，Agent 不能修改。"

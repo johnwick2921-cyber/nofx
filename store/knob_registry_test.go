@@ -43,25 +43,13 @@ func TestKnobRegistryIsComplete(t *testing.T) {
 	t.Logf("registry: %d reflected fields, all classified · %s", len(fields), KnobRegistryBootLine())
 }
 
-// The audit's dead knobs must NOT be classified live — the registry is only
-// useful if it tells the truth about the fifteen that produced it.
+// The audit's dead knobs were REMOVED (FIX-KNOBS A, 2026-09-26) — the registry
+// must no longer know them: a removed dead knob that still classifies is a
+// knob that looks active and does nothing.
 func TestRegistryDoesNotCallTheAuditsDeadKnobsLive(t *testing.T) {
 	for _, p := range AuditDeadKnobs2026_09_03 {
-		e, ok := LookupKnob(p)
-		if !ok {
-			t.Errorf("%s: the audit named it and the registry does not know it", p)
-			continue
-		}
-		if e.Status == KnobLive {
-			t.Errorf("%s: registry says LIVE but the audit proved it cannot take effect", p)
-		}
-		// An audit-dead knob is 'ineffective' (read, no effect) — never
-		// 'candidate', which means nobody has checked yet.
-		if e.Status == KnobCandidate {
-			t.Errorf("%s: the audit CHECKED this one — it is ineffective, not unverified", p)
-		}
-		if e.Note == "" {
-			t.Errorf("%s: a non-live knob must carry the REASON", p)
+		if e, ok := LookupKnob(p); ok {
+			t.Errorf("%s: the audit named it and FIX-KNOBS A removed it — the registry must not still classify it (%+v)", p, e)
 		}
 	}
 }
