@@ -87,8 +87,18 @@ func TestProtectiveStopRefusedAfterDisconnectThenPlacedAfterReproof(t *testing.T
 	if err == nil {
 		t.Fatal("protective stop placed while the far side was unproven")
 	}
-	if !errors.Is(err, ntwire.ErrAddonBuildTooOld) {
-		t.Fatalf("want ErrAddonBuildTooOld, got %v", err)
+	// TRACEABILITY PIN (B-rules, FIX-P1A): build "" after a disconnect is
+	// "not proven since reconnect", NOT "build too old". A mutation that folds
+	// this back into ErrAddonBuildTooOld — or drops the reason text — fails
+	// the two assertions below.
+	if !errors.Is(err, ntwire.ErrFarSideNotProven) {
+		t.Fatalf("want ErrFarSideNotProven (the proof was retired by the disconnect), got %v", err)
+	}
+	if errors.Is(err, ntwire.ErrAddonBuildTooOld) {
+		t.Fatalf("a link-down refusal must NOT read as addon-build-too-old: %v", err)
+	}
+	if !strings.Contains(err.Error(), "far side not proven since reconnect") {
+		t.Fatalf("refusal must name the true reason: %v", err)
 	}
 	if !strings.Contains(err.Error(), "guard=far_side_build") {
 		t.Fatalf("refusal error does not name the guard: %v", err)

@@ -1831,6 +1831,18 @@ func (at *AutoTrader) placeOneStopEntry(pl stopEntryPlacer, ledger armStateWrite
 			}
 			return stopPlaceNotSent
 		}
+		// FIX-P1A — a MISSING proof (never reported, or retired by a
+		// disconnect) is its own refusal class: the true reason is the link /
+		// re-proof gap, not an AddOn that is too old. Counted apart so
+		// /api/risk/gate-blocks tells the two apart (B-rules traceability).
+		if errors.Is(perr, ntwire.ErrFarSideNotProven) {
+			if armRefusalChanged(&at.armRefusalLast, armKey, "stop_entry:far_side_unproven") {
+				shown := at.countStopEntryRefusal(r, "stop_entry:far_side_unproven", now)
+				at.logWarnf("🔌 armed %s stop-entry REFUSED [guard=far_side_build state=not-proven-since-reconnect verdict=%s] %s stop-market trigger=%.2f: %v%s",
+					r.Scenario, d.Verdict, strings.ToUpper(d.Side), d.Trigger, perr, shown)
+			}
+			return stopPlaceNotSent
+		}
 		// The broker permit refused (hold landed between the check above and
 		// the send). Same refusal, same report.
 		if ntTrader.IsMaintenanceHold(perr) {

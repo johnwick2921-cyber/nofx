@@ -57,6 +57,11 @@
 //     `s.farSideBuild.Store("")` plus its comment (the FIX-P1A retirement of the
 //     proof). Additive; no identifier renamed, no guard removed, the hello/
 //     heartbeat/order_snapshot prove sites are byte-untouched.
+// Baseline advanced AGAIN 2026-09-26 for the FIX-P1A CI-red fix-up (same branch,
+// the CTO's traceability ruling): provider/ninjatrader/tcp_framing.go gains
+//   `ErrFarSideNotProven` (a new sentinel beside ErrAddonBuildTooOld so a
+//   link-down / not-yet-re-proven refusal names its true reason). Additive; no
+//   existing identifier renamed, no wire shape changed.
 // Bar-feed baseline advanced 2026-09-25 for DS-105 DEFAULTS-SANE (#212 fold):
 //   provider/ninjatrader/tcp_server.go — the live-sink age bound's name is
 //     exported for the Picture floor pins (liveFrameMaxAgeMs → LiveFrameMaxAgeMs
