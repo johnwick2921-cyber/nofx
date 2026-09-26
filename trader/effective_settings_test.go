@@ -275,6 +275,32 @@ func effRowsSlice(m map[string]EffectiveKnob) []EffectiveKnob {
 	return out
 }
 
+// P2-3 (FIX-KNOBS, DS-105, 2026-09-26): every shipped-default-ON day_plan knob
+// must have a RESOLVED row in the effective feed — the Studio's read-only rows
+// show its effective value + origin, and an unresolved row shows "n/a — no
+// resolver registered" where a real default exists. planner_contract (WAVE
+// PLANNER A3, nil=ON) is the one missing resolver today.
+func TestEffectivePlannerContractRowResolved(t *testing.T) {
+	raw := `{"day_plan":{}}`
+	row := effRowsFor(t, raw, "ninjatrader", "")[dpPath+"planner_contract"]
+	if !row.Resolved {
+		t.Fatalf("planner_contract row is UNRESOLVED (%s) — the Studio cannot show its effective value", row.Effective)
+	}
+	if row.Effective != true {
+		t.Fatalf("nil day_plan.planner_contract must resolve ON, got %v", row.Effective)
+	}
+	if row.Origin != store.SourceShippedDefault {
+		t.Fatalf("origin %q, want %q", row.Origin, store.SourceShippedDefault)
+	}
+	if row.Resolver != "store.(*DayPlanConfig).PlannerContractOn" {
+		t.Fatalf("resolver %q, want the production PlannerContractOn", row.Resolver)
+	}
+	off := effRowsFor(t, `{"day_plan":{"planner_contract":false}}`, "ninjatrader", "")[dpPath+"planner_contract"]
+	if off.Effective != false || off.Origin != store.SourceSaved {
+		t.Fatalf("explicit false: %+v", off)
+	}
+}
+
 // condition_status: the row's map is exactly what the arm seam resolves, and the
 // origin names which layer decided which condition.
 func TestEffectiveConditionStatusRow(t *testing.T) {
