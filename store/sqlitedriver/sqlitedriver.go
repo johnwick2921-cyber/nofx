@@ -25,6 +25,7 @@ package sqlitedriver
 
 import (
 	"database/sql"
+	"path/filepath"
 	"strings"
 
 	"gorm.io/gorm"
@@ -67,4 +68,29 @@ func IsBusy(err error) bool {
 // Backend names the compiled-in backend (for boot lines / diagnostics).
 func Backend() string {
 	return backendName
+}
+
+// busyTimeoutDSN makes the per-connection busy_timeout guarantee EXPLICIT in
+// the DSN. Both compiled-in backends happen to carry PRAGMA busy_timeout=5000
+// on every connection open today (mattn/go-sqlite3 applies it by default,
+// sqlite3.go:1098,1491; glebarez/go-sqlite bakes it in), but the guarantee is
+// a driver default, not a contract — a driver upgrade could silently drop it
+// and the other 3 pooled connections would then fail writes with SQLITE_BUSY
+// immediately under contention (P1-B, audit 2026-09-26). The DSN parameter is
+// backend-specific: _busy_timeout for mattn, _pragma=busy_timeout(5000) for
+// modernc/glebarez.
+func busyTimeoutDSN(dsn, param string) string {
+	if strings.Contains(dsn, "_busy_timeout") || strings.Contains(dsn, "_pragma") {
+		return dsn // already explicit
+	}
+	if !strings.HasPrefix(dsn, "file:") {
+		if abs, err := filepath.Abs(dsn); err == nil {
+			dsn = "file:" + abs
+		}
+	}
+	sep := "?"
+	if strings.Contains(dsn, "?") {
+		sep = "&"
+	}
+	return dsn + sep + param
 }
