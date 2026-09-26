@@ -2461,7 +2461,8 @@ func (s *StrategyStore) SetActive(userID, strategyID string) error {
 // copy never lands without its record, nor pairs one source's bytes with
 // another moment's record.
 func (s *StrategyStore) Duplicate(userID, sourceID, newID, newName string) error {
-	return s.db.Transaction(func(tx *gorm.DB) error {
+	// P2-4: BEGIN IMMEDIATE, not a deferred read→write upgrade.
+	return immediateOrPlainTxAny(s.db, func(tx *gorm.DB) error {
 		// get source strategy
 		source, err := getStrategy(tx, userID, sourceID)
 		if err != nil {

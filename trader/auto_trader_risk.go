@@ -35,7 +35,7 @@ func (at *AutoTrader) startDrawdownMonitor() {
 		for {
 			select {
 			case <-ticker.C:
-				at.monitorTick(time.Now())
+				at.runBeatSafely("drawdown monitor", func() { at.monitorTick(time.Now()) })
 			case <-stopDone:
 				logger.Info("⏹ Stopped position drawdown monitoring")
 				return
