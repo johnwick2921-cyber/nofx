@@ -90,17 +90,17 @@ day_plan.write_time_feasibility,,,write-time feasibility gate (default ON),store
 day_plan.zone_max_pts,,,zone max points (default 10),store/strategy.go:1169,,,open
 day_plan.zone_place_within_pts,,,zone placement band (default 25),store/strategy.go:1180,,,open
 day_plan.zone_rest_max_min,,,zone rest cap minutes (default 30),store/strategy.go:1173,,,open
-grid_config.atr_multiplier,,,strategy field (grid_config.atr_multiplier),store/strategy.go:1875,,,open
-grid_config.daily_loss_limit_pct,,,strategy field (grid_config.daily_loss_limit_pct),store/strategy.go:1883,,,open
-grid_config.direction_bias_ratio,,,strategy field (grid_config.direction_bias_ratio),store/strategy.go:1889,,,open
-grid_config.enable_direction_adjust,,,strategy field (grid_config.enable_direction_adjust),store/strategy.go:1887,,,open
-grid_config.grid_count,,,strategy field (grid_config.grid_count),store/strategy.go:1863,,,open
-grid_config.lower_price,,,strategy field (grid_config.lower_price),store/strategy.go:1871,,,open
-grid_config.max_drawdown_pct,,,strategy field (grid_config.max_drawdown_pct),store/strategy.go:1879,,,open
-grid_config.stop_loss_pct,,,strategy field (grid_config.stop_loss_pct),store/strategy.go:1881,,,open
-grid_config.total_investment,,,strategy field (grid_config.total_investment),store/strategy.go:1865,,,open
-grid_config.upper_price,,,strategy field (grid_config.upper_price),store/strategy.go:1869,,,open
-grid_config.use_atr_bounds,,,strategy field (grid_config.use_atr_bounds),store/strategy.go:1873,,,open
-grid_config.use_maker_only,,,strategy field (grid_config.use_maker_only),store/strategy.go:1885,,,open
+grid_config.atr_multiplier,,,"GridStrategyConfig comment, store/strategy.go:1860-1890",store/strategy.go:1875,yes (settings.ts grid block),,done
+grid_config.daily_loss_limit_pct,,,"GridStrategyConfig comment, store/strategy.go:1860-1890",store/strategy.go:1883,yes (settings.ts grid block),,done
+grid_config.direction_bias_ratio,,,"GridStrategyConfig comment, store/strategy.go:1860-1890",store/strategy.go:1889,yes (settings.ts grid block),,done
+grid_config.enable_direction_adjust,,,"GridStrategyConfig comment, store/strategy.go:1860-1890",store/strategy.go:1887,yes (settings.ts grid block),,done
+grid_config.grid_count,,,"GridStrategyConfig comment, store/strategy.go:1860-1890",store/strategy.go:1863,yes (settings.ts grid block),,done
+grid_config.lower_price,,,"GridStrategyConfig comment, store/strategy.go:1860-1890",store/strategy.go:1871,yes (settings.ts grid block),,done
+grid_config.max_drawdown_pct,,,"GridStrategyConfig comment, store/strategy.go:1860-1890",store/strategy.go:1879,yes (settings.ts grid block),,done
+grid_config.stop_loss_pct,,,"GridStrategyConfig comment, store/strategy.go:1860-1890",store/strategy.go:1881,yes (settings.ts grid block),,done
+grid_config.total_investment,,,"GridStrategyConfig comment, store/strategy.go:1860-1890",store/strategy.go:1865,yes (settings.ts grid block),,done
+grid_config.upper_price,,,"GridStrategyConfig comment, store/strategy.go:1860-1890",store/strategy.go:1869,yes (settings.ts grid block),,done
+grid_config.use_atr_bounds,,,"GridStrategyConfig comment, store/strategy.go:1860-1890",store/strategy.go:1873,yes (settings.ts grid block),,done
+grid_config.use_maker_only,,,"GridStrategyConfig comment, store/strategy.go:1860-1890",store/strategy.go:1885,yes (settings.ts grid block),,done
 language,,,prompt language variant (en/zh); used at prompt build,store/strategy.go:722,,,open
 regime.htf_veto,,,regime-level HTF veto (nil-driven ON),store/strategy.go:767,,,open

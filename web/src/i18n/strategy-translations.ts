@@ -153,9 +153,9 @@ export const gridConfig = {
   },
   leverage: { zh: '杠杆倍数', en: 'Leverage', es: 'Apalancamiento' },
   leverageDesc: {
-    zh: '交易使用的杠杆倍数 (1-5)',
-    en: 'Leverage for trading (1-5)',
-    es: 'Apalancamiento (1-5)',
+    zh: '交易使用的杠杆倍数 (1-20)',
+    en: 'Leverage for trading (1-20)',
+    es: 'Apalancamiento (1-20)',
   },
   gridCount: { zh: '网格数量', en: 'Grid Count', es: 'Cantidad de Grids' },
   gridCountDesc: {
@@ -192,21 +192,21 @@ export const gridConfig = {
     es: 'Multiplicador ATR',
   },
   atrMultiplierDesc: {
-    zh: '边界距离当前价格的 ATR 倍数',
-    en: 'ATR multiplier for bounds distance',
-    es: 'Distancia en ATR',
+    zh: 'ATR 倍数 — 用于边界计算（默认 2.0）',
+    en: 'ATR multiplier for bound calculation (default 2.0)',
+    es: 'Multiplicador ATR para calcular límites (por defecto 2.0)',
   },
   upperPrice: { zh: '上边界价格', en: 'Upper Price', es: 'Precio Superior' },
   upperPriceDesc: {
-    zh: '网格上边界价格 (0=自动计算)',
-    en: 'Grid upper bound (0=auto)',
-    es: 'Límite superior (0=auto)',
+    zh: '网格上边界价格 (0 = 从 ATR 自动计算)',
+    en: 'Grid upper bound (0 = auto-calculate from ATR)',
+    es: 'Límite superior (0 = auto desde ATR)',
   },
   lowerPrice: { zh: '下边界价格', en: 'Lower Price', es: 'Precio Inferior' },
   lowerPriceDesc: {
-    zh: '网格下边界价格 (0=自动计算)',
-    en: 'Grid lower bound (0=auto)',
-    es: 'Límite inferior (0=auto)',
+    zh: '网格下边界价格 (0 = 从 ATR 自动计算)',
+    en: 'Grid lower bound (0 = auto-calculate from ATR)',
+    es: 'Límite inferior (0 = auto desde ATR)',
   },
   maxDrawdown: {
     zh: '最大回撤 (%)',
@@ -260,9 +260,9 @@ export const gridConfig = {
     es: 'Ajustar según breaks',
   },
   directionBiasRatio: {
-    zh: '偏向强度',
-    en: 'Bias Strength',
-    es: 'Intensidad de Sesgo',
+    zh: '偏向强度（long_bias/short_bias，默认 0.7 = 70%/30%）',
+    en: 'Bias Strength (long_bias/short_bias modes, default 0.7 = 70%/30%)',
+    es: 'Intensidad de Sesgo (modos long/short, por defecto 0.7)',
   },
   directionBiasRatioDesc: {
     zh: '偏多/偏空模式的强度',

@@ -2,7 +2,7 @@
 // they cannot drift again. Code truth for the coin_source fields is the
 // CoinSourceConfig struct comments at store/strategy.go:1905-1930.
 import { describe, expect, it } from 'vitest'
-import { coinSource, indicator } from './strategy-translations'
+import { coinSource, gridConfig, indicator } from './strategy-translations'
 
 // The source-type value set the code accepts (store/strategy.go source_type
 // comment: "static" | "ai500" | "oi_top" | "oi_low"). A label that drops or
@@ -70,5 +70,26 @@ describe('indicator label truth (pinned to store/strategy.go:1936-1958)', () => 
 
   it('rawKlines desc states always enabled (force-set on mount)', () => {
     expect(indicator.rawKlinesDesc.en.toLowerCase()).toContain('always enabled')
+  })
+})
+// Grid descs pin the code ranges/defaults (store/strategy.go:1860-1914).
+describe('gridConfig label truth (pinned to store/strategy.go:1860-1914)', () => {
+  it('leverage desc states the code range 1-20, never 1-5', () => {
+    expect(gridConfig.leverageDesc.en).toContain('1-20')
+    expect(gridConfig.leverageDesc.en).not.toContain('1-5')
+  })
+
+  it('atrMultiplier desc states the code default 2.0', () => {
+    expect(gridConfig.atrMultiplierDesc.en).toContain('2.0')
+  })
+
+  it('upper/lower bound descs say 0 = auto-calculate from ATR', () => {
+    expect(gridConfig.upperPriceDesc.en).toContain('ATR')
+    expect(gridConfig.lowerPriceDesc.en).toContain('ATR')
+  })
+
+  it('directionBiasRatio desc states the code default 0.7 = 70%/30%', () => {
+    expect(gridConfig.directionBiasRatio.en).toContain('0.7')
+    expect(gridConfig.directionBiasRatio.en).toContain('70%/30%')
   })
 })
