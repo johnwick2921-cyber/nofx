@@ -40,8 +40,7 @@ const dayPlan: KnobSpec[] = [
   },
   {
     label: 'Planner contract (A3)',
-    where:
-      'Strategy → Day Plan → Shipped defaults (read-only) → planner_contract (FIX-KNOBS P2-3, 2026-09-26: the advanced switch was retired; the row is read-only)',
+    where: 'Strategy → Day Plan → Planner contract switch (advanced).',
     what: "WAVE PLANNER A3 (2026-09-25): the prompt, the validator and the executor are ONE contract — breakdown/breakup entries must wait for the tape's confirming close, planned_order is legal only on reject / fvg_entry / sweep_reclaim leg 0, every scenario's economics must carry nonzero risk, and a REJECT fade's stop is composed by the executor from the frozen zone (edge − buffer).",
     trader:
       "ON by default (nil). Turning it OFF restores the pre-A3 prompt text byte-for-byte — the machine still refuses the same violations; only the prompt's contract wording changes.",
@@ -421,56 +420,6 @@ const dayPlan: KnobSpec[] = [
       'Add a currency only if you have watched its red prints move MNQ enough to want the machine to refuse entries around them; ALL only to reproduce the pre-2026-09-18 behaviour.',
     perSession:
       'No — one list for every session (the session currency filter still decides which events are shown at all).',
-  },
-  {
-    label: 'Fade-or-wide k (W2 LABEL)',
-    where:
-      'Strategy → Day Plan → Fade-or-wide k (fade_or_wide_k) — READ-ONLY in the Studio (FIX-KNOBS P2-3)',
-    what: 'The exclusion-label knob: sets exclusion (a)\u2019s k — the width multiple a level must clear to be labelled fade-or-wide. It changes what is RECORDED (the label), never what is armed. Zero = the C5 default 1.28.',
-    trader:
-      'A labelling constant, not a gate: no trade is placed or refused by it. Changing it only re-labels history.',
-    consumer: 'trader/fade_facts.go:155 (the label)',
-    range: '0 (default 1.28) or an explicit multiple',
-    systemDefault: '1.28 (C5 default)',
-    recommended:
-      '⭐ leave at the C5 default; the label vocabulary was calibrated against the research tape.',
-    whenToTouch:
-      'Only if the label set needs re-tuning for a new market regime — and then read the label, not the arm.',
-    perSession: 'No.',
-  },
-  {
-    label: 'Last-entry offset (minutes before session end)',
-    where:
-      'Strategy → Day Plan → Session accordion → Last-entry offset (last_entry_offset_min) — READ-ONLY in the Studio (FIX-KNOBS P2-3)',
-    what: 'How many minutes before the session end the bot stops taking NEW entries (the last-entry gate). Resolved per session: a session override wins, otherwise the shipped default 15.',
-    trader:
-      'The last-entry gate closes entries before the EOD-flat window so a fresh entry cannot be flattened seconds later.',
-    consumer:
-      'store.LastEntryOffsetFor (DayPlanConfig.LastEntryOffsetFor) · trader/auto_trader_session.go entry-time gate',
-    range: '0–60 minutes per session override',
-    systemDefault: '15 (absent)',
-    recommended:
-      '⭐ 15 for the shipped sessions; raise it on high-impact calendar days.',
-    whenToTouch:
-      'When you want entries to stop earlier (or later) than 15 minutes before a specific session ends.',
-    perSession: 'Yes — override per session.',
-  },
-  {
-    label: 'EOD-flat offset (minutes before session end)',
-    where:
-      'Strategy → Day Plan → Session accordion → EOD-flat offset (eod_flat_offset_min) — READ-ONLY in the Studio (FIX-KNOBS P2-3)',
-    what: 'How many minutes before the session end the EOD flat run starts (a session override wins, otherwise the shipped default 0 = at the boundary).',
-    trader:
-      'Moves the flatten window earlier so the flat completes before the close, when the session needs it.',
-    consumer:
-      'store.EODFlatOffsetFor (DayPlanConfig.EODFlatOffsetFor) · trader/auto_trader_session.go EOD-flat scheduling',
-    range: '0–60 minutes per session override',
-    systemDefault: '0 (absent — flat at the boundary)',
-    recommended:
-      '⭐ 0 for the shipped sessions; set it only when the flat has been observed to miss the close.',
-    whenToTouch:
-      'When the EOD flat repeatedly runs after the session boundary.',
-    perSession: 'Yes — override per session.',
   },
   {
     label: 'Wake on level events (1 switch)',

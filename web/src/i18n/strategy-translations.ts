@@ -432,12 +432,6 @@ export const riskControl = {
     en: 'Max Margin Usage (AI-guided, not enforced)',
     es: 'Uso Máximo de Margen (guía AI)',
   },
-  // FIX-KNOBS P2-8 (2026-09-26) — ineffective knobs shown read-only.
-  noEffect: {
-    zh: '无效果 — 只读',
-    en: 'no effect — read-only',
-    es: 'sin efecto — solo lectura',
-  },
   maxMarginUsageDesc: {
     zh: '保证金使用率上限（AI 提示，非代码强制）',
     en: 'Max margin utilization — AI-guided hint, not code-enforced',

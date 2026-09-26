@@ -594,68 +594,6 @@ export const planStrings = {
     id: 'Grade min one setup',
   },
 
-  // FIX-KNOBS P2-3 (2026-09-26) — shipped-default knobs shown READ-ONLY.
-  shippedDefaults: {
-    en: 'Shipped defaults (read-only)',
-    zh: '出厂默认值（只读）',
-    id: 'Default bawaan (baca-saja)',
-  },
-  readOnly: {
-    en: 'read-only',
-    zh: '只读',
-    id: 'baca-saja',
-  },
-  zonePlaceWithinPts: {
-    en: 'Zone place within (pts) — beyond-proximity arm band',
-    zh: '区间挂单范围（点）— 超邻近挂单带',
-    id: 'Zona place within (pts) — pita arm luar proksimitas',
-  },
-  plannerContract: {
-    en: 'Planner contract — prompt/validator/executor one contract',
-    zh: '规划师契约 — 提示/校验/执行单一契约',
-    id: 'Kontrak planner — prompt/validator/eksekutor satu kontrak',
-  },
-  plannerFreshTape: {
-    en: 'Planner fresh tape — reads only tape newer than the last plan',
-    zh: '规划师新鲜行情 — 仅读取晚于上一计划的行情',
-    id: 'Planner fresh tape — baca tape lebih baru dari rencana',
-  },
-  writeTimeFeasibility: {
-    en: 'Write-time feasibility',
-    zh: '写入时可行性',
-    id: 'Kelayakan waktu tulis',
-  },
-  geometryRefLevels: {
-    en: 'Geometry reference levels',
-    zh: '几何参考价位',
-    id: 'Level referensi geometri',
-  },
-  conditionStatus: {
-    en: 'Condition status seam (live/shadow per condition)',
-    zh: '条件状态缝（每条件 live/shadow）',
-    id: 'Seam status kondisi (live/shadow per kondisi)',
-  },
-  fadeOrWideK: {
-    en: 'Fade-or-wide k — exclusion label (what is recorded)',
-    zh: 'Fade-or-wide k — 排除标签（记录内容）',
-    id: 'Fade-or-wide k — label eksklusi (yang direkam)',
-  },
-  lastEntryOffsetMin: {
-    en: 'Last-entry offset (min before session end)',
-    zh: '最后入场偏移（时段结束前分钟）',
-    id: 'Offset entry terakhir (menit sebelum sesi selesai)',
-  },
-  eodFlatOffsetMin: {
-    en: 'EOD-flat offset (min before session end)',
-    zh: '收盘平仓偏移（时段结束前分钟）',
-    id: 'Offset EOD-flat (menit sebelum sesi selesai)',
-  },
-  wakeOnHtfOb: {
-    en: 'Legacy HTF order-block wake (folded — a stored true still runs the OB class)',
-    zh: '旧版 HTF 订单块唤醒（已折叠 — 存储为 true 时仍运行 OB 类）',
-    id: 'Wake HTF order-block lama (terlipat — true tersimpan tetap menjalankan kelas OB)',
-  },
-
   // W15.C follow-up — the owner door only opens on the LIVE session, because every
   // mutating endpoint resolves the active session server-side.
   siblingReadOnly: {

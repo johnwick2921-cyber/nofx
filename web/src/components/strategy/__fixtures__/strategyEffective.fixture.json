@@ -623,121 +623,6 @@
           "scope": "strategy",
           "resolver": "none",
           "resolved": false
-        },
-        {
-          "path": "day_plan.wake_on_htf_ob",
-          "status": "live",
-          "ui_label": "live",
-          "stored": { "present": false },
-          "effective": false,
-          "origin": "code constant (folded)",
-          "scope": "strategy",
-          "resolver": "store.(*DayPlanConfig).WakeOnHTFOrderBlocks",
-          "resolved": true
-        },
-        {
-          "path": "day_plan.zone_place_within_pts",
-          "status": "live",
-          "ui_label": "live",
-          "stored": { "present": false },
-          "effective": 25,
-          "origin": "shipped default",
-          "scope": "strategy",
-          "resolver": "store.ResolveZonePlaceWithinPts",
-          "resolved": true
-        },
-        {
-          "path": "day_plan.planner_contract",
-          "status": "live",
-          "ui_label": "live",
-          "stored": { "present": false },
-          "effective": true,
-          "origin": "shipped default",
-          "scope": "strategy",
-          "resolver": "store.(*DayPlanConfig).PlannerContractOn",
-          "resolved": true
-        },
-        {
-          "path": "day_plan.planner_fresh_tape",
-          "status": "live",
-          "ui_label": "live",
-          "stored": { "present": false },
-          "effective": true,
-          "origin": "shipped default",
-          "scope": "strategy",
-          "resolver": "store.(*DayPlanConfig).PlannerFreshTapeEnabled",
-          "resolved": true
-        },
-        {
-          "path": "day_plan.write_time_feasibility",
-          "status": "live",
-          "ui_label": "live",
-          "stored": { "present": false },
-          "effective": true,
-          "origin": "shipped default",
-          "scope": "strategy",
-          "resolver": "store.(*DayPlanConfig).WriteTimeFeasibilityEnabled",
-          "resolved": true
-        },
-        {
-          "path": "day_plan.geometry_reference_levels",
-          "status": "live",
-          "ui_label": "live",
-          "stored": { "present": false },
-          "effective": true,
-          "origin": "shipped default",
-          "scope": "strategy",
-          "resolver": "store.(*DayPlanConfig).GeometryRefIDsEnabled",
-          "resolved": true
-        },
-        {
-          "path": "day_plan.condition_status",
-          "status": "live",
-          "ui_label": "live",
-          "stored": { "present": false },
-          "effective": {
-            "hold": "live",
-            "breakout_retest": "live",
-            "reclaim": "live",
-            "fvg_entry": "live"
-          },
-          "origin": "shipped default (rest)",
-          "scope": "strategy",
-          "resolver": "kernel.ConditionStatusWithSource (= kernel.ConditionStatus) per known condition",
-          "resolved": true
-        },
-        {
-          "path": "day_plan.fade_or_wide_k",
-          "status": "live",
-          "ui_label": "live",
-          "stored": { "present": false },
-          "effective": 1.28,
-          "origin": "shipped default (C5)",
-          "scope": "strategy",
-          "resolver": "trader.(*AutoTrader).fadeORWideKResolved",
-          "resolved": true
-        },
-        {
-          "path": "ai_config.risk_control.max_margin_usage",
-          "status": "live",
-          "ui_label": "live",
-          "stored": { "present": true, "value": 0.9 },
-          "effective": 0.9,
-          "origin": "saved value",
-          "scope": "strategy",
-          "resolver": "store.(*Strategy).ParseConfig → applyMissingDefaults",
-          "resolved": true
-        },
-        {
-          "path": "ai_config.risk_control.min_position_size",
-          "status": "live",
-          "ui_label": "live",
-          "stored": { "present": true, "value": 12 },
-          "effective": 12,
-          "origin": "saved value",
-          "scope": "strategy",
-          "resolver": "store.(*Strategy).ParseConfig → applyMissingDefaults",
-          "resolved": true
         }
       ],
       "coverage": {
@@ -828,28 +713,6 @@
           "scope": "strategy",
           "resolver": "store.ResolveReplanCap (DayPlanConfig.ReplanCapFor delegates)",
           "resolved": true
-        },
-        {
-          "path": "day_plan.sessions.last_entry_offset_min",
-          "status": "live",
-          "ui_label": "live",
-          "stored": { "present": false },
-          "effective": 15,
-          "origin": "shipped default",
-          "scope": "strategy",
-          "resolver": "store.LastEntryOffsetForWithSource (= DayPlanConfig.LastEntryOffsetFor)",
-          "resolved": true
-        },
-        {
-          "path": "day_plan.sessions.eod_flat_offset_min",
-          "status": "live",
-          "ui_label": "live",
-          "stored": { "present": false },
-          "effective": 0,
-          "origin": "shipped default",
-          "scope": "strategy",
-          "resolver": "store.EODFlatOffsetForWithSource (= DayPlanConfig.EODFlatOffsetFor)",
-          "resolved": true
         }
       ],
       "coverage": {
@@ -929,28 +792,6 @@
           "scope": "session:ASIA",
           "resolver": "store.ResolveReplanCap (DayPlanConfig.ReplanCapFor delegates)",
           "resolved": true
-        },
-        {
-          "path": "day_plan.sessions.last_entry_offset_min",
-          "status": "live",
-          "ui_label": "live",
-          "stored": { "present": false },
-          "effective": 15,
-          "origin": "shipped default",
-          "scope": "strategy",
-          "resolver": "store.LastEntryOffsetForWithSource (= DayPlanConfig.LastEntryOffsetFor)",
-          "resolved": true
-        },
-        {
-          "path": "day_plan.sessions.eod_flat_offset_min",
-          "status": "live",
-          "ui_label": "live",
-          "stored": { "present": false },
-          "effective": 0,
-          "origin": "shipped default",
-          "scope": "strategy",
-          "resolver": "store.EODFlatOffsetForWithSource (= DayPlanConfig.EODFlatOffsetFor)",
-          "resolved": true
         }
       ],
       "coverage": {
@@ -1029,28 +870,6 @@
           "origin": "shipped default",
           "scope": "strategy",
           "resolver": "store.ResolveReplanCap (DayPlanConfig.ReplanCapFor delegates)",
-          "resolved": true
-        },
-        {
-          "path": "day_plan.sessions.last_entry_offset_min",
-          "status": "live",
-          "ui_label": "live",
-          "stored": { "present": false },
-          "effective": 15,
-          "origin": "shipped default",
-          "scope": "strategy",
-          "resolver": "store.LastEntryOffsetForWithSource (= DayPlanConfig.LastEntryOffsetFor)",
-          "resolved": true
-        },
-        {
-          "path": "day_plan.sessions.eod_flat_offset_min",
-          "status": "live",
-          "ui_label": "live",
-          "stored": { "present": false },
-          "effective": 0,
-          "origin": "shipped default",
-          "scope": "strategy",
-          "resolver": "store.EODFlatOffsetForWithSource (= DayPlanConfig.EODFlatOffsetFor)",
           "resolved": true
         }
       ],
