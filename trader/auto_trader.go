@@ -1,6 +1,7 @@
 package trader
 
 import (
+	"context"
 	"fmt"
 	"nofx/kernel"
 	"nofx/logger"
@@ -449,10 +450,12 @@ type AutoTrader struct {
 	// flight across a Stop or a restart cannot send for a trader that is
 	// gone. Atomic: read from the live-bar goroutine, written on Run/Stop.
 	pictureGen            atomic.Int64
-	startTime             time.Time             // System start time
-	callCount             int                   // AI call count
-	positionFirstSeenTime map[string]int64      // Position first seen time (symbol_side -> timestamp in milliseconds)
-	stopMonitorCh         chan struct{}         // Used to stop monitoring goroutine
+	startTime             time.Time        // System start time
+	callCount             int              // AI call count
+	positionFirstSeenTime map[string]int64 // Position first seen time (symbol_side -> timestamp in milliseconds)
+	stopMonitorMu         sync.Mutex       // guards stopMonitorCtx/stopMonitorCancel (per-Run)
+	stopMonitorCtx        context.Context
+	stopMonitorCancel     context.CancelFunc
 	monitorWg             sync.WaitGroup        // Used to wait for monitoring goroutine to finish
 	kickCh                chan string           // discard-burn/post-exit: one-shot deferred-cycle kicks into the run loop (reason payload)
 	kickPending           atomic.Bool           // at most one kick armed at a time (CAS)
@@ -900,7 +903,6 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		callCount:             0,
 		isRunning:             false,
 		positionFirstSeenTime: make(map[string]int64),
-		stopMonitorCh:         make(chan struct{}),
 		kickCh:                make(chan string, 4),
 		monitorWg:             sync.WaitGroup{},
 		peakPnLCache:          make(map[string]float64),
@@ -948,7 +950,12 @@ func (at *AutoTrader) Run() error {
 			return fmt.Errorf("primary_timeframe %q is not in the timeframe table (kernel/timeframes.go) — refusing to run on a corrupt bar clock", at.primaryTimeframe())
 		}
 	}
-	at.stopMonitorCh = make(chan struct{})
+	at.stopMonitorMu.Lock()
+	stopCtx, stopCancel := context.WithCancel(context.Background())
+	at.stopMonitorCtx = stopCtx
+	at.stopMonitorCancel = stopCancel
+	at.stopMonitorMu.Unlock()
+	stopDone := stopCtx.Done()
 	at.kickCh = make(chan string, 4) // fresh kick channel per Run (restart-safe)
 	at.kickPending.Store(false)
 	registerPostExitDispatch(at) // Phase 4: close events → one post-exit rescan
@@ -1078,6 +1085,7 @@ func (at *AutoTrader) Run() error {
 		at.logInfof("🔲 Grid trading strategy detected, initializing grid...")
 		if err := at.InitializeGrid(); err != nil {
 			at.logErrorf("❌ Failed to initialize grid: %v", err)
+			at.cancelStopMonitor() // NOTE-leak fix: the drawdown monitor started above must not orphan on this error path
 			return fmt.Errorf("grid initialization failed: %w", err)
 		}
 	}
@@ -1121,7 +1129,7 @@ func (at *AutoTrader) Run() error {
 			at.noteKick(reason)
 			at.tickOnce(isGridStrategy)
 			at.cycleTrigger = ""
-		case <-at.stopMonitorCh:
+		case <-stopDone:
 			at.logInfof("⏹ Stop signal received, exiting automatic trading main loop")
 			return nil
 		}
@@ -1153,9 +1161,32 @@ func (at *AutoTrader) Stop() {
 		at.orderedExecUnreg = nil
 	}
 	at.orderedExecMu.Unlock()
-	close(at.stopMonitorCh) // Notify monitoring goroutine to stop
-	at.monitorWg.Wait()     // Wait for monitoring goroutine to finish
+	at.cancelStopMonitor()                // Notify monitoring goroutine to stop (idempotent per-Run cancel; the grid-init error path may already have called it)
+	at.monitorWg.Wait()                   // Wait for monitoring goroutine to finish
+	ntTrader.StopLevelStatsNightly(at.id) // NOTE-leak fix: the 24h-idling nightly goroutine exits on Stop
 	logger.Info("⏹ Automatic trading system stopped")
+}
+
+// cancelStopMonitor asks the drawdown monitor (and the run loop's stop select)
+// to exit. Idempotent: the per-Run cancel can be called by Stop AND by the
+// grid-init error path in any order.
+func (at *AutoTrader) cancelStopMonitor() {
+	at.stopMonitorMu.Lock()
+	if at.stopMonitorCancel != nil {
+		at.stopMonitorCancel()
+	}
+	at.stopMonitorMu.Unlock()
+}
+
+// setupStopMonitorForTest pre-arms a per-Run stop signal the way Run does, for
+// tests that drive Stop (or the run loop) without a full Run. Production Run
+// replaces it with its own ctx; cancelStopMonitor is nil-safe regardless.
+func (at *AutoTrader) setupStopMonitorForTest() {
+	at.stopMonitorMu.Lock()
+	ctx, cancel := context.WithCancel(context.Background())
+	at.stopMonitorCtx = ctx
+	at.stopMonitorCancel = cancel
+	at.stopMonitorMu.Unlock()
 }
 
 // GetID gets trader ID

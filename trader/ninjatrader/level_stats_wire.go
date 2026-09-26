@@ -30,6 +30,16 @@ import (
 // bound to the wrong trader. Per-trader wiring ends the T1 saga.
 var levelStatsWired sync.Map
 
+// levelStatsJobs holds the per-trader STOP handles (FIX-LEAKS NOTE): the
+// nightly goroutine idles ~24h between 17:05 CT runs and had no exit path —
+// it lived as long as the process. StopLevelStatsNightly closes the handle and
+// the goroutine exits promptly, even mid-sleep.
+type levelStatsJob struct {
+	stop chan struct{}
+}
+
+var levelStatsJobs sync.Map // traderID -> *levelStatsJob
+
 // wireLevelStatsForTrader is the pure once-per-trader decision (true = start
 // this trader's job).
 func wireLevelStatsForTrader(traderID string) bool {
@@ -52,17 +62,40 @@ func WireLevelStatsNightly(st *store.Store, traderID string) {
 	ls := st.LevelStats()
 	if err := ls.Migrate(); err != nil {
 		logger.Warnf("level_stats: migrate failed: %v", err)
+		levelStatsWired.Delete(traderID) // no half-wired entry: a restart may re-wire and retry
 		return
 	}
+	job := &levelStatsJob{stop: make(chan struct{})}
+	levelStatsJobs.Store(traderID, job)
 	go func() {
 		_, _ = runLevelStatsDay(st, ls, traderID)
 		for {
 			// Next 17:05 CT boundary (the daily roll + 5m settling time).
 			next := kernel.NextSessionRollCT(time.Now()).Add(5 * time.Minute)
-			time.Sleep(time.Until(next))
+			t := time.NewTimer(time.Until(next))
+			select {
+			case <-job.stop:
+				t.Stop()
+				return // FIX-LEAKS NOTE: the trader's Stop ends the nightly job
+			case <-t.C:
+			}
 			_, _ = runLevelStatsDay(st, ls, traderID)
 		}
 	}()
+}
+
+// StopLevelStatsNightly stops THIS trader's nightly job (FIX-LEAKS NOTE).
+// Idempotent; a restarted trader can re-wire via WireLevelStatsNightly.
+func StopLevelStatsNightly(traderID string) {
+	if traderID == "" {
+		return
+	}
+	if v, ok := levelStatsJobs.LoadAndDelete(traderID); ok {
+		levelStatsWired.Delete(traderID) // free the idempotency key for a restart
+		if job, ok := v.(*levelStatsJob); ok {
+			close(job.stop)
+		}
+	}
 }
 
 // runLevelStatsDay evaluates the PREVIOUS CME session-day (17:00→17:00 CT).

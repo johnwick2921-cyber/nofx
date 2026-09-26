@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -218,4 +219,46 @@ func TestLevelStatsFoldsOverlay(t *testing.T) {
 	if n != 2 {
 		t.Fatalf("the folded plan must evaluate 2 rows (PDH + overlay PDL), got %d", n)
 	}
+}
+
+// FIX-LEAKS NOTE RED→GREEN — the nightly goroutine had no stop path and idled
+// ~24h between 17:05 CT runs. StopLevelStatsNightly must end it promptly, even
+// while it sleeps on the next boundary. Production call sites:
+// WireLevelStatsNightly / StopLevelStatsNightly (the Stop hook lives in
+// AutoTrader.Stop).
+func TestStopLevelStatsNightlyStopsTheGoroutine(t *testing.T) {
+	st, err := store.New(filepath.Join(t.TempDir(), "ls-stop.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	if err := st.LevelStats().Migrate(); err != nil {
+		t.Fatal(err)
+	}
+
+	const id = "stop-test-trader"
+	WireLevelStatsNightly(st, id)
+
+	// Give the first evaluation a moment to finish so the goroutine is provably
+	// in the sleep select (or very close); the stop must still exit it.
+	time.Sleep(200 * time.Millisecond)
+	runtime.GC()
+	base := runtime.NumGoroutine()
+
+	StopLevelStatsNightly(id)
+
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if got := runtime.NumGoroutine(); got <= base+1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("level-stats nightly goroutine ignored its stop: %d goroutines (base %d)", runtime.NumGoroutine(), base)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	// Restart shape: the same trader id can re-wire after the stop.
+	WireLevelStatsNightly(st, id)
+	StopLevelStatsNightly(id)
 }
