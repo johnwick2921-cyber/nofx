@@ -8,24 +8,17 @@ import (
 )
 
 // NOTE-leak (armed_event_pass.go:67-72) RED→GREEN — the old close() armed a
-// 5s time.After on EVERY call, and once it fired with no receiver left (the
-// select had already returned via done), the timer's delivery goroutine
-// blocked forever: one permanent goroutine per Stop. With the fast path, no
-// timer is allocated at all for an already-finished loop; with the slow path,
-// the timer is stopped on return. RED: wait past the timer's firing time and
-// the leaked delivery goroutine must not appear.
-func TestArmedEventLoopCloseDoesNotLeakTimer(t *testing.T) {
+// 5s time.After on EVERY call, including the already-finished fast path: a
+// per-Stop timer allocation that lingers armed for 5s. The fix returns before
+// allocating any timer when the loop has already finished, and stops the timer
+// on the slow path. RED: AllocsPerRun pins the allocation — old code allocates
+// the timer + channel per close, new code allocates nothing.
+func TestArmedEventLoopCloseFastPathAllocatesNoTimer(t *testing.T) {
 	l := &armedEventLoop{kick: make(chan struct{}, 1), stop: make(chan struct{}), done: make(chan struct{})}
 	close(l.done) // the pass already finished — the fast path
-	runtime.GC()
-	time.Sleep(50 * time.Millisecond)
-	base := runtime.NumGoroutine()
-	l.close()
-
-	// The old code's timer fires at +5s; the new code has no timer at all.
-	time.Sleep(5*time.Second + 500*time.Millisecond)
-	if got := runtime.NumGoroutine(); got > base+2 {
-		t.Fatalf("armed-event close leaked the 5s timer's delivery goroutine: %d goroutines (base %d)", got, base)
+	allocs := testing.AllocsPerRun(200, func() { l.close() })
+	if allocs >= 1 {
+		t.Fatalf("a finished loop's close must not allocate a timer: %.1f allocs/run", allocs)
 	}
 }
 
@@ -52,7 +45,7 @@ func TestDrawdownMonitorStopsOnCancel(t *testing.T) {
 
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		if got := runtime.NumGoroutine(); got <= base+1 {
+		if got := runtime.NumGoroutine(); got <= base {
 			break
 		}
 		if time.Now().After(deadline) {

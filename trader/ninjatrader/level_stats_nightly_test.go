@@ -142,7 +142,7 @@ func TestLevelStatsNightlyProofDB(t *testing.T) {
 		t.Fatalf("clear copy day rows: %v", err)
 	}
 	before, _ := ls.Count()
-	n, err := runLevelStatsDayAt(st, ls, traderID, now)
+	n, err := runLevelStatsDayAt(st, ls, traderID, now, nil)
 	if err != nil {
 		t.Fatalf("nightly replay: %v", err)
 	}
@@ -239,17 +239,20 @@ func TestStopLevelStatsNightlyStopsTheGoroutine(t *testing.T) {
 	const id = "stop-test-trader"
 	WireLevelStatsNightly(st, id)
 
-	// Give the first evaluation a moment to finish so the goroutine is provably
-	// in the sleep select (or very close); the stop must still exit it.
-	time.Sleep(200 * time.Millisecond)
+	// Let the goroutine get running (it may still be mid-first-evaluation);
+	// the stop is asynchronous and must end it whenever it reaches the select.
+	time.Sleep(300 * time.Millisecond)
 	runtime.GC()
-	base := runtime.NumGoroutine()
+	base := runtime.NumGoroutine() // INCLUDES the nightly goroutine
 
 	StopLevelStatsNightly(id)
 
-	deadline := time.Now().Add(10 * time.Second)
+	// The observable is the goroutine LEAVING: the count must drop below the
+	// baseline that includes it. A goroutine that ignores its stop keeps the
+	// count at base forever and fails the deadline.
+	deadline := time.Now().Add(15 * time.Second)
 	for {
-		if got := runtime.NumGoroutine(); got <= base+1 {
+		if got := runtime.NumGoroutine(); got <= base-1 {
 			break
 		}
 		if time.Now().After(deadline) {
