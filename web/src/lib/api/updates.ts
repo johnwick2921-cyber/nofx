@@ -121,6 +121,81 @@ export interface UpdatesInstallResult {
   status?: number
 }
 
+// ── The authorization line (UPDATER-USABLE-V1 A) ───────────────────────────
+// The page's paste box takes the ONE line `updater-bootstrap authorize
+// <release_id>` prints: json.Marshal of updateauth.Grant, exactly
+// {release_id, job_id, expires_at, hmac}. The parser checks the SHAPE only —
+// the MAC is the server's to verify — but it must preserve the wire truth:
+// expires_at travels as a JSON NUMBER (unix seconds). A quoted one is refused
+// HERE with text that says so, because the server would answer 400 anyway and
+// the MAC is over the decimal text — no other encoding may alias it
+// (internal/updateauth/strict.go rawUnixSeconds, PR #200 fold F1).
+export interface InstallAuthorization {
+  release_id: string
+  job_id: string
+  expires_at: number
+  hmac: string
+}
+
+export type InstallAuthorizationParse =
+  | { ok: true; body: InstallAuthorization }
+  | { ok: false; error: string }
+
+export function parseInstallAuthorization(
+  text: string
+): InstallAuthorizationParse {
+  const trimmed = text.trim()
+  if (!trimmed) {
+    return { ok: false, error: 'paste the authorization line first' }
+  }
+  let raw: unknown
+  try {
+    raw = JSON.parse(trimmed)
+  } catch {
+    return {
+      ok: false,
+      error: 'not JSON — paste the one line updater-bootstrap authorize prints',
+    }
+  }
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    return { ok: false, error: 'not the authorization object' }
+  }
+  const r = raw as Record<string, unknown>
+  for (const k of ['release_id', 'job_id', 'expires_at', 'hmac'] as const) {
+    if (!(k in r)) {
+      return { ok: false, error: `missing ${k}` }
+    }
+  }
+  if (
+    typeof r.release_id !== 'string' ||
+    typeof r.job_id !== 'string' ||
+    typeof r.hmac !== 'string'
+  ) {
+    return {
+      ok: false,
+      error: 'release_id, job_id and hmac must be strings',
+    }
+  }
+  // expires_at MUST be a number here: Number() coercion would alias the
+  // quoted form the server refuses, so the paste is judged as parsed.
+  if (typeof r.expires_at !== 'number' || !Number.isInteger(r.expires_at)) {
+    return {
+      ok: false,
+      error:
+        'expires_at must be an unquoted whole number of unix seconds — the server refuses a quoted one',
+    }
+  }
+  return {
+    ok: true,
+    body: {
+      release_id: r.release_id,
+      job_id: r.job_id,
+      expires_at: r.expires_at,
+      hmac: r.hmac,
+    },
+  }
+}
+
 // ── GET /api/updates/jobs/:id and /jobs/:id/receipt (handler_updates.go:301) ──
 // M3: every id is 404 {error:"not found"} — there is no worker yet. The M4
 // worker's state machine (downloaded → … → complete | rolled_back |
@@ -187,16 +262,12 @@ export const updatesApi = {
   },
 
   // The body is EXACTLY the line `updater-bootstrap authorize` prints
-  // (json.Marshal of updateauth.Grant). expires_at is unix seconds as a JSON
-  // NUMBER: the server parses the raw bytes (internal/updateauth/strict.go
-  // rawUnixSeconds) and answers a quoted one 400 — the MAC is over its
-  // decimal text, so no other encoding may alias it (PR #200 fold F1).
-  async install(body: {
-    release_id: string
-    job_id: string
-    expires_at: number
-    hmac: string
-  }): Promise<UpdatesInstallResult> {
+  // (json.Marshal of updateauth.Grant, parsed by parseInstallAuthorization
+  // above — the caller pastes, never retypes). expires_at is unix seconds as
+  // a JSON NUMBER: the server parses the raw bytes (internal/updateauth/
+  // strict.go rawUnixSeconds) and answers a quoted one 400 — the MAC is over
+  // its decimal text, so no other encoding may alias it (PR #200 fold F1).
+  async install(body: InstallAuthorization): Promise<UpdatesInstallResult> {
     const res = await httpClient.request<{ job_id: string; error?: string }>(
       `${API_BASE}/updates/install`,
       { method: 'POST', data: body, headers: UPDATE_HEADERS, silent: true }
