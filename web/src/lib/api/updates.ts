@@ -66,10 +66,14 @@ export interface HealthStatus {
   revision?: string
 }
 
-// INSTALL_AUTHZ_UNDER_REVIEW ships ON until the CTO announces M3's adversarial
-// review closed; while ON the Install button is disabled with the exact text
-// below and no install POST can fire (pinned by its own test).
-export const INSTALL_AUTHZ_UNDER_REVIEW = true
+// INSTALL_AUTHZ_UNDER_REVIEW is the ONE constant gating the install control.
+// UPDATER-USABLE-V1 final commit (separate on purpose): flipped to false so
+// the install control's enabled state comes from the server alone
+// (install_enabled AND worker_listening) — the CTO can take or drop this
+// commit after his own adversarial pass. While true, the Install button is
+// disabled with the exact text below and no install POST can fire (pinned by
+// UpdatesPage.authzReview.test.tsx).
+export const INSTALL_AUTHZ_UNDER_REVIEW = false
 export const INSTALL_UNDER_REVIEW_TEXT = 'install authorization under review'
 
 // ── GET /api/installation-gate (trader/installation_gate.go InstallationGate) ──
