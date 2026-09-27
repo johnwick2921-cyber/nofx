@@ -76,7 +76,10 @@ jobs:
           # (v1.0.* / v1.0-*).
           # Unprovable ⇒ empty ⇒ [] — an uncomputed pair is absent, never
           # fabricated (canon 49/53).
-          OLD="$(bash deploy/release/resolve-rollback-old.sh "$NEW" "${TAG:-}" "${ROLLBACK_FROM:-}" || true)"
+          OLD=""
+          if [ -n "$NEW" ]; then
+            OLD="$(bash deploy/release/resolve-rollback-old.sh "$NEW" "${TAG:-}" "${ROLLBACK_FROM:-}" || true)"
+          fi
           printf '%s' "$OLD" | grep -Eqx '[0-9a-f]{40}' || OLD=""
           if [ -z "$NEW" ] || [ -z "$OLD" ]; then
             echo '[]'
