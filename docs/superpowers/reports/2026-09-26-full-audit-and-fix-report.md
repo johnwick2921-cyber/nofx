@@ -1,10 +1,62 @@
 # Full audit and fix report — Saturday 2026-09-26
 
-**For:** the owner. **Written by:** the CTO. First version at 01:00 CT Saturday 2026-09-26; **updated 07:00 CT** (see §0).
+**For:** the owner. **Written by:** the CTO. First version at 01:00 CT Saturday 2026-09-26; updated 07:00 CT; **updated 19:30 CT** (see §00, the newest).
 
 **Live system:** boot 3, nofx `6cac1b89`, release marker `04ae1c2f`, booted Friday 19:33 CT and restarted at 20:14 CT with `FAST_MARKET_REASONING=max`. The bot is flat. CME is closed until Sunday 17:00 CT.
 
 Evidence tiers: **[A]** means someone ran it or read the exact line. **[B]** means inferred from strong evidence. **[C]** means a guess.
+
+---
+
+## 00. Update at 19:30 CT Saturday: where everything stands
+
+### Nothing is live yet
+The bot is still boot 3 (`6cac1b89`), flat, NT8 connected. Every fix below is on **dev** (`66afdf1ab`) and goes live only at the attended boot.
+
+### Merged to dev today: 15 fixes
+The full test suite passed on the merged dev head (54 packages, 0 FAIL, 5d8fce94d; #245 added after is text and tests only). For every fix the CTO broke the fix on purpose and confirmed a test fails.
+
+| PR | Fix | What the CTO checked |
+|---|---|---|
+| #246 | Crash recovery per trader, DB lock timeout, loud writes | 3 of 3 breaks caught |
+| #249 | Leaks, bounded order queue that never drops, "unresolved" P&L | queue-drop break caught by 2 tests |
+| #248 | Planner: dead-setup salvage, repair hints | **sent back once** (untested checks); 3 of 3 breaks caught |
+| #250 | Flaky test that wrote into the source folder | guard fails when the old write returns |
+| #247 | Health, counters, scheduler; retention OFF | **sent back once** (backup would have filled the disk); now opt-in with a space check |
+| #252, #254 | Boot-day check script; it reads your planner level from `.env` | read-only; mismatch-only FAIL proven |
+| #253 | Security: owner-only onboarding, logout survives restart, login rate limit, one-time Telegram bind code, honest JWT boot line | 5 of 5 breaks caught |
+| #256 | Planner high-vs-max comparison script (for after one week on high) | win % denominator break caught |
+| #258 | CI no longer hangs on a live CoinAnk call | guard blocks any test that dials the internet |
+| #260 | Dead code part 1: 107 unused functions removed (agent 84, CoinAnk 23) | merged tree builds; nothing live removed |
+| #243 | NT8 disconnect clears the AddOn proof; stop-type orders wait until NT8 re-proves; the refusal says "not proven since reconnect", not "build too old" | **sent back once** (9 tests broke in CI); 2 of 3 breaks caught, the 3rd pinned in #245 |
+| **#261** | **Double entry after a reconnect: fixed.** A resent entry is decided from its OWN account's fresh order book; found at NT8 = not resent; no fresh book = wait, then drop, never guess. The AddOn also ignores a repeated signal id | **7 of 7 breaks caught**, including the cross-account case from the independent review |
+| #255 | Crash net on every long-running background task, plus a guard against new unprotected ones | **sent back once** (telegram guard); 3 of 3 breaks caught |
+| #245 | Studio and Guide labels say what the code does: 105 of 105 rows | text and tests only; counter pin break caught |
+
+### Held for YOUR decision: FIX-KNOBS (DS-105, not merged, not live)
+You asked for "no cosmetic, dead wire, all setting conflicts". DS-105 found 4 risk-control settings that show in Studio but do not do what they say. **Nothing is removed until you say.**
+
+| Setting | What it does today [A] | What FIX-KNOBS does |
+|---|---|---|
+| `max_contracts_enabled` (on/off switch) | Can turn the contract cap OFF | Removes the switch. **The contract cap stays and can no longer be turned off.** |
+| `notional_cap_enabled` (on/off switch) | Can turn the notional/leverage cap OFF | Removes the switch. **The cap stays and can no longer be turned off.** |
+| `max_margin_usage` | Text in the old crypto prompt only; no futures gate ever reads it | Removed (it never protected anything) |
+| `min_position_size` | Studio value; the real floor is hard-coded 12 in code. All 9 stored strategies hold 12 | Removed from Studio; the floor 12 stays in code. No sizing change |
+
+Also: the `sessions_enabled` list stops gating; the per-session ON switches you already use decide. No live strategy is affected (checked in the DB copy).
+
+**CTO recommendation: approve.** No protection is lost; two caps become impossible to switch off. If you want any switch kept, say which and DS-105 puts it back.
+
+### Still open
+- **DS-108** flaky-test fixes (test only, does not block the boot).
+- **Dead code part 2** waits for your go after the boot.
+
+### Boot (before Sunday 17:00 CT, you present)
+1. CTO: full gate at the final dev head, clean-clone release build, dry run.
+2. You: run the cutover command the CTO gives you; release the lock.
+3. You: NT8 **F5** recompile of the AddOn (the double-entry fix changed C#).
+4. You: one check: place one entry, hard-kill NT8 mid-send, reconnect; exactly **one** order exists for that signal.
+5. CTO: boot checks, including the first planner read showing **high**.
 
 ---
 
