@@ -267,11 +267,19 @@ export const updatesApi = {
 
   // The body is EXACTLY the line `updater-bootstrap authorize` prints
   // (json.Marshal of updateauth.Grant, parsed by parseInstallAuthorization
-  // above — the caller pastes, never retypes). expires_at is unix seconds as
-  // a JSON NUMBER: the server parses the raw bytes (internal/updateauth/
-  // strict.go rawUnixSeconds) and answers a quoted one 400 — the MAC is over
-  // its decimal text, so no other encoding may alias it (PR #200 fold F1).
-  async install(body: InstallAuthorization): Promise<UpdatesInstallResult> {
+  // above — the caller pastes, never retypes). The INLINE shape stays here
+  // on purpose: api/handler_updates_web_body_test.go reads it to prove the
+  // web client's declared keys/types are what ParseInstallRequest accepts.
+  // expires_at is unix seconds as a JSON NUMBER: the server parses the raw
+  // bytes (internal/updateauth/strict.go rawUnixSeconds) and answers a
+  // quoted one 400 — the MAC is over its decimal text, so no other encoding
+  // may alias it (PR #200 fold F1).
+  async install(body: {
+    release_id: string
+    job_id: string
+    expires_at: number
+    hmac: string
+  }): Promise<UpdatesInstallResult> {
     const res = await httpClient.request<{ job_id: string; error?: string }>(
       `${API_BASE}/updates/install`,
       { method: 'POST', data: body, headers: UPDATE_HEADERS, silent: true }
