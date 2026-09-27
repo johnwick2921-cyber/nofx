@@ -167,13 +167,22 @@ jobs:
       - name: Build the updater binaries (shipped beside the bot)
         run: |
           set -euo pipefail
-          go build -trimpath -o updater/nofx-updater ./cmd/nofx-updater
-          go build -trimpath -o updater/nofx-updater-bootstrap ./cmd/updater-bootstrap
-          for b in updater/nofx-updater updater/nofx-updater-bootstrap; do
+          # Built OUTSIDE the checkout, then copied in. A binary written into
+          # the tree is an untracked file, so the NEXT build reads
+          # vcs.modified=true — the first release run (v2026.09.27.1,
+          # 2026-09-27) refused exactly that on nofx-updater-bootstrap.
+          # Pinned by TestReleaseWorkflowGoBuildsWriteOutsideTheTree.
+          OUT="$RUNNER_TEMP/updater-bin"
+          mkdir -p "$OUT"
+          go build -trimpath -o "$OUT/nofx-updater" ./cmd/nofx-updater
+          go build -trimpath -o "$OUT/nofx-updater-bootstrap" ./cmd/updater-bootstrap
+          for b in "$OUT/nofx-updater" "$OUT/nofx-updater-bootstrap"; do
             go version -m "$b" > /tmp/updater-vcs.txt
             grep -q 'vcs.modified=false' /tmp/updater-vcs.txt || { echo "REFUSED: $b is not a clean build"; exit 1; }
             grep -q "vcs.revision=${{ steps.src.outputs.sha }}" /tmp/updater-vcs.txt || { echo "REFUSED: $b does not carry the tag's revision"; exit 1; }
           done
+          mkdir -p updater
+          cp "$OUT/nofx-updater" "$OUT/nofx-updater-bootstrap" updater/
 
       - name: Stage ONLY the allow-list
         run: bash deploy/release/package.sh "$PWD" /tmp/stage "${{ steps.src.outputs.sha }}"
