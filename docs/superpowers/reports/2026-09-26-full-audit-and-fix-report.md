@@ -33,7 +33,9 @@ The full test suite passed on the merged dev head (54 packages, 0 FAIL, 5d8fce94
 | #255 | Crash net on every long-running background task, plus a guard against new unprotected ones | **sent back once** (telegram guard); 3 of 3 breaks caught |
 | #245 | Studio and Guide labels say what the code does: 105 of 105 rows | text and tests only; counter pin break caught |
 
-### Held for YOUR decision: FIX-KNOBS (DS-105, not merged, not live)
+### FIX-KNOBS (DS-105): **OWNER SAID NO at 19:35 CT, so it is PARKED.** Not merged, not in this boot; all four settings stay exactly as they are today.
+
+(The table below is what it would have changed, kept for the record.)
 You asked for "no cosmetic, dead wire, all setting conflicts". DS-105 found 4 risk-control settings that show in Studio but do not do what they say. **Nothing is removed until you say.**
 
 | Setting | What it does today [A] | What FIX-KNOBS does |
