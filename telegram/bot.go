@@ -8,6 +8,7 @@ import (
 	"nofx/mcp"
 	_ "nofx/mcp/payment"
 	_ "nofx/mcp/provider"
+	"nofx/safe"
 	"nofx/store"
 	"nofx/telegram/agent"
 	"os"
@@ -209,7 +210,7 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 		// A message in flight across a re-mint finishes on the manager, and
 		// the token, it started with.
 		agents := ident.agents
-		go func(agents *agent.Manager, chatID int64, text string) {
+		safe.GoNet("tg-message-handler", "", func() {
 			sent, err := bot.Send(tgbotapi.NewMessage(chatID, "⏳"))
 			placeholderID := 0
 			if err == nil {
@@ -251,7 +252,7 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 					bot.Send(msg) //nolint:errcheck
 				}
 			}
-		}(agents, chatID, text)
+		})
 	}
 
 	return true

@@ -19,6 +19,7 @@ import (
 	"nofx/logger"
 	"nofx/provider/databento"
 	"nofx/provider/ninjatrader"
+	"nofx/safe"
 	"nofx/trader/types"
 )
 
@@ -58,14 +59,14 @@ func New(cfg Config) *Trader {
 		stopLoss: map[string]float64{},
 		takePrft: map[string]float64{},
 	}
-	go func() {
+	safe.GoNet("nt8-csv-tailer", "", func() {
 		_ = t.tailer.TailFills(context.Background(), func(f ninjatrader.FillRow) {
 			t.mu.Lock()
 			defer t.mu.Unlock()
 			t.lastFill = f
 			t.hasFill = true
 		})
-	}()
+	})
 	return t
 }
 

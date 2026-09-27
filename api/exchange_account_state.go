@@ -24,6 +24,7 @@ import (
 	"nofx/trader/okx"
 
 	"github.com/gin-gonic/gin"
+	"nofx/safe"
 )
 
 const exchangeAccountStateCacheTTL = 30 * time.Second
@@ -150,13 +151,13 @@ func (s *Server) getExchangeAccountStates(userID string) (map[string]ExchangeAcc
 	for _, exchangeCfg := range exchanges {
 		exchangeCfg := exchangeCfg
 		wg.Add(1)
-		go func() {
+		safe.GoNamed("exchange-state-probe", func() {
 			defer wg.Done()
 			state := probeExchangeAccountState(exchangeCfg, userID)
 			mu.Lock()
 			states[exchangeCfg.ID] = state
 			mu.Unlock()
-		}()
+		})
 	}
 
 	wg.Wait()

@@ -31,8 +31,24 @@ type dropWire struct {
 	addr string
 }
 
-// newDropWire: a started server whose far-side build is proven by a client
-// that then DISCONNECTS, so the next entry is queued, not written.
+// newDropWire: a started server whose far-side build was PROVEN by a client
+// that then DISCONNECTS. FIX-P1A truth: the disconnect RETIRES the proof —
+// closeConn clears farSideBuild, so after this fixture FarSideBuildID() == ""
+// and the far side is NOT proven. That is the production state after any NT8
+// link drop, and every test below re-anchors on it. The old fixture state
+// "proven AND disconnected" no longer exists in production, and no test may
+// fake it back (CTO ruling 2026-09-26: re-Store-ing the build after a
+// disconnect would assert a state the binary cannot be in).
+//
+// DEAD-WIRE LEDGER (maintenance-drop settle path): the path this fixture feeds
+// is STILL REACHABLE in production. Market entries (placeEntryWith →
+// server.SendSignal) and armed limit entries (PlaceLimitEntry → SendSignal)
+// are NOT capability-gated: they QUEUE while the link is down and the
+// maintenance hold drops them at flush (ownDropError → DroppedEntry sink →
+// onMaintenanceDroppedEntry). The capability-gated sends (stop-entry
+// tcp_trader.go:773, protective-stop :1121) refuse BEFORE SendSignal and were
+// never part of the drop queue. The queued-send production sequence is pinned
+// by the tests below (PendingSignalCount == 1 while unproven+disconnected).
 func newDropWire(t *testing.T) *dropWire {
 	t.Helper()
 	dir := withMaintenanceDir(t)
@@ -64,8 +80,11 @@ func newDropWire(t *testing.T) *dropWire {
 	for i := 0; i < 200 && s.IsConnected(); i++ {
 		time.Sleep(5 * time.Millisecond)
 	}
-	if s.IsConnected() || !ntwire.FarSideProven(s.FarSideBuildID(), top) {
-		t.Fatal("fixture: want a proven far side and NO connected client")
+	if s.IsConnected() {
+		t.Fatal("fixture: want NO connected client")
+	}
+	if got := s.FarSideBuildID(); got != "" {
+		t.Fatalf("fixture: the disconnect must RETIRE the far-side proof (closeConn, FIX-P1A), got build=%q", got)
 	}
 	nt := ntTrader.NewTCPTrader(s, "MNQ", "Sim101")
 	at := &AutoTrader{id: "drop-trader-1", store: st, exchange: "ninjatrader", trader: nt}

@@ -99,7 +99,7 @@ func (at *AutoTrader) startArmedEventLoop() {
 	if old := at.armedEvent.Swap(l); old != nil {
 		old.close()
 	}
-	go at.runArmedEventLoop(l)
+	at.goNetted("armed-event-loop", func() { at.runArmedEventLoop(l) })
 }
 
 // stopArmedEventLoop stops it (Stop): no event pass starts after this returns.

@@ -198,13 +198,8 @@ func (at *AutoTrader) maybeRunShadowAB(session, tradeDate, userPrompt string, ma
 		at.logWarnf("🔬 shadow A/B skipped: another shadow call is still in flight (never concurrent)")
 		return
 	}
-	go func() {
+	at.goNetted("shadow-ab", func() {
 		defer shadowABInFlight.Store(false)
-		defer func() {
-			if r := recover(); r != nil { // A10 — a measurement never takes the bot down
-				at.logWarnf("🔬 shadow A/B panicked (measurement only, live path unaffected): %v", r)
-			}
-		}()
 		mcp.ApplyThinking(runner.client, runner.mode, runner.effort)
 		cap := runner.maxTokens
 		req := &mcp.Request{
@@ -233,7 +228,7 @@ func (at *AutoTrader) maybeRunShadowAB(session, tradeDate, userPrompt string, ma
 		// executor call is never left on the shadow mode.
 		pm, pe := planReasoningWire()
 		mcp.ApplyThinking(runner.client, pm, pe)
-	}()
+	})
 }
 
 // FactsSnapshotJSON (B-1) renders the facts a rejected attempt was validated

@@ -303,7 +303,7 @@ func (at *AutoTrader) maybeRereadAfterDeath(now time.Time, session, tradeDate st
 	// Non-fatal and async, exactly like the flip read: a read that does not
 	// land a newer active version keeps the dormant plan and clears the
 	// once-key so the dormant branch retries next cycle.
-	go func() {
+	at.goNetted("death-reread", func() {
 		defer deathRereadInFlight.Delete(inflightKey)
 		// The row may have been re-armed between the dormant write and this
 		// goroutine's first instruction. Read it back and skip.
@@ -345,7 +345,7 @@ func (at *AutoTrader) maybeRereadAfterDeath(now time.Time, session, tradeDate st
 			at.logInfof("🗓️ plan %s %s v%d SUPERSEDED by the death re-read (new v%d).", tradeDate, session, row.Version, fresh.Version)
 		}
 		at.carryOwnerEditsInto(fresh.PlanID, row.Version, fresh.Version)
-	}()
+	})
 }
 
 // deathRereadKillerDirection renders the break direction for the prompt line

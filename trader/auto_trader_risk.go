@@ -18,7 +18,7 @@ const futuresMaxNotionalLeverage = 20.0
 // startDrawdownMonitor starts drawdown monitoring
 func (at *AutoTrader) startDrawdownMonitor() {
 	at.monitorWg.Add(1)
-	go func() {
+	at.goNetted("drawdown-monitor", func() {
 		defer at.monitorWg.Done()
 
 		ticker := time.NewTicker(1 * time.Minute) // Check every minute
@@ -41,7 +41,7 @@ func (at *AutoTrader) startDrawdownMonitor() {
 				return
 			}
 		}
-	}()
+	})
 }
 
 // monitorTick is one wall-clock monitor beat (every minute, independent of the

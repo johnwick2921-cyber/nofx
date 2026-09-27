@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"nofx/internal/updaterjob"
+	"nofx/safe"
 )
 
 // Budgets are the step budgets (brief §3.1 "constants, not knobs"; OQ-2 as
@@ -178,7 +179,7 @@ func (w *Worker) Start(ctx context.Context) (StartReport, error) {
 	if err != nil {
 		return rep, err
 	}
-	go w.run(ctx)
+	safe.GoNamed("updater-worker-run", func() { w.run(ctx) })
 	if rep.Active != "" {
 		w.signal()
 	}

@@ -9,6 +9,7 @@ import (
 	"nofx/kernel"
 	"nofx/logger"
 	"nofx/market"
+	"nofx/safe"
 	"nofx/store"
 )
 
@@ -67,7 +68,10 @@ func WireLevelStatsNightly(st *store.Store, traderID string) {
 	}
 	job := &levelStatsJob{stop: make(chan struct{})}
 	levelStatsJobs.Store(traderID, job)
-	go func() {
+	// panic-net-complete: the 24h-idling nightly loop is LONG-LIVED — a panic
+	// here must freeze the owning trader and exit cleanly, never kill the
+	// process. A restarted trader re-wires it via WireLevelStatsNightly.
+	safe.GoNet("level-stats-nightly-"+traderID, traderID, func() {
 		// B1: the run's error is LOGGED (with the trader id) — never discarded.
 		if _, err := runLevelStatsDayWithStop(st, ls, traderID, job.stop); err != nil {
 			logger.Warnf("level_stats: nightly evaluation trader=%s failed: %v", traderID, err)
@@ -86,7 +90,7 @@ func WireLevelStatsNightly(st *store.Store, traderID string) {
 				logger.Warnf("level_stats: nightly evaluation trader=%s failed: %v", traderID, err)
 			}
 		}
-	}()
+	})
 }
 
 // StopLevelStatsNightly stops THIS trader's nightly job (FIX-LEAKS NOTE).

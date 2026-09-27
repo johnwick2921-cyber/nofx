@@ -17,6 +17,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"nofx/safe"
 	"nofx/store"
 )
 
@@ -140,7 +141,7 @@ func RunDaily(st *store.Store, now time.Time, cfg Config) Report {
 // (catch-up stamp, like the agent scheduler: a missed minute still runs).
 // Errors are collected into the Report; nothing is retried within the day.
 func StartDaily(ctx context.Context, st *store.Store) {
-	go func() {
+	safe.GoNamed("retention-daily-ticker", func() {
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
 		lastDay := time.Now().Format("2006-01-02")
@@ -158,7 +159,7 @@ func StartDaily(ctx context.Context, st *store.Store) {
 				RunDaily(st, now, ResolveConfig())
 			}
 		}
-	}()
+	})
 }
 
 // traderIDs returns every trader id in the store (the per-trader prune

@@ -15,6 +15,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -42,6 +43,8 @@ namespace NinjaTrader.NinjaScript.AddOns
         private const int    ORDER_SNAPSHOT_INTERVAL_MS = 30000;
         private const int    RECONNECT_INTERVAL_MS   = 5000;  // spec L4415
         private const int    STALE_SIGNAL_AGE_SECONDS = 60;   // spec L4414
+        private const int    SEEN_SIGNAL_TTL_MINUTES  = 10;   // FIX-DOUBLE-ENTRY: replay dedupe memory (≥10 min per CTO ruling)
+        private const int    SEEN_SIGNAL_CAP          = 1024; // FIX-DOUBLE-ENTRY: bounded seen set
         // Wire-protocol generation. v2 = symbol-tagged fills + the hello handshake.
         // v3 (A2/G1) = identity stamp + echo-verify: order/modify/cancel frames carry
         // (trader_id, account, seq) and this AddOn echoes all three on fill/close/
@@ -154,6 +157,10 @@ namespace NinjaTrader.NinjaScript.AddOns
         // Go verifies it acted for the ORIGINATING trader. Guarded by signalMapLock.
         private class SignalIdentity { public string TraderId; public long Seq; }
         private readonly Dictionary<string, SignalIdentity> signalIdentity = new Dictionary<string, SignalIdentity>();
+        // FIX-DOUBLE-ENTRY — seen-signal set for replayed entry frames: keyed by
+        // signal_id, TTL SEEN_SIGNAL_TTL_MINUTES, NEVER cleared on fill (a
+        // post-fill duplicate must be ignored too). Bounded by SEEN_SIGNAL_CAP.
+        private readonly Dictionary<string, DateTime> seenSignals = new Dictionary<string, DateTime>();
 
         // A3 (G2) — session account ALLOWLIST. The AddOn executes ONLY on accounts
         // this session's bound traders use: the active account, any account the owner
@@ -1016,6 +1023,44 @@ namespace NinjaTrader.NinjaScript.AddOns
             {
                 signalEntryByOco[signalId] = entry;
                 signalTickSizeByOco[signalId] = tickSize;
+            }
+
+            // FIX-DOUBLE-ENTRY (far-side half of the Go attempted-entry guard,
+            // defence in depth — the Go side must be correct WITHOUT this):
+            // a SECOND entry frame carrying a signal_id already seen here is a
+            // replayed frame (Go re-queued an `attempted` entry on a mid-flush
+            // write failure and re-sent it after reconnect). The first entry may
+            // already be working or FILLED at NT8 — a resubmit would double the
+            // position. It is NOT submitted; it is answered with a fill frame
+            // status "duplicate_ignored", which Go treats as already-handled —
+            // never as a reject that re-arms. The seen set is NOT cleared on
+            // fill (a post-fill duplicate must be ignored too) and is bounded by
+            // a TTL + size cap.
+            lock (signalMapLock)
+            {
+                if (seenSignals.TryGetValue(signalId, out DateTime seenAt))
+                {
+                    if ((DateTime.UtcNow - seenAt).TotalMinutes < SEEN_SIGNAL_TTL_MINUTES)
+                    {
+                        LogWarn("VLTraderTCPClient: duplicate entry " + signalId + " ignored (seen-signal dedupe)");
+                        SendFillFrame(signalId, 0.0, side, qty, 0.0, "duplicate_ignored", symbol: symbol);
+                        return;
+                    }
+                }
+                seenSignals[signalId] = DateTime.UtcNow;
+                if (seenSignals.Count > SEEN_SIGNAL_CAP)
+                {
+                    // P3 (DS-101 adversarial review, 2026-09-26): a HARD cap —
+                    // evict oldest-first, TTL or not. A soft cap that removes
+                    // only expired entries is bounded by TTL x rate, not by
+                    // SEEN_SIGNAL_CAP.
+                    var oldest = seenSignals.OrderBy(kv => kv.Value)
+                                            .Take(seenSignals.Count - SEEN_SIGNAL_CAP)
+                                            .Select(kv => kv.Key).ToList();
+                    foreach (var k in oldest) seenSignals.Remove(k);
+                    LogWarn("VLTraderTCPClient: seen-signal set hit its hard cap " + SEEN_SIGNAL_CAP +
+                            " — evicted " + oldest.Count + " oldest entries (oldest-first)");
+                }
             }
 
             // Submit the ENTRY only; the protective SL/TP are placed once the

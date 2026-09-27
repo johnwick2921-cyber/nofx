@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"nofx/internal/updaterwire"
+	"nofx/safe"
 )
 
 // Handler answers one decoded, already-validated request. Its Response is
@@ -280,12 +281,12 @@ func (l *Listener) Serve(h Handler) error {
 			continue
 		}
 		wg.Add(1)
-		go func() {
+		safe.GoNamed("wire-conn-serve", func() {
 			defer wg.Done()
 			defer func() { <-sem }()
 			defer l.untrack(c)
 			l.serveConn(c, h)
-		}()
+		})
 	}
 }
 

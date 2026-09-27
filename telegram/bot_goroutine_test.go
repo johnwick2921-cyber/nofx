@@ -876,19 +876,48 @@ func TestRunBotGoroutinesReadNoBotIdentityField(t *testing.T) {
 		}
 	}
 	aiGoroutines := 0
+	countRun := func(m ast.Node) bool {
+		if se, ok := m.(*ast.SelectorExpr); ok {
+			if fn, ok := tp.info.Uses[se.Sel].(*types.Func); ok && fn.Name() == "Run" && fn.Pkg() != nil && fn.Pkg().Path() == "nofx/telegram/agent" {
+				aiGoroutines++
+			}
+		}
+		return true
+	}
 	ast.Inspect(runBot.Body, func(n ast.Node) bool {
-		g, ok := n.(*ast.GoStmt)
-		if !ok {
+		// Bare-go path: the pre-net shape, kept so the pin survives both forms.
+		if g, ok := n.(*ast.GoStmt); ok {
+			ast.Inspect(g.Call.Fun, countRun)
 			return true
 		}
-		ast.Inspect(g.Call.Fun, func(m ast.Node) bool {
-			if se, ok := m.(*ast.SelectorExpr); ok {
-				if fn, ok := tp.info.Uses[se.Sel].(*types.Func); ok && fn.Name() == "Run" && fn.Pkg() != nil && fn.Pkg().Path() == "nofx/telegram/agent" {
-					aiGoroutines++
+		// Net-wrapped path (panic-net-complete): a safe.GoNet / safe.GoNamed
+		// (or at.goNetted) call whose fn argument is a func literal that calls
+		// (*agent.Manager).Run counts as the SAME anchor. The no-identity-field
+		// rule already walks every func literal in the package (goroutineRule),
+		// so the wrapped body carries the same guard as the bare one.
+		if call, ok := n.(*ast.CallExpr); ok {
+			switch fun := ast.Unparen(call.Fun).(type) {
+			case *ast.SelectorExpr:
+				if fn, ok := tp.info.Uses[fun.Sel].(*types.Func); ok &&
+					(fn.Name() == "GoNet" || fn.Name() == "GoNamed") &&
+					fn.Pkg() != nil && fn.Pkg().Path() == "nofx/safe" {
+					for _, a := range call.Args {
+						if fl, ok := ast.Unparen(a).(*ast.FuncLit); ok {
+							ast.Inspect(fl.Body, countRun)
+						}
+					}
+				}
+			case *ast.Ident:
+				if fn, ok := tp.info.Uses[fun].(*types.Func); ok && fn.Name() == "goNetted" {
+					for _, a := range call.Args {
+						if fl, ok := ast.Unparen(a).(*ast.FuncLit); ok {
+							ast.Inspect(fl.Body, countRun)
+						}
+					}
 				}
 			}
 			return true
-		})
+		}
 		return true
 	})
 

@@ -7686,6 +7686,32 @@ loss is a lost exit/fill, assert the lock is acquired AT BEGIN (IMMEDIATE), not
 at the first write after reads; for every per-connection PRAGMA issued once via
 a pool handle, prove which pooled connections actually carry it.
 
+## CLASS NN (assigned at merge) — attempted entry replay (FIX-DOUBLE-ENTRY, 2026-09-26)
+
+An entry frame whose socket write was STARTED (`attempted`) may have reached the
+AddOn even though the write errored, and the flush re-queued it for the next
+reconnect (`tcp_server.go` W2 Sunday-Shield re-queue). Nothing read `attempted`,
+the 60s stale-age lease still passed, and the AddOn overwrote its
+`signalIdentity`/`pendingBrackets`/`workingEntries` dicts with no seen-signal
+skip — so a reconnect within the window could submit the SAME entry twice
+(second `CreateOrder` named `signal_id`), doubling the position and placing a
+second SL/TP bracket. Never observed on the box (0 mid-flush failures), but
+unguarded end to end (VERIFY-0926 double-entry, PROVEN P1).
+**Fixed:** the Go flush consults fresh post-reconnect broker truth before any
+attempted entry frame is written — settle when the order named `signal_id` is in
+a fresh snapshot or a fill echoed it; resend once when a fresh snapshot shows it
+absent; drop + `telemetry.IncGateBlock("attempted_entry_unverified")` + WARN when
+no fresh snapshot arrives within `ATTEMPTED_ENTRY_VERIFY_WAIT_S` (default 10s,
+always ON). The AddOn adds a bounded seen-signal set (TTL 10 min, never cleared
+on fill) that answers replays with fill status `duplicate_ignored`, which Go
+treats as already-handled. Non-entry commands (cancel/close/move_stop) are
+immediate writes and idempotent replays — never queued. Pinned at the production
+flush path (`attempted_replay_test.go`, six scenarios + variants) and the fill
+funnel (`TestDuplicateIgnoredReplyNeverTriggersRearm`). **Probe:** for every
+queued command frame that a reconnect can re-emit, prove EITHER the far side
+dedupes by an id that survives the reconnect, OR the re-emit is gated on
+fresh broker truth taken after the reconnect, OR the replay is idempotent by
+construction.
 ## CLASS NN (assigned at merge) — observability that records into a void
 
 **Found:** 2026-09-25, AUDIT-0926 system-pipeline P2 set (DS-107) [A]. Counters

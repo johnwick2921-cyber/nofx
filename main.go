@@ -33,6 +33,7 @@ import (
 
 	"github.com/google/uuid"
 	ntwire "nofx/provider/ninjatrader"
+	"nofx/safe"
 	ntTrader "nofx/trader/ninjatrader"
 )
 
@@ -718,14 +719,14 @@ func main() {
 	nofxiAgent.Start()
 	defer nofxiAgent.Stop()
 
-	go func() {
+	safe.GoNet("api-server", "", func() {
 		if err := server.Start(); err != nil {
 			logger.Fatalf("❌ Failed to start API server: %v", err)
 		}
-	}()
+	})
 
 	// Start Telegram bot (if TELEGRAM_BOT_TOKEN is configured)
-	go telegram.Start(cfg, st, telegramReloadCh)
+	safe.GoNet("telegram-bot", "", func() { telegram.Start(cfg, st, telegramReloadCh) })
 
 	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)

@@ -370,7 +370,13 @@ func (at *AutoTrader) actOnProtection(v protectionVerdict, symbol, side string, 
 			// The build gate lives behind this error. Naming it is the point:
 			// an old AddOn cannot honour the frame, and pretending otherwise
 			// would record a protection that does not exist (class 81).
-			at.logErrorf("🚨 protection PLACEMENT REFUSED/FAILED: %s %s ×%d stop=%.2f — %v", side, symbol, qty, v.StopPx, err)
+			// B1-B4: the refusal carries the trader id + symbol + qty + stop, and
+			// incUnprotected above already counted this pass. WARN (not ERROR):
+			// the P0 alert above is the human-pager; this line is the forensic
+			// trail. The NEXT 1-minute pass re-attempts once the reconnect hello
+			// re-proves the far-side build (FIX-P1A).
+			at.logWarnf("🧷 protection PLACEMENT REFUSED: trader=%s %s %s ×%d stop=%.2f — %v",
+				at.id, side, symbol, qty, v.StopPx, err)
 			return
 		}
 		at.logWarnf("🧷 protective stop SENT: %s %s ×%d stop=%.2f source=%s signal=%s — SENT is not CONFIRMED; the next pass reads the book",

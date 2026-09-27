@@ -9,6 +9,7 @@ import (
 	"nofx/discipline"
 	"nofx/logger"
 	"nofx/market"
+	"nofx/safe"
 	"nofx/store"
 	"nofx/telemetry"
 )
@@ -91,7 +92,7 @@ func (t *TCPTrader) StartPositionReconcile(traderID, exchangeID, exchangeType st
 		if n := RepairArmedLineage(st, traderID); n > 0 {
 			logger.Infof("🩹 RepairArmedLineage: stamped %d position(s) with their armed-fill plan linkage (the #567 class)", n)
 		}
-		go func() {
+		safe.GoNet("nt8-position-reconcile", "traderID", func() {
 			ticker := time.NewTicker(reconcileInterval)
 			defer ticker.Stop()
 			defer close(stopped)
@@ -108,7 +109,7 @@ func (t *TCPTrader) StartPositionReconcile(traderID, exchangeID, exchangeType st
 					t.reconcilePositions(traderID, exchangeID, exchangeType, st)
 				}
 			}
-		}()
+		})
 		logger.Infof("🔧 NinjaTrader position-reconcile started (anchors entry_price to NT8 avg + clears orphan rows)")
 	})
 }

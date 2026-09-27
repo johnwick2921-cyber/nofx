@@ -231,6 +231,11 @@ export const guards: GuideSection = {
           body: '"Refused this session" panel shows every label + count; reset at the 17:00 roll and on restart.',
           cite: 'web/src/components/plan/GateBlocksPanel.tsx',
         },
+        {
+          title: 'attempted-entry replay guard (FIX-DOUBLE-ENTRY)',
+          body: 'An entry frame whose socket write was STARTED (it may have reached NinjaTrader) is never re-sent blindly after a reconnect. Before re-sending, the bot requires FRESH broker truth taken after the reconnect: the order named by the signal id in a new order snapshot, or a fill echoing it → the frame is settled and dropped ("found at broker — not resent"). Absent from a fresh snapshot it is re-sent once; no fresh snapshot within the wait → dropped and counted (gate-block "attempted_entry_unverified"). Always ON — ATTEMPTED_ENTRY_VERIFY_WAIT_S only tunes the wait. A missed entry is acceptable; a double entry is not.',
+          cite: 'provider/ninjatrader/attempted_guard.go',
+        },
       ],
     },
     { kind: 'h', text: 'plan_mode — the three levels' },
