@@ -90,7 +90,7 @@ func TestInstallationGateNt8AbsentReadyWhenEveryLegPasses(t *testing.T) {
 	if a.LinkDownSince == "" {
 		t.Fatal("link_down_since must be recorded")
 	}
-	for _, name := range []string{"hold", "go_drained", "in_flight_sends", "queued_signals", "planner_in_flight", "ledger_exposure", "sim_accounts"} {
+	for _, name := range []string{"hold", "go_drained", "in_flight_sends", "queued_signals", "planner_in_flight", "ledger_exposure", "sim_accounts", "db_open_positions"} {
 		l, ok := absentLegOf(a, name)
 		if !ok {
 			t.Errorf("absent leg %s missing", name)
@@ -205,4 +205,45 @@ func TestInstallationGateNt8AbsentEachLedgerLegRefuses(t *testing.T) {
 		at.trader = ntTrader.NewTCPTrader(s, "MNQ", "")
 		mustFailAbsent(t, f.run().NT8Absent, "sim_accounts", "bound to no account")
 	})
+}
+
+// P1 (CTO 1790571298302): the absent verdict must carry a position leg — the
+// SAME store read CutoverGateStatus leg 1 uses. An OPEN trader_positions row
+// with NT8 absent ≥60s and every other leg green fails the verdict and NAMES
+// the row; a closed row leaves it ready.
+func TestInstallationGateNt8AbsentOpenPositionRefuses(t *testing.T) {
+	f, _ := newAbsentFixture(t)
+	if err := f.st.Position().CreateOpenPosition(&store.TraderPosition{TraderID: "gate-t1", Symbol: "MNQ", Side: "long"}); err != nil {
+		t.Fatal(err)
+	}
+	a := f.run().NT8Absent
+	mustFailAbsent(t, a, "db_open_positions", "open#")
+	l, _ := absentLegOf(a, "db_open_positions")
+	for _, want := range []string{"gate-t1", "MNQ", "long"} {
+		if !strings.Contains(l.Detail, want) {
+			t.Fatalf("the leg must name the row's trader, symbol and side: %q", l.Detail)
+		}
+	}
+}
+
+func TestInstallationGateNt8AbsentClosedRowStaysReady(t *testing.T) {
+	f, _ := newAbsentFixture(t)
+	if err := f.st.Position().CreateOpenPosition(&store.TraderPosition{TraderID: "gate-t1", Symbol: "MNQ", Side: "long"}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := f.st.Position().GetOpenPositions("gate-t1")
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("fixture: %v rows=%d", err, len(rows))
+	}
+	if _, err := f.st.Position().ClosePosition(rows[0].ID, rows[0].EntryPrice, "test", 0, 0, "sync"); err != nil {
+		t.Fatal(err)
+	}
+	g := f.run()
+	if g.NT8Absent == nil || !g.NT8Absent.Eligible || !g.NT8Absent.Ready {
+		t.Fatalf("a closed row must leave the absent verdict ready: %+v", g.NT8Absent)
+	}
+	l, ok := absentLegOf(g.NT8Absent, "db_open_positions")
+	if !ok || !l.Pass {
+		t.Fatalf("db_open_positions %+v", l)
+	}
 }

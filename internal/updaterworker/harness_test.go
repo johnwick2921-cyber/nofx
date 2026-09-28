@@ -767,6 +767,7 @@ func (b *box) gateView() GateView {
 				{Name: "planner_in_flight", Pass: !planner, Detail: "none"},
 				{Name: "ledger_exposure", Pass: flat, Detail: fmt.Sprintf("flat=%v", flat)},
 				{Name: "sim_accounts", Pass: sim, Detail: "Sim101 tradeable"},
+				{Name: "db_open_positions", Pass: flat, Detail: "0 open rows"},
 			}
 			abs.Ready = true
 			for _, l := range absLegs {

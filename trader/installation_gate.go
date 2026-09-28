@@ -468,6 +468,38 @@ func InstallationGateStatus(loaded map[string]*AutoTrader, st *store.Store) (g I
 		return true, fmt.Sprintf("%d bound account(s) SIM-tradeable", checked)
 	}
 
+	// db_open_positions — the DB's own record of exposure, per NT8 trader
+	// (UPDATER-NT8-CLOSED P1): the SAME store read CutoverGateStatus leg 1
+	// uses (store.Position().GetOpenPositions). With NT8 absent the broker
+	// legs cannot run, so this leg IS the position evidence. Fail-closed on
+	// any read error or unknown; each open row is NAMED (id, trader,
+	// symbol, side).
+	dbOpenLeg := func() (bool, string) {
+		if st == nil || st.Position() == nil {
+			return false, "position store unavailable — leg cannot be evaluated"
+		}
+		var exposed []string
+		total, traders := 0, 0
+		for _, id := range ids {
+			if _, ok := all[id].trader.(*ntTrader.TCPTrader); !ok {
+				continue
+			}
+			traders++
+			rows, err := st.Position().GetOpenPositions(id)
+			if err != nil {
+				return false, fmt.Sprintf("query failed for %s: %v", id, err)
+			}
+			total += len(rows)
+			for _, r := range rows {
+				exposed = append(exposed, fmt.Sprintf("open#%d %s %s %s", r.ID, r.TraderID, r.Symbol, r.Side))
+			}
+		}
+		if len(exposed) > 0 {
+			return false, "OPEN: " + strings.Join(exposed, ", ")
+		}
+		return true, fmt.Sprintf("0 open rows across %d NT8 trader(s)", traders)
+	}
+
 	// trader_cutover:<id> — each NT8 trader's legs 1, 2, 4
 	for _, at := range nts {
 		at := at
@@ -521,6 +553,7 @@ func InstallationGateStatus(loaded map[string]*AutoTrader, st *store.Store) (g I
 				{"planner_in_flight", "plannerReadInFlight ∪ weeklyReadClaim ∪ flipRereadInFlight ∪ deathRereadInFlight", plannerLeg},
 				{"ledger_exposure", "armed_orders + picture_htf_opportunities, all trader ids (canonical arm-state predicates)", ledgerLeg},
 				{"sim_accounts", "each bound trading account via IsAccountTradeable (the SIM-only order predicate, never weakened)", simAccountsLeg},
+				{"db_open_positions", "sqlite trader_positions — the SAME read as CutoverGateStatus leg 1, per NT8 trader", dbOpenLeg},
 			}
 			absent.Ready = true
 			for _, al := range absentLegs {
