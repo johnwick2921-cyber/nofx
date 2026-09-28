@@ -312,6 +312,36 @@ describe('UpdatesPage', () => {
     }
   )
 
+  // UPDATER-NT8-CLOSED item 5: the install surface is loopback :8080 only.
+  // A non-8080 origin (the :3000 dev server) gets the plain hint, never a
+  // bare cross-origin 403; the origin check itself is unchanged.
+  const stubLocationPort = (port: string) => {
+    Object.defineProperty(window, 'location', {
+      value: new URL(`http://localhost:${port}/`),
+      writable: true,
+      configurable: true,
+    })
+  }
+
+  it('a non-8080 origin shows the plain install hint', async () => {
+    stubLocationPort('3000')
+    render(<UpdatesPage />)
+    await waitFor(() =>
+      expect(screen.getByTestId('non-8080-origin')).toBeTruthy()
+    )
+    expect(screen.getByTestId('non-8080-origin')).toHaveTextContent(
+      'http://localhost:8080'
+    )
+    expect(screen.getByTestId('non-8080-origin')).toHaveTextContent('3000')
+  })
+
+  it('the :8080 origin shows no hint', async () => {
+    stubLocationPort('8080')
+    render(<UpdatesPage />)
+    await waitFor(() => expect(screen.getByText('no update job')).toBeTruthy())
+    expect(screen.queryByTestId('non-8080-origin')).toBeNull()
+  })
+
   it('a quoted expires_at fails the parse with its own text and never POSTs', async () => {
     enableInstall()
     render(<UpdatesPage />)
