@@ -60,6 +60,23 @@ func TestPlaceEntry_UnboundRefuses(t *testing.T) {
 	}
 }
 
+// TestPlaceEntry_NonSIMBoundAccountStillRefuses pins the SIM-only law AFTER
+// UPDATER-FLAT-LIVE-OK: a FLAT non-SIM connection may pass the installation
+// census now, but its account is STILL untradeable — the order path's refusal
+// is unchanged, and the exported gate predicate agrees with it.
+func TestPlaceEntry_NonSIMBoundAccountStillRefuses(t *testing.T) {
+	s := ntwire.NewTCPServer(nil)
+	s.SetAccountsList([]ntwire.AccountInfo{{Name: "Live123", IsSim: false}}, "Live123")
+
+	tr := NewTCPTrader(s, "MNQ", "Live123")
+	if tr.IsAccountTradeable("Live123") {
+		t.Fatal("IsAccountTradeable must be false for a non-SIM account, whatever the census says")
+	}
+	if _, err := tr.OpenWithBracket("MNQ", "long", 1, 0, 0); err == nil || !strings.Contains(err.Error(), "not tradeable") {
+		t.Fatalf("a NON-SIM bound account must refuse the entry after the census ruling: err=%v", err)
+	}
+}
+
 // TestGetPositions_ReadsBoundAccountNotCurrent locks the decoupling: a trader reads
 // its OWN bound account's positions, NOT the shared connection "current" account
 // (which the dashboard can switch for display). Without this, viewing another
