@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"nofx/internal/updaterjob"
+	"nofx/store"
 )
 
 const absentDown = 90 * time.Second
@@ -107,8 +108,83 @@ func TestDrainNt8AbsentNonSIMAccountRefuses(t *testing.T) {
 	if j.State != updaterjob.StateRecoveryNeeded {
 		t.Fatalf("state=%s", j.State)
 	}
-	if !strings.Contains(j.Error, "sim_accounts") {
-		t.Fatalf("error %q must name the sim_accounts leg", j.Error)
+	// the drain must NOT pass and the named failing leg must be the blocker
+	// text (CTO fold (a) — K_ready skips the ready check and passes the drain)
+	if !strings.Contains(j.Error, "sim_accounts: ") || !strings.Contains(j.Error, "tradeable") {
+		t.Fatalf("error %q must carry the named leg's blocker text", j.Error)
+	}
+}
+
+// The db_open_positions leg failing (the CTO P1 leg) must block the drain the
+// same way, with its own name in the blocker text.
+func TestDrainNt8AbsentOpenPositionLegRefuses(t *testing.T) {
+	r := newRig(t, withNT8Down(absentDown), func(b *box) { b.absentDbOpen = true })
+	if r.runCrashing(t) {
+		t.Fatal("drain passed although an OPEN trader_positions row exists")
+	}
+	j := r.job()
+	if j.State != updaterjob.StateRecoveryNeeded {
+		t.Fatalf("state=%s", j.State)
+	}
+	if !strings.Contains(j.Error, "db_open_positions: ") {
+		t.Fatalf("error %q must carry the db_open_positions blocker text", j.Error)
+	}
+}
+
+// CTO fold (b) — the worker's ELIGIBILITY check is the revoke: the drain's
+// read is eligible+ready (the drain stamps the absent path), then the verdict
+// flaps to eligible=false but, adversarially, ready=true with every leg
+// passing — the gate must NOT advance on the absent path. K_elig
+// ('if a == nil || !a.Eligible' → 'if a == nil') would let the gate pass and
+// the run completes; this pin goes RED.
+func TestDrainNt8AbsentNotEligibleNeverPassesEvenIfReady(t *testing.T) {
+	r := newRig(t, withNT8Down(absentDown), func(b *box) {
+		// reads: 1=preflight's flat check, 2=the drain (passes, stamps the
+		// path), 3=the gate — flapped there
+		b.absentOverride, b.absentFlapAt, b.absentEligible, b.absentReady = true, 3, true, true
+	})
+	if r.runCrashing(t) {
+		t.Fatal("drain passed although the gate says the absent path is NOT eligible")
+	}
+	j := r.job()
+	if j.State != updaterjob.StateRecoveryNeeded {
+		t.Fatalf("state=%s — the drain must fail on the normal path", j.State)
+	}
+	// the normal path's own blocker (no AddOn ack) is the real reason
+	if !strings.Contains(j.Error, "addon_ack") {
+		t.Fatalf("error %q must be the normal-path ack blocker, not the absent path", j.Error)
+	}
+}
+
+// CTO fold (c) — the hold on disk not ours refuses, even with the absent
+// verdict ready.
+func TestDrainNt8AbsentRefusesWhenTheHoldIsNotOurs(t *testing.T) {
+	r := newRig(t, withNT8Down(absentDown))
+	r.w.crash = func(q string) {
+		if q == "drained_acked/started" {
+			panic(crashPanic{q})
+		}
+	}
+	if !r.runCrashing(t) {
+		t.Fatal("drain never started")
+	}
+	r.w.crash = nil
+	// someone else's hold lands on disk mid-job (the REAL store writer — the
+	// hold_write seam is for the worker's own step)
+	if err := store.WriteMaintenanceHold(r.data, store.MaintenanceHold{Held: true, JobID: "job-u4-9999zzzz", Since: time.Now().UTC().Format(time.RFC3339), Owner: "operator"}); err != nil {
+		t.Fatal(err)
+	}
+	if r.runCrashing(t) {
+		t.Fatal("drain passed although the hold on disk is another job's")
+	}
+	j := r.job()
+	if j.State != updaterjob.StateRecoveryNeeded {
+		t.Fatalf("state=%s", j.State)
+	}
+	// the foreign hold is NAMED — either by the gate's job-id check (first) or
+	// by the absent hold-ours check; both are refusals of the same fact
+	if !strings.Contains(j.Error, "job-u4-9999zzzz") && !strings.Contains(j.Error, "hold on disk is not this job's") {
+		t.Fatalf("error %q must name the foreign hold", j.Error)
 	}
 }
 

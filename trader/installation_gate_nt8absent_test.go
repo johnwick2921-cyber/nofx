@@ -211,6 +211,21 @@ func TestInstallationGateNt8AbsentEachLedgerLegRefuses(t *testing.T) {
 // SAME store read CutoverGateStatus leg 1 uses. An OPEN trader_positions row
 // with NT8 absent ≥60s and every other leg green fails the verdict and NAMES
 // the row; a closed row leaves it ready.
+// The READY verdict must NAME the db_open_positions leg. A mutant that drops
+// the leg from absentLegs (and its closure, to keep the build) must fail
+// here even when every remaining leg passes — the leg's presence is pinned,
+// not just its behavior.
+func TestInstallationGateNt8AbsentLegsIncludeDbOpenPositions(t *testing.T) {
+	f, _ := newAbsentFixture(t)
+	a := f.run().NT8Absent
+	if a == nil || !a.Eligible || !a.Ready {
+		t.Fatalf("fixture must be ready: %+v", a)
+	}
+	if _, ok := absentLegOf(a, "db_open_positions"); !ok {
+		t.Fatalf("the ready verdict must name the db_open_positions leg: %+v", a.Legs)
+	}
+}
+
 func TestInstallationGateNt8AbsentOpenPositionRefuses(t *testing.T) {
 	f, _ := newAbsentFixture(t)
 	if err := f.st.Position().CreateOpenPosition(&store.TraderPosition{TraderID: "gate-t1", Symbol: "MNQ", Side: "long"}); err != nil {

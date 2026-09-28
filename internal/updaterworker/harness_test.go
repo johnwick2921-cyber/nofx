@@ -107,11 +107,17 @@ type box struct {
 	reverifyTamper   func(*ReleaseFacts)
 
 	// UPDATER-NT8-CLOSED knobs
-	addonDownSince time.Duration // >0: the AddOn is disconnected this long (stamped on the fake server's record); the ack is nil and the fake gate attaches its nt8_absent view
-	absentInflight bool          // nt8_absent leg: an entry send holds a permit
-	absentQueued   int           // nt8_absent leg: queued_signals
-	absentPlanner  bool          // nt8_absent leg: a planner read is in flight
-	absentSim      bool          // nt8_absent leg: the bound account is SIM-tradeable
+	addonDownSince  time.Duration // >0: the AddOn is disconnected this long (stamped on the fake server's record); the ack is nil and the fake gate attaches its nt8_absent view
+	absentInflight  bool          // nt8_absent leg: an entry send holds a permit
+	absentQueued    int           // nt8_absent leg: queued_signals
+	absentPlanner   bool          // nt8_absent leg: a planner read is in flight
+	absentSim       bool          // nt8_absent leg: the bound account is SIM-tradeable
+	absentDbOpen    bool          // nt8_absent leg: an OPEN trader_positions row (the CTO P1 leg)
+	absentOverride  bool          // attach the view with the flags below instead of the computed ones (the K_elig mutant probe)
+	absentEligible  bool
+	absentReady     bool
+	absentFlapAt    int // with absentOverride: from gate-read N onward the view flaps to eligible=false, ready=true (the gate must refuse — K_elig would let it through)
+	absentViewReads int // count of gate-view reads for the flap knob
 
 	calls       []string
 	violations  []string
@@ -748,35 +754,49 @@ func (b *box) gateView() GateView {
 		ready = ready && l.Pass
 	}
 	gv := GateView{Ready: ready, JobID: job, Legs: legs, Traders: []string{"t1"}, Note: "test"}
-	// UPDATER-NT8-CLOSED: when the AddOn is down, the fake gate attaches the
-	// nt8_absent view (eligible at ≥60s continuous link-down, stamped), with
-	// the absent leg set computed from the box knobs — mirrors
-	// trader/installation_gate.go field for field.
+	// UPDATER-NT8-CLOSED: the fake gate mirrors trader/installation_gate.go —
+	// the nt8_absent view is ATTACHED whenever an NT8 trader exists (also when
+	// the link is up: eligible=false, ready=false), and its flags are computed
+	// from the knobs; the override probes the worker's own eligibility check.
 	b.mu.Lock()
-	downSince, inflight, queued, planner, sim := b.addonDownSince, b.absentInflight, b.absentQueued, b.absentPlanner, b.absentSim
-	b.mu.Unlock()
-	if downSince > 0 {
-		downAt := b.clock.Now().Add(-downSince)
-		abs := &NT8AbsentView{Eligible: downSince >= 60*time.Second, LinkDownSince: downAt.UTC().Format(time.RFC3339Nano)}
-		if abs.Eligible {
-			absLegs := []GateLeg{
-				{Name: "hold", Pass: st.Held, Detail: "held=" + fmt.Sprint(st.Held)},
-				{Name: "go_drained", Pass: st.Held, Detail: "barrier engaged"},
-				{Name: "in_flight_sends", Pass: !inflight, Detail: fmt.Sprintf("in_flight_sends=%v", inflight)},
-				{Name: "queued_signals", Pass: queued == 0, Detail: fmt.Sprintf("queued_signals=%d", queued)},
-				{Name: "planner_in_flight", Pass: !planner, Detail: "none"},
-				{Name: "ledger_exposure", Pass: flat, Detail: fmt.Sprintf("flat=%v", flat)},
-				{Name: "sim_accounts", Pass: sim, Detail: "Sim101 tradeable"},
-				{Name: "db_open_positions", Pass: flat, Detail: "0 open rows"},
-			}
-			abs.Ready = true
-			for _, l := range absLegs {
-				abs.Ready = abs.Ready && l.Pass
-			}
-			abs.Legs = absLegs
+	downSince, inflight, queued, planner, sim, dbOpen := b.addonDownSince, b.absentInflight, b.absentQueued, b.absentPlanner, b.absentSim, b.absentDbOpen
+	override, eligible, ready := b.absentOverride, b.absentEligible, b.absentReady
+	if override && b.absentFlapAt > 0 {
+		b.absentViewReads++
+		if b.absentViewReads >= b.absentFlapAt {
+			eligible, ready = false, true // flap: eligible is gone, ready lies
 		}
-		gv.NT8Absent = abs
 	}
+	b.mu.Unlock()
+	abs := &NT8AbsentView{}
+	if override {
+		abs.Eligible, abs.Ready = eligible, ready
+		if ready {
+			abs.LinkDownSince = "2026-09-28T04:00:00Z"
+		}
+	} else if downSince > 0 {
+		downAt := b.clock.Now().Add(-downSince)
+		abs.Eligible = downSince >= 60*time.Second
+		abs.LinkDownSince = downAt.UTC().Format(time.RFC3339Nano)
+	}
+	if abs.Eligible || ready {
+		absLegs := []GateLeg{
+			{Name: "hold", Pass: st.Held, Detail: "held=" + fmt.Sprint(st.Held)},
+			{Name: "go_drained", Pass: st.Held, Detail: "barrier engaged"},
+			{Name: "in_flight_sends", Pass: !inflight, Detail: fmt.Sprintf("in_flight_sends=%v", inflight)},
+			{Name: "queued_signals", Pass: queued == 0, Detail: fmt.Sprintf("queued_signals=%d", queued)},
+			{Name: "planner_in_flight", Pass: !planner, Detail: "none"},
+			{Name: "ledger_exposure", Pass: flat, Detail: fmt.Sprintf("flat=%v", flat)},
+			{Name: "sim_accounts", Pass: sim, Detail: "Sim101 tradeable"},
+			{Name: "db_open_positions", Pass: !dbOpen, Detail: "0 open rows"},
+		}
+		abs.Ready = true
+		for _, l := range absLegs {
+			abs.Ready = abs.Ready && l.Pass
+		}
+		abs.Legs = absLegs
+	}
+	gv.NT8Absent = abs
 	return gv
 }
 
