@@ -83,6 +83,32 @@ minutes**, single use.
    post-update `deploy/RELEASE` marker commit per the boot procedure — that is
    a deploy-lane step, never yours from the Updates page.
 
+### The NT8-closed flow (preferred — UPDATER-NT8-CLOSED, owner ruling 22:1x CT 09-27)
+
+Close NT8 FIRST, then run the loop above. With NT8 closed nothing can trade
+(every account is NT8 SIM and Sim101 executes INSIDE NT8), so the updater
+PROCEEDS instead of waiting for an AddOn that cannot answer:
+
+- The drain takes the **nt8_absent** path — taken only when ALL hold: the
+  AddOn link has been down **≥60 s continuously** (measured from the bot's
+  per-connection record, never from a stale ack), the hold is present, the
+  entry barrier is drained, nothing is queued or in flight, no planner read
+  is claimed, the ledger has no placed/pending/working arm or picture row,
+  and every bound trading account is SIM-tradeable. The receipt records the
+  path and each leg's evidence; the job file says `nt8_absent (link down
+  since <ts>)`.
+- If NT8 reconnects DURING the job, the normal ack/census legs apply again
+  from that moment — the absent verdict is revoked, never grandfathered.
+- The NT8 step with NT8 absent: **no `.cs` change → nt8_skipped** (as
+  today); **a `.cs` change → the Go side completes and the job records
+  "AddOn F5 owed at next NT8 start"** — it does NOT park (NT8 is closed;
+  nobody can F5 now). `boot_verified` skips the AddOn-ack wait in this mode
+  and records that it did.
+- The simple owner flow: **close NT8 → authorize → paste → Update now →
+  wait for complete → open NT8** (and F5 first if the job recorded it).
+- With NT8 OPEN the census rule is exactly as before (you can still update
+  with NT8 open by disconnecting any live data connections first).
+
 ## 3. Recovery
 
 - **`recovery_needed`:** `nofx-updater recovery <job>` prints the manual steps
@@ -105,5 +131,7 @@ minutes**, single use.
 - **The worker never runs an update step by itself unattended:** `fetch`,
   `authorize`, the F5 and `resume` are all attended by you, in that order.
 - **Loopback-direct only.** The Updates page works when you open the bot at
-  `127.0.0.1`/`localhost` on this box, signed in as the enrolled account — not
-  through a proxy, a tunnel or the LAN name.
+  `127.0.0.1`/`localhost` **on port 8080**, signed in as the enrolled account —
+  not through a proxy, a tunnel, the LAN name, or the `:3000` dev server
+  (the page says so plainly instead of a bare refusal; the origin check
+  itself is unchanged).

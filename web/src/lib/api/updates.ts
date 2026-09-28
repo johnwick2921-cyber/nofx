@@ -84,12 +84,25 @@ export interface InstallationGateLeg {
   source: string
 }
 
+// UPDATER-NT8-CLOSED: the gate's nt8_absent verdict — present when an NT8 TCP
+// trader exists to measure the link; eligible when the link has been down
+// ≥60s continuously (measured from the server's per-connection record, never
+// inferred from a stale ack); ready only when eligible AND every ledger leg
+// passes on its own evidence. Legs stay ABSENT (not []) when not eligible.
+export interface NT8AbsentView {
+  eligible: boolean
+  ready: boolean
+  link_down_since?: string
+  legs?: InstallationGateLeg[]
+}
+
 export interface InstallationGate {
   ready: boolean
   job_id: string // "n/a" when no well-formed hold names one
   legs: InstallationGateLeg[]
   traders: string[]
   note: string
+  nt8_absent?: NT8AbsentView | null
 }
 
 // ── GET /api/updates (api/handler_updates.go:495 handleUpdatesStatus) ──

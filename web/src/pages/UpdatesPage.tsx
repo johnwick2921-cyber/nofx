@@ -356,6 +356,16 @@ export default function UpdatesPage() {
   const ack = maintenance?.addon_ack ?? null
   const completedBarsN = pivotWindow !== null ? pivotWindow + 4 : null
 
+  // UPDATER-NT8-CLOSED item 5: the install surface is loopback :8080 only.
+  // A page opened from a non-8080 origin (the :3000 dev server) can never
+  // pass the origin gate — the page says so plainly instead of a bare
+  // cross-origin 403. The origin check itself is UNCHANGED: this is a hint,
+  // never a bypass.
+  const non8080Origin =
+    typeof window !== 'undefined' &&
+    window.location.port !== '' &&
+    window.location.port !== '8080'
+
   return (
     <div className="space-y-5" data-testid="updates-page">
       {notEnrolled && (
@@ -382,6 +392,14 @@ export default function UpdatesPage() {
 
       {/* Panel B — Update */}
       <Panel title={up('updatePanel', language)}>
+        {non8080Origin && (
+          <p
+            className="mb-2 text-xs text-amber-400"
+            data-testid="non-8080-origin"
+          >
+            {up('openOn8080', language, { port: window.location.port })}
+          </p>
+        )}
         <div className="flex items-center gap-3">
           <button
             type="button"

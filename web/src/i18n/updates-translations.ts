@@ -69,6 +69,11 @@ export const updatesStrings = {
     zh: '安装已接受',
     id: 'Pemasangan diterima',
   },
+  openOn8080: {
+    en: 'open http://localhost:8080 to install — this page is served from port {port}, which the bot refuses for Updates (open the bot directly)',
+    zh: '请打开 http://localhost:8080 进行安装 — 本页面来自端口 {port}，机器人会拒绝该来源的更新请求（请直接打开机器人）',
+    id: 'buka http://localhost:8080 untuk memasang — halaman ini dilayani dari port {port}, yang ditolak bot untuk Pembaruan (buka bot langsung)',
+  },
 
   // hold / gate
   holdState: { en: 'Hold state', zh: '挂起状态', id: 'Status tahan' },
