@@ -14,15 +14,15 @@ func TestEnvScaleKnobSource(t *testing.T) {
 		want     float64
 		wantSrc  envcompat.Source
 	}{
-		"VL wins":          {"0.7", "0.3", 0.7, envcompat.SourceVL},
-		"NOFX fallback":    {"", "0.4", 0.4, envcompat.SourceNOFX},
-		"both empty":       {"", "", 0, envcompat.SourceDefault},
-		"garbage rejected": {"garbage", "0.4", 0, envcompat.SourceDefault},
+		"VL wins":               {"0.7", "0.3", 0.7, envcompat.SourceVL},
+		"NOFX fallback":         {"", "0.4", 0.4, envcompat.SourceNOFX},
+		"both empty":            {"", "", 0, envcompat.SourceDefault},
+		"garbage rejected":      {"garbage", "0.4", 0, envcompat.SourceDefault},
 		"non-positive rejected": {"-1", "0.4", 0, envcompat.SourceDefault},
 	} {
 		t.Setenv("VL_TEST_KNOB", c.vl)
 		t.Setenv("NOFX_TEST_KNOB", c.nofx)
-		got, src := envScaleKnob("TEST_KNOB")
+		got, src := envScaleKnob(envcompat.Env("TEST_KNOB"))
 		if got != c.want || src != c.wantSrc {
 			t.Errorf("%s: envScaleKnob = %v/%s, want %v/%s", name, got, src, c.want, c.wantSrc)
 		}

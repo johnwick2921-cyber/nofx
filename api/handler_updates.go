@@ -123,7 +123,7 @@ func updateVerifierName(v updateauth.Verifier) string {
 // dialled (a worker is started by hand, attended — not dialling at boot is
 // not knowing yet, so n/a, never "down").
 func (s *Server) configureUpdater() {
-	if envcompat.EnvValue("UPDATER") != "1" { // R5 removes: VL_/NOFX_ prefix is envcompat's business
+	if v, _ := envcompat.Env("UPDATER"); v != "1" { // R5 removes: VL_/NOFX_ prefix is envcompat's business
 		return
 	}
 	s.updaterOn = true

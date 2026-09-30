@@ -104,7 +104,7 @@ say "current: rev=$OLD_SHORT  releases → $RELEASES"
 # never-proven file on disk while the old process keeps serving. Reconcile the
 # way back against BOTH /api/health (the running process's own revision) and
 # the RELEASE marker. A mismatch, or neither consultable, refuses the cutover.
-HEALTH_URL="${NOFX_HEALTH_URL:-http://127.0.0.1:8080/api/health}"
+HEALTH_URL="${VL_HEALTH_URL:-${NOFX_HEALTH_URL:-http://127.0.0.1:8080/api/health}}" # R5 removes the NOFX twin
 HEALTH_REV="$(curl -s --max-time 5 "$HEALTH_URL" 2>/dev/null \
   | sed -n 's/.*"revision"[[:space:]]*:[[:space:]]*"\([0-9a-fA-F]*\)".*/\1/p' | tr 'A-F' 'a-f')"
 RELEASE_REV="$([ -f "$INSTALL/RELEASE" ] && tr -d '[:space:]' < "$INSTALL/RELEASE" 2>/dev/null | tr 'A-F' 'a-f')"
@@ -130,7 +130,7 @@ say "current reconciled: disk=$OLD_SHORT health=$(rev12 "${HEALTH_REV:-}") relea
 # comes from the environment and is never echoed, never logged, and never
 # accepted as an argument.
 [ -n "${NOFX_CUTOVER_TOKEN:-}" ] || die "cutover gate needs a token — set NOFX_CUTOVER_TOKEN (never pass it on the command line)"
-GATE_URL="${NOFX_GATE_URL:-http://127.0.0.1:8080/api/installation-gate}"
+GATE_URL="${VL_GATE_URL:-${NOFX_GATE_URL:-http://127.0.0.1:8080/api/installation-gate}}" # R5 removes the NOFX twin
 # The token never rides ANY process's argv ([25]/[29]): it is written to a 0600
 # header file and handed to curl as -H @file, so ps and /proc/<pid>/cmdline show
 # only the file path for the call's lifetime, and the file is removed on every

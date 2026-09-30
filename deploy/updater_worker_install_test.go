@@ -124,7 +124,7 @@ func TestInstallUpdaterWorkerScript(t *testing.T) {
 		home := t.TempDir()
 		writeEnv(t, home, "NOFX_RELEASE_DIR="+filepath.Join(home, "releases")+"\n", 0o600)
 		out, rc := run(t, home, "", strings.Repeat("b", 40))
-		if rc != 2 || !strings.Contains(out, "must set NOFX_RELEASE_DIR and NOFX_CUTOVER_TOKEN") {
+			if rc != 2 || !strings.Contains(out, "must set VL_RELEASE_DIR/NOFX_RELEASE_DIR") {
 			t.Fatalf("rc=%d out=%q", rc, out)
 		}
 	})

@@ -240,7 +240,8 @@ func fetch(t updaterworker.Target, releaseID string, stdout, stderr io.Writer) i
 	if !updaterwire.ValidReleaseID(releaseID) {
 		return refuse("invalid release id %q", releaseID)
 	}
-	inbox := strings.TrimSpace(envcompat.EnvValue("RELEASE_INBOX")) // R5 removes: VL_/NOFX_ prefix is envcompat's business
+	inbox, _ := envcompat.Env("RELEASE_INBOX") // R5 removes: VL_/NOFX_ prefix is envcompat's business
+	inbox = strings.TrimSpace(inbox)
 	if inbox == "" {
 		return refuse("%s is not set (the local inbox holding %s.tar.gz — there is no network fetch)", releaseInboxEnv, releaseID)
 	}
