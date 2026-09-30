@@ -1,3 +1,4 @@
+names rewritten to vl on 2026-09-30 (VL rename)
 <h1 align="center">VL Intelligent</h1>
 
 <p align="center">

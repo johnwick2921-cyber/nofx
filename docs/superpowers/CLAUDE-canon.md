@@ -1,3 +1,4 @@
+names rewritten to vl on 2026-09-30 (VL rename)
 # CLAUDE-canon — the operating rules that must SURVIVE, in a file a wave can reach
 
 **Why this file exists.** `~/vl/CLAUDE.md` is **untracked**. Every rule in it is
