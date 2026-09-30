@@ -20,9 +20,10 @@ import (
 	"strings"
 	"time"
 
-	nt "nofx/trader/ninjatrader"
+	"nofx/internal/envcompat"
 	"nofx/kernel"
 	"nofx/store"
+	nt "nofx/trader/ninjatrader"
 )
 
 const defaultTraderID = "8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265"
@@ -32,13 +33,13 @@ func main() {
 	traderFlag := flag.String("trader", "", "trader id (default: hoang day-plan trader)")
 	flag.Parse()
 
-	dbPath := os.Getenv("NOFX_DB_PATH")
+	dbPath, _ := envcompat.Env("DB_PATH") // R5 removes
 	if dbPath == "" {
 		dbPath = "data/data.db"
 	}
 	traderID := *traderFlag
 	if traderID == "" {
-		traderID = os.Getenv("NOFX_TRADER_ID")
+		traderID, _ = envcompat.Env("TRADER_ID") // R5 removes
 	}
 	if traderID == "" {
 		traderID = defaultTraderID

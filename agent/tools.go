@@ -1246,12 +1246,28 @@ func (a *Agent) toolGetExchangeConfigs(storeUserID string) string {
 }
 
 func latestBackendLogFilePath() string {
-	matches, err := filepath.Glob(filepath.Join("data", "nofx_*.log"))
-	if err != nil || len(matches) == 0 {
+	// BOTH prefixes; the newest by MTIME wins (lexicographic order would let
+	// a vl_/nofx_ prefix flip the choice — R5 removes the nofx glob).
+	var matches []string
+	for _, pat := range []string{"vl_*.log", "nofx_*.log"} {
+		hits, err := filepath.Glob(filepath.Join("data", pat))
+		if err == nil {
+			matches = append(matches, hits...)
+		}
+	}
+	if len(matches) == 0 {
 		return ""
 	}
-	sort.Strings(matches)
-	return matches[len(matches)-1]
+	best, bestAt := "", time.Time{}
+	for _, m := range matches {
+		if st, err := os.Stat(m); err == nil && st.ModTime().After(bestAt) {
+			best, bestAt = m, st.ModTime()
+		}
+	}
+	if best == "" {
+		return matches[len(matches)-1] // nothing statable: keep the old lexicographic result
+	}
+	return best
 }
 
 func isBackendErrorLikeLogLine(line string) bool {

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"nofx/internal/envcompat"
 	"nofx/logger"
 )
 
@@ -118,11 +119,11 @@ func (s *PositionStore) AdherenceDistribution() (map[string]int, error) {
 // uses, so it is safe against a live process. A failure here ABORTS the
 // migration: no backup, no write.
 func BackupBeforeRegrade(dbPath, stamp string) (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve home: %w", err)
+	root := envcompat.BackupRoot() // R5 removes: vl-backups wins, nofx-backups only when ~/nofx exists
+	if root == "" {
+		return "", fmt.Errorf("resolve home for the backup dir")
 	}
-	dir := filepath.Join(home, "nofx-backups", "adherence-regrade")
+	dir := filepath.Join(root, "adherence-regrade")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("create backup dir: %w", err)
 	}

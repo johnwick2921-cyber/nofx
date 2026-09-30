@@ -16,12 +16,14 @@ import (
 // vcs stamps are the install's clean sha, and every half is byte-identical to
 // the install's. The rollback is RollbackTo(snapshot, install, id).
 
-// snapshotRelease addresses a snapshot dir as a Release (sha = the install's).
-func snapshotRelease(dir, sha string) Release {
+// snapshotRelease addresses a snapshot dir as a Release (sha = the install's;
+// binName is the install's basename, kept as-is — a snapshot of a vl-bin
+// install restores to vl-bin). // R5 removes the nofx name.
+func snapshotRelease(dir, sha, binName string) Release {
 	return Release{
 		Dir:         dir,
 		SHA:         sha,
-		Binary:      filepath.Join(dir, "nofx-bin"),
+		Binary:      filepath.Join(dir, binName),
 		Dist:        filepath.Join(dir, "web", "dist"),
 		ReleaseFile: filepath.Join(dir, "RELEASE"),
 	}

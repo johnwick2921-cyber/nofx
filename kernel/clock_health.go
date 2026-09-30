@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"nofx/internal/envcompat"
 	"nofx/logger"
 	"nofx/market"
 )
@@ -143,7 +144,7 @@ func LogClockGuardBoot() {
 	// Guard timer state, judged by state-file freshness (the bot runs as a
 	// SYSTEM service and cannot reliably reach the user systemd manager, so the
 	// file the 15-min timer writes is the honest signal: fresh = active).
-	statePath := os.Getenv("NOFX_CLOCK_STATE")
+	statePath, _ := envcompat.Env("CLOCK_STATE") // R5 removes
 	if statePath == "" {
 		statePath = "data/clock-guard-state.json"
 	}

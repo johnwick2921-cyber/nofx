@@ -1,10 +1,11 @@
 package installpath
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"nofx/internal/envcompat"
 )
 
 // NOFX_RELEASE_DIR turns the install into VERSIONED runtimes:
@@ -35,7 +36,7 @@ var (
 // two parts of the same boot will read differently.
 func ReleaseDir() string {
 	releaseDirOnce.Do(func() {
-		releaseDirVal = strings.TrimSpace(os.Getenv("NOFX_RELEASE_DIR"))
+		releaseDirVal = strings.TrimSpace(envcompat.EnvValue("RELEASE_DIR")) // R5 removes
 	})
 	return releaseDirVal
 }

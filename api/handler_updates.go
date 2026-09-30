@@ -6,12 +6,12 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	"nofx/auth"
 	"nofx/config"
+	"nofx/internal/envcompat"
 	"nofx/internal/updateauth"
 	"nofx/internal/updaterjob"
 	"nofx/internal/updaterwire"
@@ -123,7 +123,7 @@ func updateVerifierName(v updateauth.Verifier) string {
 // dialled (a worker is started by hand, attended — not dialling at boot is
 // not knowing yet, so n/a, never "down").
 func (s *Server) configureUpdater() {
-	if os.Getenv(updaterKnobEnv) != "1" {
+	if envcompat.EnvValue("UPDATER") != "1" { // R5 removes: VL_/NOFX_ prefix is envcompat's business
 		return
 	}
 	s.updaterOn = true
@@ -270,7 +270,7 @@ var updatesRefusalCategories = map[string]string{
 	"install: MAC mismatch":                "install_mac",
 	"password changed since enrollment (re-enroll with --replace)":                                  "password_changed",
 	"install: expired under the seen-store lock, or at/below its clock floor (clock stepped back?)": "install_expired_under_lock",
-	"install: job-id store refused":                                                                    "job_store_refused",
+	"install: job-id store refused":                                                                 "job_store_refused",
 }
 
 // updatesRefusalCategory maps a refusal reason onto its closed category.

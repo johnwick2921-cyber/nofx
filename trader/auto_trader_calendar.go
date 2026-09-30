@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"nofx/calendar"
+	"nofx/internal/envcompat"
 	"nofx/kernel"
 	"nofx/store"
 )
@@ -114,7 +115,7 @@ func (at *AutoTrader) maybeFetchCalendar(now time.Time) {
 // calendar.Event ({"time": RFC3339-UTC, "currency", "title", "impact":"T1"}).
 // Missing/unreadable/invalid file → nil (FetchWeek reports SourceNone + warns).
 func calendarStaticLoader() []calendar.Event {
-	path := os.Getenv("NOFX_CALENDAR_STATIC")
+	path, _ := envcompat.Env("CALENDAR_STATIC") // R5 removes
 	if path == "" {
 		path = "calendar_static_t1.json"
 	}

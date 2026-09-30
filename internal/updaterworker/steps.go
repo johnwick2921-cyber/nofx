@@ -603,8 +603,8 @@ func (w *Worker) stepActivate(ctx context.Context, j updaterjob.Job) stepResult 
 	if err == nil {
 		res.set = func(k *updaterjob.Job) {
 			k.IdentityAfter = &next
-			// the new process names its log by ITS boot date
-			if p := w.predictedLog(w.host.Now()); p != k.LogPath {
+			// the new process names its log by ITS boot date and ITS binary
+			if p := w.predictedLog(w.host.Now(), j.Release.Binary); p != k.LogPath {
 				zero := int64(0)
 				k.LogPath, k.LogOffset = p, &zero
 			}
@@ -725,7 +725,11 @@ func (w *Worker) stepRollback(ctx context.Context, j updaterjob.Job) stepResult 
 	if j.Attempts > 1 || j.IdentityRollback == nil {
 		id, ok := w.currentIdentityRetry(ctx)
 		since := w.host.Now().Truncate(time.Second)
-		path := w.predictedLog(since)
+		bin := "nofx-bin" // R5 removes: the snapshot's own binary
+		if j.Snapshot != nil {
+			bin = j.Snapshot.Binary
+		}
+		path := w.predictedLog(since, bin)
 		off := fileSize(path)
 		k, err := w.update(j.JobID, j.State, j.Phase, func(k *updaterjob.Job) error {
 			if ok {
@@ -764,7 +768,7 @@ func (w *Worker) stepRollback(ctx context.Context, j updaterjob.Job) stepResult 
 	// no earlier boot of today, so a stale OK line cannot satisfy it. The
 	// activate path re-predicts the same way (stepActivate).
 	watchLogPath, watchLogOff := j.RollbackLogPath, *j.RollbackLogOffset
-	if p := w.predictedLog(w.host.Now()); p != watchLogPath {
+	if p := w.predictedLog(w.host.Now(), j.Snapshot.Binary); p != watchLogPath {
 		zero := int64(0)
 		watchLogPath, watchLogOff = p, zero
 	}

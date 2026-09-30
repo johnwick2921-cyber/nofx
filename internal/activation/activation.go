@@ -90,9 +90,13 @@ func Resolve(dir string) (Release, error) {
 	if dir == "" {
 		return Release{}, fmt.Errorf("release dir is empty")
 	}
+	bin, err := releaseBinaryName(dir)
+	if err != nil {
+		return Release{}, fmt.Errorf("release %s: %w", dir, err)
+	}
 	rel := Release{
 		Dir:          dir,
-		Binary:       filepath.Join(dir, "nofx-bin"),
+		Binary:       filepath.Join(dir, bin),
 		Dist:         filepath.Join(dir, "web", "dist"),
 		ReleaseFile:  filepath.Join(dir, "RELEASE"),
 		ManifestPath: filepath.Join(dir, "manifest.json"),
@@ -115,6 +119,27 @@ func Resolve(dir string) (Release, error) {
 	}
 	rel.SHA = m.SourceSHA
 	return rel, nil
+}
+
+// releaseBinaryName returns the release dir's ONE binary name: vl-bin when
+// present, else nofx-bin; BOTH present is refused (the dir must hold EXACTLY
+// ONE — R5 removes the nofx branch when the rename lands). Neither present is
+// refused too: a release without a binary would only fail later, after a kill.
+func releaseBinaryName(dir string) (string, error) {
+	vl, vlErr := os.Stat(filepath.Join(dir, "vl-bin"))
+	nfx, nfxErr := os.Stat(filepath.Join(dir, "nofx-bin"))
+	vlOK := vlErr == nil && vl.Mode().IsRegular()
+	nfxOK := nfxErr == nil && nfx.Mode().IsRegular()
+	switch {
+	case vlOK && nfxOK:
+		return "", fmt.Errorf("holds BOTH vl-bin and nofx-bin; a release dir must hold exactly one")
+	case vlOK:
+		return "vl-bin", nil
+	default:
+		// Neither present keeps the old reading (nofx-bin); the activate
+		// step fails on the missing binary, as it always did.
+		return "nofx-bin", nil
+	}
 }
 
 // Manifest re-reads the manifest for a resolved release.

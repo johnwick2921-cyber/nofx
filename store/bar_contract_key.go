@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+
+	"nofx/internal/envcompat"
 )
 
 // ── W-BARS-CONTRACT-KEY (2026-09-18) — THE CONTRACT JOINS THE PRIMARY KEY ────
@@ -212,17 +214,16 @@ func (r BarsKeyReport) BootLine() string {
 }
 
 // barsKeyBackupDir is where the pre-migration backup goes: BARS_KEY_BACKUP_DIR
-// if set (tests and failure injection), else ~/nofx-backups — beside the C1
-// timer's auto/ tree and the ad-hoc guarded-write snapshots.
+// if set (tests and failure injection), else envcompat.BackupRoot() — the
+// vl-backups tree, or nofx-backups only while ~/nofx exists (R5 removes).
 func barsKeyBackupDir() (string, error) {
 	if v := strings.TrimSpace(os.Getenv("BARS_KEY_BACKUP_DIR")); v != "" {
-		return v, nil
+		return v, nil // BARS_KEY_BACKUP_DIR still wins: an explicit dir is explicit
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve home for the backup dir: %w", err)
+	if root := envcompat.BackupRoot(); root != "" {
+		return root, nil
 	}
-	return filepath.Join(home, "nofx-backups"), nil
+	return "", fmt.Errorf("resolve home for the backup dir")
 }
 
 // barsKeyRequiredFree is the free space the backup dir must have before
