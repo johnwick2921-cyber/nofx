@@ -299,7 +299,7 @@ strategy, and trader through the UI (D1 step 10).
 | `deploy/vl-db-backup.sh` | `VL_DB` default `/home/hoang/vl/data/data.db` (`:17`); python3 sqlite backup API + `PRAGMA quick_check` + gzip; retention 14 daily / 8 weekly under `~/vl-backups/auto`. |
 | `deploy/vl-clock-guard.sh` | `VL_CLOCK_STATE` default `/home/hoang/vl/data/clock-guard-state.json` (`:25`); reads `/sys/class/rtc/rtc0/since_epoch`, `timedatectl timesync-status`, optional `powershell.exe`; writes state JSON for the Go P1.4 boot block. |
 | `deploy/fix-wsl2-clock.sh` | owner/sudo path — WSL2 has NO root-free clock resync (`deploy/vl-clock-guard.sh` header: hwclock absent, timesyncd slews only). |
-| `deploy/leveltruth-cutover.sh` | **`cd /home/hoang/vl` hardcoded** (`:8`); one-shot cutover for build sha `6fc09ad3` — HISTORICAL, do not copy or run on B. |
+| `deploy/cutover.sh` / the update button | the live cutover path (the retired one-shot `leveltruth-cutover.sh` was superseded by `cutover.sh` + the updater, Z8). |
 | `deploy/RESTORE.md` | restore runbook: `kill -9` the bot, swap `~/vl/data/data.db`, verify `quick_check` → `ok`, systemd relaunches. Paths are the machine's own. |
 | `deploy/vl-lock.sh` / `deploy/vl-claim.sh` | see C6/C7. |
 
@@ -746,7 +746,6 @@ deploy/install-db-backup.sh       1b29263c 2026-08-13 17:56:29 -0500
 deploy/vl-db-backup.sh          1b29263c 2026-08-13 17:56:29 -0500
 deploy/vl-clock-guard.sh        5cac3a80 2026-09-02 20:49:24 -0500
 deploy/fix-wsl2-clock.sh          1beef226 2026-08-30 23:55:41 -0500
-deploy/leveltruth-cutover.sh      108f44d2 2026-08-27 14:30:54 -0500
 deploy/RESTORE.md                 986a8fbe 2026-08-16 09:54:59 -0500
 deploy/RELEASE                    cd5b9a6b 2026-09-08 15:06:00 -0500
 deploy/vl-lock.sh               bd20be31 2026-09-03 22:04:13 -0500
