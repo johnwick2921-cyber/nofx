@@ -1,14 +1,5 @@
 import { useState } from 'react'
-import {
-  Plus,
-  X,
-  Database,
-  TrendingUp,
-  TrendingDown,
-  List,
-  Ban,
-  Zap,
-} from 'lucide-react'
+import { Plus, X, Database, TrendingUp, List, Ban, Layers } from 'lucide-react'
 import type { CoinSourceConfig } from '../../types'
 import { coinSource, ts } from '../../i18n/strategy-translations'
 import { VlSelect } from '../ui/select'
@@ -32,15 +23,15 @@ export function CoinSourceEditor({
 
   const sourceTypes = [
     { value: 'static', icon: List, color: '#848E9C' },
-    { value: 'ai500', icon: Database, color: '#F0B90B' },
-    { value: 'oi_top', icon: TrendingUp, color: '#0ECB81' },
-    { value: 'oi_low', icon: TrendingDown, color: '#F6465D' },
+    { value: 'hyper_all', icon: Database, color: '#F0B90B' },
+    { value: 'hyper_main', icon: TrendingUp, color: '#0ECB81' },
+    { value: 'mixed', icon: Layers, color: '#a855f7' },
   ] as const
 
-  // CME futures (e.g. MNQ) only use the Static symbol list — AI500 / OI rankings
-  // are crypto-only data feeds (and would make the engine fetch crypto data
-  // instead of trading MNQ). Hide them on futures (DISPLAY only — saved data is
-  // untouched) and treat the displayed type as Static there. Crypto shows all 4.
+  // CME futures (e.g. MNQ) only use the Static symbol list — Hyperliquid coin
+  // sources are crypto-only data feeds (and would make the engine fetch crypto
+  // data instead of trading MNQ). Hide them on futures (DISPLAY only — saved
+  // data is untouched) and treat the displayed type as Static there.
   const isFutures = isCMEFutures(config.static_coins?.[0])
   const visibleSourceTypes = isFutures
     ? sourceTypes.filter((s) => s.value === 'static')
@@ -344,102 +335,85 @@ export function CoinSourceEditor({
         )}
       </div>
 
-      {/* AI500 Options - only for ai500 mode */}
-      {effectiveSourceType === 'ai500' && (
+      {/* Hyperliquid All options — for hyper_all or mixed */}
+      {(effectiveSourceType === 'hyper_all' ||
+        effectiveSourceType === 'mixed') && (
         <div className="p-4 rounded-lg bg-vl-neo-gold/5 border border-vl-neo-gold/20">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 text-vl-neo-gold" />
+              <Database className="w-4 h-4 text-vl-neo-gold" />
               <span className="text-sm font-medium text-vl-neo-text">
-                AI500 {ts(coinSource.dataSourceConfig, language)}
+                {ts(coinSource.hyperAll, language)}{' '}
+                {ts(coinSource.dataSourceConfig, language)}
               </span>
             </div>
           </div>
-
-          <div className="space-y-3">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={config.use_ai500}
-                onChange={(e) =>
-                  !disabled &&
-                  onChange({ ...config, use_ai500: e.target.checked })
-                }
-                disabled={disabled}
-                className="w-5 h-5 rounded accent-vl-neo-gold"
-              />
-              <span className="text-vl-neo-text">
-                {ts(coinSource.useAI500, language)}
-              </span>
-            </label>
-
-            {config.use_ai500 && (
-              <div className="flex items-center gap-3 pl-8">
-                <span className="text-sm text-vl-neo-text-muted">
-                  {ts(coinSource.ai500Limit, language)}:
-                </span>
-                <VlSelect
-                  value={config.ai500_limit || 3}
-                  onChange={(val) =>
-                    !disabled &&
-                    onChange({ ...config, ai500_limit: parseInt(val) || 3 })
-                  }
-                  disabled={disabled}
-                  options={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => ({
-                    value: n,
-                    label: String(n),
-                  }))}
-                  className="px-3 py-1.5 rounded bg-vl-neo-bg border border-vl-neo-gold/20 text-vl-neo-text"
-                />
-              </div>
-            )}
-          </div>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={config.use_hyper_all}
+              onChange={(e) =>
+                !disabled &&
+                onChange({ ...config, use_hyper_all: e.target.checked })
+              }
+              disabled={disabled}
+              className="w-5 h-5 rounded accent-vl-neo-gold"
+            />
+            <span className="text-vl-neo-text">
+              {ts(coinSource.useHyperAll, language)}
+            </span>
+          </label>
+          <p className="text-xs pl-8 text-vl-neo-text-muted mt-1">
+            {ts(coinSource.hyperAllDesc, language)}
+          </p>
         </div>
       )}
 
-      {/* OI Top Options - only for oi_top mode */}
-      {effectiveSourceType === 'oi_top' && (
+      {/* Hyperliquid Main options — for hyper_main or mixed */}
+      {(effectiveSourceType === 'hyper_main' ||
+        effectiveSourceType === 'mixed') && (
         <div className="p-4 rounded-lg bg-vl-neo-success/5 border border-vl-neo-success/20">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-vl-neo-success" />
               <span className="text-sm font-medium text-vl-neo-text">
-                {ts(coinSource.oiIncreaseTitle, language)}{' '}
+                {ts(coinSource.hyperMain, language)}{' '}
                 {ts(coinSource.dataSourceConfig, language)}
               </span>
             </div>
           </div>
-
           <div className="space-y-3">
             <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"
-                checked={config.use_oi_top}
+                checked={config.use_hyper_main}
                 onChange={(e) =>
                   !disabled &&
-                  onChange({ ...config, use_oi_top: e.target.checked })
+                  onChange({ ...config, use_hyper_main: e.target.checked })
                 }
                 disabled={disabled}
                 className="w-5 h-5 rounded accent-vl-neo-success"
               />
               <span className="text-vl-neo-text">
-                {ts(coinSource.useOITop, language)}
+                {ts(coinSource.useHyperMain, language)}
               </span>
             </label>
-
-            {config.use_oi_top && (
+            {config.use_hyper_main && (
               <div className="flex items-center gap-3 pl-8">
                 <span className="text-sm text-vl-neo-text-muted">
-                  {ts(coinSource.oiTopLimit, language)}:
+                  {ts(coinSource.hyperMainLimit, language)}:
                 </span>
                 <VlSelect
-                  value={config.oi_top_limit || 3}
+                  value={config.hyper_main_limit || 20}
                   onChange={(val) =>
                     !disabled &&
-                    onChange({ ...config, oi_top_limit: parseInt(val) || 3 })
+                    onChange({
+                      ...config,
+                      hyper_main_limit: parseInt(val) || 20,
+                    })
                   }
                   disabled={disabled}
-                  options={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => ({
+                  options={[5, 10, 15, 20, 30, 50].map((n) => ({
                     value: n,
                     label: String(n),
                   }))}
@@ -447,60 +421,9 @@ export function CoinSourceEditor({
                 />
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* OI Low Options - only for oi_low mode */}
-      {effectiveSourceType === 'oi_low' && (
-        <div className="p-4 rounded-lg bg-vl-neo-danger/5 border border-vl-neo-danger/20">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <TrendingDown className="w-4 h-4 text-vl-neo-danger" />
-              <span className="text-sm font-medium text-vl-neo-text">
-                {ts(coinSource.oiDecreaseTitle, language)}{' '}
-                {ts(coinSource.dataSourceConfig, language)}
-              </span>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={config.use_oi_low}
-                onChange={(e) =>
-                  !disabled &&
-                  onChange({ ...config, use_oi_low: e.target.checked })
-                }
-                disabled={disabled}
-                className="w-5 h-5 rounded accent-red-500"
-              />
-              <span className="text-vl-neo-text">
-                {ts(coinSource.useOILow, language)}
-              </span>
-            </label>
-
-            {config.use_oi_low && (
-              <div className="flex items-center gap-3 pl-8">
-                <span className="text-sm text-vl-neo-text-muted">
-                  {ts(coinSource.oiLowLimit, language)}:
-                </span>
-                <VlSelect
-                  value={config.oi_low_limit || 3}
-                  onChange={(val) =>
-                    !disabled &&
-                    onChange({ ...config, oi_low_limit: parseInt(val) || 3 })
-                  }
-                  disabled={disabled}
-                  options={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => ({
-                    value: n,
-                    label: String(n),
-                  }))}
-                  className="px-3 py-1.5 rounded bg-vl-neo-bg border border-vl-neo-gold/20 text-vl-neo-text"
-                />
-              </div>
-            )}
+            <p className="text-xs text-vl-neo-text-muted">
+              {ts(coinSource.hyperMainDesc, language)}
+            </p>
           </div>
         </div>
       )}
