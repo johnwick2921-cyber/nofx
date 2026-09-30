@@ -25,7 +25,7 @@ answers `install_enabled: true` + `worker_listening: true`.
 2. **GitHub Environment `release`:** repo → Settings → Environments → `release`:
    add yourself as a REQUIRED REVIEWER. The signing key lives ONLY there.
 3. **Enroll this box:** see the M3 enrollment runbook —
-   `go run ./cmd/updater-bootstrap --install-dir <bot folder> enroll <your exact account email>`.
+   `go run ./cmd/vl-updater-bootstrap --install-dir <bot folder> enroll <your exact account email>`.
 4. **Turn the glue on:** `NOFX_UPDATER=1` (exactly 1) in the bot's environment,
    then restart the bot. Unset, nothing installs and the verifier is the stub.
 5. **Worker install** (no privilege escalation anywhere):
@@ -66,7 +66,7 @@ minutes**, single use.
    `data/updater/verdicts/`. No verdict, no install (`422 release not
    verified`).
 4. **Authorize (attended, single use):**
-   `go run ./cmd/updater-bootstrap --install-dir <bot folder> authorize <release_id>`,
+   `go run ./cmd/vl-updater-bootstrap --install-dir <bot folder> authorize <release_id>`,
    type `AUTHORIZE <release_id>`. It prints ONE JSON line —
    `{release_id, job_id, expires_at, hmac}` — valid 5 minutes, single use.
 5. **Paste + Update now.** Paste that line into the Updates page box and press

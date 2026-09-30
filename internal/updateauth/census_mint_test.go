@@ -216,7 +216,7 @@ func TestUpdateAuthImporterAdmissionIsExact(t *testing.T) {
 		"internal/updaterwire/ids2.go",
 		"internal/updaterbootstrapx/x.go",
 		"internal/updaterbootstrap/extra.go",
-		"cmd/updater-bootstrap/main.go",
+		"cmd/vl-updater-bootstrap/main.go",
 		"cmd/updater-anything/main.go",
 		"api/handler_updates_helper.go",
 	} {

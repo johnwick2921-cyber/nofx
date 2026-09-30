@@ -236,7 +236,7 @@ func TestHoldWriterAdmissionsArePinned(t *testing.T) {
 // vl/internal/updaterbootstrap is forbidden too — its Run reaches
 // updateauth.Authorize → ComputeMAC, the one door that mints an install MAC,
 // and nothing on the app side may mint (CTO ruling Q1(a)). Only its own
-// binary, cmd/updater-bootstrap, links it.
+// binary, cmd/vl-updater-bootstrap, links it.
 var (
 	tradingAppDirs          = []string{"api", "trader", "kernel", "agent", "telegram", "store"}
 	forbiddenWorkerPackages = []string{"vl/internal/updaterwire/wireserver", "vl/internal/updaterworker", "vl/internal/updaterbootstrap",

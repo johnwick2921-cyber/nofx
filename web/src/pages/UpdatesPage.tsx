@@ -244,7 +244,7 @@ export default function UpdatesPage() {
   }, [])
 
   // ── Panel B: two buttons, driven ONLY by the API + the pasted authz ───────
-  // The paste box parses the ONE line `updater-bootstrap authorize` prints.
+  // The paste box parses the ONE line `vl-updater-bootstrap authorize` prints.
   // Shape is checked in the browser (expires_at must be a JSON number) but
   // the MAC is the SERVER's to verify — the parsed body goes verbatim, never
   // retyped, so no other encoding can alias the MAC's decimal text.

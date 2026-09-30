@@ -51,7 +51,7 @@ import (
 // expires_at under device.key (possession factor; updateauth.Message is the
 // one layout).
 // Nothing on the API side can mint a MAC (CTO ruling Q1(a)): the
-// owner runs the attended `updater-bootstrap authorize <release_id>` on the
+// owner runs the attended `vl-updater-bootstrap authorize <release_id>` on the
 // box and pastes its {job_id, expires_at, hmac}.
 
 // updatesAdminIDKey carries the enrolled admin's user_id from the gate to the
@@ -480,7 +480,7 @@ func (s *Server) updatesRefusal(c *gin.Context) string {
 	// H1/H2 belt: the enrollment is bound to the password the row had at
 	// enrollment. Any change since — the owner's own, or one forced through a
 	// machine/stolen/retired token — un-enrolls until the owner re-runs the
-	// attended `updater-bootstrap enroll --replace` on the box.
+	// attended `vl-updater-bootstrap enroll --replace` on the box.
 	if !admin.PasswordStillBound(key, u.PasswordHash) {
 		return "password changed since enrollment (re-enroll with --replace)"
 	}

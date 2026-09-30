@@ -49,7 +49,7 @@ type Admin struct {
 	// users.password_hash) as it stood at enrollment. The /updates gate
 	// recomputes it from the CURRENT row: any password change — the owner's,
 	// or one forced through a stolen/machine token — un-enrolls (403 until
-	// `updater-bootstrap enroll --replace`), exactly as a reset-account does.
+	// `vl-updater-bootstrap enroll --replace`), exactly as a reset-account does.
 	// It is a MAC over a bcrypt hash under a key only this box holds: it
 	// reveals nothing about the password.
 	PasswordBinding string `json:"password_binding"`

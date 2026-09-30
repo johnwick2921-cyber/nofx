@@ -59,7 +59,7 @@ func Message(userID, releaseID, jobID string, expiresAt int64) ([]byte, error) {
 }
 
 // ComputeMAC returns the lowercase-hex HMAC-SHA256 of Message under key.
-// Callers: the attended `updater-bootstrap authorize` ONLY (CTO ruling Q1(a):
+// Callers: the attended `vl-updater-bootstrap authorize` ONLY (CTO ruling Q1(a):
 // nothing on the API side mints a MAC). A census test pins it.
 func ComputeMAC(key []byte, userID, releaseID, jobID string, expiresAt int64) (string, error) {
 	if len(key) != DeviceKeyLen || degenerateKey(key) {
@@ -105,7 +105,7 @@ func CheckExpiry(expiresAt int64, now time.Time) error {
 }
 
 // Grant is one install authorization: exactly the POST /api/updates/install
-// body, and exactly what `updater-bootstrap authorize` prints.
+// body, and exactly what `vl-updater-bootstrap authorize` prints.
 type Grant struct {
 	ReleaseID string `json:"release_id"`
 	JobID     string `json:"job_id"`

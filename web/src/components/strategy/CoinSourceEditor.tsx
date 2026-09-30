@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import type { CoinSourceConfig } from '../../types'
 import { coinSource, ts } from '../../i18n/strategy-translations'
-import { NofxSelect } from '../ui/select'
+import { VlSelect } from '../ui/select'
 import { isCMEFutures } from '../../lib/instrument'
 
 interface CoinSourceEditorProps {
@@ -386,7 +386,7 @@ export function CoinSourceEditor({
                 <span className="text-sm text-nofx-text-muted">
                   {ts(coinSource.ai500Limit, language)}:
                 </span>
-                <NofxSelect
+                <VlSelect
                   value={config.ai500_limit || 3}
                   onChange={(val) =>
                     !disabled &&
@@ -445,7 +445,7 @@ export function CoinSourceEditor({
                 <span className="text-sm text-nofx-text-muted">
                   {ts(coinSource.oiTopLimit, language)}:
                 </span>
-                <NofxSelect
+                <VlSelect
                   value={config.oi_top_limit || 3}
                   onChange={(val) =>
                     !disabled &&
@@ -504,7 +504,7 @@ export function CoinSourceEditor({
                 <span className="text-sm text-nofx-text-muted">
                   {ts(coinSource.oiLowLimit, language)}:
                 </span>
-                <NofxSelect
+                <VlSelect
                   value={config.oi_low_limit || 3}
                   onChange={(val) =>
                     !disabled &&

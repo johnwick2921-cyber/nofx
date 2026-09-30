@@ -25,7 +25,7 @@ func TestWorkerImportGuardRefusesTheMintingCLI(t *testing.T) {
 	censusWrite(t, root, "internal/updaterworker/hold.go", "package updaterworker\n")
 	censusWrite(t, root, "internal/updateauth/mac.go", "package updateauth\n\nfunc ComputeMAC() string { return \"\" }\n")
 	censusWrite(t, root, "internal/updaterbootstrap/bootstrap.go", "package updaterbootstrap\n\nimport \"vl/internal/updateauth\"\n\nfunc Run() string { return updateauth.ComputeMAC() }\n")
-	censusWrite(t, root, "cmd/updater-bootstrap/main.go", "package main\n\nimport \"vl/internal/updaterbootstrap\"\n\nfunc main() { _ = updaterbootstrap.Run() }\n")
+	censusWrite(t, root, "cmd/vl-updater-bootstrap/main.go", "package main\n\nimport \"vl/internal/updaterbootstrap\"\n\nfunc main() { _ = updaterbootstrap.Run() }\n")
 	censusWrite(t, root, "api/server.go", "package api\n\nimport _ \"vl/internal/updaterwire\"\n")
 	censusWrite(t, root, "trader/t.go", "package trader\n")
 	censusWrite(t, root, "main.go", "package main\n\nimport _ \"vl/api\"\n\nfunc main() {}\n")
