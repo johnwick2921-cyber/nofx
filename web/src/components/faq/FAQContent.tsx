@@ -90,7 +90,7 @@ export function FAQContent({
                       <div className="text-base">
                         {language === 'zh' ? '链接：' : 'Links:'}{' '}
                         <a
-                          href="https://github.com/johnwick2921-cyber/nofx/3"
+                          href="https://github.com/johnwick2921-cyber/nofx/issues/3"
                           target="_blank"
                           rel="noreferrer"
                           style={{ color: '#F0B90B' }}
@@ -99,7 +99,7 @@ export function FAQContent({
                         </a>
                         {'  |  '}
                         <a
-                          href="https://github.com/johnwick2921-cyber/nofx/5"
+                          href="https://github.com/johnwick2921-cyber/nofx/issues/5"
                           target="_blank"
                           rel="noreferrer"
                           style={{ color: '#F0B90B' }}
