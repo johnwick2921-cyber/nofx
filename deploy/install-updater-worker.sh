@@ -4,8 +4,8 @@
 # What this does, in order (every refusal is final and writes nothing):
 #   1. The source must be a NAMED, CLEAN sha: 40 hex. The binary is built
 #      from that exact commit in a THROWAWAY clone — the live install
-#      (~/nofx) is never checked out, never modified, never built over.
-#   2. %h/.config/nofx-updater/env (mode 0600) must exist and set
+#      (~/vl) is never checked out, never modified, never built over.
+#   2. %h/.config/vl-updater/env (mode 0600) must exist and set
 #      VL_RELEASE_DIR (absolute, OUTSIDE the install — the same containment
 #      the worker enforces, internal/updaterworker/releaseroot.go) and
 #      VL_CUTOVER_TOKEN (non-empty; never printed here).
@@ -13,7 +13,7 @@
 #      and vcs.revision=<sha> — a dirty or mis-labelled build is refused.
 #   4. The unit template at THAT sha is copied into ~/.config/systemd/user/
 #      and systemctl --user daemon-reload + enable run. The worker is NOT
-#      started here: start it attended (systemctl --user start nofx-updater).
+#      started here: start it attended (systemctl --user start vl-updater).
 #      serve refuses root, the bot's cgroup, and a set TZ — this unit avoids
 #      all three by construction.
 #
@@ -30,16 +30,16 @@
 set -uo pipefail
 
 SHA="${1:-}"
-# Shell twins VL_ → NOFX_ → default; the install default is the install-root
-# rule ($HOME/vl when present, else $HOME/nofx). R5 removes the NOFX twins.
+# Shell twins VL_ → NOFX_ → default; the install default is $HOME/vl
+# (plan v7 FINAL D2 item 7 :34). The repo URL STAYS the pre-rename owner repo
+# until the R4 commit (Z14). R5 removes the NOFX twins.
 REPO_URL="${VL_UPDATER_BUILD_REPO:-${NOFX_UPDATER_BUILD_REPO:-https://github.com/johnwick2921-cyber/nofx}}"
-DEFAULT_INSTALL="$HOME/vl"; [ -d "$DEFAULT_INSTALL" ] || DEFAULT_INSTALL="$HOME/nofx"
-INSTALL_DIR="${VL_UPDATER_INSTALL_DIR:-${NOFX_UPDATER_INSTALL_DIR:-$DEFAULT_INSTALL}}"
+INSTALL_DIR="${VL_UPDATER_INSTALL_DIR:-${NOFX_UPDATER_INSTALL_DIR:-$HOME/vl}}"
 
 usage() {
   echo "usage: install-updater-worker.sh <40-hex sha>" >&2
-  echo "  builds ~/bin/nofx-updater from that exact commit and installs the systemd --user unit" >&2
-  echo "  env: VL_/NOFX_UPDATER_BUILD_REPO (default $REPO_URL), VL_/NOFX_UPDATER_INSTALL_DIR (default \$HOME/vl when present, else \$HOME/nofx)" >&2
+  echo "  builds ~/bin/vl-updater from that exact commit and installs the systemd --user unit" >&2
+  echo "  env: VL_/NOFX_UPDATER_BUILD_REPO (default $REPO_URL), VL_/NOFX_UPDATER_INSTALL_DIR (default \$HOME/vl)" >&2
 }
 [ -n "$SHA" ] || { usage; exit 2; }
 printf '%s' "$SHA" | grep -Eqx '[0-9a-f]{40}' || {
@@ -48,7 +48,7 @@ printf '%s' "$SHA" | grep -Eqx '[0-9a-f]{40}' || {
 }
 [ -n "${HOME:-}" ] || { echo "install-updater-worker: REFUSED — no HOME" >&2; exit 2; }
 
-ENV_FILE="$HOME/.config/nofx-updater/env"
+ENV_FILE="$HOME/.config/vl-updater/env"
 [ -f "$ENV_FILE" ] || {
   echo "install-updater-worker: REFUSED — $ENV_FILE does not exist." >&2
   echo "  create it (mode 0600, owner you) with exactly two lines (VL_ names win):" >&2
@@ -88,7 +88,7 @@ esac
 echo "install-updater-worker: env ok (release dir outside the install; token present, not shown)"
 echo "install-updater-worker: note — VL_/NOFX_CUTOVER_TOKEN is a 24-hour gate-jwt (auth/auth.go:227); refresh it before each attended install window — no longer-lived token type exists"
 
-BUILD_DIR="$(mktemp -d /tmp/nofx-updater-build.XXXXXX)" || { echo "install-updater-worker: REFUSED — cannot make a build dir" >&2; exit 2; }
+BUILD_DIR="$(mktemp -d /tmp/vl-updater-build.XXXXXX)" || { echo "install-updater-worker: REFUSED — cannot make a build dir" >&2; exit 2; }
 trap 'rm -rf "$BUILD_DIR"' EXIT
 echo "install-updater-worker: cloning $REPO_URL (the live install is never touched)"
 git clone -q "$REPO_URL" "$BUILD_DIR/src" 2>/dev/null || { echo "install-updater-worker: REFUSED — clone failed ($REPO_URL)" >&2; exit 2; }
@@ -98,21 +98,21 @@ git -C "$BUILD_DIR/src" checkout -q --detach "$SHA" 2>/dev/null || { echo "insta
   echo "install-updater-worker: REFUSED — build failed at $SHA" >&2
   exit 2
 }
-go version -m "$BUILD_DIR/nofx-updater" > "$BUILD_DIR/vcs.txt" 2>/dev/null || { echo "install-updater-worker: REFUSED — cannot read the build stamp" >&2; exit 2; }
+go version -m "$BUILD_DIR/vl-updater" > "$BUILD_DIR/vcs.txt" 2>/dev/null || { echo "install-updater-worker: REFUSED — cannot read the build stamp" >&2; exit 2; }
 grep -q 'vcs.modified=false' "$BUILD_DIR/vcs.txt" || { echo "install-updater-worker: REFUSED — vcs.modified is not false" >&2; exit 2; }
 grep -q "vcs.revision=$SHA" "$BUILD_DIR/vcs.txt" || { echo "install-updater-worker: REFUSED — the binary does not carry the named sha" >&2; exit 2; }
 
 mkdir -p "$HOME/bin"
-install -m 0755 "$BUILD_DIR/nofx-updater" "$HOME/bin/nofx-updater" || { echo "install-updater-worker: REFUSED — cannot install $HOME/bin/nofx-updater" >&2; exit 2; }
+install -m 0755 "$BUILD_DIR/vl-updater" "$HOME/bin/vl-updater" || { echo "install-updater-worker: REFUSED — cannot install $HOME/bin/vl-updater" >&2; exit 2; }
 mkdir -p "$HOME/.config/systemd/user"
-cp "$BUILD_DIR/src/deploy/systemd-user/nofx-updater.service" "$HOME/.config/systemd/user/nofx-updater.service"
+cp "$BUILD_DIR/src/deploy/systemd-user/vl-updater.service" "$HOME/.config/systemd/user/vl-updater.service"
 if command -v systemctl >/dev/null 2>&1 && systemctl --user daemon-reload 2>/dev/null; then
-  if systemctl --user enable nofx-updater >/dev/null 2>&1; then
-    echo "install-updater-worker: unit installed and enabled; start it attended: systemctl --user start nofx-updater"
+  if systemctl --user enable vl-updater >/dev/null 2>&1; then
+    echo "install-updater-worker: unit installed and enabled; start it attended: systemctl --user start vl-updater"
   else
-    echo "install-updater-worker: unit installed (enable skipped); start it attended: systemctl --user start nofx-updater"
+    echo "install-updater-worker: unit installed (enable skipped); start it attended: systemctl --user start vl-updater"
   fi
 else
-  echo "install-updater-worker: note — systemctl unavailable; the unit file is installed at $HOME/.config/systemd/user/nofx-updater.service"
+  echo "install-updater-worker: note — systemctl unavailable; the unit file is installed at $HOME/.config/systemd/user/vl-updater.service"
 fi
-echo "install-updater-worker: DONE — $HOME/bin/nofx-updater from $SHA (clean, stamped); unit installed"
+echo "install-updater-worker: DONE — $HOME/bin/vl-updater from $SHA (clean, stamped); unit installed"
