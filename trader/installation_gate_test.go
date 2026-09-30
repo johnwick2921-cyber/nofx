@@ -157,6 +157,7 @@ func TestInstallationGateCensusCases(t *testing.T) {
 			a.Accounts = append(a.Accounts, ntwire.CensusAccount{Sim: false, Positions: 1})
 		}, "open position(s) on a non-SIM (live) account"},
 		"working order on a LIVE account": {func(a *ntwire.MaintenanceAckPayload) {
+			a.Connections[1].Connected = true // the connected non-SIM connection whose suffix must not survive a refusal
 			a.Accounts = append(a.Accounts, ntwire.CensusAccount{Sim: false, Working: 1})
 		}, "working order(s) on a non-SIM (live) account"},
 		// M2.1 (review d): a connection neither Connected nor Disconnected
