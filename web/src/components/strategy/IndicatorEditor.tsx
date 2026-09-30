@@ -16,7 +16,7 @@ import useSWR from 'swr'
 import { api } from '../../lib/api'
 import type { IndicatorConfig } from '../../types'
 import { indicator, ts } from '../../i18n/strategy-translations'
-import { NofxSelect } from '../ui/select'
+import { VlSelect } from '../ui/select'
 
 // Default NofxOS API Key
 const DEFAULT_NOFXOS_API_KEY = 'cm_568c67eae410d912c54c'
@@ -558,7 +558,7 @@ export function IndicatorEditor({
                       className="flex gap-2 mt-2"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <NofxSelect
+                      <VlSelect
                         value={config.oi_ranking_duration || '1h'}
                         onChange={(val) =>
                           !disabled &&
@@ -577,7 +577,7 @@ export function IndicatorEditor({
                           { value: '24h', label: '24h' },
                         ]}
                       />
-                      <NofxSelect
+                      <VlSelect
                         value={config.oi_ranking_limit || 10}
                         onChange={(val) =>
                           !disabled &&
@@ -674,7 +674,7 @@ export function IndicatorEditor({
                       className="flex gap-2 mt-2"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <NofxSelect
+                      <VlSelect
                         value={config.netflow_ranking_duration || '1h'}
                         onChange={(val) =>
                           !disabled &&
@@ -693,7 +693,7 @@ export function IndicatorEditor({
                           { value: '24h', label: '24h' },
                         ]}
                       />
-                      <NofxSelect
+                      <VlSelect
                         value={config.netflow_ranking_limit || 10}
                         onChange={(val) =>
                           !disabled &&
@@ -789,7 +789,7 @@ export function IndicatorEditor({
                       className="flex gap-2 mt-2"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <NofxSelect
+                      <VlSelect
                         value={config.price_ranking_duration || '1h,4h,24h'}
                         onChange={(val) =>
                           !disabled &&
@@ -812,7 +812,7 @@ export function IndicatorEditor({
                           },
                         ]}
                       />
-                      <NofxSelect
+                      <VlSelect
                         value={config.price_ranking_limit || 10}
                         onChange={(val) =>
                           !disabled &&

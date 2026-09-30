@@ -22,7 +22,7 @@ import { formatPrice, formatQuantity } from '../utils/format'
 import { t, type Language } from '../i18n/translations'
 import { LogOut, Loader2, Eye, EyeOff, Copy, Check } from 'lucide-react'
 import { DeepVoidBackground } from '../components/common/DeepVoidBackground'
-import { NofxSelect } from '../components/ui/select'
+import { VlSelect } from '../components/ui/select'
 import { GridRiskPanel } from '../components/strategy/GridRiskPanel'
 import { PlanCard } from '../components/plan/PlanCard'
 import { PictureHtfPanel } from '../components/trader/PictureHtfPanel'
@@ -1062,7 +1062,7 @@ export function TraderDashboardPage({
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-2">
                         <span>{t('traderDashboard.perPage', language)}:</span>
-                        <NofxSelect
+                        <VlSelect
                           value={positionsPageSize}
                           onChange={(val) => setPositionsPageSize(Number(val))}
                           options={[
@@ -1190,7 +1190,7 @@ export function TraderDashboardPage({
                 )}
               </div>
               {/* Limit Selector */}
-              <NofxSelect
+              <VlSelect
                 value={decisionsLimit}
                 onChange={(val) => onDecisionsLimitChange(Number(val))}
                 options={[

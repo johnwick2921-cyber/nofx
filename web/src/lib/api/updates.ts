@@ -139,7 +139,7 @@ export interface UpdatesInstallResult {
 }
 
 // ── The authorization line (UPDATER-USABLE-V1 A) ───────────────────────────
-// The page's paste box takes the ONE line `updater-bootstrap authorize
+// The page's paste box takes the ONE line `vl-updater-bootstrap authorize
 // <release_id>` prints: json.Marshal of updateauth.Grant, exactly
 // {release_id, job_id, expires_at, hmac}. The parser checks the SHAPE only —
 // the MAC is the server's to verify — but it must preserve the wire truth:
@@ -171,7 +171,8 @@ export function parseInstallAuthorization(
   } catch {
     return {
       ok: false,
-      error: 'not JSON — paste the one line updater-bootstrap authorize prints',
+      error:
+        'not JSON — paste the one line vl-updater-bootstrap authorize prints',
     }
   }
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
@@ -278,7 +279,7 @@ export const updatesApi = {
     return res.success && res.data ? res.data : null
   },
 
-  // The body is EXACTLY the line `updater-bootstrap authorize` prints
+  // The body is EXACTLY the line `vl-updater-bootstrap authorize` prints
   // (json.Marshal of updateauth.Grant, parsed by parseInstallAuthorization
   // above — the caller pastes, never retypes). The INLINE shape stays here
   // on purpose: api/handler_updates_web_body_test.go reads it to prove the

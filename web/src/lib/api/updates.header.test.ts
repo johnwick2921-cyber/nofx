@@ -17,7 +17,7 @@
 // are pinned to is testdata/updates-install-body.wire.txt (no trailing
 // newline — the file IS the body): the Go side feeds it to the production
 // parser and router (api/handler_updates_web_body_test.go) and pins
-// `updater-bootstrap authorize`'s printed line to it
+// `vl-updater-bootstrap authorize`'s printed line to it
 // (internal/updaterbootstrap/web_wire_test.go).
 
 import { readFileSync } from 'node:fs'
@@ -124,7 +124,7 @@ describe('every /api/updates* request carries X-NOFX-Update: 1 (the M3 gate refu
   )
 })
 
-describe('the install body on the wire is the grant `updater-bootstrap authorize` prints', () => {
+describe('the install body on the wire is the grant `vl-updater-bootstrap authorize` prints', () => {
   const wire = readFileSync(
     resolve(__dirname, 'testdata/updates-install-body.wire.txt'),
     'utf-8'
