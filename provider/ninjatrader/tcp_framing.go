@@ -149,8 +149,11 @@ type HelloPayload struct {
 // can see, WITHOUT NAMES (the repo is public; the census is counts and flags
 // only). The installation gate fails on: no ack for the current connection, an
 // ack for another job, a census the AddOn could not enumerate (CensusError, or
-// a nil list), any connected non-SIM connection, or any position / working
-// order on ANY account (CTO ruling Q1).
+// a nil list), any unsettled (transitional) connection, or any position /
+// working order on ANY account (CTO ruling Q1). A connected non-SIM (live)
+// connection alone does NOT fail: when every account is flat the update may
+// proceed (owner ruling 2026-09-28 — the updater never disconnects anything;
+// TRADING stays SIM-only, see isAccountTradeable).
 const (
 	FrameMaintenance    FrameType = "maintenance"
 	FrameMaintenanceAck FrameType = "maintenance_ack"

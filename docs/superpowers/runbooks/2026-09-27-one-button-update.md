@@ -106,8 +106,13 @@ PROCEEDS instead of waiting for an AddOn that cannot answer:
   and records that it did.
 - The simple owner flow: **close NT8 → authorize → paste → Update now →
   wait for complete → open NT8** (and F5 first if the job recorded it).
-- With NT8 OPEN the census rule is exactly as before (you can still update
-  with NT8 open by disconnecting any live data connections first).
+- With NT8 OPEN, live (non-SIM) connections may stay connected: the census
+  admits them when **every account is flat** — the census proves
+  `positions=0` and `working=0` across ALL accounts, live ones included
+  (owner ruling 2026-09-28; the updater never disconnects anything). Any
+  open position or working order on ANY account — live or SIM — still
+  refuses, as does any connection in a transitional state. The owner flow
+  is the same open or closed: **just flat**, then update.
 
 ## 3. Recovery
 

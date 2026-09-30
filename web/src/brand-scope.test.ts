@@ -67,6 +67,12 @@
 //     exported for the Picture floor pins (liveFrameMaxAgeMs → LiveFrameMaxAgeMs
 //     in bar_live_sink.go; tcp_server.go only re-qualifies its WARN field, one
 //     identifier renamed, no guard touched).
+// Bar-feed baseline advanced 2026-09-28 for UPDATER-FLAT-LIVE-OK (DS-103,
+// fix/updater-flat-live-ok): provider/ninjatrader/tcp_framing.go is
+// COMMENT-ONLY — the maintenance_ack census doc records the owner ruling
+// 2026-09-28 (a connected non-SIM connection is allowed when every account is
+// flat; TRADING stays SIM-only, see isAccountTradeable). No identifier
+// renamed, no guard removed, no wire shape changed.
 // Bar-feed baselines advanced 2026-09-10 for two owner-dispatched waves that
 // touched the protected files without renaming an identifier:
 //   provider/ninjatrader/tcp_server.go  @ a53359ce (fix/contract-roll: the

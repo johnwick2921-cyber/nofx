@@ -480,7 +480,7 @@ addon_ack is the CURRENT AddOn connection's maintenance_ack only (null before on
 				s.handleMaintenanceStatus)
 			s.routeWithSchema(protected, "GET", "/installation-gate", "Installation-wide update gate: every trader, every account, one verdict (W-ONE-BUTTON M2; read-only)",
 				`Returns: {"ready":<bool>,"job_id":"<string>|n/a","legs":[{"name":"<string>","pass":<bool>,"detail":"<string>","source":"<string>"}],"traders":["<id>"],"note":"<string>"}
-Legs: hold · go_drained · in_flight_sends · queued_signals · planner_in_flight (union of every planner-class claim, any trader) · traders_nt8 · addon_ack · addon_census (no connected non-SIM connection, no position or working order on ANY account) · ledger_exposure (all trader ids) · trader_cutover:<id> (legs 1, 2, 4). A leg that cannot be evaluated fails.`,
+Legs: hold · go_drained · in_flight_sends · queued_signals · planner_in_flight (union of every planner-class claim, any trader) · traders_nt8 · addon_ack · addon_census (every connection settled; no position and no working order on ANY account — a connected non-SIM connection is allowed when every account is flat, owner ruling 2026-09-28) · ledger_exposure (all trader ids) · trader_cutover:<id> (legs 1, 2, 4). A leg that cannot be evaluated fails.`,
 				s.handleInstallationGate)
 			s.routeWithSchema(protected, "GET", "/decisions", "AI trading decisions (decision records)",
 				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>&limit=<int, default 20>
