@@ -1,4 +1,8 @@
 // Dispatch 102 freezes load-bearing identifiers, including their surrounding guards.
+// OWNER RULING 2026-09-30 (plan v7 FINAL R1b.10 / Z21, reverses the 09-08
+// Dispatch 102): the protected namespace is now `vl/…`; the old module prefix
+// is forbidden (Go: TestNoOldModuleImport; this file's base stays the
+// pre-rename commit — no TS import target holds the old token).
 // Ops baselines advanced 2026-09-30 for RENAME-R1a (feat/rename-vl-r1a, DS-103,
 // owner ruling 2026-09-29 "dual readers"): three pinned deploy scripts become
 // dual readers by dispatch, not by drift —
@@ -321,11 +325,12 @@ it('preserves every existing TypeScript import target in changed files', async (
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     })
-  // The base is a nofx commit. A mirror clone (the VL partner repo) does not
-  // carry nofx history, so the pin cannot be evaluated there: skip with the
-  // reason stated instead of failing on `git diff` (bad object). In nofx itself
-  // the commit exists and the check runs unchanged. TypeScript twin of the Go
-  // skip in branding/scope_test.go (TestExistingGoImportTargetsPreserved).
+  // The base is a pre-rename commit (A4-S3 P3-7). A mirror clone (the VL
+  // partner repo) does not carry nofx history, so the pin cannot be evaluated
+  // there: skip with the reason stated instead of failing on `git diff` (bad
+  // object). In nofx itself the commit exists and the check runs unchanged.
+  // TypeScript twin of the Go skip in branding/scope_test.go
+  // (TestExistingGoImportTargetsPreserved).
   let baseIsPresent = true
   try {
     git(['cat-file', '-e', `${base}^{commit}`])
@@ -350,6 +355,20 @@ it('preserves every existing TypeScript import target in changed files', async (
         : []
     )
   }
+  // W-EXEC-TRUTH W0 twin (the Go preserveImports move rule): a target that
+  // left THIS file but is still imported by another tracked file was MOVED —
+  // a legitimate refactor (e.g. the D2-WEB fold deleted the NofxOS Studio
+  // surface and IndicatorEditor.tsx dropped its `../ui/select` import while
+  // five other files keep importing it) — and is preserved; a target that
+  // vanished from the module is rejected.
+  const headTargets = new Set<string>()
+  for (const f of git(['ls-files', '--', '*.ts', '*.tsx'])
+    .trim()
+    .split('\n')
+    .filter(Boolean)) {
+    for (const t of targets(readFileSync(resolve('..', f), 'utf8')))
+      headTargets.add(t)
+  }
   for (const path of git(['diff', '--name-only', base, '--', '*.ts', '*.tsx'])
     .trim()
     .split('\n')
@@ -361,9 +380,11 @@ it('preserves every existing TypeScript import target in changed files', async (
       continue
     }
     const current = targets(readFileSync(resolve('..', path), 'utf8'))
-    for (const target of targets(old))
+    for (const target of targets(old)) {
+      if (current.includes(target) || headTargets.has(target)) continue
       expect(current, `${path}: existing import target ${target}`).toContain(
         target
       )
+    }
   }
 })
