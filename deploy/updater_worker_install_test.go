@@ -17,12 +17,12 @@ import (
 )
 
 func TestUpdaterWorkerServiceTemplate(t *testing.T) {
-	svc := repoFile(t, "deploy/systemd-user/nofx-updater.service")
+	svc := repoFile(t, "deploy/systemd-user/vl-updater.service")
 	for _, want := range []string{
 		"[Unit]",
 		"Type=simple",
-		"ExecStart=%h/bin/nofx-updater --install-dir %h/nofx serve",
-		"EnvironmentFile=%h/.config/nofx-updater/env",
+		"ExecStart=%h/bin/vl-updater --install-dir %h/vl serve",
+		"EnvironmentFile=%h/.config/vl-updater/env",
 		"UnsetEnvironment=TZ",
 		"[Install]",
 		"WantedBy=default.target",
@@ -52,6 +52,11 @@ func TestInstallUpdaterWorkerScript(t *testing.T) {
 		"vcs.modified=false",
 		"vcs.revision=$SHA",
 		"40-hex",
+		// item 7: builds cmd/vl-updater, stamps and installs the vl
+		// binary, and installs the vl-updater unit (D2-OPS).
+		"$BUILD_DIR/vl-updater",
+		"$HOME/bin/vl-updater",
+		"systemd-user/vl-updater.service",
 		// the token has a 24-hour lifetime and there is no longer-lived type
 		"24-hour",
 	} {
@@ -89,7 +94,7 @@ func TestInstallUpdaterWorkerScript(t *testing.T) {
 
 	writeEnv := func(t *testing.T, home, body string, mode os.FileMode) {
 		t.Helper()
-		dir := filepath.Join(home, ".config", "nofx-updater")
+		dir := filepath.Join(home, ".config", "vl-updater")
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			t.Fatal(err)
 		}
@@ -115,7 +120,7 @@ func TestInstallUpdaterWorkerScript(t *testing.T) {
 	t.Run("a missing env file is refused with its exact path", func(t *testing.T) {
 		home := t.TempDir()
 		out, rc := run(t, home, "", strings.Repeat("a", 40))
-		if rc != 2 || !strings.Contains(out, ".config/nofx-updater/env does not exist") {
+		if rc != 2 || !strings.Contains(out, ".config/vl-updater/env does not exist") {
 			t.Fatalf("rc=%d out=%q", rc, out)
 		}
 	})
@@ -124,7 +129,7 @@ func TestInstallUpdaterWorkerScript(t *testing.T) {
 		home := t.TempDir()
 		writeEnv(t, home, "NOFX_RELEASE_DIR="+filepath.Join(home, "releases")+"\n", 0o600)
 		out, rc := run(t, home, "", strings.Repeat("b", 40))
-			if rc != 2 || !strings.Contains(out, "must set VL_RELEASE_DIR/NOFX_RELEASE_DIR") {
+		if rc != 2 || !strings.Contains(out, "must set VL_RELEASE_DIR/NOFX_RELEASE_DIR") {
 			t.Fatalf("rc=%d out=%q", rc, out)
 		}
 	})
@@ -140,7 +145,7 @@ func TestInstallUpdaterWorkerScript(t *testing.T) {
 
 	t.Run("NOFX_RELEASE_DIR inside the install is refused", func(t *testing.T) {
 		home := t.TempDir()
-		inst := filepath.Join(home, "nofx")
+		inst := filepath.Join(home, "vl")
 		if err := os.MkdirAll(inst, 0o755); err != nil {
 			t.Fatal(err)
 		}
