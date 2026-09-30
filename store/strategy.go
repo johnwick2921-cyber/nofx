@@ -2411,6 +2411,14 @@ func (c *StrategyConfig) applyMissingDefaults() {
 		!c.CoinSource.UseHyperAll && !c.CoinSource.UseHyperMain {
 		c.CoinSource.SourceType = "static"
 	}
+	// D2-DEAD (item 12): the ai500/oi_top/oi_low coin sources were backed by the
+	// deleted legacy provider. Stored rows still carry those values (the owner's
+	// saved strategies are read, never migrated), so the loader degrades them to
+	// the static coin list here instead of leaving an unknown source_type live.
+	switch c.CoinSource.SourceType {
+	case "ai500", "oi_top", "oi_low":
+		c.CoinSource.SourceType = "static"
+	}
 
 	// Klines: no selected timeframes and no primary timeframe means the block was
 	// never set -> adopt the default timeframe set (5m/15m/1h, primary 5m), which
