@@ -505,6 +505,15 @@ func TestCutoverRefusesWithoutAPassingInstallationGate(t *testing.T) {
 	}
 }
 
+// interpolationRefused returns the offending header form when sh interpolates
+// a cutover token into a curl Authorization header, else "". ANY expansion
+// that names CUTOVER_TOKEN is refused (RENAME-R1a: the NOFX_ and VL_ forms,
+// and any future name — the token must never ride argv).
+func interpolationRefused(sh string) string {
+	re := regexp.MustCompile(`Authorization: Bearer \$\{[A-Z0-9_]*CUTOVER_TOKEN\}`)
+	return re.FindString(sh)
+}
+
 func TestCutoverTokenNeverRidesAProcessArgv(t *testing.T) {
 	sh := repoFile(t, "deploy/cutover.sh")
 	// Findings [25]/[29]: the token was interpolated into curl's -H header, i.e.
@@ -512,9 +521,8 @@ func TestCutoverTokenNeverRidesAProcessArgv(t *testing.T) {
 	// lifetime — while the script's own refusal text says "never pass it on the
 	// command line". The fold: a 0600 header file, curl -H @file, removed on
 	// every exit path.
-	if strings.Contains(sh, "Authorization: Bearer ${NOFX_CUTOVER_TOKEN}") ||
-		strings.Contains(sh, "Authorization: Bearer ${VL_CUTOVER_TOKEN}") { // R5 removes the NOFX form
-		t.Fatalf("the token must never be interpolated into curl's argv — it rides a header FILE (either name)")
+	if m := interpolationRefused(sh); m != "" {
+		t.Fatalf("the token must never be interpolated into curl's argv — it rides a header FILE (%s)", m)
 	}
 	if !strings.Contains(sh, `-H "@$TOKEN_HDR"`) {
 		t.Fatalf("curl must receive the header via -H @file")
@@ -524,6 +532,23 @@ func TestCutoverTokenNeverRidesAProcessArgv(t *testing.T) {
 	}
 	if !strings.Contains(sh, `rm -f "${TOKEN_HDR:-}"`) {
 		t.Fatalf("the token header file must be removed on every exit path (trap)")
+	}
+}
+
+// RENAME-R1a: the refusal covers the VL_ form too — narrowing it back to the
+// literal NOFX_ form must fail THIS test (the mutant list's item 11).
+func TestCutoverTokenInterpolationRefusalCoversAnyCUTOVER_TOKENName(t *testing.T) {
+	for _, line := range []string{
+		"curl -H \"Authorization: Bearer ${VL_CUTOVER_TOKEN}\" http://x",
+		"curl -H \"Authorization: Bearer ${NOFX_CUTOVER_TOKEN}\" http://x",
+		"curl -H \"Authorization: Bearer ${SOME_OTHER_CUTOVER_TOKEN}\" http://x",
+	} {
+		if interpolationRefused(line) == "" {
+			t.Fatalf("the interpolation %q must be refused", line)
+		}
+	}
+	if interpolationRefused("curl -H \"Authorization: Bearer ${TOKEN}\" http://x") != "" {
+		t.Fatalf("a non-CUTOVER_TOKEN expansion is not this refusal's business")
 	}
 }
 

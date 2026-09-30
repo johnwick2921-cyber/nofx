@@ -11,6 +11,15 @@ import (
 
 // R1a shell twins, exercised through the real scripts.
 
+// RENAME-R1a: the bars-key liveness refusal matches BOTH binary names —
+// dropping the vl-bin match must fail this test.
+func TestBarsKeyRollbackRefusesBothBinaryNames(t *testing.T) {
+	sh := repoFile(t, "deploy/bars-key-rollback.sh")
+	if !strings.Contains(sh, "pgrep -f nofx-bin") || !strings.Contains(sh, "pgrep -f vl-bin") {
+		t.Fatalf("the liveness refusal must match BOTH vl-bin and nofx-bin")
+	}
+}
+
 // TestInstallUpdaterWorkerEnvFileDual: the env file may carry the VL_ keys, the
 // NOFX_ keys, or both (VL wins); each layout must pass the env check ("env ok")
 // before the build stage (which fails on network in a test — irrelevant).
