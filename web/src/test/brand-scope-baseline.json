@@ -1,8 +1,8 @@
 {
   "auth/auth.go": "ce7e284f454352832843a42aa7f57844918aeb8ee60b91add36106718fea6cf8",
-  "deploy/nofx-claim.sh": "d110a108cb7d1d6f3e92a48a1cca0ef8ab59ec4df320ec519898ead08e7bc236",
-  "deploy/nofx-db-backup.sh": "0e9dae38e208ba51a81482493474df462d9be73496a61f788c287e07956ec56e",
-  "deploy/nofx-lock.sh": "46fcbf76478c43943fb7607bd2929fe3629371ae5b8571ec9da8e1fa6e96c6ab",
+  "deploy/nofx-claim.sh": "99d09313a8272fd6b4e27c83028c3b9eba9eb16ba35de7b2c3a1b5b5d518545f",
+  "deploy/nofx-db-backup.sh": "5ead69deb7cc2380d482710260452b23af460c7a21b5ba10f9c47b3c4e6bef85",
+  "deploy/nofx-lock.sh": "bb0b09d5d22efc539739f5b29fd962d87442dddbcc290882df53ee1f852ffc93",
   "deploy/nofx-web.service": "10a06fc959623207bcb89280fcea89ee55794e875f3ad72e525b795891e7d377",
   "deploy/nofx.service": "b3d1a0c78d39a4ff9d4e2de16e500b1ee40b403d58dc2ec7e47e3f6843ab4e5d",
   "deploy/systemd-user/nofx-backup.service": "b3909698c869355ffd9b12fefbea98b07ffff83ca4f45502b5e07af6b8e9e81d",
