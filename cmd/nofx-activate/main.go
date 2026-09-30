@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"nofx/internal/activation"
+	"nofx/internal/envcompat"
 )
 
 func main() {
@@ -29,7 +30,7 @@ func main() {
 	cmd := os.Args[1]
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	var (
-		relDir    = fs.String("release", "", "release directory (NOFX_RELEASE_DIR/<sha>)")
+		relDir    = fs.String("release", "", "release directory (VL_RELEASE_DIR/NOFX_RELEASE_DIR/<sha>)")
 		prevDir   = fs.String("prev", "", "previous release directory, for activate/rollback")
 		install   = fs.String("install", "", "install directory the running process reads from")
 		dbPath    = fs.String("db", "data/data.db", "sqlite database to back up")
@@ -80,7 +81,7 @@ func run(cmd string, o opts) (activation.Receipt, error) {
 	case "backup":
 		dest := o.dest
 		if dest == "" {
-			dest = filepath.Join(os.Getenv("HOME"), "nofx-backups", "updater",
+			dest = filepath.Join(envcompat.BackupRoot(), "updater", // R5 removes: vl-backups wins, nofx-backups only while ~/nofx exists
 				time.Now().Format("20060102-150405"), "data.db")
 		}
 		return activation.Backup(o.dbPath, dest)

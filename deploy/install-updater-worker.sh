@@ -30,13 +30,16 @@
 set -uo pipefail
 
 SHA="${1:-}"
-REPO_URL="${NOFX_UPDATER_BUILD_REPO:-https://github.com/johnwick2921-cyber/nofx}"
-INSTALL_DIR="${NOFX_UPDATER_INSTALL_DIR:-$HOME/nofx}"
+# Shell twins VL_ → NOFX_ → default; the install default is the install-root
+# rule ($HOME/vl when present, else $HOME/nofx). R5 removes the NOFX twins.
+REPO_URL="${VL_UPDATER_BUILD_REPO:-${NOFX_UPDATER_BUILD_REPO:-https://github.com/johnwick2921-cyber/nofx}}"
+DEFAULT_INSTALL="$HOME/vl"; [ -d "$DEFAULT_INSTALL" ] || DEFAULT_INSTALL="$HOME/nofx"
+INSTALL_DIR="${VL_UPDATER_INSTALL_DIR:-${NOFX_UPDATER_INSTALL_DIR:-$DEFAULT_INSTALL}}"
 
 usage() {
   echo "usage: install-updater-worker.sh <40-hex sha>" >&2
   echo "  builds ~/bin/nofx-updater from that exact commit and installs the systemd --user unit" >&2
-  echo "  env: NOFX_UPDATER_BUILD_REPO (default $REPO_URL), NOFX_UPDATER_INSTALL_DIR (default \$HOME/nofx)" >&2
+  echo "  env: VL_/NOFX_UPDATER_BUILD_REPO (default $REPO_URL), VL_/NOFX_UPDATER_INSTALL_DIR (default \$HOME/vl when present, else \$HOME/nofx)" >&2
 }
 [ -n "$SHA" ] || { usage; exit 2; }
 printf '%s' "$SHA" | grep -Eqx '[0-9a-f]{40}' || {
@@ -48,9 +51,9 @@ printf '%s' "$SHA" | grep -Eqx '[0-9a-f]{40}' || {
 ENV_FILE="$HOME/.config/nofx-updater/env"
 [ -f "$ENV_FILE" ] || {
   echo "install-updater-worker: REFUSED — $ENV_FILE does not exist." >&2
-  echo "  create it (mode 0600, owner you) with exactly two lines:" >&2
-  echo "    NOFX_RELEASE_DIR=/absolute/path/outside/nofx" >&2
-  echo "    NOFX_CUTOVER_TOKEN=<a fresh gate-jwt — 24h lifetime, refresh before each install window>" >&2
+  echo "  create it (mode 0600, owner you) with exactly two lines (VL_ names win):" >&2
+  echo "    VL_RELEASE_DIR=/absolute/path/outside/vl   (or NOFX_RELEASE_DIR — R5 removes)" >&2
+  echo "    VL_CUTOVER_TOKEN=<a fresh gate-jwt — 24h lifetime, refresh before each install window>" >&2
   exit 2
 }
 [ "$(stat -c '%a' "$ENV_FILE" 2>/dev/null)" = "600" ] || {
@@ -58,12 +61,14 @@ ENV_FILE="$HOME/.config/nofx-updater/env"
   exit 2
 }
 
-# Read the two required values WITHOUT printing them.
-release_dir="$(awk -F= '$1=="NOFX_RELEASE_DIR"{print $2}' "$ENV_FILE" | tail -1)"
+# Read the two required values WITHOUT printing them. The VL_ key wins when
+# non-empty; the NOFX_ key is the fallback (R5 removes it).
+release_dir="$(awk -F= '$1=="VL_RELEASE_DIR"{print $2}' "$ENV_FILE" | tail -1)"
+[ -n "$release_dir" ] || release_dir="$(awk -F= '$1=="NOFX_RELEASE_DIR"{print $2}' "$ENV_FILE" | tail -1)"
 token_ok=no
-grep -Eq '^NOFX_CUTOVER_TOKEN=.+' "$ENV_FILE" && token_ok=yes
+grep -Eq '^(VL|NOFX)_CUTOVER_TOKEN=.+' "$ENV_FILE" && token_ok=yes
 { [ -n "$release_dir" ] && [ "$token_ok" = "yes" ]; } || {
-  echo "install-updater-worker: REFUSED — $ENV_FILE must set NOFX_RELEASE_DIR and NOFX_CUTOVER_TOKEN (both non-empty)" >&2
+  echo "install-updater-worker: REFUSED — $ENV_FILE must set VL_RELEASE_DIR/NOFX_RELEASE_DIR and VL_CUTOVER_TOKEN/NOFX_CUTOVER_TOKEN (both non-empty)" >&2
   exit 2
 }
 case "$release_dir" in
@@ -77,11 +82,11 @@ real_root="$(realpath -m "$release_dir" 2>/dev/null || echo "$release_dir")"
 real_install="$(realpath -m "$INSTALL_DIR" 2>/dev/null || echo "$INSTALL_DIR")"
 case "$real_root" in
   "$real_install"|"$real_install"/*)
-    echo "install-updater-worker: REFUSED — NOFX_RELEASE_DIR ($release_dir) must be OUTSIDE the install ($INSTALL_DIR)" >&2
+    echo "install-updater-worker: REFUSED — VL_RELEASE_DIR/NOFX_RELEASE_DIR ($release_dir) must be OUTSIDE the install ($INSTALL_DIR)" >&2
     exit 2 ;;
 esac
 echo "install-updater-worker: env ok (release dir outside the install; token present, not shown)"
-echo "install-updater-worker: note — NOFX_CUTOVER_TOKEN is a 24-hour gate-jwt (auth/auth.go:227); refresh it before each attended install window — no longer-lived token type exists"
+echo "install-updater-worker: note — VL_/NOFX_CUTOVER_TOKEN is a 24-hour gate-jwt (auth/auth.go:227); refresh it before each attended install window — no longer-lived token type exists"
 
 BUILD_DIR="$(mktemp -d /tmp/nofx-updater-build.XXXXXX)" || { echo "install-updater-worker: REFUSED — cannot make a build dir" >&2; exit 2; }
 trap 'rm -rf "$BUILD_DIR"' EXIT

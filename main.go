@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"nofx/internal/envcompat"
 	ntwire "nofx/provider/ninjatrader"
 	"nofx/safe"
 	ntTrader "nofx/trader/ninjatrader"
@@ -41,6 +42,10 @@ func main() {
 	// Initialize logger first so the .env outcome has somewhere to land
 	// (logger.Init reads no environment variable, so config sees the same order)
 	logger.Init(nil)
+
+	// envcompat: reads at package init (chart across-roll, bar-source knobs)
+	// queue their NOFX_-fallback WARN until a sink exists; the logger is it.
+	envcompat.SetWarnSink(func(m string) { logger.Warn(m) })
 
 	// Load .env environment variables — fails open: on any error nothing is
 	// set and every variable falls back to the process environment; the

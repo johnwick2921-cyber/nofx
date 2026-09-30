@@ -35,6 +35,7 @@ import (
 	"strings"
 	"syscall"
 
+	"nofx/internal/envcompat"
 	"nofx/internal/updaterjob"
 	"nofx/internal/updaterwire"
 	"nofx/internal/updaterwire/wireserver"
@@ -81,6 +82,10 @@ func main() { os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)) }
 const usage = "usage: nofx-updater [--install-dir d] serve | fetch <release_id> | status [<job>] | resume <job> | recovery <job>"
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	// The worker's three env fallbacks (cutover token, inbox, service dir)
+	// WARN through envcompat; the updater never inits the logger, so its
+	// sink is stderr. // R5 removes with envcompat.
+	envcompat.SetWarnSink(func(m string) { fmt.Fprintln(stderr, "nofx-updater:", m) })
 	top := flag.NewFlagSet("nofx-updater", flag.ContinueOnError)
 	top.SetOutput(stderr)
 	wd, _ := getwd()
@@ -131,6 +136,16 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	return 2
 }
 
+// lockScriptFor is the deploy lock script for this install: vl-lock.sh when
+// present, else nofx-lock.sh. Only `check` is ever run. // R5 removes the
+// nofx branch.
+func lockScriptFor(installDir string) string {
+	if _, err := os.Stat(filepath.Join(installDir, "deploy", "vl-lock.sh")); err == nil {
+		return filepath.Join(installDir, "deploy", "vl-lock.sh")
+	}
+	return filepath.Join(installDir, "deploy", "nofx-lock.sh")
+}
+
 // serve refuses, in order: the process checks (root, the bot's cgroup, TZ),
 // a missing cutover token, an adapter that has not landed, no home for the
 // backups, the worker lock (a second serve writes nothing), and the start
@@ -159,12 +174,16 @@ func serve(t updaterworker.Target, stderr io.Writer) int {
 		return 2
 	}
 	logf := func(format string, a ...any) { fmt.Fprintf(stderr, format+"\n", a...) }
+	// The lock script is deploy/vl-lock.sh when present, else nofx-lock.sh
+	// (the rename lands in R5; until then either may be shipped). Only its
+	// `check` verb is ever run.
+	lockScript := lockScriptFor(t.InstallDir)
 	w, err := updaterworker.New(updaterworker.Config{
 		Target:     t,
-		BackupRoot: filepath.Join(home, "nofx-backups", "updater"),
+		BackupRoot: filepath.Join(envcompat.BackupRoot(), "updater"),
 		Budgets:    updaterworker.DefaultBudgets(),
 		Logf:       logf,
-	}, updaterworker.Deps{Lib: lib, App: app, Rel: rel, Host: updaterworker.OSHost{LockScript: filepath.Join(t.InstallDir, "deploy", "nofx-lock.sh")}})
+	}, updaterworker.Deps{Lib: lib, App: app, Rel: rel, Host: updaterworker.OSHost{LockScript: lockScript}})
 	if err != nil {
 		fmt.Fprintln(stderr, "nofx-updater serve:", err)
 		return 2
@@ -221,7 +240,8 @@ func fetch(t updaterworker.Target, releaseID string, stdout, stderr io.Writer) i
 	if !updaterwire.ValidReleaseID(releaseID) {
 		return refuse("invalid release id %q", releaseID)
 	}
-	inbox := strings.TrimSpace(os.Getenv(releaseInboxEnv))
+	inbox, _ := envcompat.Env("RELEASE_INBOX") // R5 removes: VL_/NOFX_ prefix is envcompat's business
+	inbox = strings.TrimSpace(inbox)
 	if inbox == "" {
 		return refuse("%s is not set (the local inbox holding %s.tar.gz — there is no network fetch)", releaseInboxEnv, releaseID)
 	}

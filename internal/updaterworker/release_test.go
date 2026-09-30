@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"nofx/internal/censuswalk"
 	"nofx/internal/updaterjob"
 	"nofx/internal/updaterworker/releasefixture"
 )
@@ -990,13 +991,17 @@ func TestReadVerdictRefusesWhatFetchNeverWrites(t *testing.T) {
 // ── no network, no MAC, no activation: the unit's imports, pinned ────────────
 
 func TestReleaseFetchHasNoNetworkCode(t *testing.T) {
+	module, err := censuswalk.ModulePath(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatalf("module path: %v", err)
+	}
 	forbidden := map[string]string{
 		"net": "network", "net/http": "network", "net/url": "network", "net/rpc": "network",
-		"os/exec":                  "a subprocess (verification is in-process, never ssh-keygen at run time)",
-		"crypto/hmac":              "a MAC (only internal/updateauth computes one — census rule 4)",
-		"nofx/internal/updateauth": "the enrollment/MAC package",
-		"nofx/internal/activation": "the kill library (not on dev; U4 owns the adapter)",
-		"golang.org/x/crypto/ssh":  "a dependency the stdlib verifier does not need",
+		"os/exec":                       "a subprocess (verification is in-process, never ssh-keygen at run time)",
+		"crypto/hmac":                   "a MAC (only internal/updateauth computes one — census rule 4)",
+		module + "/internal/updateauth": "the enrollment/MAC package",
+		module + "/internal/activation": "the kill library (not on dev; U4 owns the adapter)",
+		"golang.org/x/crypto/ssh":       "a dependency the stdlib verifier does not need",
 	}
 	for _, file := range []string{"sshsig.go", "release.go"} {
 		f, err := parser.ParseFile(token.NewFileSet(), file, nil, parser.ImportsOnly)
