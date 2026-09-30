@@ -77,7 +77,8 @@ type box struct {
 
 	inst, data, relDir, backupRoot string
 
-	binName string // the install/release binary basename (vl-bin or nofx-bin — R5 removes the nofx form)
+	binName    string // the install binary basename (vl-bin or nofx-bin — R5 removes the nofx form)
+	relBinName string // the release dir's binary basename (defaults to binName)
 
 	id      Identity // the unit's MainPID identity
 	running string   // the sha the running process serves
@@ -155,6 +156,19 @@ func withBinary(binName string) rigOpt {
 			}
 		}
 		b.binName = binName
+		b.relBinName = binName
+	}
+}
+
+// withReleaseBinary renames ONLY the release's binary (the R2-like rollback
+// test: a vl release activating onto a nofx install).
+func withReleaseBinary(binName string) rigOpt {
+	return func(b *box) {
+		old, nu := filepath.Join(b.relDir, "nofx-bin"), filepath.Join(b.relDir, binName)
+		if err := os.Rename(old, nu); err == nil {
+			_ = os.Chmod(nu, 0o755)
+		}
+		b.relBinName = binName
 	}
 }
 
@@ -202,6 +216,9 @@ func newRig(t *testing.T, opts ...rigOpt) *rig {
 	writeFile(t, filepath.Join(b.relDir, "manifest.json"), fmt.Sprintf(`{"source_sha":%q,"binary_md5":"","signature_verdict":"sshsig:release:SHA256:fake"}`, boxNew))
 	for _, o := range opts {
 		o(b)
+	}
+	if b.relBinName == "" {
+		b.relBinName = b.binName
 	}
 
 	r := &rig{box: b, log: &strings.Builder{}}
@@ -389,7 +406,7 @@ func (f *fakeLib) Resolve(dir string) (Release, error) {
 	if err := json.Unmarshal(raw, &m); err != nil || m.SourceSHA == "" || m.Signature == "" {
 		return Release{}, fmt.Errorf("manifest refused")
 	}
-	return Release{Dir: dir, SHA: m.SourceSHA, Binary: filepath.Join(dir, f.b.binName), Dist: filepath.Join(dir, "web", "dist"),
+	return Release{Dir: dir, SHA: m.SourceSHA, Binary: filepath.Join(dir, f.b.relBinName), Dist: filepath.Join(dir, "web", "dist"),
 		ReleaseFile: filepath.Join(dir, "RELEASE"), ManifestPath: filepath.Join(dir, "manifest.json")}, nil
 }
 
@@ -598,7 +615,7 @@ func (f *fakeRel) Rehash(v Verdict) (int, error) {
 
 func (f *fakeRel) Reverify(v Verdict) (ReleaseFacts, error) {
 	arts := map[string]string{}
-	for _, rel := range []string{"web/dist/index.html", "ninjascript/VLTrader.cs", calendarFile, f.b.binName} {
+	for _, rel := range []string{"web/dist/index.html", "ninjascript/VLTrader.cs", calendarFile, f.b.relBinName} {
 		if f.b.noCS && strings.HasPrefix(rel, "ninjascript/") {
 			continue
 		}

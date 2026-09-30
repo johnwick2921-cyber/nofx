@@ -82,6 +82,21 @@ func TestEnvBothEmptyIsDefaultWithoutWarn(t *testing.T) {
 	}
 }
 
+func TestEnvEmptyVlFallsToNofx(t *testing.T) {
+	reset(t)
+	t.Setenv("VL_EMPTY_KEY", "")
+	t.Setenv("NOFX_EMPTY_KEY", "nofx-value")
+	var warns []string
+	SetWarnSink(func(m string) { warns = append(warns, m) })
+	v, src := Env("EMPTY_KEY")
+	if v != "nofx-value" || src != SourceNOFX {
+		t.Fatalf("Env = %q/%s, want nofx-value/NOFX (an EMPTY VL name is not a value)", v, src)
+	}
+	if len(warns) != 1 {
+		t.Fatalf("want exactly one fallback WARN, got %v", warns)
+	}
+}
+
 func TestBackupRootThreeWay(t *testing.T) {
 	t.Run("vl-backups wins when present", func(t *testing.T) {
 		home := t.TempDir()

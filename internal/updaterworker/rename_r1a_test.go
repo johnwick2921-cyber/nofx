@@ -103,3 +103,48 @@ func TestArchiveBinaryExactlyOne(t *testing.T) {
 		}
 	})
 }
+
+// A rollback from a vl-bin release back to a nofx-bin snapshot: the activate
+// Watch points at the release's vl_ log, and the rollback Watch is re-predicted
+// from the SNAPSHOT's binary — the nofx_ log.
+func TestRollbackFromVlReleaseRePredictsFromTheSnapshotBinary(t *testing.T) {
+	r := newRig(t, withReleaseBinary("vl-bin"))
+	r.watchFail[boxNew] = true
+	j := r.runToEnd(t)
+	r.noViolations(t)
+	if j.State != updaterjob.StateRolledBack || j.Phase != updaterjob.PhaseDone {
+		t.Fatalf("job %s/%s (error %q), want rolled_back/done", j.State, j.Phase, j.Error)
+	}
+	if len(r.watchOpts) != 2 {
+		t.Fatalf("Watch ran %d times, want 2 (activate + rollback)", len(r.watchOpts))
+	}
+	if got := filepath.Base(r.watchOpts[0].LogPath); got != "vl_2026-09-24.log" {
+		t.Fatalf("the activate Watch log = %s, want the release's vl_ file", got)
+	}
+	if got := filepath.Base(r.watchOpts[1].LogPath); got != "nofx_2026-09-24.log" {
+		t.Fatalf("the rollback Watch log = %s, want the snapshot's nofx_ file", got)
+	}
+	if _, err := os.Stat(filepath.Join(r.data, "vl_2026-09-24.log")); err != nil {
+		t.Fatalf("the vl boot line never landed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(r.data, "nofx_2026-09-24.log")); err != nil {
+		t.Fatalf("the nofx rollback boot line never landed: %v", err)
+	}
+}
+
+// R2-like: the install holds BOTH binaries; the install side reads vl-bin.
+func TestInstallSideVlWinsWhenBothExist(t *testing.T) {
+	dir := t.TempDir()
+	for _, n := range []string{"vl-bin", "nofx-bin"} {
+		if err := os.WriteFile(filepath.Join(dir, n), []byte("\x7fELF"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tgt := Target{InstallDir: dir}
+	if got := tgt.InstallBinaryPath(); filepath.Base(got) != "vl-bin" {
+		t.Fatalf("InstallBinaryPath = %s, want the vl-bin install side", got)
+	}
+	if got := tgt.InstallRelease("x").Binary; filepath.Base(got) != "vl-bin" {
+		t.Fatalf("InstallRelease.Binary = %s, want vl-bin", got)
+	}
+}
