@@ -158,12 +158,12 @@ func TestBackupOptInBacksUpResearch(t *testing.T) {
 	}
 	found := false
 	for _, f := range listBackupFiles(t, root) {
-		if strings.HasPrefix(filepath.Base(f), "research-") && strings.HasSuffix(f, ".db.gz") {
+		if strings.HasPrefix(filepath.Base(f), "vl-research-") && strings.HasSuffix(f, ".db.gz") {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("opt-in run wrote no research-*.db.gz; files=%v", listBackupFiles(t, root))
+		t.Fatalf("opt-in run wrote no vl-research-*.db.gz; files=%v", listBackupFiles(t, root))
 	}
 }
 

@@ -149,10 +149,10 @@ prune "$WEEKLY_DIR" "$KEEP_WEEKLY" "vl"   # R5 removes the old-prefix prune abov
 
 if [[ "$BACKUP_RESEARCH" == "1" ]]; then
   if [[ -f "$DB_RESEARCH" ]]; then
-    backup_one "$DB_RESEARCH" "research"
-    promote_weekly "research" "$DAILY_DIR/research-${ts}.db.gz"
-    prune "$DAILY_DIR" "$KEEP_RESEARCH_DAILY" "research"
-    prune "$WEEKLY_DIR" "$KEEP_RESEARCH_WEEKLY" "research"
+    backup_one "$DB_RESEARCH" "vl-research"
+    promote_weekly "vl-research" "$DAILY_DIR/vl-research-${ts}.db.gz"
+    prune "$DAILY_DIR" "$KEEP_RESEARCH_DAILY" "vl-research"
+    prune "$WEEKLY_DIR" "$KEEP_RESEARCH_WEEKLY" "vl-research"
   else
     echo "vl-backup: research DB absent at $DB_RESEARCH — skipped (a machine without the research ledger is not a failure)"
   fi

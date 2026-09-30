@@ -583,6 +583,28 @@ NEWB2 reclaim sess-B sess-A 'HEAD static; no build in flight' >/dev/null 2>&1
 NEWB2 release sess-B >/dev/null
 rm -rf "$XH"
 
+
+echo "== Z18 home: with the envs unset, the DEFAULT is the ONE old home until R5 =="
+#
+# R1a flipped the default to $HOME/vl-main.lock.d at 84dec7f4f while promising
+# byte-identical behaviour. An empty NEW home reads "free" while the deploy
+# session holds the real lock in the OLD home (the updater's attended C19 check
+# included), and the post-boot release would refuse. A temp HOME is the
+# production call site: no env vars, the real default.
+ZH="$WORK/zhome"; mkdir -p "$ZH"
+DEFAULT() { VL_LOCK_DIR= NOFX_LOCK_DIR= HOME="$ZH" VL_LOCK_BEAT_SECONDS=60 VL_LOCK_STALE_SECONDS=600 bash "$LOCK_SH" "$@" 2>&1; }
+hasi  "an env-less status reads the old home free" "$(DEFAULT status 2>&1)" "free"
+DEFAULT acquire sess-Z 'the one home' 60 >/dev/null
+check "an env-less acquire parks in the old home"  "$([ -d "$ZH/$o-main.lock.d" ] && echo yes || echo no)" "yes"
+check "and NEVER creates the vl home"               "$([ -d "$ZH/vl-main.lock.d" ] && echo yes || echo no)" "no"
+DEFAULT release sess-Z >/dev/null
+WRAPD() { VL_LOCK_DIR= NOFX_LOCK_DIR= HOME="$ZH" "$WRAP" "$@" 2>&1; }
+WRAPD acquire sess-Z 'the wrapper default' 60 >/dev/null
+has   "the tool reads the wrapper's default home"   "$(DEFAULT status 2>&1)" "sess-Z"
+check "and it is the SAME old home"                 "$([ -d "$ZH/$o-main.lock.d" ] && echo yes || echo no)" "yes"
+check "the wrapper never creates the vl home either" "$([ -d "$ZH/vl-main.lock.d" ] && echo yes || echo no)" "no"
+WRAPD release sess-Z >/dev/null
+rm -rf "$ZH"
 echo "== the wrappers run DIRECTLY on their own shebang, never via bash =="
 KDC="$WORK/direct.lock.d"
 VL_LOCK_DIR="$KDC" "$WRAP" acquire sess-D 'direct exec' 60 >/dev/null
