@@ -11,7 +11,7 @@ law lines: 80
 [10] Missing wire identity on materialized positions. @L82 :: every materialized row carries source + account + entry; priced closes are consumed immediately (TestReconcileMaterializesUntrackedNT8Position).
 [11] Enum spelling drift. @L88 :: function shared by parser and validator. enum parsing normalizes known spellings and logs the unknown ones by name.
 [12] Log-flood retention. @L96 :: sampled (1/500) + a 1-line/min INFO summary. every logging change ships with a retention re-projection.
-[13] Concurrent-terminal. @L104 :: class 70, which removed the pid this line used to name). WORKTREE LAW — the main checkout belongs to exactly ONE dispatch; secondary work runs in `git worktree add ../nofx-<task>` + `git worktree lock`.
+[13] Concurrent-terminal. @L104 :: class 70, which removed the pid this line used to name). WORKTREE LAW — the main checkout belongs to exactly ONE dispatch; secondary work runs in `git worktree add ../vl-<task>` + `git worktree lock`.
 [14] Unattended deploys. @L110 :: deploy commands — none may exist. NO-UNATTENDED-DEPLOYS — owner ack within minutes OR a TESTED auto-rollback; timers are banned outright.
 [15] Fantasy-R. @L117 :: refused). the contract says what the gate enforces; fantasy targets get WARN-flagged at write.
 [16] Small-n crowns. @L123 :: explicitly labeled anecdote. every verdict carries n; no crowns on small n.
