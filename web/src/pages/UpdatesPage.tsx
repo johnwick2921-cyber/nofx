@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Download, Loader2, RefreshCw, ShieldAlert } from 'lucide-react'
 import { useLanguage } from '../contexts/LanguageContext'
 import { up } from '../i18n/updates-translations'
+import { storageMigrationLine } from '../lib/storageMigration'
 import { GUIDE_BUILT_REV } from '../guide/types'
 import {
   INSTALL_AUTHZ_UNDER_REVIEW,
@@ -373,6 +374,9 @@ export default function UpdatesPage() {
           {up('pollingStopped', language)}
         </div>
       )}
+      <p className="text-xs text-zinc-500">
+        {storageMigrationLine(window.localStorage, window.location.origin)}
+      </p>
       {/* Panel A — Running now */}
       <Panel title={up('runningNow', language)}>
         <Row

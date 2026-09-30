@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
+import { storageMigrationLine } from '../lib/storageMigration'
 import { t } from '../i18n/translations'
 import { api } from '../lib/api'
 import { ExchangeConfigModal } from '../components/trader/ExchangeConfigModal'
@@ -454,6 +455,9 @@ export function SettingsPage() {
     >
       <div className="max-w-2xl mx-auto">
         <h1 className="text-xl font-bold text-white mb-6">Settings</h1>
+        <p className="text-xs text-zinc-500 mb-4">
+          {storageMigrationLine(window.localStorage, window.location.origin)}
+        </p>
 
         {/* Tabs */}
         <div className="flex gap-1 mb-6 bg-zinc-900/60 border border-zinc-800 rounded-xl p-1">
