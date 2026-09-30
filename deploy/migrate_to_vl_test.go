@@ -154,7 +154,10 @@ cmd="${1:-}"
 case "$cmd" in
   cat)
     shift
-    if [ -f "$(unit_file "$1")" ]; then cat "$(unit_file "$1")"; exit 0; else exit 1; fi ;;
+    for n in "$1" "$1.service"; do
+      if [ -f "$(unit_file "$n")" ]; then cat "$(unit_file "$n")"; exit 0; fi
+    done
+    exit 1 ;;
   is-active)
     is_active "$2" && exit 0 || exit 1 ;;
   show)
@@ -179,6 +182,7 @@ case "$cmd" in
     [ "${1:-}" = "--now" ] && { now=1; shift; }
     for u in "$@"; do
       log "enable $u"
+      if [ "$u" = "vl-updater" ] && [ -f "$ST/fail_enable_updater" ]; then exit 1; fi
       act "$u"
       if [ "$now" = 1 ] && [ "$u" = "vl" ]; then
         ( cd "$HOME/vl" && ./vl-bin )
@@ -187,7 +191,7 @@ case "$cmd" in
         # the FAKE OLD BOT: a fresh old-prefix boot line + health
         ( cd "$HOME/$OLDNAME" && mkdir -p data \
           && echo "BOOT INTEGRITY OK — rev $OLD12" >> "data/${OLDNAME}_$(date +%F).log" \
-          && echo "$OLD12" > data/health_rev.txt )
+          && echo "$OLD12" > "$FAKE_STATE/health_rev.txt" )
       fi
       if [ "$now" = 1 ]; then set_mp 4242 "$u"; fi
     done
@@ -219,6 +223,8 @@ case "${1:-}" in
     mkdir -p "$(dirname "$path")"
     cat > "$path"
     log "sudo tee $path"
+    case "$path" in */systemd/system/*.service) mkdir -p "$ST/units"; cp "$path" "$ST/units/$(basename "$path")" ;; esac
+    if [ "$(basename "$path")" = "vl.service" ] && [ -f "$ST/fail_tee_vl" ]; then exit 1; fi
     exit 0 ;;
   rm)
     log "sudo rm $*"
@@ -282,8 +288,9 @@ case "${1:-}" in
     rc="$(cat "$ST/lock_check_rc" 2>/dev/null || echo 1)"
     exit "$rc" ;;
   heartbeat)
-    now="$(date +%s)"
-    sed -i "s/^heartbeat_epoch=.*/heartbeat_epoch=$now/" "$HOME/<OLD>-main.lock.d/meta"
+    now="$(grep -m1 '^heartbeat_epoch=' "$HOME/<OLD>-main.lock.d/meta" 2>/dev/null | cut -d= -f2-)"
+    next=$(( ${now:-0} + 1 ))
+    sed -i "s/^heartbeat_epoch=.*/heartbeat_epoch=$next/" "$HOME/<OLD>-main.lock.d/meta"
     exit 0 ;;
   *) exit 0 ;;
 esac
@@ -308,10 +315,10 @@ d="$(date +%F)"
 mkdir -p data
 if [ -n "$m" ] && [ "$(printf '%s' "$m" | cut -c1-12)" = "$BOT_SHA12" ]; then
   echo "BOOT INTEGRITY OK — rev $BOT_SHA12" >> "data/vl_$d.log"
-  echo "$BOT_SHA12" > data/health_rev.txt
+  echo "$BOT_SHA12" > "$FAKE_STATE/health_rev.txt"
 else
   echo "BOOT INTEGRITY REFUSED — marker '$(printf '%s' "$m" | cut -c1-12)'" >> "data/vl_$d.log"
-  echo "$OLD12" > data/health_rev.txt
+  echo "$OLD12" > "$FAKE_STATE/health_rev.txt"
 fi
 if [ "${BOT_HELLO:-0}" = "1" ]; then
   sleep 1.5
@@ -449,6 +456,23 @@ func (fe *fakeEnv) writeOldTree() {
 	fe.writeState("lock_check_rc", "1")
 	fe.writeState("journal_vl_updater.txt",
 		"🔧 vl-updater: serving 127.0.0.1:9 · install "+fe.home+"/vl · data "+fe.home+"/vl/data\n")
+}
+
+func (fe *fakeEnv) refreshNewSHA() {
+	fe.t.Helper()
+	fe.newSHA = strings.TrimSpace(fe.gitTree("rev-parse", "HEAD"))
+	fe.new12 = fe.newSHA[:12]
+}
+
+func (fe *fakeEnv) gitTree(args ...string) string {
+	fe.t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", filepath.Join(fe.home, fe.oldName)}, args...)...)
+	cmd.Env = append(os.Environ(), "HOME="+fe.home)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		fe.t.Fatalf("gitTree %v: %v (%s)", args, err, out)
+	}
+	return string(out)
 }
 
 func (fe *fakeEnv) writeLockHome() {
@@ -603,6 +627,13 @@ func TestForwardPath(t *testing.T) {
 	if _, err := os.Stat(oldBin); err != nil {
 		t.Fatalf("parked old binary missing: %v", err)
 	}
+	// the old binary is parked AFTER verify, never before: the park line must
+	// print after the boot-line leg in the script's own output
+	iVerify := strings.Index(out, "boot line OK")
+	iPark := strings.Index(out, "parked the old binary")
+	if iVerify < 0 || iPark < 0 || iVerify > iPark {
+		t.Fatalf("old binary parked before verify (verify@%d park@%d)", iVerify, iPark)
+	}
 	link, err := os.Readlink(filepath.Join(fe.home, fe.oldName))
 	if err != nil || link != filepath.Join(fe.home, "vl") {
 		t.Fatalf("symlink = %q (%v)", link, err)
@@ -722,14 +753,14 @@ func TestStepErrorsAutoRollback(t *testing.T) {
 		{
 			name: "step3 vl.service template missing",
 			setup: func(fe *fakeEnv) {
-				_ = os.Remove(filepath.Join(fe.home, o, "deploy", "vl.service"))
+				fe.writeState("fail_tee_vl", "1")
 			},
-			want: "template vl is missing",
+			want: "automatic rollback",
 		},
 		{
 			name: "step4 vl-updater.service template missing",
 			setup: func(fe *fakeEnv) {
-				_ = os.Remove(filepath.Join(fe.home, o, "deploy", "systemd-user", "vl-updater.service"))
+				fe.writeState("fail_enable_updater", "1")
 			},
 			want: "automatic rollback",
 		},
@@ -753,6 +784,14 @@ func TestStepErrorsAutoRollback(t *testing.T) {
 				t.Fatalf("old tree gone: %v", err)
 			} else if fi.Mode()&os.ModeSymlink != 0 {
 				t.Fatalf("old tree still a symlink after rollback")
+			}
+			// the rollback restored the parked updater and the RELEASE marker
+			if _, err := os.Stat(filepath.Join(fe.home, "bin", o+"-updater")); err != nil {
+				t.Fatalf("old updater not restored: %v", err)
+			}
+			b, _ := os.ReadFile(filepath.Join(fe.home, o, "deploy", "RELEASE"))
+			if strings.TrimSpace(string(b))[:12] != fe.old12 {
+				t.Fatalf("marker not restored after rollback: %s", b)
 			}
 		})
 	}
@@ -829,7 +868,7 @@ func TestRollbackLockCheckedFirst(t *testing.T) {
 			stateDir := filepath.Join(fe.home, ".local", "state", "vl-migrate")
 			_ = os.MkdirAll(stateDir, 0o755)
 			_ = os.WriteFile(filepath.Join(stateDir, fe.session),
-				[]byte("sha="+fe.newSHA+"\nold12="+fe.old12+"\n"), 0o600)
+				[]byte("session="+fe.session+"\nsha="+fe.newSHA+"\nold_sha="+fe.oldSHA+"\nold12="+fe.old12+"\nts=20260930-000000\nno_updater=0\n"), 0o600)
 			tc.setup(fe)
 			out, code := fe.run(t, "--session", fe.session, "--rollback")
 			if code == 0 {
@@ -884,6 +923,7 @@ func TestKeeperBeatsThroughMoveAndRollback(t *testing.T) {
 	if code2 != 0 {
 		t.Fatalf("rollback exit %d\n%s", code2, out2)
 	}
+	time.Sleep(400 * time.Millisecond) // at least two keeper beats after step 3
 	after := readEpoch()
 	if before == mid || mid == after {
 		t.Fatalf("heartbeat_epoch did not advance through the move and back (before=%s mid=%s after=%s)", before, mid, after)
@@ -916,11 +956,22 @@ func TestBackupServiceStoppedBeforeMove(t *testing.T) {
 
 func TestRerunAlreadyMigratedBranch(t *testing.T) {
 	fe := newFakeEnv(t)
+	o := fe.oldName
+	// a box that has the optional releases/inbox dirs: they are moved at step 2,
+	// so after the first run EVERY vl path in (d) exists and the re-run takes
+	// the already-migrated branch
+	for _, d := range []string{o + "-releases", o + "-inbox"} {
+		if err := os.MkdirAll(filepath.Join(fe.home, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
 	out, code := fe.run(t, fe.argsForward()...)
 	if code != 0 {
 		t.Fatalf("first run exit %d\n%s", code, out)
 	}
 	// the operator starts unit vl manually; the fake bot boots again, fresh
+	// (a post-R5-style box has the vl lock home; (b) requires every vl path)
+	_ = os.MkdirAll(filepath.Join(fe.home, "vl-main.lock.d"), 0o755)
 	logf := filepath.Join(fe.home, "vl", "data", "vl_"+time.Now().Format("2006-01-02")+".log")
 	_ = os.MkdirAll(filepath.Dir(logf), 0o755)
 	f, _ := os.OpenFile(logf, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
@@ -971,15 +1022,23 @@ func TestStep0Refusals(t *testing.T) {
 		{"OLD_SHA health mismatch", func(fe *fakeEnv) { fe.writeHealth("dddddddddddd") }, nil, nil, "mismatch"},
 		{"OLD_SHA marker mismatch", func(fe *fakeEnv) {
 			_ = os.WriteFile(filepath.Join(fe.home, o, "deploy", "RELEASE"), []byte("eeeeeeeeeeee\n"), 0o644)
+			fe.gitTree("add", "-A")
+			fe.gitTree("commit", "-q", "-m", "marker changed")
+			fe.refreshNewSHA()
 		}, nil, nil, "mismatch"},
 		{"neither health nor marker", func(fe *fakeEnv) {
 			fe.writeHealth("")
-			_ = os.Remove(filepath.Join(fe.home, o, "deploy", "RELEASE"))
+			fe.gitTree("rm", "-q", "deploy/RELEASE")
+			fe.gitTree("commit", "-q", "-m", "marker gone")
+			fe.refreshNewSHA()
 		}, nil, nil, "neither /api/health nor the install marker"},
 		{"non-terminal job in flight", func(fe *fakeEnv) {
 			fe.write(filepath.Join(fe.home, o, "data", "updater", "jobs", "j1.json"),
 				`{"schema":1,"job_id":"j1","release_id":"r","state":"downloaded","phase":"started","attempts":1,"created_at":"`+time.Now().Format(time.RFC3339)+`","updated_at":"`+time.Now().Format(time.RFC3339)+`","transitions":[],"receipts":[]}`)
 		}, nil, nil, "in flight: j1"},
+		{"vl unit already loaded", func(fe *fakeEnv) {
+			fe.writeState("units/vl", "[Unit]\nDescription=vl\n")
+		}, nil, nil, "unit vl or vl-web is already loaded"},
 		{"release dir inside install", nil, func(fe *fakeEnv) []string {
 			return []string{"--session", fe.session, "--sha", fe.newSHA, "--release-dir", filepath.Join(fe.home, o, "inside"), "--dry-run"}
 		}, nil, "inside the install tree"},
@@ -1174,10 +1233,31 @@ func TestNT8Legs(t *testing.T) {
 	}
 }
 
+func TestReleaseRootSymlinkRefusedAtStep2(t *testing.T) {
+	// The release-root invariant is re-checked AFTER the move (step 2). A
+	// release dir reached through a symlink passes step 0 but must refuse at
+	// step 2 and roll back — this is the mutant "skip the step-2 re-check".
+	fe := newFakeEnv(t)
+	real := filepath.Join(fe.root, "realrel")
+	if err := os.Rename(fe.relDir, real); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, fe.relDir); err != nil {
+		t.Fatal(err)
+	}
+	out, code := runWithEnv(t, fe, nil,
+		"--session", fe.session, "--sha", fe.newSHA, "--release-dir", fe.relDir)
+	if code == 0 {
+		t.Fatalf("expected refusal at step 2, got success\n%s", out)
+	}
+	mustContain(t, out, "symlink anywhere in it is refused")
+	mustContain(t, out, "rollback DONE")
+}
+
 func TestNoOldNameLiteralInMyFiles(t *testing.T) {
 	o := oldName()
 	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..", "..")
+	root := filepath.Join(wd, "..")
 	for _, rel := range []string{
 		"deploy/migrate-to-vl.sh",
 		filepath.Join("docs", "superpowers", "runbooks", "2026-09-30-vl-rename-boot.md"),
