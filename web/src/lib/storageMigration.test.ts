@@ -266,3 +266,104 @@ describe('storageMigration', () => {
     )
   })
 })
+
+// ── W1 survivor folds (CHECK D2-WEB): writeAndVerify's failure paths ─────────
+// A migration that deletes the old key without a trusted new value loses data.
+// Each case proves the old key survives with its original value and the marker
+// counts the key as NOT migrated.
+
+// A storage whose setItem succeeds but whose getItem returns a DIFFERENT value
+// for the new key: the read-back disagrees, so the new key must not be trusted.
+function createDisagreeingReadbackStorage(targetKey: string): Storage {
+  const inner = createStorage()
+  return {
+    get length() {
+      return inner.length
+    },
+    clear() {
+      inner.clear()
+    },
+    getItem(key: string) {
+      if (key === targetKey) {
+        return inner.getItem(key) === null ? null : 'corrupted-readback'
+      }
+      return inner.getItem(key)
+    },
+    key(index: number) {
+      return inner.key(index)
+    },
+    removeItem(key: string) {
+      inner.removeItem(key)
+    },
+    setItem(key: string, value: string) {
+      inner.setItem(key, value)
+    },
+  }
+}
+
+describe('writeAndVerify failure paths (W1)', () => {
+  it('keeps the old key when the read-back disagrees', () => {
+    const storage = createDisagreeingReadbackStorage(VL_USER_MODE_KEY)
+    storage.setItem('nofx_user_mode', 'advanced')
+
+    const result = runStorageMigration(storage)
+
+    expect(storage.getItem('nofx_user_mode')).toBe('advanced')
+    expect(storage.getItem(VL_MIGRATED_AT_KEY)).toBeNull()
+    expect(result.legacyKeysLeft).toBe(1)
+    expect(storage.getItem(VL_LEGACY_KEYS_LEFT_KEY)).toBe('1')
+  })
+
+  it('counts the key as NOT migrated when a quota error kills the retry', () => {
+    const inner = createStorage()
+    inner.setItem('nofx_user_mode', 'advanced')
+    let remaining = 2
+    const storage = {
+      get length() {
+        return inner.length
+      },
+      clear() {
+        inner.clear()
+      },
+      getItem(key: string) {
+        return inner.getItem(key)
+      },
+      key(index: number) {
+        return inner.key(index)
+      },
+      removeItem(key: string) {
+        inner.removeItem(key)
+      },
+      setItem(key: string, value: string) {
+        if (remaining > 0) {
+          remaining--
+          const err = new Error('quota')
+          ;(err as Error & { name: string }).name = 'QuotaExceededError'
+          throw err
+        }
+        inner.setItem(key, value)
+      },
+    }
+
+    const result = runStorageMigration(storage)
+
+    expect(storage.getItem('nofx_user_mode')).toBe('advanced')
+    expect(storage.getItem(VL_USER_MODE_KEY)).toBeNull()
+    expect(result.legacyKeysLeft).toBe(1)
+    expect(storage.getItem(VL_LEGACY_KEYS_LEFT_KEY)).toBe('1')
+    expect(storage.getItem(VL_MIGRATED_AT_KEY)).toBeNull()
+  })
+
+  it('keeps the old key when the old chat value does not parse', () => {
+    const storage = createStorage()
+    storage.setItem(VL_AGENT_CHAT_KEY, '{broken')
+    storage.setItem('nofxi-agent-chat', '{broken')
+
+    const result = runStorageMigration(storage)
+
+    expect(storage.getItem('nofxi-agent-chat')).toBe('{broken')
+    expect(result.legacyKeysLeft).toBe(1)
+    expect(storage.getItem(VL_LEGACY_KEYS_LEFT_KEY)).toBe('1')
+    expect(storage.getItem(VL_MIGRATED_AT_KEY)).toBeNull()
+  })
+})
