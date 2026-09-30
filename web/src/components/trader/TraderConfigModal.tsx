@@ -426,13 +426,13 @@ export function TraderConfigModal({
                             {t('coinSource', language)}:{' '}
                             {aiConfig.coin_source.source_type === 'static'
                               ? '固定币种'
-                              : aiConfig.coin_source.source_type === 'ai500'
-                                ? 'AI500'
-                                : aiConfig.coin_source.source_type === 'oi_top'
-                                  ? 'OI Top'
-                                  : aiConfig.coin_source.source_type ===
-                                      'oi_low'
-                                    ? 'OI Low'
+                              : aiConfig.coin_source.source_type === 'hyper_all'
+                                ? 'Hyper All'
+                                : aiConfig.coin_source.source_type ===
+                                    'hyper_main'
+                                  ? 'Hyper Main'
+                                  : aiConfig.coin_source.source_type === 'mixed'
+                                    ? 'Mixed'
                                     : '-'}
                           </div>
                           <div>
