@@ -57,7 +57,7 @@ SHORT="${NEW_SHA:0:12}"
 if [ -z "$ACTIVATE" ]; then
   ACTIVATE="$(mktemp -t nofx-activate.XXXXXX)"
   trap 'rm -f "$ACTIVATE"' EXIT
-  go build -o "$ACTIVATE" ./cmd/nofx-activate 2>/dev/null \
+  go build -o "$ACTIVATE" ./cmd/vl-activate 2>/dev/null \
     || die "cannot build cmd/nofx-activate from this tree; pass NOFX_ACTIVATE_BIN=<path> if you have one"
 fi
 [ -x "$ACTIVATE" ] || die "$ACTIVATE is not executable"

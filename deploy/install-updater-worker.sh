@@ -94,7 +94,7 @@ echo "install-updater-worker: cloning $REPO_URL (the live install is never touch
 git clone -q "$REPO_URL" "$BUILD_DIR/src" 2>/dev/null || { echo "install-updater-worker: REFUSED — clone failed ($REPO_URL)" >&2; exit 2; }
 git -C "$BUILD_DIR/src" checkout -q --detach "$SHA" 2>/dev/null || { echo "install-updater-worker: REFUSED — $SHA is not in $REPO_URL" >&2; exit 2; }
 [ -z "$(git -C "$BUILD_DIR/src" status --porcelain)" ] || { echo "install-updater-worker: REFUSED — checkout not clean" >&2; exit 2; }
-( cd "$BUILD_DIR/src" && go build -trimpath -o "$BUILD_DIR/nofx-updater" ./cmd/nofx-updater ) || {
+( cd "$BUILD_DIR/src" && go build -trimpath -o "$BUILD_DIR/vl-updater" ./cmd/vl-updater ) || {
   echo "install-updater-worker: REFUSED — build failed at $SHA" >&2
   exit 2
 }

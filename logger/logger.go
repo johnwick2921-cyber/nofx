@@ -61,6 +61,14 @@ func init() {
 // Initialization functions
 // ============================================================================
 
+// LogFileNameFor builds the bot's log file name for the given local date:
+// <dir>/vl_<YYYY-MM-DD>.log. The updater's boot-line prediction
+// (logPrefixForBinary in internal/updaterworker) must agree with the prefix
+// this function writes — a parity test pins the pair.
+func LogFileNameFor(dir string, t time.Time) string {
+	return filepath.Join(dir, fmt.Sprintf("vl_%s.log", t.Format("2006-01-02")))
+}
+
 // Init initializes the global logger
 // If config is nil, uses default configuration (console output, info level)
 func Init(cfg *Config) error {
@@ -87,7 +95,7 @@ func Init(cfg *Config) error {
 	// Setup log file output (write to both stdout and file)
 	logDir := "data"
 	if err := os.MkdirAll(logDir, 0755); err == nil {
-		logFileName := filepath.Join(logDir, fmt.Sprintf("vl_%s.log", time.Now().Format("2006-01-02")))
+		logFileName := LogFileNameFor(logDir, time.Now())
 		f, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err == nil {
 			logFile = f

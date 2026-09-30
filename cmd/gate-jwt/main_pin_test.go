@@ -496,8 +496,8 @@ func TestGateJWTMainMintsOnlyThroughMintGateToken(t *testing.T) {
 			}
 		}
 	}
-	if got := directMints["mintGateToken"]; len(got) != 1 || !strings.HasSuffix(got[0], " nofx/auth.GenerateScopedJWT") {
-		bad = append(bad, fmt.Sprintf("mintGateToken's direct mints = %v — want exactly one nofx/auth.GenerateScopedJWT", got))
+	if got := directMints["mintGateToken"]; len(got) != 1 || !strings.HasSuffix(got[0], " vl/auth.GenerateScopedJWT") {
+		bad = append(bad, fmt.Sprintf("mintGateToken's direct mints = %v — want exactly one vl/auth.GenerateScopedJWT", got))
 	}
 	// 2. main's ONLY mint is one call `mintGateToken(`.
 	mainMints := 0

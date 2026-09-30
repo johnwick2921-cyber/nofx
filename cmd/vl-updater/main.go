@@ -170,7 +170,7 @@ func serve(t updaterworker.Target, stderr io.Writer) int {
 	}
 	home, err := os.UserHomeDir()
 	if err != nil || !filepath.IsAbs(home) {
-		fmt.Fprintln(stderr, "nofx-updater serve: no home directory for ~/nofx-backups/updater")
+		fmt.Fprintln(stderr, "vl-updater serve: no home directory for ~/vl-backups/updater")
 		return 2
 	}
 	logf := func(format string, a ...any) { fmt.Fprintf(stderr, format+"\n", a...) }

@@ -35,7 +35,7 @@ func main() {
 		install   = fs.String("install", "", "install directory the running process reads from")
 		dbPath    = fs.String("db", "data/data.db", "sqlite database to back up")
 		dest      = fs.String("dest", "", "backup destination file")
-		logPath   = fs.String("log", "", "the bot's log file; empty = the NEWEST data/nofx_*.log (logs are named by BOOT date, not today's date)")
+		logPath   = fs.String("log", "", "the bot's log file; empty = the NEWEST data/vl_*.log (nofx_* while the rename is in flight; logs are named by BOOT date, not today's date)")
 		healthURL = fs.String("health", "http://127.0.0.1:8080/api/health", "health endpoint")
 		within    = fs.Duration("within", 90*time.Second, "how long watch waits")
 		pid       = fs.Int("pid", 0, "pid to replace; 0 = read it from systemd")

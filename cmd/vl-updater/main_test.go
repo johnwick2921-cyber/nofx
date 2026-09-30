@@ -145,7 +145,7 @@ func TestServeRefusesUnlessBothAdaptersAreWired(t *testing.T) {
 	}{
 		// the production wiring: both adapters wired → past the adapters, to the next precondition
 		{"production: both adapters wired", productionNewLibrary, productionNewReverifier, false,
-			"nofx-updater serve: no home directory for ~/nofx-backups/updater"},
+			"vl-updater serve: no home directory for ~/vl-backups/updater"},
 		{"library errors, re-proof wired", notWired, productionNewReverifier, true,
 			"activation library adapter: missing (updaterworker: not wired yet) · release re-proof adapter: wired"},
 		{"library wired, re-proof missing", productionNewLibrary,
@@ -379,7 +379,7 @@ func TestServeWiresTheWorkerBehindTheSocket(t *testing.T) {
 		t.Fatalf("serve ended %d: %s", got, errb.String())
 	}
 	line := errb.String()
-	if !strings.Contains(line, "🔧 nofx-updater: serving ") || !strings.Contains(line, "active=n/a · recovery_needed=n/a · stale_at_start=n/a") {
+	if !strings.Contains(line, "🔧 vl-updater: serving ") || !strings.Contains(line, "active=n/a · recovery_needed=n/a · stale_at_start=n/a") {
 		t.Fatalf("start line: %q", line)
 	}
 	if strings.Contains(line, "tok-serve-never-printed") {
@@ -793,7 +793,7 @@ func TestAMovedReleaseRootRefusalNamesBothStepsAndFollowingThemWorks(t *testing.
 	_, err = rel.Verdict(fetchID)
 	vpath := filepath.Join(f.data, "updater", "verdicts", fetchID+".json")
 	want := fmt.Sprintf("release root refused: the verdict for %s names the release dir %s, not %s under the current NOFX_RELEASE_DIR — "+
-		"to use this release there: (1) remove the old verdict by hand: rm %s (2) then re-fetch it: nofx-updater --install-dir %s fetch %s",
+		"to use this release there: (1) remove the old verdict by hand: rm %s (2) then re-fetch it: vl-updater --install-dir %s fetch %s",
 		fetchID, filepath.Join(f.root, fetchSHA), filepath.Join(b, fetchSHA), vpath, tg.InstallDir, fetchID)
 	if err == nil || err.Error() != want {
 		t.Fatalf("Verdict under the moved root = %v;\nwant exactly %q", err, want)
@@ -808,8 +808,8 @@ func TestAMovedReleaseRootRefusalNamesBothStepsAndFollowingThemWorks(t *testing.
 	if out, err := exec.Command("/bin/sh", "-c", rmCmd).CombinedOutput(); err != nil {
 		t.Fatalf("step 1 %q: %v %s", rmCmd, err, out)
 	}
-	if len(fetchCmd) == 0 || fetchCmd[0] != "nofx-updater" {
-		t.Fatalf("step 2 is not an nofx-updater command: %q", fetchCmd)
+	if len(fetchCmd) == 0 || fetchCmd[0] != "vl-updater" {
+		t.Fatalf("step 2 is not an vl-updater command: %q", fetchCmd)
 	}
 	if rc, out, errs := runCLI(t, nil, fetchCmd[1:]...); rc != 0 {
 		t.Fatalf("step 2 %q = %d %q %q", fetchCmd, rc, out, errs)
@@ -948,17 +948,17 @@ func TestFetchRefusesWithoutItsInputs(t *testing.T) {
 // PIN (U4N item B): the release fixture is TEST support — the production
 // binary's dependency graph never contains it (nor the testing package).
 func TestTheUpdaterBinaryNeverLinksTheReleaseFixture(t *testing.T) {
-	out, err := exec.Command("go", "list", "-deps", "vl/cmd/nofx-updater").CombinedOutput()
+	out, err := exec.Command("go", "list", "-deps", "vl/cmd/vl-updater").CombinedOutput()
 	if err != nil {
 		t.Fatalf("go list: %v\n%s", err, out)
 	}
 	deps := "\n" + string(out)
-	if !strings.Contains(deps, "\nnofx/internal/updaterworker\n") {
-		t.Fatalf("the dependency listing is not the updater's (no nofx/internal/updaterworker):\n%s", out)
+	if !strings.Contains(deps, "\nvl/internal/updaterworker\n") {
+		t.Fatalf("the dependency listing is not the updater's (no vl/internal/updaterworker):\n%s", out)
 	}
-	for _, bad := range []string{"\nnofx/internal/updaterworker/releasefixture\n", "\ntesting\n"} {
+	for _, bad := range []string{"\nvl/internal/updaterworker/releasefixture\n", "\ntesting\n"} {
 		if strings.Contains(deps, bad) {
-			t.Fatalf("nofx-updater links %q", strings.TrimSpace(bad))
+			t.Fatalf("vl-updater links %q", strings.TrimSpace(bad))
 		}
 	}
 }
