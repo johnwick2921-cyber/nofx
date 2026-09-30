@@ -2,7 +2,7 @@
 # Persistent=true: a missed window (laptop sleep) fires on wake — exactly the
 # moment clock drift is most likely.
 [Unit]
-Description=nofx clock drift guard — every 15 minutes
+Description=vl clock drift guard — every 15 minutes
 
 [Timer]
 OnCalendar=*:0/15

@@ -1,5 +1,5 @@
 [Unit]
-Description=nofx SQLite auto-backup timer — 05:00 + 17:30 CT, twice daily (C1)
+Description=vl SQLite auto-backup timer — 05:00 + 17:30 CT, twice daily (C1)
 
 [Timer]
 # The host runs in America/Chicago, so these calendar times ARE CT. 05:00 is a

@@ -34,7 +34,7 @@ func TestInstallUpdaterWorkerEnvFileDual(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			home := t.TempDir()
-			envDir := filepath.Join(home, ".config", "nofx-updater")
+			envDir := filepath.Join(home, ".config", "vl-updater")
 			if err := os.MkdirAll(envDir, 0o755); err != nil {
 				t.Fatal(err)
 			}
