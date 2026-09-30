@@ -16,9 +16,8 @@ import (
 func TestExecHoldPathsCountGateBlocks(t *testing.T) {
 	trader := "p27-holder"
 	ctx := &Context{
-		TraderID:    trader,
-		Account:     AccountInfo{TotalEquity: 60000},
-		OITopDataMap: map[string]*OITopData{},
+		TraderID: trader,
+		Account:  AccountInfo{TotalEquity: 60000},
 	}
 	engine := &StrategyEngine{config: &store.StrategyConfig{
 		RiskControl: store.RiskControlConfig{MaxPositions: 1},
