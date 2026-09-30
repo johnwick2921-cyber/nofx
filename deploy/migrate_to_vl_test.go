@@ -969,9 +969,9 @@ func TestRerunAlreadyMigratedBranch(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("first run exit %d\n%s", code, out)
 	}
-	// the operator starts unit vl manually; the fake bot boots again, fresh
-	// (a post-R5-style box has the vl lock home; (b) requires every vl path)
-	_ = os.MkdirAll(filepath.Join(fe.home, "vl-main.lock.d"), 0o755)
+	// the operator starts unit vl manually; the fake bot boots again, fresh.
+	// DS-101 P3-1: a post-R2-shaped box has NO ~/vl-main.lock.d (Z18 — it must
+	// not exist until R5); the already-migrated branch must still fire.
 	logf := filepath.Join(fe.home, "vl", "data", "vl_"+time.Now().Format("2006-01-02")+".log")
 	_ = os.MkdirAll(filepath.Dir(logf), 0o755)
 	f, _ := os.OpenFile(logf, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
