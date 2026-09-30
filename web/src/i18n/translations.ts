@@ -824,11 +824,11 @@ export const translations = {
     // ===== TECHNICAL ISSUES =====
     faqPortInUse: 'Port 8080 or 3000 already in use',
     faqPortInUseAnswer:
-      'Check what\'s using the port: "lsof -i :8080" (macOS/Linux) or "netstat -ano | findstr 8080" (Windows). Kill the process or change ports in .env: NOFX_BACKEND_PORT=8081, NOFX_FRONTEND_PORT=3001. Restart with "docker compose down && docker compose up -d".',
+      'Check what\'s using the port: "lsof -i :8080" (macOS/Linux) or "netstat -ano | findstr 8080" (Windows). Kill the process or change ports in .env: VL_BACKEND_PORT=8081, VL_FRONTEND_PORT=3001. Restart with "docker compose down && docker compose up -d".',
 
     faqFrontendNotLoading: 'Frontend shows "Loading..." forever',
     faqFrontendNotLoadingAnswer:
-      'Backend may not be running or reachable. Check: 1) "curl http://127.0.0.1:8080/api/health" should return {"status":"ok"}; 2) "docker compose ps" to verify containers are running; 3) Check backend logs: "docker compose logs nofx-backend"; 4) Ensure firewall allows port 8080.',
+      'Backend may not be running or reachable. Check: 1) "curl http://127.0.0.1:8080/api/health" should return {"status":"ok"}; 2) "docker compose ps" to verify containers are running; 3) Check backend logs: "docker compose logs vl-backend"; 4) Ensure firewall allows port 8080.',
 
     faqDatabaseLocked: 'Database locked error',
     faqDatabaseLockedAnswer:
@@ -2220,11 +2220,11 @@ export const translations = {
     // ===== 技术问题 =====
     faqPortInUse: '端口 8080 或 3000 被占用',
     faqPortInUseAnswer:
-      '查看占用端口的进程：macOS/Linux 用 "lsof -i :8080"，Windows 用 "netstat -ano | findstr 8080"。终止进程或在 .env 中修改端口：NOFX_BACKEND_PORT=8081、NOFX_FRONTEND_PORT=3001。然后 "docker compose down && docker compose up -d" 重启。',
+      '查看占用端口的进程：macOS/Linux 用 "lsof -i :8080"，Windows 用 "netstat -ano | findstr 8080"。终止进程或在 .env 中修改端口：VL_BACKEND_PORT=8081、VL_FRONTEND_PORT=3001。然后 "docker compose down && docker compose up -d" 重启。',
 
     faqFrontendNotLoading: '前端一直显示"加载中..."',
     faqFrontendNotLoadingAnswer:
-      '后端可能未运行或无法访问。检查：1）"curl http://127.0.0.1:8080/api/health" 应返回 {"status":"ok"}；2）"docker compose ps" 验证容器运行中；3）查看后端日志："docker compose logs nofx-backend"；4）确保防火墙允许 8080 端口。',
+      '后端可能未运行或无法访问。检查：1）"curl http://127.0.0.1:8080/api/health" 应返回 {"status":"ok"}；2）"docker compose ps" 验证容器运行中；3）查看后端日志："docker compose logs vl-backend"；4）确保防火墙允许 8080 端口。',
 
     faqDatabaseLocked: '数据库锁定错误',
     faqDatabaseLockedAnswer:
@@ -3584,7 +3584,7 @@ export const translations = {
       'Perkiraan biaya harian per trader (interval 5 menit): DeepSeek: $0.10-0.50; Qwen: $0.20-0.80; OpenAI: $2-5; Claude: $1-3.',
     faqPortInUse: 'Port 8080 atau 3000 sudah digunakan',
     faqPortInUseAnswer:
-      'Periksa proses yang menggunakan port. Ubah port di .env: NOFX_BACKEND_PORT=8081, NOFX_FRONTEND_PORT=3001.',
+      'Periksa proses yang menggunakan port. Ubah port di .env: VL_BACKEND_PORT=8081, VL_FRONTEND_PORT=3001.',
     faqFrontendNotLoading: 'Frontend menampilkan "Memuat..." terus-menerus',
     faqFrontendNotLoadingAnswer:
       'Backend mungkin tidak berjalan. Periksa: "curl http://127.0.0.1:8080/api/health" harus mengembalikan {"status":"ok"}.',
