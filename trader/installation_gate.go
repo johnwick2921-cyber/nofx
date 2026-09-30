@@ -353,9 +353,6 @@ func InstallationGateStatus(loaded map[string]*AutoTrader, st *store.Store) (g I
 		positions, working := simPos+livePos, simWork+liveWork
 		detail := fmt.Sprintf("connections=%d connected_non_SIM=%d accounts=%d positions=%d working=%d",
 			len(a.Connections), nonSim, len(a.Accounts), positions, working)
-		if nonSim > 0 {
-			detail += fmt.Sprintf(" — %d connected non-SIM connection(s), all accounts flat — allowed (owner ruling 2026-09-28)", nonSim)
-		}
 		var why []string
 		if unsettled > 0 {
 			why = append(why, fmt.Sprintf("%d connection(s) in a transitional state (neither Connected nor Disconnected)", unsettled))
@@ -371,6 +368,12 @@ func InstallationGateStatus(loaded map[string]*AutoTrader, st *store.Store) (g I
 		}
 		if simWork > 0 {
 			why = append(why, fmt.Sprintf("%d working order(s) on a SIM account", simWork))
+		}
+		// D0: the flat-allowed suffix is the PASS path's own claim — it is
+		// appended only when the verdict passes (positions == 0 AND working
+		// == 0 AND every connection settled), never beside a refusal.
+		if len(why) == 0 && nonSim > 0 {
+			detail += fmt.Sprintf(" — %d connected non-SIM connection(s), all accounts flat — allowed (owner ruling 2026-09-28)", nonSim)
 		}
 		if len(why) > 0 {
 			return false, strings.Join(why, "; ") + " — " + detail

@@ -153,6 +153,7 @@ func TestInstallationGateCensusCases(t *testing.T) {
 		"connections not taken": {func(a *ntwire.MaintenanceAckPayload) { a.Connections = nil }, "connections"},
 		"accounts not taken":    {func(a *ntwire.MaintenanceAckPayload) { a.Accounts = nil }, "accounts"},
 		"position on a LIVE account": {func(a *ntwire.MaintenanceAckPayload) {
+			a.Connections[1].Connected = true // the connected non-SIM connection whose suffix must not survive a refusal
 			a.Accounts = append(a.Accounts, ntwire.CensusAccount{Sim: false, Positions: 1})
 		}, "open position(s) on a non-SIM (live) account"},
 		"working order on a LIVE account": {func(a *ntwire.MaintenanceAckPayload) {
@@ -171,6 +172,11 @@ func TestInstallationGateCensusCases(t *testing.T) {
 			// The pre-hold census leg shares the content judgment: a census
 			// that names exposure fails BOTH legs (#206 review fold).
 			mustFail(t, g, "addon_census_prehold", c.want)
+			// D0: a REFUSAL must never read "all accounts flat — allowed" —
+			// the suffix belongs to the pass path only.
+			if l, ok := legOf(g, "addon_census"); ok && strings.Contains(l.Detail, "all accounts flat") {
+				t.Fatalf("a refusal detail must not claim all-accounts-flat: %q", l.Detail)
+			}
 		})
 	}
 }
