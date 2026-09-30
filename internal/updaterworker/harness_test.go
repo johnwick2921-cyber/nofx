@@ -77,6 +77,8 @@ type box struct {
 
 	inst, data, relDir, backupRoot string
 
+	binName string // the install/release binary basename (vl-bin or nofx-bin — R5 removes the nofx form)
+
 	id      Identity // the unit's MainPID identity
 	running string   // the sha the running process serves
 
@@ -142,6 +144,20 @@ type rig struct {
 
 type rigOpt func(*box)
 
+// withBinary renames the box's install and release binaries from nofx-bin to
+// binName (the R1a dual-binary predictor tests; R5 removes this option).
+func withBinary(binName string) rigOpt {
+	return func(b *box) {
+		for _, dir := range []string{b.inst, b.relDir} {
+			old, nu := filepath.Join(dir, "nofx-bin"), filepath.Join(dir, binName)
+			if err := os.Rename(old, nu); err == nil {
+				_ = os.Chmod(nu, 0o755)
+			}
+		}
+		b.binName = binName
+	}
+}
+
 func withCSChanged() rigOpt {
 	return func(b *box) {
 		writeFile(b.t, filepath.Join(b.relDir, "ninjascript", "VLTrader.cs"), "// C# v2\n")
@@ -161,7 +177,8 @@ func newRig(t *testing.T, opts ...rigOpt) *rig {
 	b := &box{
 		t: t, clock: &fakeClock{t: time.Date(2026, 9, 24, 10, 0, 0, 0, time.Local)},
 		inst: filepath.Join(root, "nofx"), backupRoot: filepath.Join(root, "nofx-backups", "updater"),
-		id: Identity{PID: 4242, StartTicks: 1000}, running: boxOld,
+		binName: "nofx-bin",
+		id:      Identity{PID: 4242, StartTicks: 1000}, running: boxOld,
 		lockHeld: true, flat: true, addonConnected: true, addonBuild: boxOldBuild, manifestBuild: boxOldBuild,
 		absentSim:  true,
 		refuseBoot: map[string]bool{}, watchFail: map[string]bool{},
@@ -169,7 +186,7 @@ func newRig(t *testing.T, opts ...rigOpt) *rig {
 	b.data = filepath.Join(b.inst, "data")
 	b.relDir = filepath.Join(root, "releases", boxNew)
 	// the running install (a checkout at boxOld)
-	writeFile(t, filepath.Join(b.inst, "nofx-bin"), binaryBody(boxOld))
+	writeFile(t, filepath.Join(b.inst, b.binName), binaryBody(boxOld))
 	writeFile(t, filepath.Join(b.inst, "deploy", "RELEASE"), boxOld+"\n")
 	writeFile(t, filepath.Join(b.inst, "web", "dist", "index.html"), "<html>old</html>\n")
 	writeFile(t, filepath.Join(b.inst, "web", "dist", "assets", "app.js"), "old();\n")
@@ -177,7 +194,7 @@ func newRig(t *testing.T, opts ...rigOpt) *rig {
 	writeFile(t, filepath.Join(b.inst, "ninjascript", "VLTrader.cs"), "// C# v1\n")
 	writeFile(t, filepath.Join(b.data, "data.db"), "SQLite format 3\x00 fake\n")
 	// the materialized release (activation layout)
-	writeFile(t, filepath.Join(b.relDir, "nofx-bin"), binaryBody(boxNew))
+	writeFile(t, filepath.Join(b.relDir, b.binName), binaryBody(boxNew))
 	writeFile(t, filepath.Join(b.relDir, "RELEASE"), boxNew+"\n")
 	writeFile(t, filepath.Join(b.relDir, "web", "dist", "index.html"), "<html>new</html>\n")
 	writeFile(t, filepath.Join(b.relDir, calendarFile), "[]\n")
@@ -372,7 +389,7 @@ func (f *fakeLib) Resolve(dir string) (Release, error) {
 	if err := json.Unmarshal(raw, &m); err != nil || m.SourceSHA == "" || m.Signature == "" {
 		return Release{}, fmt.Errorf("manifest refused")
 	}
-	return Release{Dir: dir, SHA: m.SourceSHA, Binary: filepath.Join(dir, "nofx-bin"), Dist: filepath.Join(dir, "web", "dist"),
+	return Release{Dir: dir, SHA: m.SourceSHA, Binary: filepath.Join(dir, f.b.binName), Dist: filepath.Join(dir, "web", "dist"),
 		ReleaseFile: filepath.Join(dir, "RELEASE"), ManifestPath: filepath.Join(dir, "manifest.json")}, nil
 }
 
@@ -394,7 +411,7 @@ func (f *fakeLib) Backup(dbPath, dest string) (Receipt, error) {
 
 func (f *fakeLib) Snapshot(install Release, dest string) (Receipt, error) {
 	f.b.expect("snapshot", true, updaterjob.StateBackupDone)
-	out := snapshotRelease(dest, install.SHA)
+	out := snapshotRelease(dest, install.SHA, filepath.Base(install.Binary)) // snapshot keeps the install's basename
 	for _, p := range [][2]string{{install.Binary, out.Binary}, {install.ReleaseFile, out.ReleaseFile}} {
 		if err := copyFile(p[0], p[1]); err != nil {
 			return f.rc("snapshot", err, nil), err
@@ -421,7 +438,10 @@ func installHalves(rel, dst Release) error {
 }
 
 // kill plays the identity-guarded SIGKILL + systemd relaunch: the new process
-// runs whatever binary is installed and writes its boot line.
+// runs whatever binary is installed. The boot LINE is written later, on the
+// first Watch — R1a predictor pin: the log the worker predicts must be ABSENT
+// while Activate runs, exactly as on the box (the new process writes its boot
+// line only after it relaunches).
 func (b *box) kill(id Identity) (Identity, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -429,27 +449,40 @@ func (b *box) kill(id Identity) (Identity, error) {
 		return Identity{}, fmt.Errorf("pid %d is no longer the process this identity names — refusing to signal", id.PID)
 	}
 	b.id = Identity{PID: b.id.PID + 100, StartTicks: b.id.StartTicks + 7}
-	sha, _ := parseBinaryBody(filepath.Join(b.inst, "nofx-bin"))
+	sha, _ := parseBinaryBody(b.instBinary())
 	b.running = sha
 	b.clock.Advance(6 * time.Second) // RestartSec=5 + boot
-	status := "OK"
-	level := "INFO"
+	return b.id, nil
+}
+
+// instBinary is the install's binary: vl-bin when present, else nofx-bin
+// (R5 removes the nofx branch) — the same rule target.InstallBinaryPath uses.
+func (b *box) instBinary() string {
+	if _, err := os.Stat(filepath.Join(b.inst, "vl-bin")); err == nil {
+		return filepath.Join(b.inst, "vl-bin")
+	}
+	return filepath.Join(b.inst, "nofx-bin")
+}
+
+// writeBootLine appends the relaunched process's boot line to logPath — called
+// from Watch (AFTER Activate/RollbackTo returned), never from kill.
+func (b *box) writeBootLine(logPath string) error {
+	b.mu.Lock()
+	sha, status, level, pid := b.running, "OK", "INFO", b.id.PID
 	if b.refuseBoot[sha] {
 		status, level = "REFUSED", "ERRO" // main.go logs the refused line at ERROR
 	}
 	now := b.clock.Now().In(time.Local)
+	b.mu.Unlock()
 	line := fmt.Sprintf("%s [%s] main/main.go:322 🔐 BOOT INTEGRITY %s — rev %s · pid %d · built 2026-09-24T00:00:00Z · expected %s · goldens PASS\n",
-		now.Format("01-02 15:04:05"), level, status, sha[:12], b.id.PID, sha[:12])
-	logPath := filepath.Join(b.data, "nofx_"+now.Format("2006-01-02")+".log")
+		now.Format("01-02 15:04:05"), level, status, sha[:12], pid, sha[:12])
 	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
-		return Identity{}, err
+		return err
 	}
 	defer f.Close()
-	if _, err := f.WriteString(line); err != nil {
-		return Identity{}, err
-	}
-	return b.id, nil
+	_, err = f.WriteString(line)
+	return err
 }
 
 func (f *fakeLib) Activate(rel, prev Release, id Identity) (Identity, Receipt, error) {
@@ -474,6 +507,11 @@ func (f *fakeLib) Activate(rel, prev Release, id Identity) (Identity, Receipt, e
 
 func (f *fakeLib) Watch(rel Release, id Identity, opts WatchOpts) (Receipt, error) {
 	f.b.expect("watch", true, updaterjob.StateBooted, updaterjob.StateRollingBack)
+	// The relaunched process's boot line lands only after the Activate (or
+	// RollbackTo) returned — write it now, to the path the worker predicted.
+	if err := f.b.writeBootLine(opts.LogPath); err != nil {
+		return f.rc("watch", err, nil), err
+	}
 	f.b.mu.Lock()
 	f.b.watchOpts = append(f.b.watchOpts, opts)
 	f.b.watchSHAs = append(f.b.watchSHAs, rel.SHA)
@@ -560,7 +598,7 @@ func (f *fakeRel) Rehash(v Verdict) (int, error) {
 
 func (f *fakeRel) Reverify(v Verdict) (ReleaseFacts, error) {
 	arts := map[string]string{}
-	for _, rel := range []string{"web/dist/index.html", "ninjascript/VLTrader.cs", calendarFile, "nofx-bin"} {
+	for _, rel := range []string{"web/dist/index.html", "ninjascript/VLTrader.cs", calendarFile, f.b.binName} {
 		if f.b.noCS && strings.HasPrefix(rel, "ninjascript/") {
 			continue
 		}
@@ -616,7 +654,7 @@ func (h *fakeHost) ExeOf(pid int) (string, error) {
 	if h.b.exe != "" {
 		return h.b.exe, nil
 	}
-	return filepath.Join(h.b.inst, "nofx-bin"), nil
+	return h.b.instBinary(), nil // R5 removes: vl-bin when the install carries it
 }
 
 // ── the app (httptest) ──────────────────────────────────────────────────────

@@ -10,7 +10,18 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"nofx/internal/censuswalk"
 )
+
+// modulePrefix is the module path the census sees (nofx today; the R5 rename
+// makes it vl — the pins below must not hardcode it).
+func modulePrefix() string {
+	if m, err := censuswalk.ModulePath(".."); err == nil {
+		return m
+	}
+	return "nofx" // pre-go.mod synthetic dirs only
+}
 
 func importTargets(source []byte) (map[string]bool, error) {
 	f, err := parser.ParseFile(token.NewFileSet(), "source.go", source, parser.ImportsOnly)
@@ -45,7 +56,7 @@ func preserveImports(before, after []byte, stillImported func(string) bool) erro
 		return err
 	}
 	for target := range old {
-		if !strings.HasPrefix(target, "nofx/") || current[target] {
+		if !strings.HasPrefix(target, modulePrefix()+"/") || current[target] {
 			continue
 		}
 		if stillImported != nil && stillImported(target) && !renamedInto(target, current) {
@@ -59,11 +70,11 @@ func preserveImports(before, after []byte, stillImported func(string) bool) erro
 // renamedInto reports whether the after-file imports target's path under a
 // different, non-nofx module-internal root (nofx/config → vl/config).
 func renamedInto(target string, current map[string]bool) bool {
-	suffix := strings.TrimPrefix(target, "nofx/")
+	suffix := strings.TrimPrefix(target, modulePrefix()+"/")
 	for imp := range current {
 		root, rest, ok := strings.Cut(imp, "/")
-		if !ok || root == "nofx" || strings.Contains(root, ".") {
-			continue // nofx itself, or an external module (github.com/…)
+		if !ok || root == modulePrefix() || strings.Contains(root, ".") {
+			continue // the module itself, or an external module (github.com/…)
 		}
 		if rest == suffix {
 			return true

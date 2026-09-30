@@ -217,7 +217,7 @@ func TestEverySubcommandRefusesRoot(t *testing.T) {
 	checkProcess = func() error { return updaterworker.ErrBotCgroup }
 	t.Cleanup(func() { checkProcess = updaterworker.CheckProcess })
 	t.Setenv(updaterworker.CutoverTokenEnv, "tok")
-	if rc, _, errs := runCLI(t, nil, "--install-dir", inst, "serve"); rc != 2 || !strings.Contains(errs, "nofx.service control group") {
+	if rc, _, errs := runCLI(t, nil, "--install-dir", inst, "serve"); rc != 2 || !strings.Contains(errs, "bot's service control group") {
 		t.Fatalf("serve inside the bot's cgroup = %d %q", rc, errs)
 	}
 }

@@ -157,7 +157,7 @@ func TestWorkerHoldWritersCensusModuleWide(t *testing.T) {
 	put("cmd/nofx-updater/main.go", "package main\n\nimport \"nofx/internal/updaterworker\"\n\nfunc main() { updaterworker.ReleaseJob() }\n")
 	put("api/a.go", "package api\n\nimport uw \"nofx/internal/updaterworker\"\n\nvar _ = uw.HoldForJob\n")
 	put("api/b.go", "package api\n\nimport . \"nofx/internal/updaterworker\"\n\nfunc b() { HoldForJob() }\n")
-	put("api/c.go", "package api\n\nimport \"nofx/internal/updaterworker\"\n\nvar _ = updaterworker.HoldFileForDisplay\n")
+	put("api/c.go", "package api\n\nimport \""+pkgImport(dir)+"\"\n\nvar _ = updaterworker.HoldFileForDisplay\n")
 	off, _, err = workerHoldCallers(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -165,6 +165,15 @@ func TestWorkerHoldWritersCensusModuleWide(t *testing.T) {
 	if got := strings.Join(off, "|"); got != "api/a.go: names updaterworker.HoldForJob|api/b.go: names updaterworker.HoldForJob|cmd/nofx-updater/main.go: names updaterworker.ReleaseJob" {
 		t.Fatalf("synthetic census offenders = %v", off)
 	}
+}
+
+// pkgImport is the updaterworker import path as the census derives it from the
+// module (never the hardcoded nofx/ form — R5 makes the module vl).
+func pkgImport(root string) string {
+	if m, err := censuswalk.ModulePath(root); err == nil {
+		return m + "/internal/updaterworker"
+	}
+	return "nofx/internal/updaterworker"
 }
 
 func workerHoldCallers(root string) (offenders []string, scanned int, err error) {
