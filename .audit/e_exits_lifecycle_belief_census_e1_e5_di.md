@@ -1,8 +1,9 @@
+names rewritten to vl on 2026-09-30 (VL rename)
 SUBSYSTEM E — EXITS / LIFECYCLE + D3
-Worktree /home/hoang/nofx-conform @ fb50903f (base dev tip 492d2067). Deployed rev 70af663d, PID 878451, boot 2026-09-04 08:30:11 CT.
-Main tree /home/hoang/nofx READ ONLY. DB read via `file:/home/hoang/nofx/data/data.db?mode=ro`.
+Worktree /home/hoang/vl-conform @ fb50903f (base dev tip 492d2067). Deployed rev 70af663d, PID 878451, boot 2026-09-04 08:30:11 CT.
+Main tree /home/hoang/vl READ ONLY. DB read via `file:/home/hoang/vl/data/data.db?mode=ro`.
 
-REPORT PINS (`git log -1 -- <path>`, run in /home/hoang/nofx-conform)
+REPORT PINS (`git log -1 -- <path>`, run in /home/hoang/vl-conform)
 
 ```
 docs/superpowers/reports/2026-09-02-belief-census.md             ee64a494  2026-09-02 08:50:38 -0500
@@ -18,7 +19,7 @@ docs/superpowers/AUDIT-CHECKLIST.md                              158743db  2026-
 docs/superpowers/research/INDEX.md                               4e8e7e1a  2026-09-03 19:37:14 -0500
 ```
 
-A11 RESOLUTION NOTE. `/api/config/resolved` and `/api/risk/gate-blocks` return `{"error":"Missing Authorization header"}` from this session — every RESOLVED value below comes from the boot-8 lines quoted in the dispatch, from the log file `/home/hoang/nofx/data/nofx_2026-09-04.log`, or from the resolver code path with the env confirmed absent. `grep -E "EXIT_MECHS|MIN_SL|ARM_STOP|STAGE_A" /home/hoang/nofx/.env` returns NOTHING (27 assignments in that file, none of them these) [A], and `/proc/878451/environ` is unreadable to this session, so every E-subsystem resolver falls through to its shipped default. That is stated as "env absent → default", never as "the file default is live".
+A11 RESOLUTION NOTE. `/api/config/resolved` and `/api/risk/gate-blocks` return `{"error":"Missing Authorization header"}` from this session — every RESOLVED value below comes from the boot-8 lines quoted in the dispatch, from the log file `/home/hoang/vl/data/vl_2026-09-04.log`, or from the resolver code path with the env confirmed absent. `grep -E "EXIT_MECHS|MIN_SL|ARM_STOP|STAGE_A" /home/hoang/vl/.env` returns NOTHING (27 assignments in that file, none of them these) [A], and `/proc/878451/environ` is unreadable to this session, so every E-subsystem resolver falls through to its shipped default. That is stated as "env absent → default", never as "the file default is live".
 
 ---
 
@@ -36,7 +37,7 @@ A11 RESOLUTION NOTE. `/api/config/resolved` and `/api/risk/gate-blocks` return `
 | E-8 (census **E4**) | Flip/death → dormant + auto re-arm, "replan budget untouched" | `trader/auto_trader_planner.go:299-313` (dormant write + log), re-arm predicate above it | **ON**, budget untouched (boot 8 replan line: `free={… dormant/rearm}`) | **[O]** | belief-census.md:87 | **lifecycle** — entries blocked, `continue` before `store.GetReplanBudget` at `:320`, so no spend | yes | **1** path — `trader/auto_trader_planner.go:299` |
 | E-9 (census **E5**) | Level-event wake deserves a re-read | `trader/auto_trader_wake_levels.go:246/250`; cadence cutoffs `:279-300` | **cutoff 25m ENFORCE · cooldown 30m ENFORCE · fast-market ≥1.5×ATR exempt · cross-session on · stale-arm-expiry on** (boot 8 `wakes:`) | **[T] weak** | level-event-wake-audit.md:21 (**n=52** re-plans / 7 days) and **:46** ("Across all 52: **7** versions carry an arm that ever reached working or filled") | **REPLAN trigger**, now cut off | yes — the audit proposed WARN-first N=25 (report:106-125); the code at `:279-284` records the owner's 2026-09-03 promotion of that same N=25 to ENFORCE | **3** — `trader/auto_trader_planner.go:274`, `:282`, `:347` |
 | E-10 | `re-arm-after-sweep` (boot-line field) | `trader/exit_mechs_suspend.go:96` | **on** — but it is a **hardcoded `true` literal**, not a resolver | **[M]** mechanics | none found | **label only.** The real mechanism is class 33's `sweepPreBootArms` (`trader/armed_executor.go:201`, `trader/class33_boot_sweep.go`), which is unconditional | the printed value happens to be true, but it is **not READ** — see drift 5 | **1** — `trader/exit_mechs_suspend.go:96` |
-| E-11 | `trade_excursions` writer (class 54 / wave 1A) | `trader/trade_excursion_hook.go:41` open, `:77` bar-tick, `:172` close | **logging=on, rows=0, backfilled=0, unresolved=0** (log line, `nofx_2026-09-04.log`, 2 boots today) | **[M]** | trade-excursions.md:7 ("Status: NOT DEPLOYED" — now stale) · two-day-audit.md:1074 · expectancy-1d.md:163 | **advisory / telemetry**, zero gates | **NO** — the table it exists to fill has **0 rows all-time** | **4** — `trader/auto_trader_decision.go:492`, `trader/armed_executor.go:1254`, `trader/auto_trader_risk.go:54`, `trader/auto_trader_clock.go:768` |
+| E-11 | `trade_excursions` writer (class 54 / wave 1A) | `trader/trade_excursion_hook.go:41` open, `:77` bar-tick, `:172` close | **logging=on, rows=0, backfilled=0, unresolved=0** (log line, `vl_2026-09-04.log`, 2 boots today) | **[M]** | trade-excursions.md:7 ("Status: NOT DEPLOYED" — now stale) · two-day-audit.md:1074 · expectancy-1d.md:163 | **advisory / telemetry**, zero gates | **NO** — the table it exists to fill has **0 rows all-time** | **4** — `trader/auto_trader_decision.go:492`, `trader/armed_executor.go:1254`, `trader/auto_trader_risk.go:54`, `trader/auto_trader_clock.go:768` |
 | E-12 | Prompt statement of the arm stop-distance floor | `kernel/planner_prompt.go:733` | prompt string says **"stop distance must be ≥ 1.0× the current 5m ATR"**; the enforced floor is **1.5** | **[X]** contradicted by the live resolver | resolver `kernel/min_sl.go:34` = 1.5; boot 8 `atr_mult=1.5` | **advisory** (prompt text) — but it instructs the author to a value the gate will refuse | **NO — 1.0× in the prompt vs 1.5× resolved** | **1** — the planner prompt builder |
 | E-13 | Class-45 resolved stop-floor block in the prompt | `kernel/class45_feeds_forward.go:195-201` | renders `## Minimum stop distance this cycle / X pts (1.5×ATR5m Y, resolved)` — READ, correct | **[M]** | boot 8 `prompt feeds forward: … stop-floor=1.5×ATR5m…` | advisory | yes | **1** — `trader/auto_trader_planner.go:2381` (`StopFloorMult`) |
 
@@ -46,7 +47,7 @@ A11 RESOLUTION NOTE. `/api/config/resolved` and `/api/risk/gate-blocks` return `
 
 **Both halves confirmed [A] from the DB, not from a file.**
 
-`sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro"` → strategy `MNQ` (`a5b7662e-7bf7-49bb-9f09-7efa48f95ac8`), `ai_config.risk_control`:
+`sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro"` → strategy `MNQ` (`a5b7662e-7bf7-49bb-9f09-7efa48f95ac8`), `ai_config.risk_control`:
 
 ```
 breakeven_enabled        = True
@@ -68,7 +69,7 @@ Against boot 8: `exits: … BE=off · trail=off …`.
 
 **The suspending authority.** `trader/exit_mechs_suspend.go:14-28` — 0B, 2026-09-02. `exitMechsSuspended()` (`:35-43`) defaults **TRUE**; `EXIT_MECHS_SUSPENDED` is absent from `.env` [A]. Both mechanisms are refused at `exitMechSuspendedRefuse` (`:61`) *before* `moveStopWire` (`:49`), the single wire hop. `0b-exit-sanity.md:30-31` records the before/after: breakeven "firing (2 moves on 09-01) → **suspended**", trail "firing (8 ratchets on 09-01) → **suspended**".
 
-**THE SUSPENSION HAS NEVER BEEN OBSERVED FIRING [A].** `grep "⏸" nofx_2026-09-0{2,3,4}.log` returns 0 / 2 / 3 hits and **every one of them is a `⏸ TRANSITION OPENED/closed` regime line** — the `⏸ … SUSPENDED (0B)` refusal has never printed. `grep -c "auto-breakeven"` = 0 on all three days. `0b-exit-sanity.md:184` says this proof is **"Still owed"**, and it still is. Note the near-miss: post-0B position **591** printed **MFE 43.5 pts against a 40-pt BE trigger** — the trigger's condition was met on the 1m tape, but the BE/trail hooks sample `markPrice` on the ~60s drawdown monitor (`trader/auto_trader_risk.go:85-104`), not the bar high, so the tick may never have sampled it. **[B]**
+**THE SUSPENSION HAS NEVER BEEN OBSERVED FIRING [A].** `grep "⏸" vl_2026-09-0{2,3,4}.log` returns 0 / 2 / 3 hits and **every one of them is a `⏸ TRANSITION OPENED/closed` regime line** — the `⏸ … SUSPENDED (0B)` refusal has never printed. `grep -c "auto-breakeven"` = 0 on all three days. `0b-exit-sanity.md:184` says this proof is **"Still owed"**, and it still is. Note the near-miss: post-0B position **591** printed **MFE 43.5 pts against a 40-pt BE trigger** — the trigger's condition was met on the 1m tape, but the BE/trail hooks sample `markPrice` on the ~60s drawdown monitor (`trader/auto_trader_risk.go:85-104`), not the bar high, so the tick may never have sampled it. **[B]**
 
 **Bonus honesty defect inside the drift.** `trader/auto_trader_pause.go:196-201` renders `trailing=2.0×ATR14 arm=after_breakeven **(source: studio)**`. Neither the **2.0** nor the **after_breakeven** is a studio value: `trailingConfig` (`auto_trader_trailing.go:42-59`) falls back to `defaultTrailingATRMult = 2.0` (`:26`) and to `TrailArmAfterBreakeven` in the switch default (`:56`) because both fields are **absent from the stored config**. Only `trailing_atr_period: 14` is actually stored — and it equals the code default too. So the one boot line an operator would read as authoritative attributes **code constants to the owner**, and does so while the mechanism is off. **[A]**
 
@@ -80,7 +81,7 @@ Against boot 8: `exits: … BE=off · trail=off …`.
 
 `select count(*) from trade_excursions;` → **0**. Confirmed. The table's DDL is present (`store/trade_excursion.go:154` Migrate; 30 columns, unique on `position_id`), the writer code IS in the deployed rev (`git ls-tree 70af663d trader/trade_excursion_hook.go` returns the path), and the boot line prints **`📐 excursions: logging=on rows=0 backfilled=0 unresolved=0`** on both of today's boots. So the wave is LIVE and the table is EMPTY. Corroborated at `two-day-audit.md:1074` and `expectancy-1d.md:163`.
 
-**WHY it is empty, measured [A].** The writer's first boot line appears at **`nofx_2026-09-03.log:95` — `09-03 10:28:29 [INFO] … 📐 excursions: logging=on`**. The last position in the whole table (id **591**) closed at **09-03 09:20:45 CT** — 67 min 44 s earlier. No position has opened since. That matches `two-day-audit.md:1074` ("the writer shipped 67 minutes after the last trade closed") exactly.
+**WHY it is empty, measured [A].** The writer's first boot line appears at **`vl_2026-09-03.log:95` — `09-03 10:28:29 [INFO] … 📐 excursions: logging=on`**. The last position in the whole table (id **591**) closed at **09-03 09:20:45 CT** — 67 min 44 s earlier. No position has opened since. That matches `two-day-audit.md:1074` ("the writer shipped 67 minutes after the last trade closed") exactly.
 
 **A forward-looking coverage gap I did not find named anywhere [B].** `excursionOnOpen` has exactly **two** production call sites: `trader/auto_trader_decision.go:492` (AI/`system` path) and `trader/armed_executor.go:1254` (`armed_entry` path). There is **no hook on the reconcile path**. In the D3 cohort below, `source` splits **system 47 / reconcile 9 / armed_entry 5** — so ~15% of positions, including id 591 itself, would never have received an entry row even had the writer been live, and `excursionOnBarTick` skips them (`trade_excursion_hook.go:89-91`, "no entry half — nothing to update").
 
@@ -112,7 +113,7 @@ These sit right on top of the 1A wave's own backfill table (`trade-excursions.md
 
 ### 3.4 Converting the floor to points
 
-**The recorded route does not reach the cohort.** `planner_read_facts` (`stop_floor_pts`, `atr5m`, `stop_floor_mlt`) holds **25 rows**, all created **2026-09-03 05:00:56 → 2026-09-04 13:32:00 UTC**. Its earliest row is 2026-09-03 00:00 CT; the cohort's LAST trade opened 2026-09-03 09:05 CT. **Overlap = exactly one trade (id 591).** So the per-trade conversion **cannot** be done from the machine record for 60 of 61 trades. There is no `stop_floor` line in any log file either (`grep -ohE "stop_floor[^ ]*" /home/hoang/nofx/data/nofx_*.log` → nothing; the floor rides the prompt via `class45_feeds_forward.go:199`, not the journal).
+**The recorded route does not reach the cohort.** `planner_read_facts` (`stop_floor_pts`, `atr5m`, `stop_floor_mlt`) holds **25 rows**, all created **2026-09-03 05:00:56 → 2026-09-04 13:32:00 UTC**. Its earliest row is 2026-09-03 00:00 CT; the cohort's LAST trade opened 2026-09-03 09:05 CT. **Overlap = exactly one trade (id 591).** So the per-trade conversion **cannot** be done from the machine record for 60 of 61 trades. There is no `stop_floor` line in any log file either (`grep -ohE "stop_floor[^ ]*" /home/hoang/vl/data/vl_*.log` → nothing; the floor rides the prompt via `class45_feeds_forward.go:199`, not the journal).
 
 **So I reconstructed it, and validated the reconstruction.** From `bars` (MNQ, tf `5m`, 2454 rows, 2026-08-24 11:15 → 2026-09-04 08:40 CT), taking the ≤200 bars strictly before each fill and running an exact port of `market/data_indicators.go:86-117` (Wilder ATR(14), seeded from TR[1..14]) — i.e. the same computation `plannerATR5m` performs (`trader/auto_trader_planner.go:2808-2812`; `AcceptanceBars(bars,"2x5m")` is a pass-through because `acceptanceTFMinutes("2x5m")` returns 5, `kernel/scenario_facts.go:121-127`). Floor = `1.5 × atr5m`.
 
@@ -162,34 +163,34 @@ These sit right on top of the 1A wave's own backfill table (`trade-excursions.md
 
 ```bash
 # cohort
-sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" "
+sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro" "
  select count(*) from trader_positions
  where datetime(created_at/1000,'unixepoch','-5 hours') >= '2026-08-15 00:00:00'
    and status='CLOSED' and plan_id<>'UNRESOLVABLE' and source<>'e7_farside_test';"   # 61
 
 # empty excursion table
-sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" "select count(*) from trade_excursions;"  # 0
+sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro" "select count(*) from trade_excursions;"  # 0
 
 # the recorded floor series (25 rows, 09-03/09-04 only)
-sqlite3 -header -column "file:/home/hoang/nofx/data/data.db?mode=ro" \
+sqlite3 -header -column "file:/home/hoang/vl/data/data.db?mode=ro" \
  "select id, datetime(created_at,'-5 hours') ct, session, atr5m, stop_floor_pts, stop_floor_mlt
     from planner_read_facts order by id;"
 
 # env is absent -> every E resolver falls to its default
-grep -E "EXIT_MECHS|MIN_SL|ARM_STOP|STAGE_A" /home/hoang/nofx/.env    # no match
+grep -E "EXIT_MECHS|MIN_SL|ARM_STOP|STAGE_A" /home/hoang/vl/.env    # no match
 
 # the suspension has never fired
-grep -h "⏸" /home/hoang/nofx/data/nofx_2026-09-0[34].log | sed 's/.*⏸/⏸/' | sort -u   # TRANSITION lines only
-grep -c "auto-breakeven" /home/hoang/nofx/data/nofx_2026-09-0[234].log                 # 0 0 0
+grep -h "⏸" /home/hoang/vl/data/vl_2026-09-0[34].log | sed 's/.*⏸/⏸/' | sort -u   # TRANSITION lines only
+grep -c "auto-breakeven" /home/hoang/vl/data/vl_2026-09-0[234].log                 # 0 0 0
 
 # writer first went live
-grep -m1 -n "excursions: logging=on" /home/hoang/nofx/data/nofx_2026-09-03.log   # :95  09-03 10:28:29
+grep -m1 -n "excursions: logging=on" /home/hoang/vl/data/vl_2026-09-03.log   # :95  09-03 10:28:29
 ```
 
 Reconstruction script (Wilder ATR(14) on 200 prior 5m bars, exact port of `market/data_indicators.go:86-117`):
-`/tmp/claude-1000/-home-hoang-nofx/51524a30-37b9-4d23-aaa2-8ad3d23f4ea7/scratchpad/e_mae.py`
+`/tmp/claude-1000/-home-hoang-vl/51524a30-37b9-4d23-aaa2-8ad3d23f4ea7/scratchpad/e_mae.py`
 
 ## 6. FILES WRITTEN (worktree only)
 
-- `/home/hoang/nofx-conform/docs/superpowers/reports/2026-09-04-research-conformance-data/E-d3-mae-mfe-per-trade.csv` — 61 rows: `id, side, entry_px, entry_ct, mae, mfe, session, pnl, grade, source, bars_avail, atr5m, floor_pts, mae_over_floor`
-- `/home/hoang/nofx-conform/docs/superpowers/reports/2026-09-04-research-conformance-data/E-d3-summary-percentiles.csv` — 18 rows, every percentile above with its n
+- `/home/hoang/vl-conform/docs/superpowers/reports/2026-09-04-research-conformance-data/E-d3-mae-mfe-per-trade.csv` — 61 rows: `id, side, entry_px, entry_ct, mae, mfe, session, pnl, grade, source, bars_avail, atr5m, floor_pts, mae_over_floor`
+- `/home/hoang/vl-conform/docs/superpowers/reports/2026-09-04-research-conformance-data/E-d3-summary-percentiles.csv` — 18 rows, every percentile above with its n

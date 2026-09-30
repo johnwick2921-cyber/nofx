@@ -1,9 +1,10 @@
+names rewritten to vl on 2026-09-30 (VL rename)
 ## 0. Provenance
 
-- **Source tree:** `/home/hoang/nofx-conform`, base `492d2067` (= dev tip at accept; my worktree HEAD `fb50903f`, a claim commit; peers have since added `e1c81258`/`4751fc84`/`e2b2b8e1`).
-- **Running binary:** rev `70af663d`, PID 878451, booted **2026-09-04 08:30:11 CT**. Every RESOLVED value below is READ from that process's boot lines in `/home/hoang/nofx/data/nofx_2026-09-04.log` or traced through the resolver call path. `/api/config/resolved` and `/api/risk/gate-blocks` both require an `Authorization` header this session does not have — **neither was used**.
+- **Source tree:** `/home/hoang/vl-conform`, base `492d2067` (= dev tip at accept; my worktree HEAD `fb50903f`, a claim commit; peers have since added `e1c81258`/`4751fc84`/`e2b2b8e1`).
+- **Running binary:** rev `70af663d`, PID 878451, booted **2026-09-04 08:30:11 CT**. Every RESOLVED value below is READ from that process's boot lines in `/home/hoang/vl/data/vl_2026-09-04.log` or traced through the resolver call path. `/api/config/resolved` and `/api/risk/gate-blocks` both require an `Authorization` header this session does not have — **neither was used**.
 - **Clock at measurement:** 2026-09-04 08:52 CT. The NY session is ~22 min old; the measurements below are of a live, in-flight session.
-- **DB:** read-only, `file:/home/hoang/nofx/data/data.db?mode=ro`.
+- **DB:** read-only, `file:/home/hoang/vl/data/data.db?mode=ro`.
 
 `git log -1` for every report cited:
 
@@ -29,7 +30,7 @@
 
 ## 1. How the resolved values were resolved (A11)
 
-Boot-8 lines quoted verbatim from `/home/hoang/nofx/data/nofx_2026-09-04.log` (08:30:11 CT block):
+Boot-8 lines quoted verbatim from `/home/hoang/vl/data/vl_2026-09-04.log` (08:30:11 CT block):
 
 ```
 BOOT INTEGRITY OK — rev 70af663dcb6f · built 2026-09-04T13:16:34Z · expected 70af663d · goldens PASS
@@ -46,7 +47,7 @@ Resolver traces (the values are NOT file defaults presented as live):
 
 - **`plan_mode` = `strict`** [A]. `at.planModeFor(session)` → `store.DayPlanConfig.PlanModeFor` (`store/strategy.go:1399-1402`) → `store.ResolvePlanMode` (`store/resolve_source.go:47-55`). Live DB: `strategies.id = a5b7662e-…` (the only running trader `8d5c8af5_…`, `is_running=1`, account `Sim101`) has `day_plan.plan_mode = "strict"` and **no `plan_mode` in any of its three session overrides** (`sessions[]` carries only `replan_cap`/`acceptance_rule`/`min_grade`/`max_trades`/`enable`). So strict resolves for **ASIA, LONDON and NY alike**, source `strategy value`. Row `updated_at = 2026-09-01 13:13:06 UTC`, i.e. 2 days before boot 8 — the in-memory cached config equals the row.
 - **`MinRR` = `2.0`** [A]. `at.armMinRRFor(nil)` (`trader/armed_executor.go:78-83`) → `resolvedMinRR` (`:68-73`) → `store.ResolveMinRiskReward` (`store/resolve_source.go:29-34`). The saved config carries `ai_config.risk_control.min_risk_reward_ratio = 2` → source **`saved value`**, so the `SafeDefaultMinRiskReward = 3.0` branch (`store/strategy.go:76`) is NOT taken. Boot line prints both args as `2.0`, which is the proof the resolver and the raw field agree.
-- **`MinSLMult` = `1.5`** [A]. `kernel.MinSLATRMult()` (`kernel/min_sl.go:44-51`) → `MIN_SL_ATR_MULT` is **ABSENT from `/home/hoang/nofx/.env`** (checked) → `MinSLATRMultDefault = 1.5` (`kernel/min_sl.go:31`).
+- **`MinSLMult` = `1.5`** [A]. `kernel.MinSLATRMult()` (`kernel/min_sl.go:44-51`) → `MIN_SL_ATR_MULT` is **ABSENT from `/home/hoang/vl/.env`** (checked) → `MinSLATRMultDefault = 1.5` (`kernel/min_sl.go:31`).
 - **no-chase 1.00 / 1.5** [A]. `NOCHASE_MAX_DIST_ATR` and `NOCHASE_MAX_RUN_PTS` both unset → `no_chase.go:77` returns `1.0`; run ceiling falls through to `MinSLMult` (`no_chase.go:89-95`).
 
 ---
@@ -145,7 +146,7 @@ That was true for 09-02→09-03. It is **no longer true**. On **2026-09-04 02:00
 2026-09-04 02:00 CT (accepted through 29579.50) — price accepted through the level against the
 trade — it flipped roles · refusals this session: 1
 ```
-(`/home/hoang/nofx/data/nofx_2026-09-03.log:32444` — the log file is named by the process-start calendar day, so the 09-04 LONDON session lands there.) Persisted counter: `arm_refusals_0b:…:2026-09-04:LONDON:entry_gate:invalidated = 1`. **[A]** Legs 1, 2, 4, 7 remain at zero.
+(`/home/hoang/vl/data/vl_2026-09-03.log:32444` — the log file is named by the process-start calendar day, so the 09-04 LONDON session lands there.) Persisted counter: `arm_refusals_0b:…:2026-09-04:LONDON:entry_gate:invalidated = 1`. **[A]** Legs 1, 2, 4, 7 remain at zero.
 
 ---
 
@@ -189,7 +190,7 @@ Measured since boot 8: **8 decision cycles** (`decision_records` ids 37649–376
 | **S1** | **long** | `sweep_reclaim` | A | **true** | 29611.25 / 29481.50 / 29720.00 | **0.84** (108.75 ÷ 129.75) |
 | S2 | short | `sweep_reclaim` | B | true | 29720.00 / 29770.00 / 29601.00 | 2.38 (119 ÷ 50) |
 
-At **08:44:46 CT** the planner's own feasibility warning called both shots (`nofx_2026-09-04.log:4949-4950`):
+At **08:44:46 CT** the planner's own feasibility warning called both shots (`vl_2026-09-04.log:4949-4950`):
 
 ```
 ⚔️ arm feasibility: S1 arm R:R 0.84 below min_risk_reward_ratio 2.00 (Studio) — the gate-at-arm
@@ -197,7 +198,7 @@ chain will refuse it every cycle (target/stop infeasible)
 ⚔️ arm feasibility: S2 arm stop 29770.00 too close (50.00 < 52.92 = 1.5×ATR5m) — min-SL gate will refuse it
 ```
 
-At **08:46:09–08:46:10 CT** the gates ran for real (`nofx_2026-09-04.log:5039-5045`):
+At **08:46:09–08:46:10 CT** the gates ran for real (`vl_2026-09-04.log:5039-5045`):
 
 ```
 5039  ⚔️ arm REFUSED NY S1 leg 1: R:R 0.84 below arm min 2.00 (studio min_risk_reward_ratio)
@@ -237,27 +238,27 @@ Both of today's scenarios cite `sweep_reclaim`. On our own tape that condition i
 
 ```bash
 # resolved values, read from the running process
-grep -nE "08:30:1[0-9]|08:30:2[0-9]" /home/hoang/nofx/data/nofx_2026-09-04.log
-grep -nE "arm REFUSED|entry-gate REFUSED|armed cancel|⚔️|🚦" /home/hoang/nofx/data/nofx_2026-09-04.log
-grep -nE "🚦 entry-gate REFUSED" /home/hoang/nofx/data/nofx_2026-09-03.log     # LONDON 09-04 lands here
+grep -nE "08:30:1[0-9]|08:30:2[0-9]" /home/hoang/vl/data/vl_2026-09-04.log
+grep -nE "arm REFUSED|entry-gate REFUSED|armed cancel|⚔️|🚦" /home/hoang/vl/data/vl_2026-09-04.log
+grep -nE "🚦 entry-gate REFUSED" /home/hoang/vl/data/vl_2026-09-03.log     # LONDON 09-04 lands here
 
 # env overrides — all ABSENT
 for k in MIN_SL_ATR_MULT ARM_MIN_RR PLAN_MODE; do grep -q "^$k=" .env && echo "$k set" || echo "$k ABSENT"; done
 
 # the live strategy
-sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" \
+sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro" \
   "SELECT config FROM strategies WHERE id='a5b7662e-7bf7-49bb-9f09-7efa48f95ac8';"
 
 # D11 measurement
-sqlite3 -header "file:/home/hoang/nofx/data/data.db?mode=ro" \
+sqlite3 -header "file:/home/hoang/vl/data/data.db?mode=ro" \
   "SELECT plan_id,version,session,lifecycle,trigger_reason,created_at FROM plans ORDER BY created_at DESC LIMIT 6;"
-sqlite3 -header "file:/home/hoang/nofx/data/data.db?mode=ro" \
+sqlite3 -header "file:/home/hoang/vl/data/data.db?mode=ro" \
   "SELECT id,session,scenario,side,entry_px,stop_px,target_px,state,armed_under_version,condition,created_at
    FROM armed_orders WHERE created_at >= '2026-09-04 08:30:11' ORDER BY id;"
-sqlite3 -header "file:/home/hoang/nofx/data/data.db?mode=ro" \
+sqlite3 -header "file:/home/hoang/vl/data/data.db?mode=ro" \
   "SELECT id, datetime(timestamp,'-5 hours') ct, json_extract(decision_json,'\$.action') action, execution_log
    FROM decision_records WHERE datetime(timestamp) >= '2026-09-04 13:30:11' ORDER BY id;"
-sqlite3 -header "file:/home/hoang/nofx/data/data.db?mode=ro" \
+sqlite3 -header "file:/home/hoang/vl/data/data.db?mode=ro" \
   "SELECT key,value FROM system_config WHERE key LIKE 'arm_refusals%' OR key LIKE 'nochase%';"
 
 # callers / dead code

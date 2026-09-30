@@ -1,7 +1,8 @@
+names rewritten to vl on 2026-09-30 (VL rename)
 # D10 — EXPECTANCY, wave 1D: rebuilt from the live store 2026-09-04 08:5x CT
 
-Worktree `/home/hoang/nofx-conform` (HEAD `c523a34a`; `492d2067` verified ancestor).
-DB read `sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro"` only. Nothing written to `~/nofx`.
+Worktree `/home/hoang/vl-conform` (HEAD `c523a34a`; `492d2067` verified ancestor).
+DB read `sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro"` only. Nothing written to `~/vl`.
 
 ## 0 — PROVENANCE (`git log -1 -- <path>`, quoted)
 
@@ -21,17 +22,17 @@ ee64a494c60eed32bb5e71f4a2b0c43d8b0c5574 Wed Sep 2 08:50:38 2026 -0500 docs: bel
 ```
 
 **1D is DEPLOYED.** The report's own header (`:4`) says *"BUILT, GREEN, NOT DEPLOYED"*; it shipped
-in boot 7/8. Live line, read from `/home/hoang/nofx/data/nofx_2026-09-04.log`:
+in boot 7/8. Live line, read from `/home/hoang/vl/data/vl_2026-09-04.log`:
 
 ```
-09-04 08:30:11 [INFO] nofx/main.go:423 📊 expectancy: cells=41 with_n>=30=0 judged_rollups=2 unresolved=3 excluded_test=3
-09-04 08:30:11 [INFO] nofx/main.go:291 🔐 BOOT INTEGRITY OK — rev 70af663dcb6f · built 2026-09-04T13:16:34Z · expected 70af663d · goldens PASS
+09-04 08:30:11 [INFO] vl/main.go:423 📊 expectancy: cells=41 with_n>=30=0 judged_rollups=2 unresolved=3 excluded_test=3
+09-04 08:30:11 [INFO] vl/main.go:291 🔐 BOOT INTEGRITY OK — rev 70af663dcb6f · built 2026-09-04T13:16:34Z · expected 70af663d · goldens PASS
 ```
 
 **Rebuild method [A].** Not re-implemented in SQL — run through the PRODUCTION path
 (`expectancy.LoadAndBuildAt`, `expectancy/aggregate.go:89`) against a `mode=ro` DSN, via a
 read-only harness at
-`/home/hoang/nofx-conform/docs/superpowers/reports/2026-09-04-research-conformance-data/d10dump/main.go`
+`/home/hoang/vl-conform/docs/superpowers/reports/2026-09-04-research-conformance-data/d10dump/main.go`
 (`go build ./...` still rc=0 with it present). It reproduces the live boot line **byte-for-byte**:
 
 ```
@@ -285,22 +286,22 @@ callers. Highlights:
 
 ```bash
 # the table, through the production path
-cd /home/hoang/nofx-conform
+cd /home/hoang/vl-conform
 go run ./docs/superpowers/reports/2026-09-04-research-conformance-data/d10dump \
-  "file:/home/hoang/nofx/data/data.db?mode=ro&_pragma=busy_timeout(5000)"
+  "file:/home/hoang/vl/data/data.db?mode=ro&_pragma=busy_timeout(5000)"
 
 # era constant
 TZ=America/Chicago date -d '2026-08-15 00:00:00' +%s      # 1786770000
 TZ=America/Chicago date -d '2026-09-02 07:49:06' +%s      # 1788353346  (Era0BStart)
 
 # MC rig population, live
-sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" "
+sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro" "
 SELECT count(*), sum(pnl_corrected) FROM trader_positions
 WHERE status!='OPEN' AND created_at>=1786770000000 AND pnl_corrected IS NOT NULL
   AND source IN ('system','armed_entry','reconcile');"     # 65 | -563.9286
 
 # shadow-evidence accrual
-sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" "
+sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro" "
 SELECT count(*),
  sum(condition IN ('breakout_retest','fvg_entry')),
  sum(is_counterfactual=1),
@@ -309,7 +310,7 @@ SELECT count(*),
 FROM ab_confirm_log;"                                      # 209 | 0 | 0 | 55 | 54
 
 # arm blocks by condition since 0C
-sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" "
+sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro" "
 SELECT json_extract(j.value,'\$.condition'), count(*),
        sum(json_extract(j.value,'\$.arm.enabled')=1)
 FROM plans p, json_each(json_extract(p.doc,'\$.scenarios')) j

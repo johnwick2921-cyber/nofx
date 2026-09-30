@@ -1,6 +1,7 @@
+names rewritten to vl on 2026-09-30 (VL rename)
 # SUBSYSTEM F — WEEKLY READER + D6 BIAS — research-conformance re-check
 
-Source tree `/home/hoang/nofx-conform` @ `fb50903f` (contains `origin/dev` `492d2067`); every F/D6 file verified **byte-identical to origin/dev** (`git diff --stat origin/dev -- <f>` empty for `kernel/weekly_{bias,knobs,prompt}.go`, `trader/auto_trader_weekly.go`, `kernel/planner_prompt.go`, `trader/entry_gate.go`, `trader/auto_trader_transition.go`). Deployed rev `70af663d` (boot 8, 08:30:11 CT 2026-09-04, PID 878451). DB read-only via `sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro"`.
+Source tree `/home/hoang/vl-conform` @ `fb50903f` (contains `origin/dev` `492d2067`); every F/D6 file verified **byte-identical to origin/dev** (`git diff --stat origin/dev -- <f>` empty for `kernel/weekly_{bias,knobs,prompt}.go`, `trader/auto_trader_weekly.go`, `kernel/planner_prompt.go`, `trader/entry_gate.go`, `trader/auto_trader_transition.go`). Deployed rev `70af663d` (boot 8, 08:30:11 CT 2026-09-04, PID 878451). DB read-only via `sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro"`.
 
 ## Report provenance (`git log -1 -- <path>`, quoted verbatim)
 
@@ -24,7 +25,7 @@ docs/superpowers/research/INDEX.md 4e8e7e1a Thu Sep 3 19:37:14 2026 -0500 docs(i
 | **F2 IPDA 20/40/60** | `kernel/weekly_bias.go:58-66` (type), `:271-295` (`IPDA`) | `[20 40 60]` trading days · HH/LL + PosPct · insufficient history renders `PosPct=-1` → the literal string `"insufficient history"`, never a fake number | **[I]** | belief-census.md:97 (`F2 … [I] advisory`); weekly-bias-wave.md:10 describes the section, cites no study | **advisory** — same prompt-facts path | **yes** | 2 — `kernel/weekly_prompt.go:49`, same two roots |
 | **F3 weekly invalidation (1h close beyond px)** | `kernel/weekly_prompt.go:406-425` (`WeeklyInvalidationCrossed`); watch **removed** at `trader/auto_trader_weekly.go:322-327` | **NOT RESOLVED — no runtime path.** `WEEKLY_INVALIDATION_TF_DEFAULT` resolver (`kernel/weekly_knobs.go:110-116`) returns `"1h"` and has 0 callers | **[O]** | belief-census.md:94 (`F3 … [O] gate`) — the census still calls it a live gate | **DEAD** (was gate) | **NO** — research/ruling: *gate*. Live: **0 production callers** | **0 — DEAD.** Only `kernel/weekly_prompt.go:380` (inside the dead `ApplyWeeklyDOA`) + `kernel/weekly_prompt_test.go:132` |
 | **F4 weekly DOA breach-at-write guard** | `kernel/weekly_prompt.go:372-386` (`ApplyWeeklyDOA`) | **NOT RESOLVED — no runtime path** | **[O]** | belief-census.md:95 (`F4 … [O] gate`) | **DEAD** (was gate at write) | **NO** — research/ruling: *gate*. Live: **0 production callers** | **0 — DEAD.** `kernel/weekly_prompt_test.go:229` only |
-| **F5a confluence band 0.25×ATR5m** | `kernel/weekly_knobs.go:76-83` | **0.25** — `WEEKLY_CONFLUENCE_BAND_ATR` absent from `/home/hoang/nofx/.env` and from `/etc/systemd/system/nofx.service` (no `EnvironmentFile=`, no `Environment=`); resolver default | **[I]** | belief-census.md:98 (`F5 … [I] weight`); knob-census.md:50 labels it **[C]** code-canon | **shadow** (log-only) | **yes** (value); **census "weight" overstates it** — it is shadow-only, and studio-audit.md:101 agrees ("shadow-only (never change seating)") | 1 — `trader/auto_trader_weekly.go:358` |
+| **F5a confluence band 0.25×ATR5m** | `kernel/weekly_knobs.go:76-83` | **0.25** — `WEEKLY_CONFLUENCE_BAND_ATR` absent from `/home/hoang/vl/.env` and from `/etc/systemd/system/vl.service` (no `EnvironmentFile=`, no `Environment=`); resolver default | **[I]** | belief-census.md:98 (`F5 … [I] weight`); knob-census.md:50 labels it **[C]** code-canon | **shadow** (log-only) | **yes** (value); **census "weight" overstates it** — it is shadow-only, and studio-audit.md:101 agrees ("shadow-only (never change seating)") | 1 — `trader/auto_trader_weekly.go:358` |
 | **F5b shadow mult 1.5** | `kernel/weekly_knobs.go:87-94` | **1.5** — env absent, resolver default | **[I]** | belief-census.md:98; knob-census.md:49 **[C]** | **shadow** (log-only) | **yes** | 1 — `trader/auto_trader_weekly.go:359` |
 | F-extra `WEEKLY_READ_CT` | `kernel/weekly_knobs.go:23-53` | **"sun 16:30" CT** (env absent → shipped default) | **[O]** | weekly-bias-wave.md:20 (`WEEKLY_READ_CT` default "sun 16:30") | **gate** (scheduler wait/read/skip, `trader/auto_trader_weekly.go:148-156`) | **yes** | 1 — `kernel/weekly_knobs.go:64` → `trader/auto_trader_weekly.go:168` |
 | F-extra `WEEKLY_COUNTER_MODE` | `kernel/weekly_knobs.go:98-105` | `"warn"` — **unreachable** | **[I]** | knob-census.md:51 **[C]**, listed as a live env knob | **DEAD** | **NO** | **0 — DEAD.** `kernel/weekly_shadow_test.go:145` only |
@@ -192,7 +193,7 @@ No holdout leg clears Wilson-lo > .50 or net t > 2 at any n on the tape. Every F
 
 ## Findings, ranked
 
-**1 — A29 DEAD, and the boot line lies about it. `kernel.BiasArmWarning` has 0 production callers.** Its sibling warnings in the same wave are all wired at the same site (`trader/auto_trader_planner.go:1747` ChainWarnings, `:1756` FvgDemandWarnings, `:1764` FantasyTargetWarnings); `BiasArmWarning` is not. Exhaustive search across `*.go`/`*.ts`/`*.tsx` returns only its definition and 7 test call sites. The boot line `🎯 arms: bias-coherent=warn` is a **hardcoded literal** in the format string at `trader/arms_boot_line.go:21` — nothing resolves it. Live corroboration: `grep -h "⚠ bias=" data/nofx_2026-0*.log` = **0** across 20 files. The wave landed `fd3fadcd` (07:29:55 CT 2026-09-04) and IS in the deployed rev (`git merge-base --is-ancestor fd3fadcd 70af663d` → YES; `70af663d` = *"merge fix/arms-follow-bias (boot 8 …): … bias-coherence warning …"*). Class 45/49 violation (boot lines are READ, never literal) + A29. **Owner: code.**
+**1 — A29 DEAD, and the boot line lies about it. `kernel.BiasArmWarning` has 0 production callers.** Its sibling warnings in the same wave are all wired at the same site (`trader/auto_trader_planner.go:1747` ChainWarnings, `:1756` FvgDemandWarnings, `:1764` FantasyTargetWarnings); `BiasArmWarning` is not. Exhaustive search across `*.go`/`*.ts`/`*.tsx` returns only its definition and 7 test call sites. The boot line `🎯 arms: bias-coherent=warn` is a **hardcoded literal** in the format string at `trader/arms_boot_line.go:21` — nothing resolves it. Live corroboration: `grep -h "⚠ bias=" data/vl_2026-0*.log` = **0** across 20 files. The wave landed `fd3fadcd` (07:29:55 CT 2026-09-04) and IS in the deployed rev (`git merge-base --is-ancestor fd3fadcd 70af663d` → YES; `70af663d` = *"merge fix/arms-follow-bias (boot 8 …): … bias-coherence warning …"*). Class 45/49 violation (boot lines are READ, never literal) + A29. **Owner: code.**
 
 **2 — F3 + F4 are DEAD but the census still labels them live [O] gates.** `ApplyWeeklyDOA` and `WeeklyInvalidationCrossed` have 0 production callers since class 50 (`830717dd`); `InvalidatedAt` is read only inside the dead function. belief-census.md:94-95 must be corrected to `[O] → DEAD (retired by class 50)`. **Owner: ruling/census doc.** Their last live firing is on the record (09-02 19:06:24 CT log line, above).
 
@@ -218,31 +219,31 @@ No holdout leg clears Wilson-lo > .50 or net t > 2 at any n on the tape. Every F
 
 ```bash
 # resolved plan_mode (no boot line; /api/config/resolved needs auth)
-sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" \
+sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro" \
   "select config from strategies where id='a5b7662e-7bf7-49bb-9f09-7efa48f95ac8';" \
   | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['day_plan']['plan_mode'])"   # -> strict
 
 # the live weekly doc (pre-wave, directional, DOA-stamped)
-sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" ".mode line" \
+sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro" ".mode line" \
   "select doc from plans where session='WEEKLY' order by trade_date desc, version desc limit 1;"
 
 # dual bias label coverage
-sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" \
+sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro" \
   "select count(*) from plans where json_extract(doc,'\$.bias_label') is not null;"          # -> 23
 
 # dead-rule proof
-cd /home/hoang/nofx-conform && grep -rn "ArmWarning" . --include=*.go            # defs + tests only
+cd /home/hoang/vl-conform && grep -rn "ArmWarning" . --include=*.go            # defs + tests only
 grep -rn "ApplyWeeklyDOA\|WeeklyCounterMode" --include=*.go . | grep -v _test.go # defs + a comment only
 
 # live counters
-grep -h "TRANSITION STAND-DOWN" /home/hoang/nofx/data/nofx_2026-0*.log | wc -l   # -> 0
-grep -h "TRANSITION OPENED"     /home/hoang/nofx/data/nofx_2026-0*.log | wc -l   # -> 9
-grep -h "⚠ bias="               /home/hoang/nofx/data/nofx_2026-0*.log | wc -l   # -> 0
+grep -h "TRANSITION STAND-DOWN" /home/hoang/vl/data/vl_2026-0*.log | wc -l   # -> 0
+grep -h "TRANSITION OPENED"     /home/hoang/vl/data/vl_2026-0*.log | wc -l   # -> 9
+grep -h "⚠ bias="               /home/hoang/vl/data/vl_2026-0*.log | wc -l   # -> 0
 ```
 
 ## Unmeasurable from this session
 
 * `/api/config/resolved` and `/api/risk/gate-blocks` both return `{"error":"Missing Authorization header"}` — no resolved-knob dump and no in-memory gate-block counts.
-* `/proc/878451/environ` is unreadable (rc=1, permissions), so the `WEEKLY_*` resolutions rest on `/home/hoang/nofx/.env` (no `WEEKLY_*` keys) + `/etc/systemd/system/nofx.service` (no `EnvironmentFile=`, no `Environment=`) + the unit's own comment *"Services never read ~/.bashrc — every env var the bot needs must be in .env"*. **[B]**, not [A].
+* `/proc/878451/environ` is unreadable (rc=1, permissions), so the `WEEKLY_*` resolutions rest on `/home/hoang/vl/.env` (no `WEEKLY_*` keys) + `/etc/systemd/system/vl.service` (no `EnvironmentFile=`, no `Environment=`) + the unit's own comment *"Services never read ~/.bashrc — every env var the bot needs must be in .env"*. **[B]**, not [A].
 * Refs-only validator/prompt behaviour in production: **n = 0**. First exercise is Sunday 2026-09-06 16:30 CT.
 * Whether the weekly `weekly_levels` prices are actually copied from the facts (no validator, and `facts_hash` covers the facts text, not the model's echo of it).

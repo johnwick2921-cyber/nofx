@@ -1,8 +1,9 @@
+names rewritten to vl on 2026-09-30 (VL rename)
 # Orientation 1 — market data, structural maps and planning
 
-Base: `63968be62e44db2fb07a92883e02127b9064b0be`. Isolated worktree: `/tmp/nofx-understanding-market-20260913`; cwd and HEAD verified before reading. Read-only orientation: no code/config/DB/runtime changes, no builds or tests executed, no CGC reindex. Evidence labels: [A] exact source inspected; [B] consequence inferred from inspected sources; [C] unverified concern. This is NOT a certification that every function or runtime path is understood.
+Base: `63968be62e44db2fb07a92883e02127b9064b0be`. Isolated worktree: `/tmp/vl-understanding-market-20260913`; cwd and HEAD verified before reading. Read-only orientation: no code/config/DB/runtime changes, no builds or tests executed, no CGC reindex. Evidence labels: [A] exact source inspected; [B] consequence inferred from inspected sources; [C] unverified concern. This is NOT a certification that every function or runtime path is understood.
 
-Read ledger: `/tmp/nofx-market-reads.json` contains 44 fully read files, 13 excerpt/inventory entries, exact SHA256/bytes and each file's `git log -1` metadata. 98 production files in market/kernel/provider-ninjatrader remain not fully read; exact list below. An inventory hit is not a full read. Root/subsystem AGENTS files are not present in the tracked isolated checkout's file inventory; inherited owner instructions apply. Tracked `docs/superpowers/CLAUDE-canon.md` was fully read, including automatic lock keeper and checked-worktree rules. Relevant audit rules are classes 2,7,8,9,13,18,19,115–118,120–123; full checklist not claimed.
+Read ledger: `/tmp/vl-market-reads.json` contains 44 fully read files, 13 excerpt/inventory entries, exact SHA256/bytes and each file's `git log -1` metadata. 98 production files in market/kernel/provider-ninjatrader remain not fully read; exact list below. An inventory hit is not a full read. Root/subsystem AGENTS files are not present in the tracked isolated checkout's file inventory; inherited owner instructions apply. Tracked `docs/superpowers/CLAUDE-canon.md` was fully read, including automatic lock keeper and checked-worktree rules. Relevant audit rules are classes 2,7,8,9,13,18,19,115–118,120–123; full checklist not claimed.
 
 ## End-to-end path understood so far
 
