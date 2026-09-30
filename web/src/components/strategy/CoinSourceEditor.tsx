@@ -189,13 +189,6 @@ export function CoinSourceEditor({
     })
   }
 
-  // NofxOS badge component
-  const NofxOSBadge = () => (
-    <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-purple-500/20 text-purple-400 border border-purple-500/30">
-      NofxOS
-    </span>
-  )
-
   return (
     <div className="space-y-6">
       {/* Venue badge — Studio Phase 3: a futures strategy must SHOW its real
@@ -360,7 +353,6 @@ export function CoinSourceEditor({
               <span className="text-sm font-medium text-nofx-text">
                 AI500 {ts(coinSource.dataSourceConfig, language)}
               </span>
-              <NofxOSBadge />
             </div>
           </div>
 
@@ -401,10 +393,6 @@ export function CoinSourceEditor({
                 />
               </div>
             )}
-
-            <p className="text-xs pl-8 text-nofx-text-muted">
-              {ts(coinSource.nofxosNote, language)}
-            </p>
           </div>
         </div>
       )}
@@ -419,7 +407,6 @@ export function CoinSourceEditor({
                 {ts(coinSource.oiIncreaseTitle, language)}{' '}
                 {ts(coinSource.dataSourceConfig, language)}
               </span>
-              <NofxOSBadge />
             </div>
           </div>
 
@@ -460,10 +447,6 @@ export function CoinSourceEditor({
                 />
               </div>
             )}
-
-            <p className="text-xs pl-8 text-nofx-text-muted">
-              {ts(coinSource.nofxosNote, language)}
-            </p>
           </div>
         </div>
       )}
@@ -478,7 +461,6 @@ export function CoinSourceEditor({
                 {ts(coinSource.oiDecreaseTitle, language)}{' '}
                 {ts(coinSource.dataSourceConfig, language)}
               </span>
-              <NofxOSBadge />
             </div>
           </div>
 
@@ -519,10 +501,6 @@ export function CoinSourceEditor({
                 />
               </div>
             )}
-
-            <p className="text-xs pl-8 text-nofx-text-muted">
-              {ts(coinSource.nofxosNote, language)}
-            </p>
           </div>
         </div>
       )}

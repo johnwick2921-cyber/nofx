@@ -256,7 +256,7 @@ export function ExchangeConfigModal({
     { url: string; hasReferral?: boolean }
   > = {
     binance: {
-      url: 'https://www.binance.com/join?ref=NOFXENG',
+      url: 'https://www.binance.com/join',
       hasReferral: true,
     },
     okx: { url: 'https://www.okx.com/join/1865360', hasReferral: true },

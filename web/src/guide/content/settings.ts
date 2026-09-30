@@ -1177,18 +1177,6 @@ const indicators: KnobSpec[] = [
     perSession: 'No.',
   },
   {
-    label: 'NofxOS API key',
-    where: 'Strategy → Indicators → NofxOS key',
-    what: 'Unified API key for all NofxOS data sources (AI500, rankings, external sources). Never printed.',
-    trader: 'Without a key, NofxOS-backed sources return nothing.',
-    consumer: 'store/strategy.go:1962 NofxOSAPIKey.',
-    range: 'string (secret)',
-    systemDefault: 'empty',
-    recommended: 'Set once per strategy.',
-    whenToTouch: 'When the key rotates.',
-    perSession: 'No.',
-  },
-  {
     label: 'OI ranking',
     where: 'Strategy → Indicators → OI Ranking toggle + duration + limit',
     what: 'Market-wide open-interest increase/decrease ranking data. Duration: 1h | 4h | 24h. Limit: number of entries (default 10).',
