@@ -68,7 +68,7 @@ release_dir="$(awk -F= '$1=="VL_RELEASE_DIR"{print $2}' "$ENV_FILE" | tail -1)"
 token_ok=no
 grep -Eq '^(VL|NOFX)_CUTOVER_TOKEN=.+' "$ENV_FILE" && token_ok=yes
 { [ -n "$release_dir" ] && [ "$token_ok" = "yes" ]; } || {
-  echo "install-updater-worker: REFUSED — $ENV_FILE must set VL_RELEASE_DIR and VL_CUTOVER_TOKEN (both non-empty)" >&2
+  echo "install-updater-worker: REFUSED — $ENV_FILE must set VL_RELEASE_DIR/NOFX_RELEASE_DIR and VL_CUTOVER_TOKEN/NOFX_CUTOVER_TOKEN (both non-empty)" >&2
   exit 2
 }
 case "$release_dir" in
