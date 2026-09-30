@@ -156,11 +156,13 @@ newest_vl_log() { ls -1t "$VL_ROOT"/data/vl_*.log 2>/dev/null | head -1 || true;
 step0() {
   say "step 0: pre-flight refusals (in order)"
 
-  # (b) already migrated — checked FIRST.
+  # (b) already migrated — checked FIRST. Every vl path in (d) EXCEPT the lock
+  # home: under Z18 ~/vl-main.lock.d must NOT exist until R5, so a post-R2 box
+  # can never satisfy a check that requires it (DS-101 P3-1). A PRESENT lock
+  # home is still a refusal, via (d) below.
   local all_vl=1
   for p in "$HOME/vl" "$HOME/vl-backups" "$HOME/vl-releases" "$HOME/vl-inbox" \
-           "$HOME/.config/vl-updater" "$HOME/bin/vl-updater" \
-           "$HOME/vl-main.lock.d"; do
+           "$HOME/.config/vl-updater" "$HOME/bin/vl-updater"; do
     if [ ! -e "$p" ] && [ ! -L "$p" ]; then all_vl=0; break; fi
   done
   if [ "$all_vl" = 1 ] && ! ( systemctl cat vl >/dev/null 2>&1 && systemctl cat vl-web >/dev/null 2>&1 ); then
@@ -274,7 +276,12 @@ step0() {
     *) die "the lock tool verdict is not 'held' (check rc $check_rc) — refuse";;
   esac
 
-  # (j) no updater job in flight.
+  # (j) no updater job in flight. The rule this loop implements: a NON-TERMINAL
+  # job YOUNGER than 30 min is a refusal (vl-updater's start sweep would resume
+  # it against the new install and could kill the new unit mid-verify); a job
+  # OLDER than 30 min is stale — the worker's sweep marks it recovery_needed —
+  # so it is listed and left alone; recovery_needed jobs are listed and left
+  # alone (worker.go's sweep at the base, verified by the checkers).
   local job_file job_id job_state job_phase job_created age
   for job_file in "$OLD_ROOT/data/updater/jobs"/*.json; do
     [ -e "$job_file" ] || continue

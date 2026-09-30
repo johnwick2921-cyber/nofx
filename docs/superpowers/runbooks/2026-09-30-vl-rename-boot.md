@@ -37,6 +37,12 @@ the mechanism; this file is the operator's and owner's checklist.
    `VL_CUTOVER_TOKEN`, falling back to the old prefix's key; it is never in
    argv or a log (a 0600 header file is handed to curl).
 
+The script also refuses any NON-TERMINAL updater job that is YOUNGER than 30
+minutes (the new worker's start sweep would resume it against the new install).
+A job OLDER than 30 minutes is stale — the worker's sweep marks such jobs
+`recovery_needed` — so the script lists them and leaves them alone; existing
+`recovery_needed` jobs are listed (ids only) and left alone.
+
 ## The run (the owner present)
 
 ```sh
