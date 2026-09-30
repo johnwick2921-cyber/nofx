@@ -18,8 +18,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"nofx/internal/activation"
-	"nofx/internal/envcompat"
+	"vl/internal/activation"
+	"vl/internal/envcompat"
 )
 
 func main() {

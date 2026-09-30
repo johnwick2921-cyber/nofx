@@ -24,7 +24,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"nofx/internal/updaterjob"
+	"vl/internal/updaterjob"
 )
 
 // NewReleaseReverifier is the production Reverifier for the installation t

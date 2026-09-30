@@ -20,9 +20,9 @@ import (
 	"testing"
 	"time"
 
-	"nofx/auth"
-	"nofx/config"
-	"nofx/store"
+	"vl/auth"
+	"vl/config"
+	"vl/store"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"

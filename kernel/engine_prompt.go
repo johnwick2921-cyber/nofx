@@ -2,10 +2,10 @@ package kernel
 
 import (
 	"fmt"
-	"nofx/logger"
-	"nofx/market"
-	"nofx/provider/nofxos"
-	"nofx/store"
+	"vl/logger"
+	"vl/market"
+	"vl/provider/nofxos"
+	"vl/store"
 	"sort"
 	"strings"
 	"time"

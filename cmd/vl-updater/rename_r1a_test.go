@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"nofx/internal/envcompat"
+	"vl/internal/envcompat"
 )
 
 // R1a: the worker's lock script prefers deploy/vl-lock.sh, and the updater's

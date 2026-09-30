@@ -20,10 +20,10 @@ import (
 	"strings"
 	"time"
 
-	"nofx/internal/envcompat"
-	"nofx/kernel"
-	"nofx/store"
-	nt "nofx/trader/ninjatrader"
+	"vl/internal/envcompat"
+	"vl/kernel"
+	"vl/store"
+	nt "vl/trader/ninjatrader"
 )
 
 const defaultTraderID = "8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265"

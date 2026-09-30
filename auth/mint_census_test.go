@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"nofx/internal/censuswalk"
+	"vl/internal/censuswalk"
 )
 
 // M3 red-team H1 census over the REAL tree: an UNSCOPED token (GenerateJWT —
@@ -78,7 +78,7 @@ func unscopedMintSites(root string) (seen map[string]int, scanned int, err error
 		// a dot-import makes a bare GenerateJWT the auth one).
 		aliases, dot := map[string]bool{}, f.Name.Name == "auth"
 		for _, im := range f.Imports {
-			if strings.Trim(im.Path.Value, `"`) != "nofx/auth" {
+			if strings.Trim(im.Path.Value, `"`) != "vl/auth" {
 				continue
 			}
 			switch {

@@ -19,8 +19,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"golang.org/x/crypto/sha3"
 
-	"nofx/mcp"
-	"nofx/safe"
+	"vl/mcp"
+	"vl/safe"
 )
 
 // x402WarnLast rate-limits the per-cycle 402 retry noise (F5, LONDON-FORENSICS

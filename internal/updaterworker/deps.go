@@ -37,7 +37,7 @@ import (
 	"errors"
 	"time"
 
-	"nofx/internal/updaterjob"
+	"vl/internal/updaterjob"
 )
 
 // ── the activation library seam (CTO 1790261377377: the LANDED #201 shape) ──

@@ -192,7 +192,7 @@ func typeCheckTelegram() (*typedTelegram, error) {
 			self = f
 		}
 	}
-	if self == nil || self[0] != "nofx/telegram" {
+	if self == nil || self[0] != "vl/telegram" {
 		return nil, fmt.Errorf("go list did not name nofx/telegram for \".\" (got %q)", self)
 	}
 	if self[4] != "" {
@@ -219,7 +219,7 @@ func typeCheckTelegram() (*typedTelegram, error) {
 	if len(files) == 0 {
 		return nil, errors.New("no production file listed — the pin would walk nothing")
 	}
-	return checkTyped(fset, files, "nofx/telegram", exportImporter(fset, exports))
+	return checkTyped(fset, files, "vl/telegram", exportImporter(fset, exports))
 }
 
 // exportImporter imports from the go command's export data.
@@ -878,7 +878,7 @@ func TestRunBotGoroutinesReadNoBotIdentityField(t *testing.T) {
 	aiGoroutines := 0
 	countRun := func(m ast.Node) bool {
 		if se, ok := m.(*ast.SelectorExpr); ok {
-			if fn, ok := tp.info.Uses[se.Sel].(*types.Func); ok && fn.Name() == "Run" && fn.Pkg() != nil && fn.Pkg().Path() == "nofx/telegram/agent" {
+			if fn, ok := tp.info.Uses[se.Sel].(*types.Func); ok && fn.Name() == "Run" && fn.Pkg() != nil && fn.Pkg().Path() == "vl/telegram/agent" {
 				aiGoroutines++
 			}
 		}
@@ -900,7 +900,7 @@ func TestRunBotGoroutinesReadNoBotIdentityField(t *testing.T) {
 			case *ast.SelectorExpr:
 				if fn, ok := tp.info.Uses[fun.Sel].(*types.Func); ok &&
 					(fn.Name() == "GoNet" || fn.Name() == "GoNamed") &&
-					fn.Pkg() != nil && fn.Pkg().Path() == "nofx/safe" {
+					fn.Pkg() != nil && fn.Pkg().Path() == "vl/safe" {
 					for _, a := range call.Args {
 						if fl, ok := ast.Unparen(a).(*ast.FuncLit); ok {
 							ast.Inspect(fl.Body, countRun)
@@ -949,7 +949,7 @@ func TestBotIdentityClosuresReadNoReceiverField(t *testing.T) {
 		ast.Inspect(body, func(n ast.Node) bool {
 			if call, ok := n.(*ast.CallExpr); ok {
 				if se, ok := ast.Unparen(call.Fun).(*ast.SelectorExpr); ok {
-					if fn, ok := tp.info.Uses[se.Sel].(*types.Func); ok && fn.Name() == "NewManager" && fn.Pkg() != nil && fn.Pkg().Path() == "nofx/telegram/agent" {
+					if fn, ok := tp.info.Uses[se.Sel].(*types.Func); ok && fn.Name() == "NewManager" && fn.Pkg() != nil && fn.Pkg().Path() == "vl/telegram/agent" {
 						handoffs++
 					}
 				}
@@ -1067,7 +1067,7 @@ func TestBotIdentityPinRulesCatchEveryRoad(t *testing.T) {
 			}
 			files = append(files, f)
 		}
-		tp, err := checkTyped(fset, files, "nofx/telegram/synth", exportImporter(fset, telegramExports))
+		tp, err := checkTyped(fset, files, "vl/telegram/synth", exportImporter(fset, telegramExports))
 		if err != nil {
 			return nil, err
 		}

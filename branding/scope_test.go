@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"nofx/internal/censuswalk"
+	"vl/internal/censuswalk"
 )
 
 // modulePrefix is the module path the census sees (nofx today; the R5 rename
@@ -144,15 +144,15 @@ func TestExistingGoImportTargetsPreserved(t *testing.T) {
 	}
 }
 func TestImportScopeRejectsRenamedTarget(t *testing.T) {
-	err := preserveImports([]byte("package p; import \"nofx/config\""), []byte("package p; import \"vl/config\""), func(string) bool { return true })
-	if err == nil || !strings.Contains(err.Error(), "nofx/config") {
+	err := preserveImports([]byte("package p; import \"vl/config\""), []byte("package p; import \"vl/config\""), func(string) bool { return true })
+	if err == nil || !strings.Contains(err.Error(), "vl/config") {
 		t.Fatalf("renamed import was not rejected: %v", err)
 	}
 }
 
 func TestImportScopeAllowsObsoleteStandardLibraryRemoval(t *testing.T) {
-	before := []byte("package p; import (\"crypto/sha256\"; \"encoding/hex\"; \"nofx/config\")")
-	after := []byte("package p; import \"nofx/config\"")
+	before := []byte("package p; import (\"crypto/sha256\"; \"encoding/hex\"; \"vl/config\")")
+	after := []byte("package p; import \"vl/config\"")
 	if err := preserveImports(before, after, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -162,9 +162,9 @@ func TestImportScopeAllowsObsoleteStandardLibraryRemoval(t *testing.T) {
 // left auto_trader_orders.go for entry_admission.go and took nofx/discipline
 // with it) is preserved; the same removal with no other importer is not.
 func TestImportScopeAllowsMovedTarget(t *testing.T) {
-	before := []byte("package p; import (\"nofx/config\"; \"nofx/discipline\")")
-	after := []byte("package p; import \"nofx/config\"")
-	if err := preserveImports(before, after, func(t string) bool { return t == "nofx/discipline" }); err != nil {
+	before := []byte("package p; import (\"vl/config\"; \"vl/discipline\")")
+	after := []byte("package p; import \"vl/config\"")
+	if err := preserveImports(before, after, func(t string) bool { return t == "vl/discipline" }); err != nil {
 		t.Fatalf("a target still imported elsewhere was moved, not removed: %v", err)
 	}
 	if err := preserveImports(before, after, func(string) bool { return false }); err == nil {

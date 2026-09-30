@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	nt "nofx/provider/ninjatrader"
-	"nofx/store"
+	nt "vl/provider/ninjatrader"
+	"vl/store"
 )
 
 func snapWithOrders(orders ...nt.NT8Order) nt.OrderSnapshotPayload {

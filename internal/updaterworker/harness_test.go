@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"nofx/internal/updaterjob"
-	"nofx/internal/updaterwire"
-	"nofx/store"
+	"vl/internal/updaterjob"
+	"vl/internal/updaterwire"
+	"vl/store"
 )
 
 // ── the U4 test box ─────────────────────────────────────────────────────────

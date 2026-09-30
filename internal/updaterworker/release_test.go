@@ -22,9 +22,9 @@ import (
 	"testing"
 	"time"
 
-	"nofx/internal/censuswalk"
-	"nofx/internal/updaterjob"
-	"nofx/internal/updaterworker/releasefixture"
+	"vl/internal/censuswalk"
+	"vl/internal/updaterjob"
+	"vl/internal/updaterworker/releasefixture"
 )
 
 // ── release materialization, at the production call sites ────────────────────

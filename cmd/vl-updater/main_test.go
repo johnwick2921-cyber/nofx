@@ -18,12 +18,12 @@ import (
 	"testing"
 	"time"
 
-	"nofx/internal/installpath"
-	"nofx/internal/updaterjob"
-	"nofx/internal/updaterwire"
-	"nofx/internal/updaterwire/wireserver"
-	"nofx/internal/updaterworker"
-	"nofx/internal/updaterworker/releasefixture"
+	"vl/internal/installpath"
+	"vl/internal/updaterjob"
+	"vl/internal/updaterwire"
+	"vl/internal/updaterwire/wireserver"
+	"vl/internal/updaterworker"
+	"vl/internal/updaterworker/releasefixture"
 )
 
 const testJob = "job-u4-cli0abcd"
@@ -948,7 +948,7 @@ func TestFetchRefusesWithoutItsInputs(t *testing.T) {
 // PIN (U4N item B): the release fixture is TEST support — the production
 // binary's dependency graph never contains it (nor the testing package).
 func TestTheUpdaterBinaryNeverLinksTheReleaseFixture(t *testing.T) {
-	out, err := exec.Command("go", "list", "-deps", "nofx/cmd/nofx-updater").CombinedOutput()
+	out, err := exec.Command("go", "list", "-deps", "vl/cmd/nofx-updater").CombinedOutput()
 	if err != nil {
 		t.Fatalf("go list: %v\n%s", err, out)
 	}

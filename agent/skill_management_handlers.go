@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"nofx/store"
+	"vl/store"
 )
 
 var urlPattern = regexp.MustCompile(`https://[^\s"'<>]+`)

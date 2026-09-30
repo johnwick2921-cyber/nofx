@@ -18,7 +18,7 @@ import (
 	"sync"
 	"testing"
 
-	"nofx/logger"
+	"vl/logger"
 
 	"github.com/sirupsen/logrus"
 )

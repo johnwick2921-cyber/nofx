@@ -15,8 +15,8 @@ import (
 	"sync"
 	"testing"
 
-	"nofx/internal/updateauth"
-	"nofx/logger"
+	"vl/internal/updateauth"
+	"vl/logger"
 
 	"github.com/gin-gonic/gin"
 )

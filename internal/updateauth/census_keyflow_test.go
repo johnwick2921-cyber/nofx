@@ -30,8 +30,8 @@ import (
 const keyFlowGate = `package api
 
 import (
-	"nofx/internal/updateauth"
-	"nofx/trader"
+	"vl/internal/updateauth"
+	"vl/trader"
 )
 
 func gate(hash string) string {
@@ -134,7 +134,7 @@ func TestUpdateAuthLoadedKeyFlowsOnlyIntoVerification(t *testing.T) {
 		"bound with var":                 {fn("func m(d string) {\n\tvar key, err = updateauth.LoadDeviceKey(d)\n\t_, _ = key, err\n}\n"), unbound},
 		"bound to the blank identifier":  {fn("func m(d string) error {\n\t_, err := updateauth.LoadDeviceKey(d)\n\treturn err\n}\n"), unbound},
 		"used inline, never bound":       {fn("func must(b []byte, _ error) []byte { return b }\n\nfunc m(d string, g updateauth.Grant) bool {\n\treturn updateauth.VerifyMAC(must(updateauth.LoadDeviceKey(d)), g.ReleaseID, g.JobID, g.ExpiresAt, g.HMAC)\n}\n"), unbound},
-		"through a second import name":   {map[string]string{rel: strings.Replace(keyFlowGate, "\t\"nofx/internal/updateauth\"\n", "\t\"nofx/internal/updateauth\"\n\tua \"nofx/internal/updateauth\"\n", 1) + "\nfunc m(d string) []byte {\n\tkey, _ := ua.LoadDeviceKey(d)\n\treturn key\n}\n"}, used},
+		"through a second import name":   {map[string]string{rel: strings.Replace(keyFlowGate, "\t\"vl/internal/updateauth\"\n", "\t\"vl/internal/updateauth\"\n\tua \"vl/internal/updateauth\"\n", 1) + "\nfunc m(d string) []byte {\n\tkey, _ := ua.LoadDeviceKey(d)\n\treturn key\n}\n"}, used},
 		// census-repair verify P2: the import name is shadowed AFTER the real
 		// LoadDeviceKey, so `admin` is a fake's result and its
 		// PasswordStillBound receives the real key.

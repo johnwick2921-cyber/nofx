@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"nofx/mcp"
-	"nofx/store"
+	"vl/mcp"
+	"vl/store"
 )
 
 // brainDecision is the routing contract between the first-pass LLM and the executor.

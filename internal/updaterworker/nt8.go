@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"nofx/internal/updaterjob"
+	"vl/internal/updaterjob"
 )
 
 // ── the AddOn decision (C12 as ruled: the stricter composite) ──────────────

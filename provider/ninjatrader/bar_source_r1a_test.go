@@ -3,7 +3,7 @@ package ninjatrader
 import (
 	"testing"
 
-	"nofx/internal/envcompat"
+	"vl/internal/envcompat"
 )
 
 // R1a: the scale-mismatch knobs carry the env SOURCE of the value in force

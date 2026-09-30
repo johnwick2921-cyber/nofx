@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"nofx/internal/censuswalk"
+	"vl/internal/censuswalk"
 )
 
 // ── M4 3b-B U2: a resume is built ONLY by the attended updater CLI ─────────
@@ -648,7 +648,7 @@ func resumeCensusOf(t *testing.T, files map[string]string) resumeCensus {
 	t.Helper()
 	root := t.TempDir()
 	all := map[string]string{
-		"go.mod":                       "module nofx\n\ngo 1.25\n",
+		"go.mod":                       "module vl\n\ngo 1.25\n",
 		"internal/updaterwire/wire.go": resumeCensusWireGo,
 	}
 	for r, b := range files {
@@ -673,7 +673,7 @@ func resumeCensusOf(t *testing.T, files map[string]string) resumeCensus {
 // resumeCensusImp is a one-file body importing the wire package as name
 // ("" = its own name, "." = dot import).
 func resumeCensusImp(pkg, name, use string) string {
-	return "package " + pkg + "\n\nimport " + name + " \"nofx/internal/updaterwire\"\n\n" + use + "\n"
+	return "package " + pkg + "\n\nimport " + name + " \"vl/internal/updaterwire\"\n\n" + use + "\n"
 }
 
 // resumeJSONU spells a JSON unicode escape (backslash, u, four hex) at run
@@ -821,7 +821,7 @@ func TestResumeCensusSeesEveryResumeFieldWrite(t *testing.T) {
 		frame = "spells a resume frame"
 	)
 	file := func(pkg, body string) string {
-		return "package " + pkg + "\n\nimport (\n\t\"bytes\"\n\t\"encoding/json\"\n\n\t\"nofx/internal/updaterwire\"\n)\n\n" +
+		return "package " + pkg + "\n\nimport (\n\t\"bytes\"\n\t\"encoding/json\"\n\n\t\"vl/internal/updaterwire\"\n)\n\n" +
 			"var _, _ = bytes.NewReader, json.Unmarshal\n\n" + body + "\n"
 	}
 	for _, tc := range []struct {
@@ -881,14 +881,14 @@ func TestResumeCensusSeesEveryResumeFieldWrite(t *testing.T) {
 
 // PIN (U2 verifier defect 3, probe2.out G1): cmd/nofx-updater is admitted
 // because a main package cannot be imported. Any other package name there
-// could be (nu "nofx/cmd/nofx-updater"), wrapping a builder for the app, so
+// could be (nu "vl/cmd/nofx-updater"), wrapping a builder for the app, so
 // the file is an offender itself and is judged like any file outside.
 func TestResumeCensusAdmitsOnlyPackageMainInTheCLIDir(t *testing.T) {
 	const notMain = "package nofxupdater (the CLI directory admits only package main)"
 	t.Run("G1: an importable wrapper the app calls", func(t *testing.T) {
 		c := resumeCensusOf(t, map[string]string{
-			"cmd/nofx-updater/lib.go": "package nofxupdater\n\nimport \"nofx/internal/updaterwire\"\n\nfunc R(j string) updaterwire.Request { return updaterwire.NewResume(j) }\n",
-			"api/x.go":                "package api\n\nimport nu \"nofx/cmd/nofx-updater\"\n\nvar _ = nu.R(\"job-0001abcd\")\n",
+			"cmd/nofx-updater/lib.go": "package nofxupdater\n\nimport \"vl/internal/updaterwire\"\n\nfunc R(j string) updaterwire.Request { return updaterwire.NewResume(j) }\n",
+			"api/x.go":                "package api\n\nimport nu \"vl/cmd/nofx-updater\"\n\nvar _ = nu.R(\"job-0001abcd\")\n",
 		})
 		wantResumeOffenders(t, c, "cmd/nofx-updater/lib.go", notMain, "names updaterwire.NewResume")
 	})
@@ -998,7 +998,7 @@ func TestResumeCensusSeesEveryRequestShape(t *testing.T) {
 		convert = "converts to an updaterwire.Request"
 	)
 	file := func(body string) string {
-		return "package api\n\nimport (\n\t\"encoding/json\"\n\n\t\"nofx/internal/updaterwire\"\n)\n\nvar _ = json.Unmarshal\n\n" + body + "\n"
+		return "package api\n\nimport (\n\t\"encoding/json\"\n\n\t\"vl/internal/updaterwire\"\n)\n\nvar _ = json.Unmarshal\n\n" + body + "\n"
 	}
 	fill := "\tp := r0.Resume\n\t_ = json.Unmarshal([]byte(`{\"job_id\":\"`+job+`\"}`), &p)\n"
 	build := func(pre, ret string) string {

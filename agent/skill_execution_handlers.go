@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"nofx/mcp"
-	"nofx/store"
+	"vl/mcp"
+	"vl/store"
 )
 
 var (

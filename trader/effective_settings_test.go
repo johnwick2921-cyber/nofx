@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"nofx/store"
+	"vl/store"
 )
 
 func effRowsFor(t *testing.T, raw, venue, session string) map[string]EffectiveKnob {

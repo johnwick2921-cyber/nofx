@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"nofx/config"
-	"nofx/logger"
+	"vl/config"
+	"vl/logger"
 
 	"gorm.io/gorm"
 )

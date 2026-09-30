@@ -126,7 +126,7 @@ func TestNoPackageImportsASQLiteDriverDirectly(t *testing.T) {
 		t.Fatalf("%d package(s) import a SQLite driver directly instead of %s:\n  %s\n\n"+
 			"database/sql panics when two drivers register the name %q in one binary. "+
 			"Import nofx/store/sqlitedriver instead — it is the ONE registration site.",
-			len(offenders), "nofx/store/sqlitedriver", strings.Join(offenders, "\n  "), DriverName)
+			len(offenders), "vl/store/sqlitedriver", strings.Join(offenders, "\n  "), DriverName)
 	}
 }
 
@@ -146,7 +146,7 @@ func mainLinksSqlitedriver(dir string) (bool, string) {
 		if err != nil {
 			return true, fmt.Sprintf("go list %v failed for %s (%v) — absence unproven", args, dir, err)
 		}
-		if strings.Contains(string(out), "nofx/store/sqlitedriver") {
+		if strings.Contains(string(out), "vl/store/sqlitedriver") {
 			return true, "links nofx/store/sqlitedriver under " + strings.Join(args, " ")
 		}
 	}

@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"nofx/internal/envcompat"
-	"nofx/logger"
+	"vl/internal/envcompat"
+	"vl/logger"
 )
 
 // ADHERENCE REGRADE (owner ruling 2026-09-03) — flag-guarded migration for the

@@ -1,7 +1,7 @@
 package updaterworker
 
 import (
-	"nofx/internal/activation"
+	"vl/internal/activation"
 )
 
 // activationLibrary is the PRODUCTION Library: every method is ONE line that

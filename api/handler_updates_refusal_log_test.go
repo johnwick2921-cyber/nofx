@@ -26,8 +26,8 @@ import (
 	"testing"
 	"time"
 
-	"nofx/config"
-	"nofx/logger"
+	"vl/config"
+	"vl/logger"
 
 	"github.com/sirupsen/logrus"
 )

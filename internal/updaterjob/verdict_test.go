@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"nofx/internal/censuswalk"
+	"vl/internal/censuswalk"
 )
 
 // The verdict reader is app-linkable, so it must not be able to WRITE a

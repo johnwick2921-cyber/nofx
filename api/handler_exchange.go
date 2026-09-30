@@ -7,10 +7,10 @@ import (
 	"sort"
 	"strings"
 
-	"nofx/config"
-	"nofx/crypto"
-	"nofx/logger"
-	"nofx/store"
+	"vl/config"
+	"vl/crypto"
+	"vl/logger"
+	"vl/store"
 
 	"github.com/gin-gonic/gin"
 )

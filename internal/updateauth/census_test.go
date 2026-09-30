@@ -22,7 +22,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"nofx/internal/censuswalk"
+	"vl/internal/censuswalk"
 )
 
 // ── W-ONE-BUTTON M3 census: who may touch the enrollment, and who may mint ──

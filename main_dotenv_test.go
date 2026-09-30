@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"nofx/logger"
+	"vl/logger"
 )
 
 // captureLog redirects the process logger into a buffer for one test.

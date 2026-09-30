@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"nofx/internal/censuswalk"
-	ntwire "nofx/provider/ninjatrader"
-	"nofx/store"
-	"nofx/telemetry"
+	"vl/internal/censuswalk"
+	ntwire "vl/provider/ninjatrader"
+	"vl/store"
+	"vl/telemetry"
 )
 
 // PIN 5 — the warn is DEDUPED and every detection is COUNTED.

@@ -8,7 +8,7 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"nofx/internal/installpath"
+	"vl/internal/installpath"
 )
 
 // Target is the installation one worker acts on. It is resolved exactly as

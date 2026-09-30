@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"nofx/internal/envcompat"
+	"vl/internal/envcompat"
 )
 
 // NOFX_RELEASE_DIR turns the install into VERSIONED runtimes:

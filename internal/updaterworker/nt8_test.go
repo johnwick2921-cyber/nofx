@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"nofx/internal/updaterjob"
+	"vl/internal/updaterjob"
 )
 
 // atBackupDone drives a rig to backup_done/done (held, drained, gated, backed

@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"nofx/internal/envcompat"
-	"nofx/logger"
-	"nofx/market"
+	"vl/internal/envcompat"
+	"vl/logger"
+	"vl/market"
 )
 
 // PHASE 3.5 (timegate audit 2026-08-18) — CLOCK HEALTH, log-only.

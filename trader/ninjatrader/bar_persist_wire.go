@@ -3,16 +3,16 @@ package ninjatrader
 import (
 	"errors"
 	"fmt"
-	"nofx/market"
+	"vl/market"
 	"sync"
 	"time"
 
-	"nofx/kernel"
-	"nofx/logger"
-	ntwire "nofx/provider/ninjatrader"
-	"nofx/safe"
-	"nofx/store"
-	"nofx/telemetry"
+	"vl/kernel"
+	"vl/logger"
+	ntwire "vl/provider/ninjatrader"
+	"vl/safe"
+	"vl/store"
+	"vl/telemetry"
 )
 
 // WireBarPersistence (2026-08-26) — installs the closed-bar writer on the TCP

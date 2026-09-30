@@ -2,8 +2,8 @@ package kernel
 
 import (
 	"fmt"
-	"nofx/internal/envcompat"
-	"nofx/internal/installpath"
+	"vl/internal/envcompat"
+	"vl/internal/installpath"
 	"os"
 	"runtime/debug"
 	"strings"

@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"nofx/internal/activation"
+	"vl/internal/activation"
 )
 
 // impossiblePID can never name a process: Linux caps pid_max at 2^22

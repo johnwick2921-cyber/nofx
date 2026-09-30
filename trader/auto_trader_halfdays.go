@@ -5,8 +5,8 @@ import (
 	"sort"
 	"time"
 
-	"nofx/kernel"
-	"nofx/logger"
+	"vl/kernel"
+	"vl/logger"
 )
 
 // P4 — HalfDays, FOLDED INTO THE SESSION CALENDAR (owner ruling 2026-09-07).

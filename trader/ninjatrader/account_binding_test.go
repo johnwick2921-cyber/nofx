@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	ntwire "nofx/provider/ninjatrader"
+	ntwire "vl/provider/ninjatrader"
 )
 
 // TestSignalAccountWire locks the P5.4 wire rule: an UNBOUND trader's signal

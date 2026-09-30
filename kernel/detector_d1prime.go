@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"nofx/market"
+	"vl/market"
 )
 
 // ── D1′ — THE CALIBRATED TOUCH DETECTOR (2026-09-03) ─────────────────────────

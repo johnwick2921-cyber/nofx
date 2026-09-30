@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"nofx/internal/installpath"
+	"vl/internal/installpath"
 )
 
 // ErrReleaseRoot is every refusal of the release root.

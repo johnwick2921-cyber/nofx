@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"nofx/internal/installpath"
-	"nofx/internal/updaterjob"
+	"vl/internal/installpath"
+	"vl/internal/updaterjob"
 )
 
 // reproofInstall is a temp installation (its .env names no DB_PATH) whose

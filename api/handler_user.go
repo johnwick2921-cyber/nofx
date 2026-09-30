@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"nofx/auth"
-	"nofx/logger"
-	"nofx/store"
-	"nofx/telemetry"
+	"vl/auth"
+	"vl/logger"
+	"vl/store"
+	"vl/telemetry"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"

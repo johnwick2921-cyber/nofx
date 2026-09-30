@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	nt "nofx/provider/ninjatrader"
-	"nofx/store"
+	nt "vl/provider/ninjatrader"
+	"vl/store"
 )
 
 // THE REAPER READS THE BROKER, NOT SILENCE.

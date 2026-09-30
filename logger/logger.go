@@ -37,7 +37,7 @@ func (f *compactFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 		}
 		// Skip logrus internal and our logger.go
 		if !strings.Contains(file, "logrus") && !strings.HasSuffix(file, "logger/logger.go") {
-			// Get package name from path (e.g., "nofx/manager/trader_manager.go" -> "manager")
+			// Get package name from path (e.g., "vl/manager/trader_manager.go" -> "manager")
 			dir := filepath.Dir(file)
 			pkg := filepath.Base(dir)
 			caller = fmt.Sprintf("%s/%s:%d", pkg, filepath.Base(file), line)

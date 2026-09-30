@@ -164,13 +164,13 @@ type importerFunc func(string) (*types.Package, error)
 
 func (f importerFunc) Import(path string) (*types.Package, error) { return f(path) }
 
-// resolveModule is the synthetic module's path (mintBase writes "module nofx").
+// resolveModule is the synthetic module's path (mintBase writes "module vl").
 const resolveModule = "nofx"
 
 // resolvePrelude declares, once per matrix file, the stand-ins a shadow binds.
 const resolvePrelude = `package api
 
-import "nofx/internal/updateauth"
+import "vl/internal/updateauth"
 
 type sinkFn func([]byte)
 

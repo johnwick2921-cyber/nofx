@@ -35,12 +35,12 @@ import (
 	"strings"
 	"syscall"
 
-	"nofx/internal/envcompat"
-	"nofx/internal/updaterjob"
-	"nofx/internal/updaterwire"
-	"nofx/internal/updaterwire/wireserver"
-	"nofx/internal/updaterworker"
-	"nofx/safe"
+	"vl/internal/envcompat"
+	"vl/internal/updaterjob"
+	"vl/internal/updaterwire"
+	"vl/internal/updaterwire/wireserver"
+	"vl/internal/updaterworker"
+	"vl/safe"
 )
 
 // Seams (tests only).

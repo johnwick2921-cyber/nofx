@@ -14,7 +14,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"nofx/internal/envcompat"
+	"vl/internal/envcompat"
 )
 
 // ── W-BARS-CONTRACT-KEY (2026-09-18) — THE CONTRACT JOINS THE PRIMARY KEY ────

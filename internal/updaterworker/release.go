@@ -71,8 +71,8 @@ import (
 	"syscall"
 	"time"
 
-	"nofx/internal/updaterjob"
-	"nofx/internal/updaterwire"
+	"vl/internal/updaterjob"
+	"vl/internal/updaterwire"
 )
 
 // Refusal classes; each wraps the detail so a test can prove WHICH check refused.

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"nofx/internal/updateauth"
+	"vl/internal/updateauth"
 )
 
 func TestPasswordChangeUnbindsTheEnrollment(t *testing.T) {

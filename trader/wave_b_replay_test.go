@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	ntwire "nofx/provider/ninjatrader"
+	ntwire "vl/provider/ninjatrader"
 )
 
 // ny0904S2Prices are the 21 cycle prices the executor actually saw on

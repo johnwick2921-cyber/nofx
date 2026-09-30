@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"nofx/kernel"
-	"nofx/market"
-	"nofx/store"
+	"vl/kernel"
+	"vl/market"
+	"vl/store"
 )
 
 // W-FLIP-REREAD (2026-09-17) — a fired flip must produce a re-read in the

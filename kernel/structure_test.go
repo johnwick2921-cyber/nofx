@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"nofx/market"
+	"vl/market"
 )
 
 // hourMs is a CT wall-clock hour rendered as epoch ms.

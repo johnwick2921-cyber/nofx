@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"nofx/internal/updaterjob"
+	"vl/internal/updaterjob"
 )
 
 // R1a dual readers: the boot-watch inputs are predicted from the BINARY the

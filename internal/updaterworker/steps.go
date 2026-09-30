@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"nofx/internal/updaterjob"
+	"vl/internal/updaterjob"
 )
 
 // ── the transition bodies (brief §3.3, all accepted defaults) ──────────────

@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"nofx/logger"
+	"vl/logger"
 
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"

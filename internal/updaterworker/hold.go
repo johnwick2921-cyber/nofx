@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"nofx/internal/updaterwire"
-	"nofx/store"
+	"vl/internal/updaterwire"
+	"vl/store"
 )
 
 // ── THE census-admitted worker hold writer ──────────────────────────────────

@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	_ "github.com/lib/pq"     // PostgreSQL driver
-	"nofx/store/sqlitedriver" // the ONE sqlite registration site
+	"vl/store/sqlitedriver" // the ONE sqlite registration site
 )
 
 // DBType represents database type

@@ -30,7 +30,7 @@ import (
 	"syscall"
 	"time"
 
-	"nofx/internal/updaterwire"
+	"vl/internal/updaterwire"
 )
 
 const (

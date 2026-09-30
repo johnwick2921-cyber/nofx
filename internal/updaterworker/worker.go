@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"nofx/internal/updaterjob"
-	"nofx/safe"
+	"vl/internal/updaterjob"
+	"vl/safe"
 )
 
 // Budgets are the step budgets (brief §3.1 "constants, not knobs"; OQ-2 as

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"nofx/internal/updaterjob"
+	"vl/internal/updaterjob"
 )
 
 // PIN (#206 review fold, runner.go:367): the rollback's boot-watch log was

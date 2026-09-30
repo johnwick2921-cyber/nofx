@@ -2,8 +2,8 @@ package kernel
 
 import (
 	"fmt"
-	"nofx/market"
-	"nofx/provider/nofxos"
+	"vl/market"
+	"vl/provider/nofxos"
 	"sort"
 	"strings"
 	"time"

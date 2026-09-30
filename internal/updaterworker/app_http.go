@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"nofx/internal/envcompat"
+	"vl/internal/envcompat"
 )
 
 // CutoverTokenEnv is the environment variable the worker reads the app's

@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"nofx/discipline"
-	"nofx/logger"
-	"nofx/market"
-	"nofx/safe"
-	"nofx/store"
-	"nofx/telemetry"
+	"vl/discipline"
+	"vl/logger"
+	"vl/market"
+	"vl/safe"
+	"vl/store"
+	"vl/telemetry"
 )
 
 // Position reconcile — the durable single-source-of-truth anchor for NT8.

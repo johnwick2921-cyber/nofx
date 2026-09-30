@@ -14,12 +14,12 @@ import (
 	"strings"
 	"testing"
 
-	"nofx/auth"
-	"nofx/config"
-	"nofx/kernel"
-	"nofx/manager"
-	"nofx/store"
-	"nofx/trader"
+	"vl/auth"
+	"vl/config"
+	"vl/kernel"
+	"vl/manager"
+	"vl/store"
+	"vl/trader"
 )
 
 const effUser = "u-effective"

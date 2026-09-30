@@ -35,8 +35,8 @@ import (
 	"testing"
 	"time"
 
-	"nofx/internal/updateauth"
-	"nofx/logger"
+	"vl/internal/updateauth"
+	"vl/logger"
 )
 
 const webInstallBodyFixture = "web/src/lib/api/testdata/updates-install-body.wire.txt"

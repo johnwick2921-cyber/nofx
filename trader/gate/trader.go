@@ -3,7 +3,7 @@ package gate
 import (
 	"context"
 	"fmt"
-	"nofx/trader/types"
+	"vl/trader/types"
 	"strings"
 	"sync"
 	"time"

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"nofx/internal/censuswalk"
+	"vl/internal/censuswalk"
 )
 
 // sqliteDriverPackages register (or wrap) the "sqlite" database/sql driver.
@@ -26,7 +26,7 @@ var sqliteDriverPackages = map[string]bool{
 // github.com/glebarez/go-sqlite itself. In the default build that is a
 // SECOND registration and the worker panics at init [A: reproduced at
 // merge-tree(this branch, c62a35dc) with the drafted adapter; the one-line fix
-// — import _ "nofx/store/sqlitedriver" there — turns it green]. This guard
+// — import _ "vl/store/sqlitedriver" there — turns it green]. This guard
 // goes RED at the fold the moment the adapter links such a package.
 func TestWorkerBinaryLinksOneSqliteDriverRegistrationGuard(t *testing.T) {
 	root, err := filepath.Abs("../..")

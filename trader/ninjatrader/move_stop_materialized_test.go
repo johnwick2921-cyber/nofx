@@ -10,8 +10,8 @@ import (
 
 	"context"
 
-	ntwire "nofx/provider/ninjatrader"
-	"nofx/store"
+	ntwire "vl/provider/ninjatrader"
+	"vl/store"
 )
 
 // GAR-F1 (grand-audit response, 2026-08-28) — move_stop for MATERIALIZED

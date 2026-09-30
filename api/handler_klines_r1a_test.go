@@ -3,7 +3,7 @@ package api
 import (
 	"testing"
 
-	"nofx/internal/envcompat"
+	"vl/internal/envcompat"
 )
 
 // R1a: the chart-across-roll boot-line word names the env SOURCE (VL/NOFX/

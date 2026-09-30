@@ -34,8 +34,8 @@ import (
 	"testing"
 	"time"
 
-	"nofx/kernel"
-	"nofx/store"
+	"vl/kernel"
+	"vl/store"
 )
 
 const (

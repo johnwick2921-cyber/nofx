@@ -38,11 +38,11 @@ import (
 	"testing"
 	"time"
 
-	"nofx/crypto"
-	"nofx/kernel"
-	"nofx/market"
-	"nofx/mcp"
-	"nofx/store"
+	"vl/crypto"
+	"vl/kernel"
+	"vl/market"
+	"vl/mcp"
+	"vl/store"
 )
 
 const (

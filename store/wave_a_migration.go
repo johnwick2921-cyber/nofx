@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"nofx/internal/envcompat"
+	"vl/internal/envcompat"
 )
 
 // ── WAVE A / D1e + D2c — THE RECORD, MIGRATED HONESTLY ───────────────────────

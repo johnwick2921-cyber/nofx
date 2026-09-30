@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"nofx/internal/updaterjob"
+	"vl/internal/updaterjob"
 )
 
 // ── the runner ──────────────────────────────────────────────────────────────

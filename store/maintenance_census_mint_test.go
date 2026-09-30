@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"nofx/internal/censuswalk"
+	"vl/internal/censuswalk"
 )
 
 // ── W-ONE-BUTTON M3 fold M4 (red-team 4 #2(b)) — the app never links the minter ──
@@ -19,16 +19,16 @@ import (
 // synthetic module (t.TempDir), with the toolchain as ground truth.
 func TestWorkerImportGuardRefusesTheMintingCLI(t *testing.T) {
 	root := t.TempDir()
-	censusWrite(t, root, "go.mod", "module nofx\n\ngo 1.25\n")
+	censusWrite(t, root, "go.mod", "module vl\n\ngo 1.25\n")
 	censusWrite(t, root, "internal/updaterwire/dial.go", "package updaterwire\n")
-	censusWrite(t, root, "internal/updaterwire/wireserver/server.go", "package wireserver\n\nimport _ \"nofx/internal/updaterwire\"\n")
+	censusWrite(t, root, "internal/updaterwire/wireserver/server.go", "package wireserver\n\nimport _ \"vl/internal/updaterwire\"\n")
 	censusWrite(t, root, "internal/updaterworker/hold.go", "package updaterworker\n")
 	censusWrite(t, root, "internal/updateauth/mac.go", "package updateauth\n\nfunc ComputeMAC() string { return \"\" }\n")
-	censusWrite(t, root, "internal/updaterbootstrap/bootstrap.go", "package updaterbootstrap\n\nimport \"nofx/internal/updateauth\"\n\nfunc Run() string { return updateauth.ComputeMAC() }\n")
-	censusWrite(t, root, "cmd/updater-bootstrap/main.go", "package main\n\nimport \"nofx/internal/updaterbootstrap\"\n\nfunc main() { _ = updaterbootstrap.Run() }\n")
-	censusWrite(t, root, "api/server.go", "package api\n\nimport _ \"nofx/internal/updaterwire\"\n")
+	censusWrite(t, root, "internal/updaterbootstrap/bootstrap.go", "package updaterbootstrap\n\nimport \"vl/internal/updateauth\"\n\nfunc Run() string { return updateauth.ComputeMAC() }\n")
+	censusWrite(t, root, "cmd/updater-bootstrap/main.go", "package main\n\nimport \"vl/internal/updaterbootstrap\"\n\nfunc main() { _ = updaterbootstrap.Run() }\n")
+	censusWrite(t, root, "api/server.go", "package api\n\nimport _ \"vl/internal/updaterwire\"\n")
 	censusWrite(t, root, "trader/t.go", "package trader\n")
-	censusWrite(t, root, "main.go", "package main\n\nimport _ \"nofx/api\"\n\nfunc main() {}\n")
+	censusWrite(t, root, "main.go", "package main\n\nimport _ \"vl/api\"\n\nfunc main() {}\n")
 	// positive control: the CLI binary links its own package; the app does not
 	if off, _, err := workerImportOffenders(root); err != nil || len(off) != 0 {
 		t.Fatalf("clean: the attended CLI's own binary may link it: offenders=%v err=%v", off, err)
@@ -37,19 +37,19 @@ func TestWorkerImportGuardRefusesTheMintingCLI(t *testing.T) {
 		t.Fatalf("clean (toolchain): offenders=%v err=%v", off, err)
 	}
 	for _, via := range []struct{ rel, body string }{
-		{"api/mint.go", "package api\n\nimport \"nofx/internal/updaterbootstrap\"\n\nvar _ = updaterbootstrap.Run\n"},
-		{"trader/mint.go", "package trader\n\nimport \"nofx/internal/updaterbootstrap\"\n\nvar _ = updaterbootstrap.Run\n"},
-		{"main_mint.go", "package main\n\nimport _ \"nofx/internal/updaterbootstrap\"\n"},
+		{"api/mint.go", "package api\n\nimport \"vl/internal/updaterbootstrap\"\n\nvar _ = updaterbootstrap.Run\n"},
+		{"trader/mint.go", "package trader\n\nimport \"vl/internal/updaterbootstrap\"\n\nvar _ = updaterbootstrap.Run\n"},
+		{"main_mint.go", "package main\n\nimport _ \"vl/internal/updaterbootstrap\"\n"},
 	} {
 		t.Run(via.rel, func(t *testing.T) {
 			root := t.TempDir()
 			for rel, body := range map[string]string{
-				"go.mod":                                 "module nofx\n\ngo 1.25\n",
+				"go.mod":                                 "module vl\n\ngo 1.25\n",
 				"internal/updateauth/mac.go":             "package updateauth\n\nfunc ComputeMAC() string { return \"\" }\n",
-				"internal/updaterbootstrap/bootstrap.go": "package updaterbootstrap\n\nimport \"nofx/internal/updateauth\"\n\nfunc Run() string { return updateauth.ComputeMAC() }\n",
+				"internal/updaterbootstrap/bootstrap.go": "package updaterbootstrap\n\nimport \"vl/internal/updateauth\"\n\nfunc Run() string { return updateauth.ComputeMAC() }\n",
 				"api/server.go":                          "package api\n",
 				"trader/t.go":                            "package trader\n",
-				"main.go":                                "package main\n\nimport _ \"nofx/api\"\nimport _ \"nofx/trader\"\n\nfunc main() {}\n",
+				"main.go":                                "package main\n\nimport _ \"vl/api\"\nimport _ \"vl/trader\"\n\nfunc main() {}\n",
 				via.rel:                                  via.body,
 			} {
 				censusWrite(t, root, rel, body)
@@ -60,7 +60,7 @@ func TestWorkerImportGuardRefusesTheMintingCLI(t *testing.T) {
 			}
 			truth := false
 			for _, p := range linked {
-				truth = truth || p.ImportPath == "nofx/internal/updaterbootstrap"
+				truth = truth || p.ImportPath == "vl/internal/updaterbootstrap"
 			}
 			if !truth {
 				t.Fatalf("ground truth: the app binary does not link updaterbootstrap via %s — probe broken", via.rel)
@@ -71,7 +71,7 @@ func TestWorkerImportGuardRefusesTheMintingCLI(t *testing.T) {
 			}
 			hit := false
 			for _, o := range off {
-				hit = hit || strings.HasSuffix(o, "nofx/internal/updaterbootstrap")
+				hit = hit || strings.HasSuffix(o, "vl/internal/updaterbootstrap")
 			}
 			if !hit {
 				t.Fatalf("the trading app links nofx/internal/updaterbootstrap (the attended MAC minter) via %s and the import guard reports %v", via.rel, off)
@@ -80,7 +80,7 @@ func TestWorkerImportGuardRefusesTheMintingCLI(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(toff) != 1 || !strings.HasPrefix(toff[0], "nofx/internal/updaterbootstrap: linked by the trading app") {
+			if len(toff) != 1 || !strings.HasPrefix(toff[0], "vl/internal/updaterbootstrap: linked by the trading app") {
 				t.Fatalf("toolchain guard via %s: %v", via.rel, toff)
 			}
 		})
@@ -100,20 +100,20 @@ func TestWorkerImportGuardRefusesTheMintingCLI(t *testing.T) {
 // synthetic module, direct and transitive, with the toolchain as ground truth.
 func TestWorkerImportGuardRefusesTheActivationLibrary(t *testing.T) {
 	for _, via := range []struct{ rel, body string }{
-		{"api/activate.go", "package api\n\nimport \"nofx/internal/activation\"\n\nvar _ = activation.Activate\n"},
-		{"internal/helper/h.go", "package helper\n\nimport _ \"nofx/internal/activation\"\n"},
-		{"main_activate.go", "package main\n\nimport _ \"nofx/internal/activation\"\n"},
+		{"api/activate.go", "package api\n\nimport \"vl/internal/activation\"\n\nvar _ = activation.Activate\n"},
+		{"internal/helper/h.go", "package helper\n\nimport _ \"vl/internal/activation\"\n"},
+		{"main_activate.go", "package main\n\nimport _ \"vl/internal/activation\"\n"},
 	} {
 		t.Run(via.rel, func(t *testing.T) {
 			root := t.TempDir()
 			for rel, body := range map[string]string{
-				"go.mod":                            "module nofx\n\ngo 1.25\n",
+				"go.mod":                            "module vl\n\ngo 1.25\n",
 				"internal/activation/activation.go": "package activation\n\nfunc Activate() {}\n",
 				"internal/helper/h.go":              "package helper\n",
-				"cmd/nofx-updater/main.go":          "package main\n\nimport _ \"nofx/internal/activation\"\n\nfunc main() {}\n",
-				"api/server.go":                     "package api\n\nimport _ \"nofx/internal/helper\"\n",
+				"cmd/nofx-updater/main.go":          "package main\n\nimport _ \"vl/internal/activation\"\n\nfunc main() {}\n",
+				"api/server.go":                     "package api\n\nimport _ \"vl/internal/helper\"\n",
 				"trader/t.go":                       "package trader\n",
-				"main.go":                           "package main\n\nimport _ \"nofx/api\"\nimport _ \"nofx/trader\"\n\nfunc main() {}\n",
+				"main.go":                           "package main\n\nimport _ \"vl/api\"\nimport _ \"vl/trader\"\n\nfunc main() {}\n",
 			} {
 				censusWrite(t, root, rel, body)
 			}
@@ -131,7 +131,7 @@ func TestWorkerImportGuardRefusesTheActivationLibrary(t *testing.T) {
 			}
 			truth := false
 			for _, p := range linked {
-				truth = truth || p.ImportPath == "nofx/internal/activation"
+				truth = truth || p.ImportPath == "vl/internal/activation"
 			}
 			if !truth {
 				t.Fatalf("ground truth: the app binary does not link nofx/internal/activation via %s — probe broken", via.rel)
@@ -142,7 +142,7 @@ func TestWorkerImportGuardRefusesTheActivationLibrary(t *testing.T) {
 			}
 			hit := false
 			for _, o := range off {
-				hit = hit || strings.HasSuffix(o, "nofx/internal/activation")
+				hit = hit || strings.HasSuffix(o, "vl/internal/activation")
 			}
 			if !hit {
 				t.Fatalf("the trading app links nofx/internal/activation via %s and the import guard reports %v", via.rel, off)
@@ -151,7 +151,7 @@ func TestWorkerImportGuardRefusesTheActivationLibrary(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(toff) != 1 || !strings.HasPrefix(toff[0], "nofx/internal/activation: linked by the trading app") {
+			if len(toff) != 1 || !strings.HasPrefix(toff[0], "vl/internal/activation: linked by the trading app") {
 				t.Fatalf("toolchain guard via %s: %v", via.rel, toff)
 			}
 		})
@@ -162,7 +162,7 @@ func TestWorkerImportGuardRefusesTheActivationLibrary(t *testing.T) {
 func TestForbiddenWorkerPackagesArePinned(t *testing.T) {
 	got := append([]string(nil), forbiddenWorkerPackages...)
 	sort.Strings(got)
-	want := "nofx/internal/activation,nofx/internal/updaterbootstrap,nofx/internal/updaterwire/wireserver,nofx/internal/updaterworker"
+	want := "vl/internal/activation,nofx/internal/updaterbootstrap,nofx/internal/updaterwire/wireserver,nofx/internal/updaterworker"
 	if strings.Join(got, ",") != want {
 		t.Fatalf("forbiddenWorkerPackages = %v, want exactly %s", got, want)
 	}

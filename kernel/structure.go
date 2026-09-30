@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"nofx/market"
+	"vl/market"
 )
 
 // G2 (regime wave, 2026-08-21) — PURE STRUCTURE DETECTORS: fractal swings →

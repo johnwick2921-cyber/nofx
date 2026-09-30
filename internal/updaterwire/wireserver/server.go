@@ -27,8 +27,8 @@ import (
 	"syscall"
 	"time"
 
-	"nofx/internal/updaterwire"
-	"nofx/safe"
+	"vl/internal/updaterwire"
+	"vl/safe"
 )
 
 // Handler answers one decoded, already-validated request. Its Response is

@@ -18,7 +18,7 @@ import (
 	// it a landmine for the M4 worker — the worker links this package AND
 	// internal/updaterbootstrap, and the two registrants would have panicked the
 	// process at init, before main ran.
-	_ "nofx/store/sqlitedriver"
+	_ "vl/store/sqlitedriver"
 )
 
 // Backup takes an ONLINE copy of the database and proves the copy is readable

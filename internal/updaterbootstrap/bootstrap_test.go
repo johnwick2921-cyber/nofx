@@ -17,9 +17,9 @@ import (
 	"time"
 	"unsafe"
 
-	"nofx/internal/holdcli"
-	"nofx/internal/updateauth"
-	"nofx/store"
+	"vl/internal/holdcli"
+	"vl/internal/updateauth"
+	"vl/store"
 )
 
 // W-ONE-BUTTON M3 — the attended enrollment / authorization CLI. Every

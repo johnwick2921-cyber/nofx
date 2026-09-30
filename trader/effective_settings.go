@@ -33,8 +33,8 @@ import (
 	"strconv"
 	"strings"
 
-	"nofx/kernel"
-	"nofx/store"
+	"vl/kernel"
+	"vl/store"
 )
 
 // Effective-value words that are not values.

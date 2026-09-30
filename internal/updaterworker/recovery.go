@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"nofx/internal/updaterjob"
+	"vl/internal/updaterjob"
 )
 
 // ── recovery_needed: the job-specific manual steps (C16 as ruled) ──────────

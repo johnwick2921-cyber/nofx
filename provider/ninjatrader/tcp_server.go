@@ -26,7 +26,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"nofx/telemetry"
+	"vl/telemetry"
 )
 
 // Wire-protocol constants per spec L4359 + L4408 + L4415 + L4414 + L4376.

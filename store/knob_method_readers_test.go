@@ -19,7 +19,7 @@ import (
 	"sync"
 	"testing"
 
-	"nofx/internal/censuswalk"
+	"vl/internal/censuswalk"
 )
 
 // ── CLEANUP BATCH 2, B1 — THE REGISTRY'S FIELD GREP MISSED METHOD READERS ─────
@@ -321,7 +321,7 @@ func tailOf(s string, n int) string {
 // same-named method on any other type never matches.
 func storeAccessorFuncs(t *testing.T, c *readerTypeContext, accessors []string, owners [][2]string) map[*types.Func]bool {
 	t.Helper()
-	storePkg, err := c.imp.Import("nofx/store")
+	storePkg, err := c.imp.Import("vl/store")
 	if err != nil {
 		t.Fatalf("import nofx/store: %v", err)
 	}
@@ -396,7 +396,7 @@ func typedAccessorCallSites(t *testing.T, root string, accessors []string, owner
 	}
 	var sites []string
 	for importPath, files := range c.pkgFiles {
-		if importPath == "nofx/store" {
+		if importPath == "vl/store" {
 			continue
 		}
 		mentions := false
@@ -486,7 +486,7 @@ func TestKnobMethodReaderSitesLeaveStorePackage(t *testing.T) {
 // + accessor names) through the same typed pass methodReadersOfKnob calls.
 func TestKnobMethodReaderSitesAreReceiverTyped(t *testing.T) {
 	root := t.TempDir()
-	writeTreeFile(t, root, "go.mod", "module nofx\n\ngo 1.25.13\n")
+	writeTreeFile(t, root, "go.mod", "module vl\n\ngo 1.25.13\n")
 	writeTreeFile(t, root, "store/store.go", `package store
 
 type DayPlanConfig struct{ WakeOnIfvgFlag bool }
@@ -496,7 +496,7 @@ func (c *DayPlanConfig) helper() bool     { return c.WakeOnIfvg() }
 `)
 	writeTreeFile(t, root, "elsewhere/fake.go", `package elsewhere
 
-import "nofx/store"
+import "vl/store"
 
 type Fake struct{}
 

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"nofx/market"
+	"vl/market"
 )
 
 // THE 2026-08-16 ASIA POST-MORTEM — a replay of all six versions.

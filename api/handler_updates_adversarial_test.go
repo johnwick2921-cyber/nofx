@@ -24,9 +24,9 @@ import (
 	"testing"
 	"time"
 
-	"nofx/internal/updateauth"
-	"nofx/logger"
-	"nofx/manager"
+	"vl/internal/updateauth"
+	"vl/logger"
+	"vl/manager"
 
 	"github.com/gin-gonic/gin"
 )

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"nofx/store"
-	"nofx/telemetry"
+	"vl/store"
+	"vl/telemetry"
 )
 
 // TestExecHoldPathsCountGateBlocks pins P2-7 at the PRODUCTION call site:

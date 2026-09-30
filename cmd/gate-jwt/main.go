@@ -39,9 +39,9 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"nofx/auth"
-	"nofx/config"
-	"nofx/store"
+	"vl/auth"
+	"vl/config"
+	"vl/store"
 )
 
 func main() {

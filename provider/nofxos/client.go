@@ -6,7 +6,7 @@ package nofxos
 import (
 	"io/ioutil"
 	"net/http"
-	"nofx/security"
+	"vl/security"
 	"strings"
 	"sync"
 	"time"

@@ -8,7 +8,7 @@ package main
 import (
 	"os"
 
-	"nofx/internal/updaterbootstrap"
+	"vl/internal/updaterbootstrap"
 )
 
 func main() { os.Exit(updaterbootstrap.Run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)) }

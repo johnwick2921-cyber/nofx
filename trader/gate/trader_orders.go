@@ -3,8 +3,8 @@ package gate
 import (
 	"fmt"
 	"math"
-	"nofx/logger"
-	"nofx/trader/types"
+	"vl/logger"
+	"vl/trader/types"
 	"strconv"
 	"strings"
 
