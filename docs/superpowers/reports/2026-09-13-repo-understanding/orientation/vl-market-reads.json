@@ -1,7 +1,7 @@
 {
   "assignment": "orientation1-market-planning",
   "base": "63968be62e44db2fb07a92883e02127b9064b0be",
-  "worktree": "/tmp/nofx-understanding-market-20260913",
+  "worktree": "/tmp/vl-understanding-market-20260913",
   "scope_note": "Manual critical-path orientation, NOT complete repository or function coverage. No runtime reads, tests, code/config changes or CGC reindex. Absent subsystem AGENTS files verified via tracked-file inventory.",
   "reads": [
     {

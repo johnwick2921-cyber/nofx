@@ -1,6 +1,7 @@
+names rewritten to vl on 2026-09-30 (VL rename)
 # Execution, risk and persistence understanding — 2026-09-13
 
-Base: `63968be62e44db2fb07a92883e02127b9064b0be`. Isolated worktree: `/tmp/nofx-understanding-execution-20260913`; pwd and HEAD verified; final porcelain clean. Read-only lane: no source/config/DB/runtime changes; no test execution; no CGC reindex. Exact manual coverage is in `/tmp/nofx-execution-reads.json`. This is a focused end-to-end trace, **not a claim that every function or every subsystem was read**.
+Base: `63968be62e44db2fb07a92883e02127b9064b0be`. Isolated worktree: `/tmp/vl-understanding-execution-20260913`; pwd and HEAD verified; final porcelain clean. Read-only lane: no source/config/DB/runtime changes; no test execution; no CGC reindex. Exact manual coverage is in `/tmp/vl-execution-reads.json`. This is a focused end-to-end trace, **not a claim that every function or every subsystem was read**.
 
 [A] means read directly at this base; [B] inferred consequences needing targeted reproduction. Reported historical incidents in comments are context, not independently reverified live incidents.
 

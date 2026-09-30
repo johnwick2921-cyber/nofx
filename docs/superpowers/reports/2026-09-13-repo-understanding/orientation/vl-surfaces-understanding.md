@@ -1,6 +1,7 @@
+names rewritten to vl on 2026-09-30 (VL rename)
 # Repository understanding — UI, API, configuration and persistence
 
-Base: `63968be62e44db2fb07a92883e02127b9064b0be`. Isolated worktree: `/tmp/nofx-understanding-surfaces-20260913`. Read-only orientation assignment 3, 2026-09-13. Evidence ledger: `/tmp/nofx-surfaces-reads.json`.
+Base: `63968be62e44db2fb07a92883e02127b9064b0be`. Isolated worktree: `/tmp/vl-understanding-surfaces-20260913`. Read-only orientation assignment 3, 2026-09-13. Evidence ledger: `/tmp/vl-surfaces-reads.json`.
 
 [A] means source directly read; [B] means consequence inferred from that source; neither means a runtime reproduction. No production files, database, accounts, configuration, orders, processes or index were changed. No test suite was run. This report is a connected critical-path reading, **not a claim to understand every function in this repository**.
 
