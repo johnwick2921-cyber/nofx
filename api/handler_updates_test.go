@@ -668,6 +668,25 @@ func TestUpdatesRequireTheUpdateHeader(t *testing.T) {
 	e.expectAllAdmitted("header 1")
 }
 
+// TestLegacyUpdateHeaderAcceptedUntilR5 — transition entry (d): the
+// pre-rename header name stays accepted until R5 removes it. Exactly one value
+// in total across both names is admitted; anything else is refused.
+func TestLegacyUpdateHeaderAcceptedUntilR5(t *testing.T) {
+	e := newUpdEnv(t)
+	e.expectAllAdmitted("legacy header 1", func(r *http.Request) {
+		r.Header.Del(UpdateHeader)
+		r.Header.Set(LegacyUpdateHeader, "1")
+	})
+	e.expectAllForbidden("new + legacy", func(r *http.Request) {
+		r.Header.Set(LegacyUpdateHeader, "1")
+	})
+	e.expectAllForbidden("legacy twice", func(r *http.Request) {
+		r.Header.Del(UpdateHeader)
+		r.Header.Add(LegacyUpdateHeader, "1")
+		r.Header.Add(LegacyUpdateHeader, "1")
+	})
+}
+
 func TestUpdatesRefuseCrossOrigin(t *testing.T) {
 	e := newUpdEnv(t)
 	for _, o := range []string{"http://evil.test", "null", "http://127.0.0.1:3000", "https://127.0.0.1:8080", "http://localhost:8080", "http://127.0.0.1:8080/"} {

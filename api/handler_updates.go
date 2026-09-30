@@ -62,7 +62,11 @@ const updatesAdminIDKey = "updates_admin_user_id"
 // with the exact value "1". It is NOT in the CORS Access-Control-Allow-Headers
 // list, so a cross-origin page can never get a browser to send it (the
 // preflight fails) — pinned by TestUpdatePreflightNeverAllowsTheUpdateHeader.
-const UpdateHeader = "X-NOFX-Update"
+const UpdateHeader = "X-VL-Update"
+
+// LegacyUpdateHeader is the pre-rename name, accepted until R5 (transition
+// table entry (d)); R5 removes this const and the dual-accept test.
+const LegacyUpdateHeader = "X-NOFX-Update"
 
 // maxUpdateInstallBody caps the install body (a Grant is ~200 bytes).
 const maxUpdateInstallBody = 4096
@@ -315,7 +319,7 @@ func (s *Server) updatesForbid(c *gin.Context, why string) {
 }
 
 // updatesGate is the whole identity gate. It returns the refusal category
-// ("" = admitted). Order: transport checks (no I/O — the X-NOFX-Update
+// ("" = admitted). Order: transport checks (no I/O — the X-VL-Update
 // header among them), then the JWT, then the enrollment files, then the
 // users store. A header-less request is refused before any token-derived
 // work (PR #200 F8: TestUpdatesHeaderIsJudgedBeforeTheToken).
@@ -404,8 +408,11 @@ func (s *Server) updatesRefusal(c *gin.Context) string {
 	if h := forwardingHeader(r.Header); h != "" {
 		return "forwarded request (" + h + ")"
 	}
-	// CSRF: the custom header, exactly one value, exactly "1".
-	if v := r.Header.Values(UpdateHeader); len(v) != 1 || v[0] != "1" {
+	// CSRF: the custom header, exactly one value in total across
+	// both names, exactly "1". The legacy name stays accepted until R5
+	// (transition entry (d)).
+	vs := append(append([]string{}, r.Header.Values(UpdateHeader)...), r.Header.Values(LegacyUpdateHeader)...)
+	if len(vs) != 1 || vs[0] != "1" {
 		return "update header missing or wrong"
 	}
 	// Origin absent or same-origin (the server speaks plain http).
