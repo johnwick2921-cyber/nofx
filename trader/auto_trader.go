@@ -3,6 +3,11 @@ package trader
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
 	"vl/discipline"
 	"vl/kernel"
 	"vl/logger"
@@ -25,11 +30,6 @@ import (
 	ntTrader "vl/trader/ninjatrader"
 	"vl/trader/okx"
 	"vl/wallet"
-	"runtime/debug"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -299,7 +299,7 @@ type AutoTraderConfig struct {
 	IndodaxSecretKey string
 
 	// NinjaTrader CSV bridge configuration
-	NinjaTraderDataDir string // /mnt/c/Users/<u>/NofxTrader/data
+	NinjaTraderDataDir string // /mnt/c/Users/<u>/VLTrader/data
 	NinjaTraderSymbol  string // e.g. "MNQ" (informational; NT uses chart's instrument)
 	NinjaTraderAccount string // P5.4 — the NT8 sub-account this trader is bound to (store.Trader.Account); empty = active account
 
@@ -875,13 +875,7 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 	if config.StrategyConfig == nil {
 		return nil, fmt.Errorf("[%s] strategy not configured", config.Name)
 	}
-	// Pass claw402 wallet key to strategy engine so nofxos data requests
-	// are routed through claw402 (reuses the same wallet as AI calls)
-	claw402Key := config.Claw402WalletKey
-	if claw402Key == "" && config.AIModel == "claw402" && config.CustomAPIKey != "" {
-		claw402Key = config.CustomAPIKey
-	}
-	strategyEngine := kernel.NewStrategyEngine(config.StrategyConfig, claw402Key)
+	strategyEngine := kernel.NewStrategyEngine(config.StrategyConfig)
 	// CTO F2: the cycle's market reads route through the trader's venue.
 	strategyEngine.SetVenue(config.Exchange)
 	logger.Infof("✓ [%s] Using strategy engine (strategy configuration loaded)", config.Name)

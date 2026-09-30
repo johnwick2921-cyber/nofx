@@ -2,12 +2,12 @@ package kernel
 
 import (
 	"fmt"
-	"vl/logger"
-	"vl/market"
-	"vl/store"
 	"sort"
 	"strings"
 	"time"
+	"vl/logger"
+	"vl/market"
+	"vl/store"
 )
 
 // ============================================================================
@@ -270,17 +270,6 @@ func (e *StrategyEngine) writeAvailableIndicators(sb *strings.Builder) {
 	if indicators.EnableFundingRate && !e.isFuturesInstrument() {
 		sb.WriteString("- Funding rate\n")
 	}
-
-	// F11a — AI500 / OI_Top are crypto screening concepts; a futures strategy trades
-	// a single static symbol and never screens by them, so suppress this line on
-	// futures (like funding via B8) instead of advertising a filter the model can't use.
-	if !e.isFuturesInstrument() && (len(e.config.CoinSource.StaticCoins) > 0 || e.config.CoinSource.UseAI500 || e.config.CoinSource.UseOITop) {
-		sb.WriteString("- AI500 / OI_Top filter tags (if available)\n")
-	}
-
-	if indicators.EnableQuantData {
-		sb.WriteString("- Quantitative data (institutional/retail fund flow, position changes, multi-period price changes)\n")
-	}
 }
 
 // ============================================================================
@@ -496,36 +485,15 @@ func (e *StrategyEngine) formatPositionInfo(index int, pos PositionInfo, ctx *Co
 func (e *StrategyEngine) formatCoinSourceTag(sources []string) string {
 	if len(sources) > 1 {
 		// Multiple signal source combination
-		hasAI500 := false
-		hasOITop := false
-		hasOILow := false
 		hasHyperAll := false
 		hasHyperMain := false
 		for _, s := range sources {
 			switch s {
-			case "ai500":
-				hasAI500 = true
-			case "oi_top":
-				hasOITop = true
-			case "oi_low":
-				hasOILow = true
 			case "hyper_all":
 				hasHyperAll = true
 			case "hyper_main":
 				hasHyperMain = true
 			}
-		}
-		if hasAI500 && hasOITop {
-			return " (AI500+OI_Top dual signal)"
-		}
-		if hasAI500 && hasOILow {
-			return " (AI500+OI_Low dual signal)"
-		}
-		if hasOITop && hasOILow {
-			return " (OI_Top+OI_Low)"
-		}
-		if hasHyperMain && hasAI500 {
-			return " (HyperMain+AI500)"
 		}
 		if hasHyperAll || hasHyperMain {
 			return " (Hyperliquid)"
@@ -533,12 +501,6 @@ func (e *StrategyEngine) formatCoinSourceTag(sources []string) string {
 		return " (Multiple sources)"
 	} else if len(sources) == 1 {
 		switch sources[0] {
-		case "ai500":
-			return " (AI500)"
-		case "oi_top":
-			return " (OI_Top OI increase)"
-		case "oi_low":
-			return " (OI_Low OI decrease)"
 		case "static":
 			return " (Manual selection)"
 		case "hyper_all":

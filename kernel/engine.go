@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
+	"time"
 	"vl/config"
 	"vl/logger"
 	"vl/market"
@@ -13,8 +15,6 @@ import (
 	"vl/provider/hyperliquid"
 	"vl/security"
 	"vl/store"
-	"strings"
-	"time"
 )
 
 // ============================================================================
@@ -52,7 +52,7 @@ type AccountInfo struct {
 // CandidateCoin candidate coin (from coin pool)
 type CandidateCoin struct {
 	Symbol  string   `json:"symbol"`
-	Sources []string `json:"sources"` // Sources: "ai500" and/or "oi_top"
+	Sources []string `json:"sources"` // Sources: "static", "hyper_all" and/or "hyper_main"
 }
 
 // TradingStats trading statistics (for AI input)
@@ -137,8 +137,8 @@ type Context struct {
 	MinScenarioQuality  string            `json:"-"`
 	PlanScenarioQuality map[string]string `json:"-"`
 	BTCETHLeverage      int               `json:"-"`
-	AltcoinLeverage     int                        `json:"-"`
-	Timeframes          []string                   `json:"-"`
+	AltcoinLeverage     int               `json:"-"`
+	Timeframes          []string          `json:"-"`
 
 	// Strategy Studio P1 — daily-guardrail inputs measured on the CME session-day
 	// (set by the trader loop from the position store; read by the daily-guardrail
@@ -329,8 +329,8 @@ func (e *StrategyEngine) SetPromptSnapshotMs(ms int64) { e.promptSnapshotMs = ms
 func (e *StrategyEngine) SetVenue(venue string) { e.venue = venue }
 
 func NewStrategyEngine(config *store.StrategyConfig, claw402WalletKey ...string) *StrategyEngine {
-	// claw402WalletKey retained for caller compatibility; NofxOS data routing was
-	// removed with the provider (D2-DEAD item 12).
+	// claw402WalletKey retained for caller compatibility; the legacy data-provider
+	// routing went with that provider (D2-DEAD item 12).
 	_ = claw402WalletKey
 	return &StrategyEngine{
 		config: config,

@@ -103,11 +103,8 @@ func TestStrategyConfigNormalizeProductSchemaForLLMLabels(t *testing.T) {
 	if merged.StrategyType != "ai_trading" {
 		t.Fatalf("strategy_type = %q, want ai_trading", merged.StrategyType)
 	}
-	if merged.CoinSource.SourceType != "ai500" {
-		t.Fatalf("source_type = %q, want ai500", merged.CoinSource.SourceType)
-	}
-	if !merged.CoinSource.UseAI500 || merged.CoinSource.UseOITop || merged.CoinSource.UseOILow {
-		t.Fatalf("coin source flags not normalized: %+v", merged.CoinSource)
+	if merged.CoinSource.SourceType != "static" {
+		t.Fatalf("source_type = %q, want static (legacy ai500 label degrades after the NofxOS provider was deleted)", merged.CoinSource.SourceType)
 	}
 	if merged.Indicators.Klines.PrimaryTimeframe != "1m" {
 		t.Fatalf("primary_timeframe = %q, want 1m", merged.Indicators.Klines.PrimaryTimeframe)
