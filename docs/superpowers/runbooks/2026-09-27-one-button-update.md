@@ -25,14 +25,14 @@ answers `install_enabled: true` + `worker_listening: true`.
 2. **GitHub Environment `release`:** repo → Settings → Environments → `release`:
    add yourself as a REQUIRED REVIEWER. The signing key lives ONLY there.
 3. **Enroll this box:** see the M3 enrollment runbook —
-   `go run ./cmd/updater-bootstrap --install-dir <bot folder> enroll <your exact account email>`.
-4. **Turn the glue on:** `NOFX_UPDATER=1` (exactly 1) in the bot's environment,
+   `go run ./cmd/vl-updater-bootstrap --install-dir <bot folder> enroll <your exact account email>`.
+4. **Turn the glue on:** `VL_UPDATER=1` (exactly 1) in the bot's environment,
    then restart the bot. Unset, nothing installs and the verifier is the stub.
 5. **Worker install** (no privilege escalation anywhere):
    - create `~/.config/nofx-updater/env`, mode 0600, with exactly two lines:
-     `NOFX_RELEASE_DIR=/absolute/path/outside/nofx` (never inside `~/nofx` —
+     `VL_RELEASE_DIR=/absolute/path/outside/vl` (never inside `~/vl` —
      the worker refuses it, and so does the installer) and
-     `NOFX_CUTOVER_TOKEN=<a fresh gate-jwt>`.
+     `VL_CUTOVER_TOKEN=<a fresh gate-jwt>`.
    - run `deploy/install-updater-worker.sh <40-hex sha>` from a checkout — it
      builds `~/bin/nofx-updater` from that exact commit in a throwaway clone
      (proves `vcs.modified=false` and `vcs.revision=<sha>`), installs the
@@ -54,19 +54,19 @@ minutes**, single use.
    (`release.yml` refuses anything else). Approve the `release` Environment run.
    The workflow proves the tree clean, builds the bot, the web assets, and the
    two updater binaries (`updater/nofx-updater`,
-   `updater/nofx-updater-bootstrap`), stages the allow-list, scans for secrets,
+   `updater/vl-updater-bootstrap`), stages the allow-list, scans for secrets,
    and signs the manifest.
 2. **Download to the local inbox:** `gh release download <release_id> --dir <NOFX_RELEASE_INBOX>`
-   — `nofx-updater fetch` reads `<inbox>/<release_id>.tar.gz`; there is no
+   — `vl-updater fetch` reads `<inbox>/<release_id>.tar.gz`; there is no
    network fetch.
-3. **Fetch (attended, verifies):** `nofx-updater fetch <release_id>`. It checks
+3. **Fetch (attended, verifies):** `vl-updater fetch <release_id>`. It checks
    the signature and every file against the INSTALL's
    `deploy/release_allowed_signers`, materializes the release under
-   `NOFX_RELEASE_DIR/<source_sha>`, and writes the verdict into
+   `VL_RELEASE_DIR/<source_sha>`, and writes the verdict into
    `data/updater/verdicts/`. No verdict, no install (`422 release not
    verified`).
 4. **Authorize (attended, single use):**
-   `go run ./cmd/updater-bootstrap --install-dir <bot folder> authorize <release_id>`,
+   `go run ./cmd/vl-updater-bootstrap --install-dir <bot folder> authorize <release_id>`,
    type `AUTHORIZE <release_id>`. It prints ONE JSON line —
    `{release_id, job_id, expires_at, hmac}` — valid 5 minutes, single use.
 5. **Paste + Update now.** Paste that line into the Updates page box and press
