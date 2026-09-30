@@ -79,14 +79,14 @@ const releaseInboxEnv = "NOFX_RELEASE_INBOX"
 
 func main() { os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)) }
 
-const usage = "usage: nofx-updater [--install-dir d] serve | fetch <release_id> | status [<job>] | resume <job> | recovery <job>"
+const usage = "usage: vl-updater [--install-dir d] serve | fetch <release_id> | status [<job>] | resume <job> | recovery <job>"
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	// The worker's three env fallbacks (cutover token, inbox, service dir)
 	// WARN through envcompat; the updater never inits the logger, so its
 	// sink is stderr. // R5 removes with envcompat.
-	envcompat.SetWarnSink(func(m string) { fmt.Fprintln(stderr, "nofx-updater:", m) })
-	top := flag.NewFlagSet("nofx-updater", flag.ContinueOnError)
+	envcompat.SetWarnSink(func(m string) { fmt.Fprintln(stderr, "vl-updater:", m) })
+	top := flag.NewFlagSet("vl-updater", flag.ContinueOnError)
 	top.SetOutput(stderr)
 	wd, _ := getwd()
 	installDir := top.String("install-dir", wd, "the bot's WorkingDirectory (its .env and DB_PATH decide the data dir)")
@@ -99,14 +99,14 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 2
 	}
 	if geteuid() == 0 {
-		fmt.Fprintln(stderr, "nofx-updater: refusing to run as root: run it as the bot's own user (a root-owned data/updater would lock the bot into a hold it cannot read)")
+		fmt.Fprintln(stderr, "vl-updater: refusing to run as root: run it as the bot's own user (a root-owned data/updater would lock the bot into a hold it cannot read)")
 		return 2
 	}
 	verb, operands := rest[0], rest[1:]
 	want := map[string][2]int{"serve": {0, 0}, "fetch": {1, 1}, "status": {0, 1}, "resume": {1, 1}, "recovery": {1, 1}}
 	n, ok := want[verb]
 	if !ok {
-		fmt.Fprintf(stderr, "nofx-updater: unknown subcommand %q\n%s\n", verb, usage)
+		fmt.Fprintf(stderr, "vl-updater: unknown subcommand %q\n%s\n", verb, usage)
 		return 2
 	}
 	if len(operands) < n[0] || len(operands) > n[1] {
@@ -115,7 +115,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	t, err := updaterworker.ResolveTarget(*installDir)
 	if err != nil {
-		fmt.Fprintln(stderr, "nofx-updater:", err)
+		fmt.Fprintln(stderr, "vl-updater:", err)
 		return 2
 	}
 	switch verb {
@@ -153,18 +153,18 @@ func lockScriptFor(installDir string) string {
 // SIGINT/SIGTERM.
 func serve(t updaterworker.Target, stderr io.Writer) int {
 	if err := checkProcess(); err != nil {
-		fmt.Fprintln(stderr, "nofx-updater serve:", err)
+		fmt.Fprintln(stderr, "vl-updater serve:", err)
 		return 2
 	}
 	app, err := updaterworker.NewHTTPApp(t.BaseURL())
 	if err != nil {
-		fmt.Fprintln(stderr, "nofx-updater serve:", err)
+		fmt.Fprintln(stderr, "vl-updater serve:", err)
 		return 2
 	}
 	lib, lerr := newLibrary()
 	rel, rerr := newReverifier(t)
 	if lerr != nil || rerr != nil || lib == nil || rel == nil {
-		fmt.Fprintf(stderr, "nofx-updater serve: %v — activation library adapter: %s · release re-proof adapter: %s; refusing to start (install dir %s, data dir %s); nothing was written\n",
+		fmt.Fprintf(stderr, "vl-updater serve: %v — activation library adapter: %s · release re-proof adapter: %s; refusing to start (install dir %s, data dir %s); nothing was written\n",
 			updaterworker.ErrNotWired, adapterState(lib != nil, lerr), adapterState(rel != nil, rerr), t.InstallDir, t.DataDir)
 		return 2
 	}
@@ -185,12 +185,12 @@ func serve(t updaterworker.Target, stderr io.Writer) int {
 		Logf:       logf,
 	}, updaterworker.Deps{Lib: lib, App: app, Rel: rel, Host: updaterworker.OSHost{LockScript: lockScript}})
 	if err != nil {
-		fmt.Fprintln(stderr, "nofx-updater serve:", err)
+		fmt.Fprintln(stderr, "vl-updater serve:", err)
 		return 2
 	}
 	path, err := updaterwire.SocketPath(t.DataDir)
 	if err != nil {
-		fmt.Fprintln(stderr, "nofx-updater serve:", err)
+		fmt.Fprintln(stderr, "vl-updater serve:", err)
 		return 2
 	}
 	// The worker lock FIRST (verifier D1): Listen takes the single-worker
@@ -198,7 +198,7 @@ func serve(t updaterworker.Target, stderr io.Writer) int {
 	// second serve that is refused here has written nothing to any job.
 	ln, err := wireserver.Listen(path, logf)
 	if err != nil {
-		fmt.Fprintln(stderr, "nofx-updater serve:", err)
+		fmt.Fprintln(stderr, "vl-updater serve:", err)
 		return 2
 	}
 	defer ln.Close()
@@ -206,10 +206,10 @@ func serve(t updaterworker.Target, stderr io.Writer) int {
 	defer stop()
 	rep, err := w.Start(ctx)
 	if err != nil {
-		fmt.Fprintln(stderr, "nofx-updater serve:", err)
+		fmt.Fprintln(stderr, "vl-updater serve:", err)
 		return 2
 	}
-	fmt.Fprintf(stderr, "🔧 nofx-updater: serving %s · install %s · data %s · active=%s · recovery_needed=%s · stale_at_start=%s\n",
+	fmt.Fprintf(stderr, "🔧 vl-updater: serving %s · install %s · data %s · active=%s · recovery_needed=%s · stale_at_start=%s\n",
 		path, t.InstallDir, t.DataDir, na(rep.Active), na(strings.Join(rep.Recovery, ",")), na(strings.Join(rep.StaleAtStart, ",")))
 	done := make(chan error, 1)
 	safe.GoNamed("updater-http-serve", func() { done <- ln.Serve(w.Handle) })
@@ -219,7 +219,7 @@ func serve(t updaterworker.Target, stderr io.Writer) int {
 		<-done
 		return 0
 	case err := <-done:
-		fmt.Fprintln(stderr, "nofx-updater serve:", err)
+		fmt.Fprintln(stderr, "vl-updater serve:", err)
 		return 1
 	}
 }
@@ -234,7 +234,7 @@ func serve(t updaterworker.Target, stderr io.Writer) int {
 // verdict's release id and source sha, never a key.
 func fetch(t updaterworker.Target, releaseID string, stdout, stderr io.Writer) int {
 	refuse := func(format string, a ...any) int {
-		fmt.Fprintf(stderr, "nofx-updater fetch: "+format+"; nothing was written\n", a...)
+		fmt.Fprintf(stderr, "vl-updater fetch: "+format+"; nothing was written\n", a...)
 		return 2
 	}
 	if !updaterwire.ValidReleaseID(releaseID) {
@@ -263,7 +263,7 @@ func fetch(t updaterworker.Target, releaseID string, stdout, stderr io.Writer) i
 		DataDir:        t.DataDir,
 	})
 	if err != nil {
-		fmt.Fprintf(stderr, "nofx-updater fetch %s: refused: %v\n", releaseID, err)
+		fmt.Fprintf(stderr, "vl-updater fetch %s: refused: %v\n", releaseID, err)
 		return 1
 	}
 	fmt.Fprintf(stdout, "release %s verified: source %s · release dir %s · verdict written to %s\n",
@@ -275,13 +275,13 @@ func fetch(t updaterworker.Target, releaseID string, stdout, stderr io.Writer) i
 func statusWorker(t updaterworker.Target, stdout, stderr io.Writer) int {
 	c, err := updaterwire.DialWorker(t.DataDir)
 	if err != nil {
-		fmt.Fprintf(stderr, "nofx-updater status: no worker answers (%v)\n", err)
+		fmt.Fprintf(stderr, "vl-updater status: no worker answers (%v)\n", err)
 		return 1
 	}
 	defer c.Close()
 	resp, err := c.Do(updaterwire.NewStatus(""))
 	if err != nil {
-		fmt.Fprintln(stderr, "nofx-updater status:", err)
+		fmt.Fprintln(stderr, "vl-updater status:", err)
 		return 1
 	}
 	return printResponse(resp, stdout, stderr)
@@ -292,7 +292,7 @@ func statusWorker(t updaterworker.Target, stdout, stderr io.Writer) int {
 func statusJob(t updaterworker.Target, jobID string, stdout, stderr io.Writer) int {
 	j, err := updaterjob.Read(t.DataDir, jobID)
 	if err != nil {
-		fmt.Fprintf(stderr, "nofx-updater status %s: %v\n", jobID, err)
+		fmt.Fprintf(stderr, "vl-updater status %s: %v\n", jobID, err)
 		return 1
 	}
 	v := updaterjob.View(j)
@@ -307,38 +307,38 @@ func statusJob(t updaterworker.Target, jobID string, stdout, stderr io.Writer) i
 // typed back, then the one resume frame the module ever builds.
 func resume(t updaterworker.Target, jobID string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if !updaterwire.ValidJobID(jobID) {
-		fmt.Fprintln(stderr, "nofx-updater resume: invalid job id")
+		fmt.Fprintln(stderr, "vl-updater resume: invalid job id")
 		return 2
 	}
 	if !isTerminal(stdin) {
-		fmt.Fprintln(stderr, "nofx-updater resume: refusing — a resume is attended: run it from a terminal and type the job id")
+		fmt.Fprintln(stderr, "vl-updater resume: refusing — a resume is attended: run it from a terminal and type the job id")
 		return 2
 	}
 	j, err := updaterjob.Read(t.DataDir, jobID)
 	if err != nil {
-		fmt.Fprintf(stderr, "nofx-updater resume %s: %v\n", jobID, err)
+		fmt.Fprintf(stderr, "vl-updater resume %s: %v\n", jobID, err)
 		return 1
 	}
 	fmt.Fprintf(stdout, "job %s (release %s) is %s/%s.\nblocker: %s\n", j.JobID, j.ReleaseID, j.State, j.Phase, na(j.Blocker))
 	fmt.Fprint(stdout, "Only after the AddOn is compiled (copy → F5 → full NT8 restart): type the job id to resume: ")
 	line, err := bufio.NewReader(io.LimitReader(stdin, 256)).ReadString('\n')
 	if err != nil && !errors.Is(err, io.EOF) {
-		fmt.Fprintln(stderr, "nofx-updater resume:", err)
+		fmt.Fprintln(stderr, "vl-updater resume:", err)
 		return 2
 	}
 	if strings.TrimSpace(line) != jobID {
-		fmt.Fprintln(stderr, "nofx-updater resume: the typed id does not match; nothing was sent")
+		fmt.Fprintln(stderr, "vl-updater resume: the typed id does not match; nothing was sent")
 		return 2
 	}
 	c, err := updaterwire.DialWorker(t.DataDir)
 	if err != nil {
-		fmt.Fprintf(stderr, "nofx-updater resume: no worker answers (%v)\n", err)
+		fmt.Fprintf(stderr, "vl-updater resume: no worker answers (%v)\n", err)
 		return 1
 	}
 	defer c.Close()
 	resp, err := c.Do(updaterwire.NewResume(jobID))
 	if err != nil {
-		fmt.Fprintln(stderr, "nofx-updater resume:", err)
+		fmt.Fprintln(stderr, "vl-updater resume:", err)
 		return 1
 	}
 	return printResponse(resp, stdout, stderr)
@@ -348,7 +348,7 @@ func resume(t updaterworker.Target, jobID string, stdin io.Reader, stdout, stder
 func recovery(t updaterworker.Target, jobID string, stdout, stderr io.Writer) int {
 	j, err := updaterjob.Read(t.DataDir, jobID)
 	if err != nil {
-		fmt.Fprintf(stderr, "nofx-updater recovery %s: %v\n", jobID, err)
+		fmt.Fprintf(stderr, "vl-updater recovery %s: %v\n", jobID, err)
 		return 1
 	}
 	fmt.Fprint(stdout, updaterworker.RecoveryText(j, t))

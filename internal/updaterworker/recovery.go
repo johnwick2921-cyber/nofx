@@ -144,7 +144,7 @@ func RecoveryText(j updaterjob.Job, t Target) string {
 		p("     maintenance-hold --install-dir %s clear --job %s", t.InstallDir, j.JobID)
 	}
 	p("")
-	p("Then restart nofx-updater (the restart is the acknowledgement; install stays refused until then).")
+	p("Then restart vl-updater (the restart is the acknowledgement; install stays refused until then).")
 	return b.String()
 }
 

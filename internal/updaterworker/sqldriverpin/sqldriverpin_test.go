@@ -50,8 +50,8 @@ func TestNoBinaryLinkingTheWorkerSetRegistersADuplicateSQLDriver(t *testing.T) {
 		tags   string
 		want   string // the ONE driver the build tag selects
 	}{
-		{"the nofx-updater binary (./cmd/nofx-updater)", []string{"list", "-deps", "-f", "{{.ImportPath}}", "./cmd/nofx-updater"}, "", modernc},
-		{"the nofx-updater binary under -tags cgofree", []string{"list", "-deps", "-f", "{{.ImportPath}}", "./cmd/nofx-updater"}, "cgofree", glebarez},
+		{"the vl-updater binary (./cmd/vl-updater)", []string{"list", "-deps", "-f", "{{.ImportPath}}", "./cmd/vl-updater"}, "", modernc},
+		{"the vl-updater binary under -tags cgofree", []string{"list", "-deps", "-f", "{{.ImportPath}}", "./cmd/vl-updater"}, "cgofree", glebarez},
 		{"the updaterworker test binary (./internal/updaterworker)", []string{"list", "-deps", "-test", "-f", "{{.ImportPath}}", "./internal/updaterworker"}, "", modernc},
 		{"the updaterworker test binary under -tags cgofree", []string{"list", "-deps", "-test", "-f", "{{.ImportPath}}", "./internal/updaterworker"}, "cgofree", glebarez},
 		{"the api test binary (./api)", []string{"list", "-deps", "-test", "-f", "{{.ImportPath}}", "./api"}, "", modernc},
@@ -119,8 +119,8 @@ func TestUpdaterBinaryInitsWithoutPanic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bin := filepath.Join(t.TempDir(), "nofx-updater")
-	goBuild(t, root, "build", "-o", bin, "./cmd/nofx-updater")
+	bin := filepath.Join(t.TempDir(), "vl-updater")
+	goBuild(t, root, "build", "-o", bin, "./cmd/vl-updater")
 	cmd := exec.Command(bin)
 	cmd.Dir = t.TempDir()
 	cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + t.TempDir()} // no token, no install, no inherited knobs
@@ -134,9 +134,9 @@ func TestUpdaterBinaryInitsWithoutPanic(t *testing.T) {
 	} else if err != nil {
 		t.Fatalf("running %s: %v", bin, err)
 	}
-	const usage = "usage: nofx-updater [--install-dir d] serve | fetch <release_id> | status [<job>] | resume <job> | recovery <job>\n"
+	const usage = "usage: vl-updater [--install-dir d] serve | fetch <release_id> | status [<job>] | resume <job> | recovery <job>\n"
 	if strings.Contains(stderr.String(), "panic:") || code != 2 || stderr.String() != usage || stdout.Len() != 0 {
-		t.Fatalf("the built nofx-updater did not init cleanly: exit %d\nstdout %q\nstderr:\n%s", code, stdout.String(), stderr.String())
+		t.Fatalf("the built vl-updater did not init cleanly: exit %d\nstdout %q\nstderr:\n%s", code, stdout.String(), stderr.String())
 	}
 }
 

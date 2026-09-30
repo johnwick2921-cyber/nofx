@@ -110,7 +110,7 @@ func TestHoldWriterCensusAdmitsTheWorkerOnlyByName(t *testing.T) {
 	for name, c := range map[string]struct{ rel, body, want string }{
 		"other file in the worker package": {"internal/updaterworker/other.go", strings.Replace(worker, "HoldForJob", "H2", 1), "internal/updaterworker/other.go: WriteMaintenanceHold"},
 		"same base name, deeper path":      {"internal/updaterworker/sub/hold.go", worker, "internal/updaterworker/sub/hold.go: WriteMaintenanceHold"},
-		"the worker binary's main":         {"cmd/nofx-updater/main.go", "package main\n\nimport \"vl/store\"\n\nfunc main() { store.ClearMaintenanceHold(\"d\") }\n", "cmd/nofx-updater/main.go: ClearMaintenanceHold"},
+		"the worker binary's main":         {"cmd/vl-updater/main.go", "package main\n\nimport \"vl/store\"\n\nfunc main() { store.ClearMaintenanceHold(\"d\") }\n", "cmd/vl-updater/main.go: ClearMaintenanceHold"},
 		"the app's update handler":         {"api/handler_updates.go", "package api\n\nimport \"vl/store\"\n\nfunc clear() { store.ForceClearMaintenanceHold(\"d\") }\n", "api/handler_updates.go: ForceClearMaintenanceHold"},
 		"the wire resolving the hold path": {"internal/updaterwire/dial.go", "package updaterwire\n\nimport \"vl/store\"\n\nvar p = store.MaintenanceHoldPath(\"d\")\n", "internal/updaterwire/dial.go: references MaintenanceHoldPath"},
 		"admitted file naming hold.json":   {"internal/updaterworker/hold.go", worker + "\nvar raw = \"updater/hold.json\"\n", "internal/updaterworker/hold.go: names the hold file"},
@@ -261,7 +261,7 @@ func TestTradingAppNeverLinksTheUpdaterWorkerSide(t *testing.T) {
 	for _, g := range guarded {
 		seen[g] = true
 	}
-	for _, want := range append([]string{"nofx"}, prefixed("vl/", tradingAppDirs)...) {
+	for _, want := range append([]string{"vl"}, prefixed("vl/", tradingAppDirs)...) {
 		if !seen[want] {
 			t.Fatalf("guarded root %s was not walked (walked %d packages: %v) — the guard is not covering the app", want, len(guarded), guarded)
 		}
@@ -300,8 +300,8 @@ func TestWorkerImportGuardCatchesDirectAndTransitiveImports(t *testing.T) {
 	}
 	// positive control: the app dials, the worker binary listens — clean
 	root := base()
-	if off, guarded, err := workerImportOffenders(root); err != nil || len(off) != 0 || strings.Join(guarded, ",") != "nofx,nofx/api,nofx/trader" {
-		t.Fatalf("clean synthetic module: offenders=%v guarded=%v err=%v (want none; guarded nofx, nofx/api, nofx/trader)", off, guarded, err)
+	if off, guarded, err := workerImportOffenders(root); err != nil || len(off) != 0 || strings.Join(guarded, ",") != "vl,vl/api,vl/trader" {
+		t.Fatalf("clean synthetic module: offenders=%v guarded=%v err=%v (want none; guarded vl, vl/api, vl/trader)", off, guarded, err)
 	}
 	for name, c := range map[string]struct{ rel, body, want string }{
 		"direct api":        {"api/worker.go", "package api\nimport _ \"vl/internal/updaterwire/wireserver\"\n", "api"},
@@ -595,9 +595,9 @@ func TestWithdrawSetterCensusCatchesEveryForm(t *testing.T) {
 		"the admitted hold writer setting it in its literal": {"internal/updaterworker/hold.go", strings.Replace(worker, `Owner: "updater"}`, `Owner: "updater", WithdrawEntries: true}`, 1), "internal/updaterworker/hold.go: composite literal sets WithdrawEntries"},
 		"an assignment in the worker":                        {"internal/updaterworker/set.go", "package updaterworker\n\nimport \"vl/store\"\n\nfunc f(h *store.MaintenanceHold) { h.WithdrawEntries = true }\n", "internal/updaterworker/set.go: assigns WithdrawEntries"},
 		"an op-assignment":                                   {"internal/updaterworker/set.go", "package updaterworker\n\nimport \"vl/store\"\n\nfunc f(h *store.MaintenanceHold, b bool) { h.WithdrawEntries = h.WithdrawEntries || b }\n", "internal/updaterworker/set.go: assigns WithdrawEntries"},
-		"the field's address taken":                          {"cmd/nofx-updater/main.go", "package main\n\nimport \"vl/store\"\n\nfunc main() { var h store.MaintenanceHold; p := &h.WithdrawEntries; *p = true }\n", "cmd/nofx-updater/main.go: takes the address of WithdrawEntries"},
+		"the field's address taken":                          {"cmd/vl-updater/main.go", "package main\n\nimport \"vl/store\"\n\nfunc main() { var h store.MaintenanceHold; p := &h.WithdrawEntries; *p = true }\n", "cmd/vl-updater/main.go: takes the address of WithdrawEntries"},
 		"a positional literal":                               {"internal/updaterworker/pos.go", "package updaterworker\n\nimport \"vl/store\"\n\nvar h = store.MaintenanceHold{true, \"j\", \"updater\", true}\n", "internal/updaterworker/pos.go: positional MaintenanceHold literal"},
-		"raw JSON naming the key":                            {"cmd/nofx-updater/main.go", "package main\n\nconst raw = `{\"held\":true,\"withdraw_entries\":true}`\n\nfunc main() {}\n", "cmd/nofx-updater/main.go: names withdraw_entries"},
+		"raw JSON naming the key":                            {"cmd/vl-updater/main.go", "package main\n\nconst raw = `{\"held\":true,\"withdraw_entries\":true}`\n\nfunc main() {}\n", "cmd/vl-updater/main.go: names withdraw_entries"},
 		"a map literal keyed withdraw_entries":               {"api/handler_updates.go", "package api\n\nvar m = map[string]any{\"withdraw_entries\": true}\n", "api/handler_updates.go: composite literal sets withdraw_entries"},
 		// U5b verifier D2 — the forms a syntactic walk cannot type (go/types leg)
 		"a keyless literal, type elided, in a slice":             {"internal/updaterworker/pos.go", "package updaterworker\n\nimport \"vl/store\"\n\nvar hs = []store.MaintenanceHold{{true, \"j\", \"updater\", true}}\n", "internal/updaterworker/pos.go: keyless MaintenanceHold literal"},
@@ -673,7 +673,7 @@ func TestWithdrawSetterAdmissionsArePinned(t *testing.T) {
 		}
 	}
 	for f := range withdrawSetterFiles {
-		if strings.HasPrefix(f, "internal/updaterworker/") || strings.HasPrefix(f, "cmd/nofx-updater/") || strings.HasPrefix(f, "internal/updaterjob/") || strings.HasPrefix(f, "api/") {
+		if strings.HasPrefix(f, "internal/updaterworker/") || strings.HasPrefix(f, "cmd/vl-updater/") || strings.HasPrefix(f, "internal/updaterjob/") || strings.HasPrefix(f, "api/") {
 			t.Fatalf("%s must never be admitted to set withdraw_entries — the updater never cancels orders", f)
 		}
 	}

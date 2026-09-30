@@ -144,8 +144,8 @@ func TestExistingGoImportTargetsPreserved(t *testing.T) {
 	}
 }
 func TestImportScopeRejectsRenamedTarget(t *testing.T) {
-	err := preserveImports([]byte("package p; import \"vl/config\""), []byte("package p; import \"vl/config\""), func(string) bool { return true })
-	if err == nil || !strings.Contains(err.Error(), "vl/config") {
+	err := preserveImports([]byte("package p; import \"vl/config\""), []byte("package p; import \"renamedroot/config\""), func(string) bool { return true })
+	if err == nil || !strings.Contains(err.Error(), "vl/config") || strings.Contains(err.Error(), "renamedroot/config") {
 		t.Fatalf("renamed import was not rejected: %v", err)
 	}
 }

@@ -49,7 +49,7 @@ var resumeBuilders = map[string]bool{"NewResume": true, "VerbResume": true, "Res
 // files may name a resume builder, each with its reason.
 var resumeAdmittedDirs = map[string]string{
 	resumeWireDir: "the wire package defines the resume verb",
-	resumeCLIDir:  "the attended `nofx-updater resume <job>` CLI (M4 3b-B dispatch §0/§3) — the only sender",
+	resumeCLIDir:  "the attended `vl-updater resume <job>` CLI (M4 3b-B dispatch §0/§3) — the only sender",
 }
 
 // resumeWireDir is where the builders must be DEFINED; the census checks they
@@ -60,7 +60,7 @@ const resumeWireDir = "internal/updaterwire"
 // imported, so nothing else can reach a builder through it (U2 verifier
 // defect 3). Any other package name there is an offender, and the file is
 // judged like any file outside.
-const resumeCLIDir = "cmd/nofx-updater"
+const resumeCLIDir = "cmd/vl-updater"
 
 // resumeFrameRe matches a hand-spelled resume frame (or a fragment of one)
 // inside a string literal. Case-insensitive, because json.Unmarshal into a
@@ -627,9 +627,9 @@ func TestOnlyTheUpdaterCLIBuildsAResumeCensus(t *testing.T) {
 		}
 	}
 	if len(c.offenders) > 0 {
-		t.Fatalf("a resume is built only by the attended updater CLI (cmd/nofx-updater); the app never sends one:\n%s", strings.Join(c.offenders, "\n"))
+		t.Fatalf("a resume is built only by the attended updater CLI (cmd/vl-updater); the app never sends one:\n%s", strings.Join(c.offenders, "\n"))
 	}
-	if _, err := os.Stat(filepath.Join(root, "cmd", "nofx-updater")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "cmd", "vl-updater")); err != nil {
 		t.Logf("cmd/nofx-updater absent at this head (%v): no package in the tree builds a resume", err)
 	}
 }

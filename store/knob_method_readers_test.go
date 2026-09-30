@@ -323,13 +323,13 @@ func storeAccessorFuncs(t *testing.T, c *readerTypeContext, accessors []string, 
 	t.Helper()
 	storePkg, err := c.imp.Import("vl/store")
 	if err != nil {
-		t.Fatalf("import nofx/store: %v", err)
+		t.Fatalf("import vl/store: %v", err)
 	}
 	out := map[*types.Func]bool{}
 	for _, o := range owners {
 		obj := storePkg.Scope().Lookup(o[0])
 		if obj == nil {
-			t.Fatalf("owner type %s not found in the nofx/store scope — pass 1 and go/types disagree", o[0])
+			t.Fatalf("owner type %s not found in the vl/store scope — pass 1 and go/types disagree", o[0])
 		}
 		tname, ok := obj.(*types.TypeName)
 		if !ok {
@@ -348,7 +348,7 @@ func storeAccessorFuncs(t *testing.T, c *readerTypeContext, accessors []string, 
 				}
 			}
 			if idx < 0 {
-				t.Fatalf("accessor %s is not a method of %s in nofx/store — pass 1 and go/types disagree", an, o[0])
+				t.Fatalf("accessor %s is not a method of %s in vl/store — pass 1 and go/types disagree", an, o[0])
 			}
 			out[named.Method(idx)] = true
 		}

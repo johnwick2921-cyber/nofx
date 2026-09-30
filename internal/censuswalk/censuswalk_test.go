@@ -139,7 +139,7 @@ func TestWalkRefusesSymlinkedPackageDir(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := NonTestGoFiles(root); err == nil {
-		t.Fatal("the walk accepted a symlinked package directory — api/hid is compiled through the link but the walk does not descend into it, so every census using NonTestGoFiles was blind to nofx/api/hid")
+		t.Fatal("the walk accepted a symlinked package directory — api/hid is compiled through the link but the walk does not descend into it, so every census using NonTestGoFiles was blind to vl/api/hid")
 	} else if !strings.Contains(err.Error(), filepath.Join("api", "hid")) {
 		t.Fatalf("error does not name the symlinked dir: %v", err)
 	}
@@ -304,7 +304,7 @@ func TestNonTestImportersSeesEveryPlatform(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "vl/api,nofx/tools,nofx/web/gopkg,nofx/winonly"; strings.Join(got, ",") != want {
+	if want := "vl/api,vl/tools,vl/web/gopkg,vl/winonly"; strings.Join(got, ",") != want {
 		t.Fatalf("importers behind another platform's build constraint: got %v, want exactly %s", got, want)
 	}
 }

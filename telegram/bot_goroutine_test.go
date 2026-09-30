@@ -193,7 +193,7 @@ func typeCheckTelegram() (*typedTelegram, error) {
 		}
 	}
 	if self == nil || self[0] != "vl/telegram" {
-		return nil, fmt.Errorf("go list did not name nofx/telegram for \".\" (got %q)", self)
+		return nil, fmt.Errorf("go list did not name vl/telegram for \".\" (got %q)", self)
 	}
 	if self[4] != "" {
 		return nil, fmt.Errorf("cgo files %s are not type-checked by this pin — extend it", self[4])
@@ -1104,10 +1104,10 @@ func TestBotIdentityPinRulesCatchEveryRoad(t *testing.T) {
 		{"an array element's address", `func c(ident *botIdentity) { p := &ident.arr[1]; go func() { _ = *p }() }`, "&ident.arr[1] — a pointer into the identity"},
 		{"a field address through the dereferenced identity", `func c(ident *botIdentity) { p := &(*ident).userID; go func() { _ = *p }() }`, "&(*ident).userID — a pointer into the identity"},
 		{"a slice of an array field", `func c(ident *botIdentity) { s := ident.arr[:]; go func() { _ = s[0] }() }`, "ident.arr[:] — a slice of an array inside the identity"},
-		{"implicit &: a method value on a value field", `func c(ident *botIdentity) { f := ident.val.bump; go f() }`, "ident.val.bump — (*nofx/telegram/synth.vfVal).bump has a pointer receiver"},
-		{"implicit &: go on a value field's pointer method", `func c(ident *botIdentity) { go ident.val.bump() }`, "ident.val.bump — (*nofx/telegram/synth.vfVal).bump has a pointer receiver"},
-		{"implicit &: a synchronous call that keeps it", `func c(ident *botIdentity) { ident.val.leak(); go func() { _ = vfLeak.n }() }`, "ident.val.leak — (*nofx/telegram/synth.vfVal).leak has a pointer receiver"},
-		{"implicit &: promoted through an embedded value", `func c(ident *botIdentity) { ident.leak(); go func() { _ = vfLeak.n }() }`, "ident.leak — (*nofx/telegram/synth.vfVal).leak has a pointer receiver"},
+		{"implicit &: a method value on a value field", `func c(ident *botIdentity) { f := ident.val.bump; go f() }`, "ident.val.bump — (*vl/telegram/synth.vfVal).bump has a pointer receiver"},
+		{"implicit &: go on a value field's pointer method", `func c(ident *botIdentity) { go ident.val.bump() }`, "ident.val.bump — (*vl/telegram/synth.vfVal).bump has a pointer receiver"},
+		{"implicit &: a synchronous call that keeps it", `func c(ident *botIdentity) { ident.val.leak(); go func() { _ = vfLeak.n }() }`, "ident.val.leak — (*vl/telegram/synth.vfVal).leak has a pointer receiver"},
+		{"implicit &: promoted through an embedded value", `func c(ident *botIdentity) { ident.leak(); go func() { _ = vfLeak.n }() }`, "ident.leak — (*vl/telegram/synth.vfVal).leak has a pointer receiver"},
 		// P2: a closure captures a holder.
 		{"E2a a holder's method in a closure", `func c(ident *botIdentity) { h := vfHolder{ident}; go func() { _ = h.cur() }() }`, "h — a closure captures a vfHolder"},
 		{"E2b a holder to a helper in a closure", `func c(ident *botIdentity) { h := vfHolder{ident}; go func() { _ = vfAgentsOf(h) }() }`, "h — a closure captures a vfHolder"},

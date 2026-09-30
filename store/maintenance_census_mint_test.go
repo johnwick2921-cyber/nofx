@@ -74,7 +74,7 @@ func TestWorkerImportGuardRefusesTheMintingCLI(t *testing.T) {
 				hit = hit || strings.HasSuffix(o, "vl/internal/updaterbootstrap")
 			}
 			if !hit {
-				t.Fatalf("the trading app links nofx/internal/updaterbootstrap (the attended MAC minter) via %s and the import guard reports %v", via.rel, off)
+				t.Fatalf("the trading app links vl/internal/updaterbootstrap (the attended MAC minter) via %s and the import guard reports %v", via.rel, off)
 			}
 			toff, _, err := toolchainWorkerLinkOffenders(root)
 			if err != nil {
@@ -134,7 +134,7 @@ func TestWorkerImportGuardRefusesTheActivationLibrary(t *testing.T) {
 				truth = truth || p.ImportPath == "vl/internal/activation"
 			}
 			if !truth {
-				t.Fatalf("ground truth: the app binary does not link nofx/internal/activation via %s — probe broken", via.rel)
+				t.Fatalf("ground truth: the app binary does not link vl/internal/activation via %s — probe broken", via.rel)
 			}
 			off, _, err := workerImportOffenders(root)
 			if err != nil {
@@ -145,7 +145,7 @@ func TestWorkerImportGuardRefusesTheActivationLibrary(t *testing.T) {
 				hit = hit || strings.HasSuffix(o, "vl/internal/activation")
 			}
 			if !hit {
-				t.Fatalf("the trading app links nofx/internal/activation via %s and the import guard reports %v", via.rel, off)
+				t.Fatalf("the trading app links vl/internal/activation via %s and the import guard reports %v", via.rel, off)
 			}
 			toff, _, err := toolchainWorkerLinkOffenders(root)
 			if err != nil {
@@ -162,7 +162,7 @@ func TestWorkerImportGuardRefusesTheActivationLibrary(t *testing.T) {
 func TestForbiddenWorkerPackagesArePinned(t *testing.T) {
 	got := append([]string(nil), forbiddenWorkerPackages...)
 	sort.Strings(got)
-	want := "vl/internal/activation,nofx/internal/updaterbootstrap,nofx/internal/updaterwire/wireserver,nofx/internal/updaterworker"
+	want := "vl/internal/activation,vl/internal/updaterbootstrap,vl/internal/updaterwire/wireserver,vl/internal/updaterworker"
 	if strings.Join(got, ",") != want {
 		t.Fatalf("forbiddenWorkerPackages = %v, want exactly %s", got, want)
 	}

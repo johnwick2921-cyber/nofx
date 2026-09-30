@@ -99,7 +99,7 @@ func TestWorkerImportGuardSeesNestedSkipNamedDirs(t *testing.T) {
 				truth = truth || p.ImportPath == "vl/internal/updaterwire/wireserver"
 			}
 			if !truth {
-				t.Fatalf("ground truth: the app binary does not link wireserver through nofx/%s — probe broken (%v)", dir, linked)
+				t.Fatalf("ground truth: the app binary does not link wireserver through vl/%s — probe broken (%v)", dir, linked)
 			}
 			off, _, err := workerImportOffenders(root)
 			if err != nil {
@@ -107,10 +107,10 @@ func TestWorkerImportGuardSeesNestedSkipNamedDirs(t *testing.T) {
 			}
 			hit := false
 			for _, o := range off {
-				hit = hit || (strings.HasPrefix(o, "api: ") && strings.Contains(o, "vl/"+dir+" → nofx/internal/updaterwire/wireserver"))
+				hit = hit || (strings.HasPrefix(o, "api: ") && strings.Contains(o, "vl/"+dir+" → vl/internal/updaterwire/wireserver"))
 			}
 			if !hit {
-				t.Fatalf("`go list -deps` links nofx/internal/updaterwire/wireserver via nofx/%s, but the import guard reports %v", dir, off)
+				t.Fatalf("`go list -deps` links vl/internal/updaterwire/wireserver via vl/%s, but the import guard reports %v", dir, off)
 			}
 			// and the toolchain-answered guard says the same
 			toff, _, err := toolchainWorkerLinkOffenders(root)
@@ -118,7 +118,7 @@ func TestWorkerImportGuardSeesNestedSkipNamedDirs(t *testing.T) {
 				t.Fatal(err)
 			}
 			if len(toff) != 1 || !strings.HasPrefix(toff[0], "vl/internal/updaterwire/wireserver: linked by the trading app") {
-				t.Fatalf("toolchain guard via nofx/%s: %v", dir, toff)
+				t.Fatalf("toolchain guard via vl/%s: %v", dir, toff)
 			}
 		})
 	}
@@ -134,7 +134,7 @@ func TestToolchainWorkerLinkGuardControls(t *testing.T) {
 	censusWrite(t, root, "internal/updaterwire/wireserver/server.go", "package wireserver\n\nimport _ \"vl/internal/updaterwire\"\n")
 	censusWrite(t, root, "api/server.go", "package api\n\nimport _ \"vl/internal/updaterwire\"\n")
 	censusWrite(t, root, "main.go", "package main\n\nimport _ \"vl/api\"\n\nfunc main() {}\n")
-	censusWrite(t, root, "cmd/nofx-updater/main.go", "package main\n\nimport _ \"vl/internal/updaterwire/wireserver\"\n\nfunc main() {}\n")
+	censusWrite(t, root, "cmd/vl-updater/main.go", "package main\n\nimport _ \"vl/internal/updaterwire/wireserver\"\n\nfunc main() {}\n")
 	if off, pats, err := toolchainWorkerLinkOffenders(root); err != nil || len(off) != 0 || strings.Join(pats, " ") != ". ./api/..." {
 		t.Fatalf("clean synthetic module: offenders=%v patterns=%v err=%v", off, pats, err)
 	}

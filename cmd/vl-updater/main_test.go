@@ -792,7 +792,7 @@ func TestAMovedReleaseRootRefusalNamesBothStepsAndFollowingThemWorks(t *testing.
 	}
 	_, err = rel.Verdict(fetchID)
 	vpath := filepath.Join(f.data, "updater", "verdicts", fetchID+".json")
-	want := fmt.Sprintf("release root refused: the verdict for %s names the release dir %s, not %s under the current NOFX_RELEASE_DIR — "+
+	want := fmt.Sprintf("release root refused: the verdict for %s names the release dir %s, not %s under the current VL_RELEASE_DIR — "+
 		"to use this release there: (1) remove the old verdict by hand: rm %s (2) then re-fetch it: vl-updater --install-dir %s fetch %s",
 		fetchID, filepath.Join(f.root, fetchSHA), filepath.Join(b, fetchSHA), vpath, tg.InstallDir, fetchID)
 	if err == nil || err.Error() != want {
