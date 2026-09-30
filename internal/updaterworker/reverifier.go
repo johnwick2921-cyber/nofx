@@ -28,7 +28,7 @@ import (
 )
 
 // NewReleaseReverifier is the production Reverifier for the installation t
-// (cmd/nofx-updater's newReverifier). It touches no file: the verdict and the
+// (cmd/vl-updater's newReverifier). It touches no file: the verdict and the
 // allowed-signers file are read at each call.
 func NewReleaseReverifier(t Target) (Reverifier, error) {
 	if !filepath.IsAbs(t.DataDir) || !filepath.IsAbs(t.InstallDir) {

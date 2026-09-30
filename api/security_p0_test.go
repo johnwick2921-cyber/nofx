@@ -289,7 +289,7 @@ func doResetAccount(s *Server, body string) *httptest.ResponseRecorder {
 // TestConfigUpdateHandlersDoNotLogSecrets is a source lint over the two handlers
 // that previously did `logger.Infof(..., "%+v", req.Models/req.Exchanges)` and
 // wrote PLAINTEXT provider keys, exchange secret keys and wallet private keys
-// into data/nofx_*.log (mode 0644). Real keys were recovered from three log
+// into data/vl_*.log (mode 0644). Real keys were recovered from three log
 // files during the P0 sweep. A %+v of a credential-bearing request struct must
 // never come back.
 func TestConfigUpdateHandlersDoNotLogSecrets(t *testing.T) {

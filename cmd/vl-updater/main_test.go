@@ -95,10 +95,10 @@ var (
 // no hold — unless BOTH production adapters are wired. Both now are: the
 // release re-proof (U4N item A: updaterworker.NewReleaseReverifier) and the
 // activation library (updaterworker.NewActivationLibrary, one-line delegations
-// to nofx/internal/activation, possible since 103's D4 fix made activation
+// to vl/internal/activation, possible since 103's D4 fix made activation
 // register the ONE sqlite driver store/sqlitedriver owns). So the production
 // wiring passes the adapter precondition and serve proceeds to its NEXT
-// precondition (a home for ~/nofx-backups/updater — unset here, so it still
+// precondition (a home for ~/vl-backups/updater — unset here, so it still
 // refuses and still writes nothing). Every row with a missing or erroring
 // adapter keeps refusing, naming which adapter is missing.
 func TestServeRefusesUnlessBothAdaptersAreWired(t *testing.T) {
@@ -391,7 +391,7 @@ func TestServeWiresTheWorkerBehindTheSocket(t *testing.T) {
 }
 
 // PIN (U4F, the containment class applied to the backup root): serve refuses
-// — and writes nothing — when ~/nofx-backups/updater is inside the install,
+// — and writes nothing — when ~/vl-backups/updater is inside the install,
 // by path elements (<install>/..h is inside) and after resolving symlinks
 // (a HOME named through a symlink to the install is inside too). A snapshot
 // that lives inside the install it restores dies with it.
@@ -624,7 +624,7 @@ func (f fetchRig) env(t *testing.T, inbox, root string) {
 	t.Cleanup(installpath.ResetReleaseDirForTest)
 }
 
-// PIN (U4N item B): `nofx-updater fetch <release_id>` — the production entry —
+// PIN (U4N item B): `vl-updater fetch <release_id>` — the production entry —
 // verifies a REAL archive (3a's package.sh + manifest.sh, the real ssh-keygen
 // signature, tar) from the local inbox against the INSTALL's allowed-signers,
 // materializes it under NOFX_RELEASE_DIR/<source_sha>, writes the verdict

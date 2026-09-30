@@ -448,7 +448,7 @@ func TestCutoverInstallsTheNewBinaryItWasGiven(t *testing.T) {
 	}
 	// MOVED WITH THE CHANGE (CLASS 239). These used to assert that cutover.sh
 	// ITSELF greps `vcs.revision=$NEW_SHA` out of `go version -m` and stages a
-	// `nofx-bin.new`. v7 delegates both to cmd/nofx-activate, so the shell no
+	// `vl-bin.new`. v7 delegates both to cmd/vl-activate, so the shell no
 	// longer contains those strings — and asserting them would now be pinning
 	// the OLD implementation rather than the guarantee.
 	//
@@ -641,7 +641,7 @@ func TestCutoverDistinguishesAnUnstampedBinaryFromAWrongOne(t *testing.T) {
 	sh := repoFile(t, "deploy/cutover.sh")
 	// MOVED WITH THE CHANGE (CLASS 239). Both refusals now live in
 	// internal/activation.Stage, which cutover.sh reaches through
-	// `nofx-activate verify`. The DISTINCTION is the guarantee — an unstamped
+	// `vl-activate verify`. The DISTINCTION is the guarantee — an unstamped
 	// binary and a wrong-revision binary send the operator to different
 	// places, and a refusal that names the wrong cause sends them to fix
 	// something that is not broken — so it is pinned where it now lives:

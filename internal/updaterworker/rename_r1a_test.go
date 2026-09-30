@@ -26,7 +26,7 @@ func TestLogPrefixFollowsTheBinary(t *testing.T) {
 }
 
 // The predictor end-to-end: run a full boot on a vl-bin release and on a
-// nofx-bin release; the Watch's LogPath must carry the release's prefix, the
+// vl-bin release; the Watch's LogPath must carry the release's prefix, the
 // offset must be 0 (the fake writes the boot line only AFTER Activate
 // returned — the log the worker predicted was ABSENT while it predicted it),
 // and the boot line must land in exactly that file.
@@ -106,7 +106,7 @@ func TestArchiveBinaryExactlyOne(t *testing.T) {
 
 // A rollback from a vl-bin release back to a nofx-bin snapshot: the activate
 // Watch points at the release's vl_ log, and the rollback Watch is re-predicted
-// from the SNAPSHOT's binary — the nofx_ log.
+// from the SNAPSHOT's binary — the vl_ log.
 func TestRollbackFromVlReleaseRePredictsFromTheSnapshotBinary(t *testing.T) {
 	r := newRig(t, withReleaseBinary("vl-bin"))
 	r.watchFail[boxNew] = true

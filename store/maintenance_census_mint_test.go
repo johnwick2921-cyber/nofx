@@ -11,7 +11,7 @@ import (
 // ── W-ONE-BUTTON M3 fold M4 (red-team 4 #2(b)) — the app never links the minter ──
 //
 // The import guard forbade only the worker's listener and the worker package.
-// nofx/internal/updaterbootstrap — the attended CLI whose Run → authorize →
+// vl/internal/updaterbootstrap — the attended CLI whose Run → authorize →
 // updateauth.Authorize → ComputeMAC mints an install MAC — was not forbidden,
 // so the trading app could link the one door that mints (CTO ruling Q1(a):
 // nothing on the API side mints a MAC) with every census green. Ported from
@@ -89,11 +89,11 @@ func TestWorkerImportGuardRefusesTheMintingCLI(t *testing.T) {
 
 // ── M4 3b-B U5b (f) — OQ-8/C2: the app never links the activation library ──
 //
-// nofx/internal/activation (Claude-103's kill/restart library: Activate,
+// vl/internal/activation (Claude-103's kill/restart library: Activate,
 // RollbackTo, Watch — SIGKILL by MainPID identity) is linked by the updater
 // worker's binary only. A trading-app package that reached it — directly or
 // through any chain — could restart the bot from inside the bot; and at
-// 3b-B it also PANICS any binary that links it beside nofx/store (its
+// 3b-B it also PANICS any binary that links it beside vl/store (its
 // steps.go registers glebarez/go-sqlite as database/sql "sqlite", the same
 // name store/sqlitedriver's default backend registers via modernc.org/sqlite:
 // "sql: Register called twice for driver sqlite" at init). Proved on a

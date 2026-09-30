@@ -52,7 +52,7 @@ var (
 )
 
 // The archive builder lives in internal/updaterworker/releasefixture (moved
-// there unchanged by U4N so cmd/nofx-updater's fetch pin builds the SAME
+// there unchanged by U4N so cmd/vl-updater's fetch pin builds the SAME
 // archive); these are its package-local names.
 
 func repoRoot(t *testing.T) string { return releasefixture.RepoRoot(t) }
@@ -233,7 +233,7 @@ func TestFetchMaterializesTheActivationLayout(t *testing.T) {
 	if got := dirNames(t, e.releaseRoot); len(got) != 1 || got[0] != testSHA {
 		t.Fatalf("release root = %v, want exactly [%s] (no staging debris)", got, testSHA)
 	}
-	// activation.Resolve's layout: <dir>/{nofx-bin, web/dist, RELEASE, manifest.json}
+	// activation.Resolve's layout: <dir>/{vl-bin, web/dist, RELEASE, manifest.json}
 	bin, err := os.Lstat(filepath.Join(final, "nofx-bin"))
 	if err != nil || !bin.Mode().IsRegular() || bin.Mode().Perm()&0o100 == 0 {
 		t.Fatalf("nofx-bin: %v %v (want a regular executable file)", bin, err)

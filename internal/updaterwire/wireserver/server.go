@@ -1,6 +1,6 @@
 // Package wireserver is the WORKER end of the W-ONE-BUTTON M3 updater channel:
 // it listens on <data>/updater/worker.sock and answers typed frames from
-// nofx/internal/updaterwire.
+// vl/internal/updaterwire.
 //
 // It is a separate package on purpose. The trading app (api/, trader/,
 // kernel/, agent/, telegram/, the root main package) DIALS the worker through

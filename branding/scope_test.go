@@ -14,7 +14,7 @@ import (
 	"vl/internal/censuswalk"
 )
 
-// modulePrefix is the module path the census sees (nofx today; the R5 rename
+// modulePrefix is the module path the census sees (vl today; the R5 rename
 // makes it vl — the pins below must not hardcode it).
 func modulePrefix() string {
 	if m, err := censuswalk.ModulePath(".."); err == nil {
@@ -39,12 +39,12 @@ func importTargets(source []byte) (map[string]bool, error) {
 	return targets, nil
 }
 
-// preserveImports protects the nofx/ namespace: a nofx/… import target the
+// preserveImports protects the vl/ namespace: a vl/… import target the
 // base file had must not disappear by RENAME (nofx/X → vl/X). W-EXEC-TRUTH W0
 // (CTO ruling on M1): a target that left THIS file but is still imported by
 // another tracked file (stillImported) was MOVED — a legitimate refactor — and
 // is preserved; a target that vanished from the module, or one whose suffix
-// reappears under a non-nofx module-internal path in this file, is rejected.
+// reappears under a non-vl module-internal path in this file, is rejected.
 // stillImported nil = no move is recognized (the strict, original reading).
 func preserveImports(before, after []byte, stillImported func(string) bool) error {
 	old, err := importTargets(before)
@@ -95,8 +95,8 @@ func TestExistingGoImportTargetsPreserved(t *testing.T) {
 	}
 	const base = "954f11b15f2e7615678f7d2b708c47895faebf1e"
 	// The base is a nofx commit. A mirror clone (the VL partner repo) does not
-	// carry nofx history, so the pin cannot be evaluated there: skip with the
-	// reason stated instead of failing on `git diff` exit 128. In nofx itself
+	// carry vl history, so the pin cannot be evaluated there: skip with the
+	// reason stated instead of failing on `git diff` exit 128. In vl itself
 	// the commit exists and the check runs unchanged.
 	if _, err := git("cat-file", "-e", base+"^{commit}"); err != nil {
 		t.Skipf("base commit %s is not in this repository (mirror clone) — import-target pin not evaluable here", base[:8])
@@ -159,7 +159,7 @@ func TestImportScopeAllowsObsoleteStandardLibraryRemoval(t *testing.T) {
 }
 
 // W-EXEC-TRUTH W0 (CTO M1): an import MOVED to another file (the freeze gate
-// left auto_trader_orders.go for entry_admission.go and took nofx/discipline
+// left auto_trader_orders.go for entry_admission.go and took vl/discipline
 // with it) is preserved; the same removal with no other importer is not.
 func TestImportScopeAllowsMovedTarget(t *testing.T) {
 	before := []byte("package p; import (\"vl/config\"; \"vl/discipline\")")

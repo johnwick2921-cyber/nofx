@@ -7,7 +7,7 @@ package updaterworker
 // check has passed (brief C6/C7/C8/C9, CTO ruling 1790259689740).
 //
 // The archive (release.yml: `tar -C /tmp/stage -czf <id>.tar.gz .`) carries
-// the staged allow-list (nofx-bin, web/dist/…, deploy/RELEASE, ninjascript/…,
+// the staged allow-list (vl-bin, web/dist/…, deploy/RELEASE, ninjascript/…,
 // LICENSE, optional updater binaries and calendar) plus, at its root, the
 // signed pair manifest.json + manifest.json.sig. FetchRelease:
 //
@@ -27,8 +27,8 @@ package updaterworker
 //     manifest.json self-entry today's release.yml produces is refused (C8);
 //  5. re-hashes EVERY artifacts[] entry (size and sha256) and refuses any
 //     extra, missing or changed file — only the signed pair itself is exempt;
-//  6. requires the layout: nofx-bin, web/dist/index.html and deploy/RELEASE
-//     listed, nofx-bin owner-executable, deploy/RELEASE naming source_sha;
+//  6. requires the layout: vl-bin, web/dist/index.html and deploy/RELEASE
+//     listed, vl-bin owner-executable, deploy/RELEASE naming source_sha;
 //  7. materializes activation's layout in the staging dir: RELEASE (a copy of
 //     deploy/RELEASE), manifest.json = {source_sha, binary_md5 (computed),
 //     signature_verdict "sshsig:release:SHA256:…"}, and the signed pair moved
@@ -102,7 +102,7 @@ const (
 	signedSigName      = "manifest.json.sig"
 	// The materialized layout (activation.Resolve: <dir>/{vl-bin|nofx-bin,
 	// web/dist, RELEASE, manifest.json}) plus the signed pair kept under
-	// signed/. A release dir holds EXACTLY ONE binary (R5 removes the nofx
+	// signed/. A release dir holds EXACTLY ONE binary (R5 removes the vl
 	// name).
 	signedDir      = "signed"
 	activationMfst = "manifest.json"
@@ -749,8 +749,8 @@ func rehashTree(root *os.Root, artifacts []Artifact, exempt map[string]bool) err
 }
 
 // binaryInRoot returns the staged release's ONE binary name: vl-bin when
-// present, else nofx-bin; BOTH present is refused (the dir must hold EXACTLY
-// ONE — R5 removes the nofx branch). // R5 removes.
+// present, else vl-bin; BOTH present is refused (the dir must hold EXACTLY
+// ONE — R5 removes the vl branch). // R5 removes.
 func binaryInRoot(root *os.Root) (string, error) {
 	vl, vlErr := root.Lstat(binaryNameVL)
 	nfx, nfxErr := root.Lstat(binaryName)
@@ -762,7 +762,7 @@ func binaryInRoot(root *os.Root) (string, error) {
 	case vlOK:
 		return binaryNameVL, nil
 	default:
-		// Neither present keeps the old reading (nofx-bin); the layout
+		// Neither present keeps the old reading (vl-bin); the layout
 		// check fails on the missing binary, as it always did.
 		return binaryName, nil
 	}

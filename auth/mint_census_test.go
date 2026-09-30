@@ -58,7 +58,7 @@ func TestOnlyLoginAndRegisterMintUnscopedTokens(t *testing.T) {
 
 // unscopedMintSites walks every non-test .go file of the module at root
 // (internal/censuswalk: root-only skips) and counts, per file, the references
-// to nofx/auth's GenerateJWT — through any import name, or bare under a
+// to vl/auth's GenerateJWT — through any import name, or bare under a
 // dot-import / inside package auth. The declaration's own name is not a use.
 func unscopedMintSites(root string) (seen map[string]int, scanned int, err error) {
 	files, err := censuswalk.NonTestGoFiles(root)
@@ -74,7 +74,7 @@ func unscopedMintSites(root string) (seen map[string]int, scanned int, err error
 			return nil, 0, err
 		}
 		scanned++
-		// The names this file reaches package nofx/auth by (an alias counts;
+		// The names this file reaches package vl/auth by (an alias counts;
 		// a dot-import makes a bare GenerateJWT the auth one).
 		aliases, dot := map[string]bool{}, f.Name.Name == "auth"
 		for _, im := range f.Imports {

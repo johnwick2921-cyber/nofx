@@ -125,9 +125,9 @@ func keysOf(m map[string]bool) []string {
 // hold.go is admitted by the store census to call the store's writers, and it
 // EXPORTS HoldForJob / ReleaseJob — a call to those is a hold write the store
 // census cannot see (it matches the store's names). So the whole module's
-// non-test files are scanned: any file importing nofx/internal/updaterworker
+// non-test files are scanned: any file importing vl/internal/updaterworker
 // (under any name, or dot-imported) that names HoldForJob or ReleaseJob is an
-// offender — cmd/nofx-updater included (the CLI never touches the hold; its
+// offender — cmd/vl-updater included (the CLI never touches the hold; its
 // recovery text tells the OPERATOR to clear it with maintenance-hold).
 func TestWorkerHoldWritersCensusModuleWide(t *testing.T) {
 	root, err := filepath.Abs("../..")

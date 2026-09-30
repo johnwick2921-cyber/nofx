@@ -112,7 +112,7 @@ func (s *PositionStore) AdherenceDistribution() (map[string]int, error) {
 }
 
 // BackupBeforeRegrade takes an online sqlite3 backup to
-// ~/nofx-backups/adherence-regrade/<stamp>.db before the migration writes.
+// ~/vl-backups/adherence-regrade/<stamp>.db before the migration writes.
 //
 // The guarded-write protocol requires a backup first, and this write rewrites
 // published grades. It uses the same online .backup mechanism the C1 timer

@@ -1,12 +1,12 @@
-// Command nofx-updater is the M4 updater worker (wave 3b-B) and its attended
+// Command vl-updater is the M4 updater worker (wave 3b-B) and its attended
 // operator verbs. It is the ONLY place a resume request is built
 // (internal/updaterwire/resume_census_test.go admits exactly this directory):
 //
-//	nofx-updater [--install-dir d] serve              run the worker (one job at a time)
-//	nofx-updater [--install-dir d] fetch <release_id> materialize + verify a local release (attended)
-//	nofx-updater [--install-dir d] status [<job>]     the worker's state, or one job's file
-//	nofx-updater [--install-dir d] resume <job>       attended resume of a job parked at nt8_updated
-//	nofx-updater [--install-dir d] recovery <job>     the manual steps for a recovery_needed job
+//	vl-updater [--install-dir d] serve              run the worker (one job at a time)
+//	vl-updater [--install-dir d] fetch <release_id> materialize + verify a local release (attended)
+//	vl-updater [--install-dir d] status [<job>]     the worker's state, or one job's file
+//	vl-updater [--install-dir d] resume <job>       attended resume of a job parked at nt8_updated
+//	vl-updater [--install-dir d] recovery <job>     the manual steps for a recovery_needed job
 //
 // It never runs as root, never touches the hold (only the worker's census-
 // admitted hold.go does), never mints a token (serve reads the operator's
@@ -62,7 +62,7 @@ var (
 //     against <install>/deploy/release_allowed_signers (U4N item A). WIRED.
 //   - newLibrary: the activation library adapter —
 //     updaterworker.NewActivationLibrary, one-line delegations to
-//     nofx/internal/activation. WIRED. It needs 103's D4 fix (activation
+//     vl/internal/activation. WIRED. It needs 103's D4 fix (activation
 //     registers the ONE sqlite driver, store/sqlitedriver's): without it this
 //     binary panics at init with "sql: Register called twice for driver
 //     sqlite" (TestUpdaterBinaryInitsWithoutPanic,
@@ -137,8 +137,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 }
 
 // lockScriptFor is the deploy lock script for this install: vl-lock.sh when
-// present, else nofx-lock.sh. Only `check` is ever run. // R5 removes the
-// nofx branch.
+// present, else vl-lock.sh. Only `check` is ever run. // R5 removes the
+// vl branch.
 func lockScriptFor(installDir string) string {
 	if _, err := os.Stat(filepath.Join(installDir, "deploy", "vl-lock.sh")); err == nil {
 		return filepath.Join(installDir, "deploy", "vl-lock.sh")

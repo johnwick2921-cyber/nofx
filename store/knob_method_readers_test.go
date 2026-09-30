@@ -160,7 +160,7 @@ func methodReadersOfKnob(t *testing.T, leaf string) (accessors []string, callSit
 	}
 	// pass 2: production call sites via go/types — the selector's selection
 	// must resolve to the accessor *types.Func on the owner type in
-	// nofx/store; package store itself is excluded (the call chain must leave
+	// vl/store; package store itself is excluded (the call chain must leave
 	// store/), and method expressions / method values count (SelectorExpr
 	// references, not only calls). CTO CENSUS-GUARDS 1790306266164 [31].
 	var anames []string
@@ -186,13 +186,13 @@ func methodReadersOfKnob(t *testing.T, leaf string) (accessors []string, callSit
 // expressions — trader/effective_settings.go:842 — pass unseen. The typed
 // pass resolves each selector through the toolchain and counts only
 // selections whose *types.Func IS the accessor method on the owner type
-// inside nofx/store; package store is excluded and references count, not
+// inside vl/store; package store is excluded and references count, not
 // only calls. go list and go/types failures are FATAL here — the pass never
 // degrades to name matching.
 
 // readerTypeContext is the one-per-root typed fixture: the toolchain's
 // package list (go list -e -json -deps -export over every walked dir), the
-// export-data importer that makes nofx/store resolve to ONE package object
+// export-data importer that makes vl/store resolve to ONE package object
 // across all type-checks, and the parsed + type-checked caches. Shared by
 // every methodReadersOfKnob call so the cost is paid once per test process.
 type readerTypeContext struct {
@@ -317,7 +317,7 @@ func tailOf(s string, n int) string {
 }
 
 // storeAccessorFuncs resolves each accessor name to its *types.Func on the
-// owner type inside nofx/store. Identity is by OBJECT, not name — so the
+// owner type inside vl/store. Identity is by OBJECT, not name — so the
 // same-named method on any other type never matches.
 func storeAccessorFuncs(t *testing.T, c *readerTypeContext, accessors []string, owners [][2]string) map[*types.Func]bool {
 	t.Helper()
@@ -383,7 +383,7 @@ func (c *readerTypeContext) checkPackage(t *testing.T, importPath string) *types
 
 // typedAccessorCallSites returns every production reference to the accessors
 // whose selection resolves to the accessor method itself on the owner type in
-// nofx/store. package store is excluded — the call chain must leave store/ —
+// vl/store. package store is excluded — the call chain must leave store/ —
 // and a SelectorExpr counts whether it is a call, a method value or a method
 // expression. go list and go/types failures are fatal (no name fallback).
 func typedAccessorCallSites(t *testing.T, root string, accessors []string, owners [][2]string) []string {

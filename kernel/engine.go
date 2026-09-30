@@ -370,7 +370,7 @@ func (e *StrategyEngine) SetClockContext(line string) { e.clockContextLine = lin
 func (e *StrategyEngine) SetPromptSnapshotMs(ms int64) { e.promptSnapshotMs = ms }
 
 // NewStrategyEngine creates strategy execution engine.
-// claw402WalletKey is optional — if provided, nofxos data requests are routed through claw402.
+// claw402WalletKey is optional — if provided, vlos data requests are routed through claw402.
 // SetVenue records the venue (the trader's exchange) the cycle's market reads
 // route through (CTO F2).
 func (e *StrategyEngine) SetVenue(venue string) { e.venue = venue }
@@ -877,7 +877,7 @@ func (e *StrategyEngine) FetchQuantData(symbol string) (*QuantData, error) {
 		return nil, nil
 	}
 
-	// Use nofxos client with unified API key
+	// Use vlos client with unified API key
 	include := "oi,price"
 	if e.config.Indicators.EnableQuantNetflow {
 		include = "netflow,oi,price"
@@ -892,7 +892,7 @@ func (e *StrategyEngine) FetchQuantData(symbol string) (*QuantData, error) {
 		return nil, nil
 	}
 
-	// Convert nofxos.QuantData to kernel.QuantData
+	// Convert VLos.QuantData to kernel.QuantData
 	quantData := &QuantData{
 		Symbol:      nofxosData.Symbol,
 		Price:       nofxosData.Price,

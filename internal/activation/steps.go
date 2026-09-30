@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	// nofx/store/sqlitedriver is the ONE place in this repo that registers the
+	// vl/store/sqlitedriver is the ONE place in this repo that registers the
 	// "sqlite" driver. A LIBRARY must never import a driver directly: anything
 	// may link it, and database/sql panics when two register the same name in
 	// one binary. This file imported github.com/glebarez/go-sqlite, which made
@@ -289,7 +289,7 @@ func lineNamesRevision(ln, sha string) bool {
 	return false
 }
 
-// lineTime reads the timestamp a nofx log line starts with: "MM-DD HH:MM:SS".
+// lineTime reads the timestamp a vl log line starts with: "MM-DD HH:MM:SS".
 // The year is absent from the format, so it is taken from the current year —
 // stated rather than hidden, because it is the one assumption here.
 func lineTime(ln string) (time.Time, bool) {
@@ -372,7 +372,7 @@ func healthSHA(url string) (string, error) {
 // prev is a Release DIRECTORY (NOFX_RELEASE_DIR/<sha>/). Under that layout all
 // three halves move together by repointing the `current` symlink, which is
 // atomic and cannot leave a mixed install. The v6 script kept siblings named
-// nofx-bin.old.<sha>.<timestamp>, which could collide and could not carry the
+// vl-bin.old.<sha>.<timestamp>, which could collide and could not carry the
 // dist or the marker alongside the binary they belonged to.
 //
 // Rollback does NOT Watch: the caller persists the receipt, then watches, so a

@@ -11,7 +11,7 @@ import (
 // Activate overwrites the install's three halves in place, so BEFORE it the
 // worker copies them out with the library's Snapshot to
 // <BackupRoot>/<job>/install/ — 103's layout at #201 afd60391:
-// <dest>/nofx-bin, <dest>/web/dist, <dest>/RELEASE (not deploy/RELEASE: U1
+// <dest>/vl-bin, <dest>/web/dist, <dest>/RELEASE (not deploy/RELEASE: U1
 // verifier note 11) — and proves the copy before trusting it: the binary's
 // vcs stamps are the install's clean sha, and every half is byte-identical to
 // the install's. The rollback is RollbackTo(snapshot, install, id).

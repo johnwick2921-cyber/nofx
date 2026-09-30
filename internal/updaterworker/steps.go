@@ -762,7 +762,7 @@ func (w *Worker) stepRollback(ctx context.Context, j updaterjob.Job) stepResult 
 	}
 	// The boot log is re-resolved AFTER the kill (#206 review fold,
 	// runner.go:367): the path was predicted from the pre-kill instant, and a
-	// restart that crosses local midnight makes the bot log to nofx_<D+1>.log
+	// restart that crosses local midnight makes the bot log to vl_<D+1>.log
 	// — watching and scanning only the D file turned a successful rollback
 	// into recovery_needed. A new file is scanned whole (offset 0): it holds
 	// no earlier boot of today, so a stale OK line cannot satisfy it. The

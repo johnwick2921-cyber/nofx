@@ -5,9 +5,9 @@
 //
 // TEST SUPPORT ONLY. It is the fixture internal/updaterworker's release tests
 // (buildRelease, the SSHSIG signers) have always used, moved here unchanged so
-// the cmd/nofx-updater tests can drive `nofx-updater fetch` end to end over
+// the cmd/vl-updater tests can drive `vl-updater fetch` end to end over
 // the SAME archive (unit U4N). No production package imports it:
-// cmd/nofx-updater's TestTheUpdaterBinaryNeverLinksTheReleaseFixture pins
+// cmd/vl-updater's TestTheUpdaterBinaryNeverLinksTheReleaseFixture pins
 // that the binary's dependency graph does not contain it.
 package releasefixture
 

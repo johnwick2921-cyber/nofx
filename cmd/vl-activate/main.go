@@ -1,4 +1,4 @@
-// Command nofx-activate drives the activation library from a terminal.
+// Command vl-activate drives the activation library from a terminal.
 //
 // It exists so the ATTENDED boot and the unattended worker (3b-B) run the SAME
 // code. deploy/cutover.sh v6 was a second implementation of these steps in
@@ -98,7 +98,7 @@ func run(cmd string, o opts) (activation.Receipt, error) {
 		logPath := o.logPath
 		if logPath == "" {
 			// Logs are named by BOOT date, not calendar date: on the live box
-			// at 08:04 on 09-24 the active file was nofx_2026-09-23.log. A
+			// at 08:04 on 09-24 the active file was vl_2026-09-23.log. A
 			// date-built path points at a file that may not exist, and then
 			// Watch fails for a reason unrelated to the activation.
 			p, lerr := activation.NewestLogPath("data")

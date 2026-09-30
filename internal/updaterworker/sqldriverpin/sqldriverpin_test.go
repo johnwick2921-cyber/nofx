@@ -29,7 +29,7 @@ const (
 // PIN (D4, CTO ruling 1790302009885): no binary linking the worker set
 // registers the "sqlite" driver twice. internal/activation (#201) blank-
 // imported glebarez/go-sqlite beside store/sqlitedriver's modernc; any binary
-// linking both — the updater linking nofx/store (the hold) AND activation (the
+// linking both — the updater linking vl/store (the hold) AND activation (the
 // adapter) — panicked at init. For each binary the worker set reaches, the
 // toolchain's own dependency list must not carry both registrations (and must
 // carry one: a probe that sees neither proves nothing).
@@ -108,12 +108,12 @@ func goList(t *testing.T, root string, tags string, args ...string) map[string]b
 	return deps
 }
 
-// PIN (D4, the build smoke): the nofx-updater binary, built exactly as an
-// operator builds it (go build -o <dir>/nofx-updater ./cmd/nofx-updater), gets
+// PIN (D4, the build smoke): the vl-updater binary, built exactly as an
+// operator builds it (go build -o <dir>/vl-updater ./cmd/vl-updater), gets
 // through init and answers its no-argument usage: exit 2, the usage line on
 // stderr, nothing on stdout, no panic. No argument means run() prints the
 // usage BEFORE it resolves an install, reads an env or opens anything — the
-// run touches nothing (cmd/nofx-updater/main.go run: len(rest) == 0).
+// run touches nothing (cmd/vl-updater/main.go run: len(rest) == 0).
 func TestUpdaterBinaryInitsWithoutPanic(t *testing.T) {
 	root, err := filepath.Abs("../../..")
 	if err != nil {

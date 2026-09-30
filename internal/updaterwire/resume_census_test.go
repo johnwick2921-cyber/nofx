@@ -21,16 +21,16 @@ import (
 //
 // resume continues a job the worker parked for an attended step (the owner's
 // F5 at nt8_updated); dispatch §0: it "resumes only on an attended
-// `nofx-updater resume <job>`". The app never sends one: the API side hands
+// `vl-updater resume <job>`". The app never sends one: the API side hands
 // off an install and reads status, nothing else. So the names that BUILD a
 // resume request may appear in exactly two directories:
 //
 //   - internal/updaterwire — the wire package, which defines them;
-//   - cmd/nofx-updater     — the CLI the owner types the job id into.
+//   - cmd/vl-updater     — the CLI the owner types the job id into.
 //
 // Both are EXACT directories, never prefixes (CTO ruling 1790258770876:
-// census admissions extend by exact names): cmd/nofx-updaterx, a
-// subdirectory of cmd/nofx-updater and internal/updaterwire/wireserver are
+// census admissions extend by exact names): cmd/vl-updaterx, a
+// subdirectory of cmd/vl-updater and internal/updaterwire/wireserver are
 // all outside.
 //
 // "Build" is judged by NAME, fail closed: any reference to NewResume,
@@ -596,8 +596,8 @@ func resumeBuilderCensus(root string) (resumeCensus, error) {
 }
 
 // PIN (M4 3b-B U2, dispatch §0/§3): over the REAL tree, nothing but the wire
-// package and cmd/nofx-updater names a resume builder or spells a resume
-// frame. At this head cmd/nofx-updater does not exist yet, so this proves no
+// package and cmd/vl-updater names a resume builder or spells a resume
+// frame. At this head cmd/vl-updater does not exist yet, so this proves no
 // OTHER package references them; the admitted set is that exact directory.
 //
 // The name carries "Census" so the standard gate
@@ -879,7 +879,7 @@ func TestResumeCensusSeesEveryResumeFieldWrite(t *testing.T) {
 	}
 }
 
-// PIN (U2 verifier defect 3, probe2.out G1): cmd/nofx-updater is admitted
+// PIN (U2 verifier defect 3, probe2.out G1): cmd/vl-updater is admitted
 // because a main package cannot be imported. Any other package name there
 // could be (nu "vl/cmd/nofx-updater"), wrapping a builder for the app, so
 // the file is an offender itself and is judged like any file outside.

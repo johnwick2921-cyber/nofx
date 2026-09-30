@@ -148,7 +148,7 @@ func TestTerminalOrderInTheBookIsNotAlive(t *testing.T) {
 	}
 }
 
-// REVIEW FINDING (nofx-47): the bug this wave's own framing predicts, surviving
+// REVIEW FINDING (vl-47): the bug this wave's own framing predicts, surviving
 // one level inside the fix.
 //
 // orderMatchesArm returns false for an empty SignalID, so the loop matched

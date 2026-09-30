@@ -358,7 +358,7 @@ type usersCensusFile struct {
 	rel     string
 	f       *ast.File
 	inStore bool            // package store: a bare User / UserStore is the store's
-	aliases map[string]bool // the names this file reaches nofx/store by
+	aliases map[string]bool // the names this file reaches vl/store by
 }
 
 // usersTableWriters returns every users-table write site under root as

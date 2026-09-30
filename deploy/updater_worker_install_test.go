@@ -5,7 +5,7 @@ package deploy
 // the REAL template and the REAL script on disk, run with bash.
 //
 // The CTO's mutations hit the script refusals: a run whose output carries the
-// token value, a NOFX_RELEASE_DIR inside ~/nofx that passes, a non-hex sha
+// token value, a NOFX_RELEASE_DIR inside ~/vl that passes, a non-hex sha
 // that is accepted, a unit that re-joins the bot's cgroup or re-sets TZ.
 
 import (
@@ -31,7 +31,7 @@ func TestUpdaterWorkerServiceTemplate(t *testing.T) {
 			t.Fatalf("unit template must carry %q:\n%s", want, svc)
 		}
 	}
-	// NOT in nofx.service's cgroup: a --user unit lives in its own cgroup
+	// NOT in vl.service's cgroup: a --user unit lives in its own cgroup
 	// tree by construction, and no slice may pin it anywhere else (serve
 	// itself refuses the bot's cgroup — ErrBotCgroup).
 	for _, l := range strings.Split(svc, "\n") {
@@ -158,7 +158,7 @@ func TestInstallUpdaterWorkerScript(t *testing.T) {
 			"NOFX_RELEASE_DIR="+filepath.Join(home, "releases")+"\nNOFX_CUTOVER_TOKEN=SECRETMARKER123\n",
 			0o600)
 		// A valid sha + a valid env file: the NEXT refusal is the clone
-		// (the repo is /nonexistent-nofx-mirror). The output must not carry
+		// (the repo is /nonexistent-vl-mirror). The output must not carry
 		// the token anywhere on the path.
 		out, rc := run(t, home, "", strings.Repeat("e", 40))
 		if rc != 2 || !strings.Contains(out, "clone failed") {

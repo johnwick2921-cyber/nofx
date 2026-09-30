@@ -39,7 +39,7 @@ c.commit(); c.close()`, path).CombinedOutput()
 	}
 }
 
-// runScript runs deploy/nofx-db-backup.sh in a fresh temp dir containing a real
+// runScript runs deploy/vl-db-backup.sh in a fresh temp dir containing a real
 // main DB and a real research DB, with a PATH shim whose `df` prints the
 // fakeAvailBytes count as the backup volume's free space. It returns the
 // backup root so callers can inspect what the run actually wrote.
@@ -192,7 +192,7 @@ func TestBackupRefusesWhenPostBackupFreeBelowFloor(t *testing.T) {
 }
 
 // D1-FOLD (DS-105): the prune handles BOTH prefixes — an old vl-*.db.gz and an
-// old nofx-*.db.gz beyond the retention window are both removed, while today's
+// old vl-*.db.gz beyond the retention window are both removed, while today's
 // fresh backup survives. Dropping the vl prune line must fail THIS test.
 func TestBackupPrunesOldVlAndNofxBackups(t *testing.T) {
 	root, _, stderr, rc := runBackupScript(t, 1<<40, nil)
