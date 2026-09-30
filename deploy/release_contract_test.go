@@ -512,8 +512,9 @@ func TestCutoverTokenNeverRidesAProcessArgv(t *testing.T) {
 	// lifetime — while the script's own refusal text says "never pass it on the
 	// command line". The fold: a 0600 header file, curl -H @file, removed on
 	// every exit path.
-	if strings.Contains(sh, "Authorization: Bearer ${NOFX_CUTOVER_TOKEN}") {
-		t.Fatalf("the token must never be interpolated into curl's argv — it rides a header FILE")
+	if strings.Contains(sh, "Authorization: Bearer ${NOFX_CUTOVER_TOKEN}") ||
+		strings.Contains(sh, "Authorization: Bearer ${VL_CUTOVER_TOKEN}") { // R5 removes the NOFX form
+		t.Fatalf("the token must never be interpolated into curl's argv — it rides a header FILE (either name)")
 	}
 	if !strings.Contains(sh, `-H "@$TOKEN_HDR"`) {
 		t.Fatalf("curl must receive the header via -H @file")

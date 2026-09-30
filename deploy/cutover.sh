@@ -33,9 +33,12 @@ set -uo pipefail
 DRY=0
 [ "${1:-}" = "--dry-run" ] && { DRY=1; shift; }
 NEW_SHA="${1:-}"; NEW_BIN="${2:-}"; NEW_DIST="${3:-}"
-UNIT="${NOFX_UNIT:-nofx}"
-INSTALL="${NOFX_INSTALL:-$HOME/nofx}"
-ACTIVATE="${NOFX_ACTIVATE_BIN:-}"
+# Shell twins VL_ → NOFX_ → default; the install default is the install-root
+# rule ($HOME/vl when present, else $HOME/nofx). R5 removes the NOFX twins.
+UNIT="${VL_UNIT:-${NOFX_UNIT:-nofx}}"
+DEFAULT_INSTALL="$HOME/vl"; [ -d "$DEFAULT_INSTALL" ] || DEFAULT_INSTALL="$HOME/nofx"
+INSTALL="${VL_INSTALL:-${NOFX_INSTALL:-$DEFAULT_INSTALL}}"
+ACTIVATE="${VL_ACTIVATE_BIN:-${NOFX_ACTIVATE_BIN:-}}"
 
 say()  { printf 'cutover: %s\n' "$*"; }
 plan() { printf 'cutover: WOULD %s\n' "$*"; }
@@ -64,7 +67,7 @@ fi
 # runs is the one that answers here. The manifest records what the operator
 # asserted; verify decides whether the binary agrees.
 STAGE_DIR="$(mktemp -d -t nofx-cutover.XXXXXX)"
-trap 'rm -rf "$STAGE_DIR"; [ -n "${ACTIVATE:-}" ] && [ -z "${NOFX_ACTIVATE_BIN:-}" ] && rm -f "$ACTIVATE"; rm -f "${TOKEN_HDR:-}"' EXIT
+trap 'rm -rf "$STAGE_DIR"; [ -n "${ACTIVATE:-}" ] && [ -z "${VL_ACTIVATE_BIN:-}${NOFX_ACTIVATE_BIN:-}" ] && rm -f "$ACTIVATE"; rm -f "${TOKEN_HDR:-}"' EXIT
 [ -f "$NEW_BIN" ] || die "new binary $NEW_BIN not found"
 cp "$NEW_BIN" "$STAGE_DIR/nofx-bin" || die "cannot stage $NEW_BIN"
 NEW_MD5="$(md5sum "$STAGE_DIR/nofx-bin" | cut -d' ' -f1)"
@@ -87,11 +90,13 @@ grep -rql "$NEW_SHA" "$SRC_DIST" 2>/dev/null >/dev/null \
 say "dist carries $SHORT"
 
 # --- what is running now ------------------------------------------------------
-OLD_SHA="$(go version -m "$INSTALL/nofx-bin" 2>/dev/null | tr '\t' ' ' \
+# Install side: vl-bin wins when both exist. R5 removes the nofx branch.
+INSTALL_BIN="$INSTALL/vl-bin"; [ -f "$INSTALL_BIN" ] || INSTALL_BIN="$INSTALL/nofx-bin"
+OLD_SHA="$(go version -m "$INSTALL_BIN" 2>/dev/null | tr '\t' ' ' \
   | awk '{for(i=1;i<=NF;i++) if($i ~ /^vcs\.revision=/){sub(/^vcs\.revision=/,"",$i); print $i; exit}}')"
 [ -n "$OLD_SHA" ] || die "cannot read vcs.revision from the CURRENT binary; refusing a cutover with no way back"
 OLD_SHORT="${OLD_SHA:0:12}"
-RELEASES="${NOFX_RELEASE_DIR:-$INSTALL/releases}"
+RELEASES="${VL_RELEASE_DIR:-${NOFX_RELEASE_DIR:-$INSTALL/releases}}" # R5 removes the NOFX twin
 say "current: rev=$OLD_SHORT  releases → $RELEASES"
 
 # --- reconcile OLD_SHA with what is ACTUALLY running -------------------------
@@ -173,7 +178,7 @@ if [ "$DRY" -eq 1 ]; then
   plan "run: nofx-activate activate -release $RELEASES/$NEW_SHA -prev $RELEASES/$OLD_SHA"
   plan "  which installs binary + dist + RELEASE atomically, THEN kills the unit's"
   plan "  MainPID only if /proc/<pid>/stat field 22 still matches (a recycled pid is refused)"
-  plan "run: nofx-activate watch -release $RELEASES/$NEW_SHA -log <the NEWEST data/nofx_*.log>"
+  plan "run: nofx-activate watch -release $RELEASES/$NEW_SHA -log <the NEWEST data/{vl,nofx}_*.log>"
   plan "  GREEN needs BOTH a boot line newer than the kill AND /api/health reporting $SHORT"
   plan "on ANY failure BEFORE anything moved (verify, gate, staging, backup):"
   plan "  REFUSE and stop — the running bot is NOT touched and NO rollback runs"
@@ -189,7 +194,7 @@ die "unattended activation is not enabled in v7 from this script.
     Run the steps explicitly with the owner present, each printing its receipt:
       nofx-activate backup   -db $INSTALL/data/data.db
       nofx-activate activate -release $RELEASES/$NEW_SHA -prev $RELEASES/$OLD_SHA
-      nofx-activate watch    -release $RELEASES/$NEW_SHA    # -log defaults to the NEWEST data/nofx_*.log; do NOT build it from today's date
+      nofx-activate watch    -release $RELEASES/$NEW_SHA    # -log defaults to the NEWEST data/{vl,nofx}_*.log; do NOT build it from today's date
       nofx-activate rollback -prev $RELEASES/$OLD_SHA        # if watch refuses
     NO UNATTENDED DEPLOYS is canon: a cutover needs the owner reachable and
     acking the boot line, or a tested auto-rollback. The worker (3b-B) is the

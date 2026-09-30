@@ -175,8 +175,14 @@ check_encryption() {
 # ------------------------------------------------------------------------
 read_env_vars() {
     if [ -f ".env" ]; then
-        NOFX_FRONTEND_PORT=$(grep "^NOFX_FRONTEND_PORT=" .env 2>/dev/null | cut -d'=' -f2 || echo "3000")
-        NOFX_BACKEND_PORT=$(grep "^NOFX_BACKEND_PORT=" .env 2>/dev/null | cut -d'=' -f2 || echo "8080")
+        # The VL_ line wins when non-empty; the NOFX_ line is the fallback
+        # (R5 removes it). Values are read, never written, here.
+        v=$(grep "^VL_FRONTEND_PORT=" .env 2>/dev/null | head -1 | cut -d'=' -f2- || true)
+        [ -n "$v" ] || v=$(grep "^NOFX_FRONTEND_PORT=" .env 2>/dev/null | head -1 | cut -d'=' -f2- || true)
+        NOFX_FRONTEND_PORT=$v
+        v=$(grep "^VL_BACKEND_PORT=" .env 2>/dev/null | head -1 | cut -d'=' -f2- || true)
+        [ -n "$v" ] || v=$(grep "^NOFX_BACKEND_PORT=" .env 2>/dev/null | head -1 | cut -d'=' -f2- || true)
+        NOFX_BACKEND_PORT=$v
 
         NOFX_FRONTEND_PORT=$(echo "$NOFX_FRONTEND_PORT" | tr -d '"'"'" | tr -d ' ')
         NOFX_BACKEND_PORT=$(echo "$NOFX_BACKEND_PORT" | tr -d '"'"'" | tr -d ' ')

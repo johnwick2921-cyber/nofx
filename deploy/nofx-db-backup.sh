@@ -26,9 +26,13 @@
 # run by hand any time. Exits non-zero (and keeps nothing partial) on any failure.
 set -euo pipefail
 
-DB="${NOFX_DB:-/home/hoang/nofx/data/data.db}"
-DB_RESEARCH="${NOFX_DB_RESEARCH:-/home/hoang/nofx/data/data.db.research.db}"
-ROOT="${NOFX_BACKUP_DIR:-$HOME/nofx-backups/auto}"
+# Every var is the shell twin VL_ → NOFX_ → default; the DB and ROOT defaults
+# use the install-root rule ($HOME/vl when present, else $HOME/nofx — never a
+# hardcoded /home/hoang). R5 removes the NOFX twins.
+INSTALL_ROOT="$HOME/vl"; [ -d "$INSTALL_ROOT" ] || INSTALL_ROOT="$HOME/nofx"
+DB="${VL_DB:-${NOFX_DB:-$INSTALL_ROOT/data/data.db}}"
+DB_RESEARCH="${VL_DB_RESEARCH:-${NOFX_DB_RESEARCH:-$INSTALL_ROOT/data/data.db.research.db}}"
+ROOT="${VL_BACKUP_DIR:-${NOFX_BACKUP_DIR:-$HOME/vl-backups/auto}}"
 KEEP_DAILY="${NOFX_KEEP_DAILY:-14}"
 KEEP_WEEKLY="${NOFX_KEEP_WEEKLY:-8}"
 # Research is OPT-IN and its retention is deliberately SHORT when opted in
