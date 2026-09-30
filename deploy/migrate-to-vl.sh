@@ -160,10 +160,12 @@ step0() {
   local all_vl=1
   for p in "$HOME/vl" "$HOME/vl-backups" "$HOME/vl-releases" "$HOME/vl-inbox" \
            "$HOME/.config/vl-updater" "$HOME/bin/vl-updater" \
-           /etc/systemd/system/vl.service /etc/systemd/system/vl-web.service \
            "$HOME/vl-main.lock.d"; do
     if [ ! -e "$p" ] && [ ! -L "$p" ]; then all_vl=0; break; fi
   done
+  if [ "$all_vl" = 1 ] && ! ( systemctl cat vl >/dev/null 2>&1 && systemctl cat vl-web >/dev/null 2>&1 ); then
+    all_vl=0
+  fi
   if [ "$all_vl" = 1 ] && [ -L "$OLD_ROOT" ] \
      && [ "$(readlink "$OLD_ROOT")" = "$VL_ROOT" ] \
      && systemctl is-active vl >/dev/null 2>&1; then
@@ -183,15 +185,18 @@ step0() {
   fi
   [ -d "$OLD_ROOT" ] || die "$OLD_ROOT is not a directory"
 
-  # (d) no vl path may exist yet.
+  # (d) no vl path may exist yet (the unit files are checked by what systemd
+  # has loaded: systemctl cat, which reads the real unit database).
   for p in "$HOME/vl" "$HOME/vl-backups" "$HOME/vl-releases" "$HOME/vl-inbox" \
            "$HOME/.config/vl-updater" "$HOME/bin/vl-updater" \
-           /etc/systemd/system/vl.service /etc/systemd/system/vl-web.service \
            "$HOME/vl-main.lock.d"; do
     if [ -e "$p" ] || [ -L "$p" ]; then
       die "$p already exists — refuse (the migration is one-way and irreversible by hand)"
     fi
   done
+  if systemctl cat vl >/dev/null 2>&1 || systemctl cat vl-web >/dev/null 2>&1; then
+    die "unit vl or vl-web is already loaded — refuse"
+  fi
 
   # (e) the updater trio.
   UP_HAS_CONFIG=0; UP_HAS_BIN=0; UP_HAS_UNIT=0
@@ -349,7 +354,7 @@ step0() {
     say "would sudo -v"
   else
     sudo -v || die "sudo -v failed — the operator's password is required before anything is stopped"
-    ( while :; do sudo -n -v 2>/dev/null || break; sleep 60; done ) &
+    ( while :; do sudo -n -v 2>/dev/null || break; sleep 60; done ) >/dev/null 2>&1 &
     TMP_KEEPALIVE=$!
   fi
 
@@ -543,6 +548,7 @@ steps_1_5() {
     for unit in vl vl-web; do
       tpl="$VL_ROOT/deploy/$unit.service"
       [ -f "$tpl" ] || stepdie "unit template $tpl is missing"
+      [ -r "$tpl" ] || stepdie "unit template $unit is unreadable"
       out="$(mkt)"
       sed -e "s|__VL_USER__|$user|g" -e "s|__VL_DIR__|$dir|g" -e "s|__NODE_DIR__|$NODE_DIR|g" "$tpl" > "$out"
       if grep -q '__' "$out"; then
@@ -552,6 +558,7 @@ steps_1_5() {
       rm -f "$out"
     done
     sudo systemctl daemon-reload
+    date +%s > "$STEP3_MARK"
     sudo systemctl enable --now vl vl-web
     say "vl system units enabled and started"
 
@@ -710,6 +717,7 @@ step7() {
   sudo systemctl disable "$o" "$o-web"
   if [ -e "$VL_ROOT/$o-bin" ]; then
     mv "$VL_ROOT/$o-bin" "$VL_ROOT/${o}-bin.old.$OLD12"
+    say "parked the old binary as $VL_ROOT/${o}-bin.old.$OLD12 (after verify)"
   fi
   if [ "$HAS_BACKUP_TMR" = 1 ]; then systemctl --user disable "$o-backup.timer" || warn "cannot disable the old backup timer"; fi
   if [ "$HAS_CLOCK_TMR" = 1 ]; then systemctl --user disable "$o-clock-guard.timer" || warn "cannot disable the old clock-guard timer"; fi
@@ -751,14 +759,17 @@ step7() {
 do_rollback() {
   say "rollback: reading the state file"
   [ -f "$STATE_FILE" ] || die "no state file at $STATE_FILE — refusing (the rollback reads ONLY that file, never globs parked binaries)"
-  local old12_s st_sha st_no_up
+  local old12_s st_sha st_no_up old_sha_s ts_rb
   st_sha="$(grep -m1 '^sha=' "$STATE_FILE" | cut -d= -f2- || true)"
   old12_s="$(grep -m1 '^old12=' "$STATE_FILE" | cut -d= -f2- || true)"
   st_no_up="$(grep -m1 '^no_updater=' "$STATE_FILE" | cut -d= -f2- || echo 0)"
+  old_sha_s="$(grep -m1 '^old_sha=' "$STATE_FILE" | cut -d= -f2- || true)"
+  ts_rb="$(grep -m1 '^ts=' "$STATE_FILE" | cut -d= -f2- || true)"
   [ -n "$st_sha" ] || die "the state file records no sha"
   [ -n "$old12_s" ] || die "the state file records no old12"
+  [ -n "$old_sha_s" ] || die "the state file records no old_sha"
   OLD12_RB="$old12_s"
-  local rb_sha="$st_sha"
+  local rb_old="$old_sha_s"
 
   # B2: the lock is checked FIRST, before anything is stopped.
   local meta_session check_rc
@@ -776,7 +787,7 @@ do_rollback() {
   state file: $STATE_FILE
   Recovery (exact commands, run by the operator):
     cd $HOME/$o && deploy/$o-lock.sh acquire $SESSION "re-acquire for the vl rename rollback" 120
-    $0 --session $SESSION --sha $rb_sha --release-dir ${RELEASE_DIR:-<dir>} --rollback
+    $0 --session $SESSION --sha $st_sha --release-dir ${RELEASE_DIR:-<dir>} --rollback
 EOF
     exit 1
   fi
@@ -814,13 +825,13 @@ EOF
     mv "$OLD_ROOT/${o}-bin.old.$old12_s" "$OLD_ROOT/$o-bin"
   fi
   local dist_old
-  dist_old="$(grep -m1 '^dist_old=' "$STATE_FILE" | cut -d= -f2- || true)"
-  if [ -n "$dist_old" ] && [ -e "$dist_old" ]; then
+  dist_old="$OLD_ROOT/web/dist.old.$old12_s.$ts_rb"
+  if [ -e "$dist_old" ]; then
     rm -rf "$OLD_ROOT/web/dist" 2>/dev/null || true
     mv "$dist_old" "$OLD_ROOT/web/dist"
   fi
   local marker_saved marker_now
-  marker_saved="$(grep -m1 '^marker_saved=' "$STATE_FILE" | cut -d= -f2- || true)"
+  marker_saved="$OLD_ROOT/deploy/RELEASE.pre-vl.$old12_s"
   if [ -n "$marker_saved" ] && [ -e "$marker_saved" ]; then
     mv "$marker_saved" "$OLD_ROOT/deploy/RELEASE"
   fi
@@ -844,14 +855,18 @@ EOF
   rm -f "$HOME/bin/vl-updater"
   systemctl --user daemon-reload 2>/dev/null || true
 
-  # 6. re-enable the old units.
+  # 6. re-enable the old units (presence read from the state file).
+  local rb_bt rb_ct rb_cs
+  rb_bt="$(grep -m1 '^backup_tmr=' "$STATE_FILE" | cut -d= -f2- || echo 0)"
+  rb_ct="$(grep -m1 '^clock_tmr=' "$STATE_FILE" | cut -d= -f2- || echo 0)"
+  rb_cs="$(grep -m1 '^clock_svc=' "$STATE_FILE" | cut -d= -f2- || echo 0)"
   sudo systemctl enable --now "$o" "$o-web" || say "rollback step 6 FAIL: cannot re-enable the old system units"
-  if [ "$HAS_BACKUP_TMR" = 1 ]; then systemctl --user enable --now "$o-backup.timer" 2>/dev/null || warn "cannot re-enable the old backup timer"; fi
-  if [ "$HAS_CLOCK_TMR" = 1 ]; then systemctl --user enable --now "$o-clock-guard.timer" 2>/dev/null || warn "cannot re-enable the old clock-guard timer"; fi
+  if [ "$rb_bt" = 1 ]; then systemctl --user enable --now "$o-backup.timer" 2>/dev/null || warn "cannot re-enable the old backup timer"; fi
+  if [ "$rb_ct" = 1 ]; then systemctl --user enable --now "$o-clock-guard.timer" 2>/dev/null || warn "cannot re-enable the old clock-guard timer"; fi
   if [ "$st_no_up" = 0 ]; then
     systemctl --user enable --now "$o-updater" 2>/dev/null || warn "cannot re-enable the old updater unit"
   fi
-  if [ "$HAS_CLOCK_SVC" = 1 ]; then
+  if [ "$rb_cs" = 1 ]; then
     systemctl --user start "$o-clock-guard.service" 2>/dev/null \
       || say "rollback step 6 FAIL: the old clock-guard service cannot start (the wrappers must be mode 100755)"
   fi
@@ -869,7 +884,7 @@ EOF
   fi
   local health_now
   health_now="$(health_rev)"
-  if revs_agree "$health_now" "$(upper12 "$rb_sha")"; then
+  if revs_agree "$health_now" "$(upper12 "$rb_old")"; then
     say "rollback: health revision OK ($health_now)"
   else
     say "rollback step 7 FAIL: /api/health reports '${health_now:-none}' — not a 7+ hex prefix of the old sha"
@@ -951,8 +966,15 @@ step0
 write_state
 say "state file written: $STATE_FILE"
 
+STEP3_MARK="$(mkt)"
 STEP3_EPOCH=0
-if ! steps_1_5; then
+# the capture pattern: errexit is OFF only around this one call, so the
+# function's own subshell keeps its set -e and its first failure is the rc
+set +e
+steps_1_5
+steps_rc=$?
+set -e
+if [ "$steps_rc" != 0 ]; then
   if [ "$NO_AUTO_ROLLBACK" = 1 ]; then
     say "============================================================"
     say "ERR in steps 1–5 and --no-auto-rollback was given."
@@ -964,7 +986,8 @@ if ! steps_1_5; then
   say "ERR in steps 1–5 — automatic rollback"
   if do_rollback; then exit 1; else say "ROLLBACK FAILED — a human must look now" >&2; exit 2; fi
 fi
-STEP3_EPOCH="$(date +%s)"
+STEP3_EPOCH="$(cat "$STEP3_MARK" 2>/dev/null || echo 0)"
+rm -f "$STEP3_MARK" 2>/dev/null || true
 
 if ! verify_legs "forward"; then
   if [ "$NO_AUTO_ROLLBACK" = 1 ]; then
