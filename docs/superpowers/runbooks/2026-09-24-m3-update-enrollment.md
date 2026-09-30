@@ -48,6 +48,11 @@ The loaders refuse a symlink, a mode looser than 0600, a file owned by another u
    ```
 2. Before the prompt, the CLI prints what it will act on: `installation:`, `bot database:`, `data dir:` and `DB_PATH from:` (which file or default the path came from). Check them. Then type exactly `ENROLL <email>`. Anything else writes nothing.
 3. Expect `enrolled: user_id=<first 8>… dir=<data>/updater (both enrollment files 0600; the key is never printed)`.
+
+**After the R2 boot (the vl rename):** re-enroll once with the SAME command
+(`vl-updater-bootstrap enroll --replace <email>`) so the enrollment is recorded
+by the renamed tool and the renamed service dir. Until then a pre-R2 enrollment
+still authorizes (the binding is the password hash, not the tool name).
 4. Check the modes. **Never** `cat`, copy or paste `device.key`.
    ```
    stat -c '%a %U %n' <data>/updater <data>/updater/admin.json <data>/updater/device.key
