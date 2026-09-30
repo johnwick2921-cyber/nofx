@@ -37,7 +37,7 @@ func TestWorkerBinaryLinksOneSqliteDriverRegistrationGuard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pkgs, err := censuswalk.ListPackages(root, true, "./cmd/nofx-updater")
+	pkgs, err := censuswalk.ListPackages(root, true, "./cmd/vl-updater")
 	if err != nil {
 		t.Fatal(err)
 	}

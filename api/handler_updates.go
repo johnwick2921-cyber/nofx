@@ -47,7 +47,7 @@ import (
 // OFF state) every route refuses and nothing else in the app changes.
 //
 // Install = the gate (identity factor: JWT of the enrolled admin) AND an
-// HMAC-SHA256 over nofx-update-install/v1|admin_user_id|release_id|job_id|
+// HMAC-SHA256 over vl-update-install/v1|admin_user_id|release_id|job_id|
 // expires_at under device.key (possession factor; updateauth.Message is the
 // one layout).
 // Nothing on the API side can mint a MAC (CTO ruling Q1(a)): the
@@ -229,7 +229,7 @@ func (s *Server) registerUpdateRoutes(api *gin.RouterGroup) {
 // a fabricated 0.
 var updatesRefusedTotal = promauto.NewCounterVec(
 	prometheus.CounterOpts{
-		Name: "nofx_updates_refused_total",
+		Name: "vl_updates_refused_total",
 		Help: "Refusals by the /api/updates gate and install handler, by route pattern and closed refusal category.",
 	},
 	[]string{"route", "category"},
@@ -307,7 +307,7 @@ func (s *Server) updatesForbid(c *gin.Context, why string) {
 	// /api/updates/jobs/BOOT%20INTEGRITY%20REFUSED once printed a WARN that
 	// verifyBootLine read as a refused boot and rolled back a good install).
 	if _, seen := s.updatesWarned.LoadOrStore(key, struct{}{}); !seen {
-		logger.Warnf("🔒 [updates] refused %s %.96q: %s — first %s refusal on %s this process; repeats log at DEBUG, all count in nofx_updates_refused_total", c.Request.Method, route, why, cat, route)
+		logger.Warnf("🔒 [updates] refused %s %.96q: %s — first %s refusal on %s this process; repeats log at DEBUG, all count in vl_updates_refused_total", c.Request.Method, route, why, cat, route)
 	} else {
 		logger.Debugf("🔒 [updates] refused %s %.96q: %s (repeat, counted as %s on %s)", c.Request.Method, route, why, cat, route)
 	}
@@ -602,7 +602,7 @@ func (s *Server) handleUpdatesInstall(c *gin.Context) {
 		}
 		logger.Errorf("🔒 [updates] install: job-id store refused: %v", err)
 		// #206 review fold: this refusal goes through updatesForbid too — the
-		// guide says every refusal increments nofx_updates_refused_total, and
+		// guide says every refusal increments vl_updates_refused_total, and
 		// the raw 403 used to skip the counter silently.
 		s.updatesForbid(c, "install: job-id store refused")
 		return

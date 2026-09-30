@@ -177,14 +177,14 @@ func TestInstallRefusesAnUnsafeSeenStoreUniformlyAndNeverRewritesIt(t *testing.T
 		t.Fatal(err)
 	}
 	// #206 review fold: this refusal must be COUNTED — the guide says every
-	// refusal increments nofx_updates_refused_total, and the raw 403 here
+	// refusal increments vl_updates_refused_total, and the raw 403 here
 	// used to skip updatesForbid and the counter entirely.
 	beforeCount := refusedCount(t, e, "/api/updates/install", "job_store_refused")
 	if w := e.do("POST", "/api/updates/install", grantBody(g0644)); w.Code != http.StatusForbidden || w.Body.String() != forbiddenBody {
 		t.Errorf("0644 seen store = %d %s, want 403 %s", w.Code, w.Body.String(), forbiddenBody)
 	}
 	if d := refusedCount(t, e, "/api/updates/install", "job_store_refused") - beforeCount; d != 1 {
-		t.Errorf("nofx_updates_refused_total{route=/api/updates/install,category=job_store_refused} rose by %v, want 1 (the guide promises every refusal is counted)", d)
+		t.Errorf("vl_updates_refused_total{route=/api/updates/install,category=job_store_refused} rose by %v, want 1 (the guide promises every refusal is counted)", d)
 	}
 	if after, _ := os.ReadFile(p); !bytes.Equal(before, after) {
 		t.Error("the 0644 seen store was rewritten")

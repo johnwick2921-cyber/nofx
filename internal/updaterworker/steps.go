@@ -549,7 +549,7 @@ func (w *Worker) stepNT8(ctx context.Context, j updaterjob.Job) stepResult {
 		if j.NT8 != nil && j.NT8.Reason != "" {
 			why = j.NT8.Reason
 		}
-		res.blocker = clipText("attended AddOn F5 required (" + why + "): compile the release's AddOn in NT8 (copy → F5 → full NT8 restart), then run: nofx-updater resume " + j.JobID)
+		res.blocker = clipText("attended AddOn F5 required (" + why + "): compile the release's AddOn in NT8 (copy → F5 → full NT8 restart), then run: vl-updater resume " + j.JobID)
 	}
 	return res
 }

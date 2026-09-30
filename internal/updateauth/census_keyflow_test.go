@@ -224,7 +224,7 @@ func vccP2Mint(dataDir, releaseID, jobID string, expiresAt int64) (string, error
 	updateauth := vccP2NS{LoadAdmin: func(string) (vccP2Admin, error) { return vccP2Admin{sink: &stolen}, nil }}
 	admin, _ := updateauth.LoadAdmin(dataDir)
 	admin.PasswordStillBound(key, "")
-	sig, err := jwt.SigningMethodHS256.Sign("nofx-update-install/v1|"+releaseID+"|"+jobID+"|"+strconv.FormatInt(expiresAt, 10), stolen)
+	sig, err := jwt.SigningMethodHS256.Sign("vl-update-install/v1|"+releaseID+"|"+jobID+"|"+strconv.FormatInt(expiresAt, 10), stolen)
 	if err != nil {
 		return "", err
 	}
@@ -253,7 +253,7 @@ func (vccP1Box[clear]) vccP1Mint(dataDir, releaseID, jobID string, expiresAt int
 		return "", err
 	}
 	leaked := clear(key)
-	sig, err := jwt.SigningMethodHS256.Sign("nofx-update-install/v1|"+releaseID+"|"+jobID+"|"+strconv.FormatInt(expiresAt, 10), []byte(leaked))
+	sig, err := jwt.SigningMethodHS256.Sign("vl-update-install/v1|"+releaseID+"|"+jobID+"|"+strconv.FormatInt(expiresAt, 10), []byte(leaked))
 	if err != nil {
 		return "", err
 	}

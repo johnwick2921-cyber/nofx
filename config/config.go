@@ -157,7 +157,7 @@ func Init() {
 		DBHost:    "localhost",
 		DBPort:    5432,
 		DBUser:    "postgres",
-		DBName:    "nofx",
+		DBName:    "vl",
 		DBSSLMode: "disable",
 	}
 

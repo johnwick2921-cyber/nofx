@@ -46,7 +46,7 @@ func TestUpdateAuthCensusSeesNestedSkipNamedDirs(t *testing.T) {
 		return off
 	}
 	want := func(rel string) []string {
-		return []string{rel + ": imports nofx/internal/updateauth", rel + ": references updateauth.Enroll",
+		return []string{rel + ": imports vl/internal/updateauth", rel + ": references updateauth.Enroll",
 			rel + ": references updateauth.LoadDeviceKey", rel + ": references updateauth.Authorize", rel + ": references updateauth.ComputeMAC"}
 	}
 	check := func(t *testing.T, rel string, off []string) {

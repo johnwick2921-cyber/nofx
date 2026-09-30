@@ -150,6 +150,7 @@ PR_DESCRIPTION.md
 
 # Compiled binaries (defensive: also matched by nofx pattern but explicit is better)
 nofx-bin*
+vl-bin*
 /nq_smoke
 
 # Local environment backups (not for commit)

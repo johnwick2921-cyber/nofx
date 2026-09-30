@@ -451,7 +451,7 @@ func (w *Worker) resumeFromPark(ctx context.Context, j updaterjob.Job) (updaterj
 			return err
 		}
 		if err != nil {
-			k.Blocker = clipText("resume refused: " + err.Error() + " — fix it, then nofx-updater resume " + k.JobID)
+			k.Blocker = clipText("resume refused: " + err.Error() + " — fix it, then vl-updater resume " + k.JobID)
 			return nil
 		}
 		k.ResumedAt = &now

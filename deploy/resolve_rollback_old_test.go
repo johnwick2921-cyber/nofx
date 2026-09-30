@@ -19,7 +19,7 @@ func TestReleaseWorkflowBuildsAndShipsTheUpdaterBinaries(t *testing.T) {
 	y := repoFile(t, ".github/workflows/release.yml")
 	for _, want := range []string{
 		"go build -trimpath -o \"$OUT/vl-updater\" ./cmd/vl-updater",
-		"go build -trimpath -o \"$OUT/vl-updater-bootstrap\" ./cmd/updater-bootstrap",
+		"go build -trimpath -o \"$OUT/vl-updater-bootstrap\" ./cmd/vl-updater-bootstrap",
 		"cp \"$OUT/vl-updater\" \"$OUT/vl-updater-bootstrap\" updater/",
 		"vcs.modified=false",
 		"resolve-rollback-old.sh",
