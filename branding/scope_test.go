@@ -93,13 +93,34 @@ func TestExistingGoImportTargetsPreserved(t *testing.T) {
 		cmd.Dir = root
 		return cmd.Output()
 	}
-	const base = "954f11b15f2e7615678f7d2b708c47895faebf1e"
-	// The base is a nofx commit. A mirror clone (the VL partner repo) does not
-	// carry vl history, so the pin cannot be evaluated there: skip with the
-	// reason stated instead of failing on `git diff` exit 128. In vl itself
-	// the commit exists and the check runs unchanged.
+	// Z21 (plan v7 FINAL R1b.10, owner ruling 2026-09-30): the protected
+	// namespace is now vl/… and the old module prefix is forbidden (see
+	// TestNoOldModuleImport). The base is re-pinned from the pre-rename commit
+	// to the D2-DEAD item-12 tip (module vl, cmd/vl-*, no provider/nofxos) —
+	// a pre-rename base would make every target skip once the prefix is vl/.
+	// The R1b PR is merged with a MERGE COMMIT, never a squash: a squash drops
+	// the pinned sha and the cat-file check below would skip the test.
+	const base = "4bed716cdd5ae90dd7069f83030aa9867804fd34"
+	// A mirror clone (the VL partner repo) does not carry vl history, so the
+	// pin cannot be evaluated there: skip with the reason stated instead of
+	// failing on `git diff` exit 128. In vl itself the commit exists and the
+	// check runs unchanged.
 	if _, err := git("cat-file", "-e", base+"^{commit}"); err != nil {
 		t.Skipf("base commit %s is not in this repository (mirror clone) — import-target pin not evaluable here", base[:8])
+	}
+	// Z21: the pinned base must declare the module path the census sees at
+	// HEAD. A re-pinned base whose go.mod disagrees is a bad pin and FAILS,
+	// never skips — a vacuous base is the whole reason for the re-pin.
+	goMod, err := git("show", base+":go.mod")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := censuswalk.ModulePath(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := moduleLine(goMod); got != want {
+		t.Fatalf("base %s declares module %q, census sees %q — re-pin base", base[:8], got, want)
 	}
 	// Every import target any tracked .go file has at HEAD (the move test).
 	files, err := git("ls-files", "*.go")
@@ -169,5 +190,46 @@ func TestImportScopeAllowsMovedTarget(t *testing.T) {
 	}
 	if err := preserveImports(before, after, func(string) bool { return false }); err == nil {
 		t.Fatal("a target no tracked file imports any more must still be rejected")
+	}
+}
+
+// moduleLine extracts the module path a go.mod declares.
+func moduleLine(goMod []byte) string {
+	for _, ln := range strings.Split(string(goMod), "\n") {
+		ln = strings.TrimSpace(ln)
+		if strings.HasPrefix(ln, "module ") {
+			return strings.TrimSpace(strings.TrimPrefix(ln, "module "))
+		}
+	}
+	return ""
+}
+
+// TestNoOldModuleImport (Z21, owner ruling 2026-09-30): the protected namespace
+// is now vl/…; the old module prefix is FORBIDDEN in every tracked .go file's
+// imports. The token is assembled at runtime so this guard cannot itself trip a
+// grep for the old name.
+func TestNoOldModuleImport(t *testing.T) {
+	old := "no" + "fx"
+	out, err := exec.Command("git", "-C", "..", "ls-files", "-z", "*.go").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range strings.Split(strings.TrimSuffix(string(out), "\x00"), "\x00") {
+		if f == "" {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join("..", f))
+		if err != nil {
+			t.Fatal(err)
+		}
+		targets, err := importTargets(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for tg := range targets {
+			if seg, _, _ := strings.Cut(tg, "/"); strings.EqualFold(seg, old) {
+				t.Errorf("%s imports the old module prefix: %s", f, tg)
+			}
+		}
 	}
 }
