@@ -6,12 +6,12 @@
 import { API_BASE, httpClient } from './helpers'
 
 // The M3 gate (api/handler_updates.go updatesRefusal) refuses every
-// /api/updates* request without exactly one X-NOFX-Update: 1 — before it
+// /api/updates* request without exactly one X-VL-Update: 1 — before it
 // reads the JWT. It is the CSRF factor: the header is not in the CORS allow
 // list, so a cross-origin page cannot make a browser send it. Sent on the
 // /updates* calls ONLY (updates.header.test.ts; the Go side pins the name
 // against api.UpdateHeader).
-const UPDATE_HEADERS = { 'X-NOFX-Update': '1' }
+const UPDATE_HEADERS = { 'X-VL-Update': '1' }
 
 /** The updatesStatus answer plus the HTTP code, so callers can tell a 403
  *  not-enrolled refusal (back off, stop polling) from any other failure. */
@@ -171,7 +171,12 @@ export function parseInstallAuthorization(
   } catch {
     return {
       ok: false,
+<<<<<<< HEAD
       error: 'not JSON — paste the one line vl-updater-bootstrap authorize prints',
+=======
+      error:
+        'not JSON — paste the one line vl-updater-bootstrap authorize prints',
+>>>>>>> c59dc5270
     }
   }
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
@@ -317,7 +322,7 @@ export const updatesApi = {
   },
 
   // The receipt route sits behind the same M3 gate as every /updates* call;
-  // a bare <a href> navigation cannot carry X-NOFX-Update and 403s. The page
+  // a bare <a href> navigation cannot carry X-VL-Update and 403s. The page
   // downloads through this method instead (OQ-7).
   async receipt(
     id: string,

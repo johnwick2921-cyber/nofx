@@ -1177,18 +1177,6 @@ const indicators: KnobSpec[] = [
     perSession: 'No.',
   },
   {
-    label: 'NofxOS API key',
-    where: 'Strategy → Indicators → NofxOS key',
-    what: 'Unified API key for all NofxOS data sources (AI500, rankings, external sources). Never printed.',
-    trader: 'Without a key, NofxOS-backed sources return nothing.',
-    consumer: 'store/strategy.go:1962 NofxOSAPIKey.',
-    range: 'string (secret)',
-    systemDefault: 'empty',
-    recommended: 'Set once per strategy.',
-    whenToTouch: 'When the key rotates.',
-    perSession: 'No.',
-  },
-  {
     label: 'OI ranking',
     where: 'Strategy → Indicators → OI Ranking toggle + duration + limit',
     what: 'Market-wide open-interest increase/decrease ranking data. Duration: 1h | 4h | 24h. Limit: number of entries (default 10).',
@@ -1781,7 +1769,7 @@ export const settings: GuideSection = {
         },
         {
           title: 'LOG_RETENTION_DAYS = 0',
-          body: "Age-based prune of data/nofx_YYYY-MM-DD.log at logger init. 0 = keep every file (the default — the owner has not ruled on logs). Never deletes today's or the running boot's file.",
+          body: "Age-based prune of data/vl_YYYY-MM-DD.log at logger init. 0 = keep every file (the default — the owner has not ruled on logs). Never deletes today's or the running boot's file.",
         },
         {
           title: 'PERSIST_STALL_WATCHDOG_S = 60',

@@ -1,6 +1,6 @@
 // W-ONE-BUTTON M3 × M5 wire pin: the M3 gate (api/handler_updates.go,
 // updatesRefusal) refuses every /api/updates* request that does not carry
-// X-NOFX-Update: 1 — before it reads the JWT — with 403 "update header
+// X-VL-Update: 1 — before it reads the JWT — with 403 "update header
 // missing or wrong". The M5 readers never sent it, so the enrolled admin's
 // own page read 403 forever while every mocked shape pin stayed green.
 //
@@ -69,11 +69,11 @@ afterEach(() => {
 // Header names are case-insensitive on the wire; count every spelling.
 function updateHeaderValues(h: Record<string, unknown>): unknown[] {
   return Object.entries(h)
-    .filter(([k]) => k.toLowerCase() === 'x-nofx-update')
+    .filter(([k]) => k.toLowerCase() === 'x-vl-update')
     .map(([, v]) => v)
 }
 
-describe('every /api/updates* request carries X-NOFX-Update: 1 (the M3 gate refuses it otherwise)', () => {
+describe('every /api/updates* request carries X-VL-Update: 1 (the M3 gate refuses it otherwise)', () => {
   const updateCalls: Array<[string, () => Promise<unknown>, string, string]> = [
     ['updatesStatus', () => updatesApi.updatesStatus(), 'GET', '/api/updates'],
     ['check', () => updatesApi.check(), 'POST', '/api/updates/check'],
