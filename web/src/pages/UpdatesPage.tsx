@@ -157,7 +157,7 @@ export default function UpdatesPage() {
 
   // The receipt download (OQ-7): the route sits behind the M3 gate, so a bare
   // navigation 403s — the receipt is fetched through the API client (which
-  // sends X-NOFX-Update) and saved as a file. A refusal shows the server's
+  // sends X-VL-Update) and saved as a file. A refusal shows the server's
   // own text, never a fabricated one.
   const [receiptBusy, setReceiptBusy] = useState(false)
   const [receiptError, setReceiptError] = useState<string | null>(null)
