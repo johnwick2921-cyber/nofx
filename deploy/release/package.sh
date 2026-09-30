@@ -32,7 +32,7 @@ ALLOW=(
 # PROCEDURE wrote for the previous boot, so copying it would ship a stale sha
 # that disagrees with the binary in the same archive. It is WRITTEN here from
 # the source sha, and the manifest pins the two to be byte-equal.
-OPTIONAL=( "updater/nofx-updater" "updater/nofx-updater-bootstrap" "calendar_static_t1.json" )
+OPTIONAL=( "updater/nofx-updater" "updater/nofx-updater-bootstrap" "updater/vl-updater" "updater/vl-updater-bootstrap" "calendar_static_t1.json" ) # R5 removes the nofx names
 
 mkdir -p "$OUT"
 staged=()

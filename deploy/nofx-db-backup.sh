@@ -139,7 +139,9 @@ fi
 backup_one "$DB" "nofx"
 promote_weekly "nofx" "$DAILY_DIR/nofx-${ts}.db.gz"
 prune "$DAILY_DIR" "$KEEP_DAILY" "nofx"
+prune "$DAILY_DIR" "$KEEP_DAILY" "vl"     # R5 removes the nofx prune above
 prune "$WEEKLY_DIR" "$KEEP_WEEKLY" "nofx"
+prune "$WEEKLY_DIR" "$KEEP_WEEKLY" "vl"   # R5 removes the nofx prune above
 
 if [[ "$BACKUP_RESEARCH" == "1" ]]; then
   if [[ -f "$DB_RESEARCH" ]]; then

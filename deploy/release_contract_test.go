@@ -724,3 +724,32 @@ func TestManifestSeparatesOwnerDataFromProgramArtifacts(t *testing.T) {
 		t.Fatal("owner data must be marked as shipped-as-template, never installed over an existing file")
 	}
 }
+
+// D1-FOLD (DS-105): a post-R1b archive that holds ONLY the vl updater binaries
+// must still stage them — OPTIONAL accepts both name pairs (R5 removes the
+// nofx pair). Dropping the vl entries must fail THIS test.
+func TestPackagerStagesAnArchiveHoldingOnlyVlUpdaterBinaries(t *testing.T) {
+	src := t.TempDir()
+	for _, p := range []string{"nofx-bin", "LICENSE", "ninjascript/x.cs", "ninjascript/vltrader_tcp_PROTOCOL.md", "web/dist/index.html",
+		"updater/vl-updater", "updater/vl-updater-bootstrap"} {
+		full := filepath.Join(src, p)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte("x"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(src, "deploy"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stage := filepath.Join(t.TempDir(), "stage")
+	if out, err := runScript(t, "deploy/release/package.sh", src, stage, strings.Repeat("e", 40)); err != nil {
+		t.Fatalf("package failed: %v\n%s", err, out)
+	}
+	for _, want := range []string{"updater/vl-updater", "updater/vl-updater-bootstrap"} {
+		if _, err := os.Stat(filepath.Join(stage, want)); err != nil {
+			t.Fatalf("the archive dropped %s: %v", want, err)
+		}
+	}
+}

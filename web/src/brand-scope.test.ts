@@ -4,7 +4,9 @@
 // dual readers by dispatch, not by drift —
 //   deploy/nofx-claim.sh      sha256 99d09313… — VL_SESSION wins over
 //     NOFX_SESSION (the shell twin); the refusal names both keys.
-//   deploy/nofx-db-backup.sh  sha256 5ead69de… — every knob is the shell twin
+//   deploy/nofx-db-backup.sh  sha256 10c0cfbf… — D1-FOLD (DS-105): the
+//     prune also handles vl-*.db.gz beside the nofx-*.db.gz it always pruned
+//     (write side stays nofx until the rename boot; R5 removes the nofx prune).
 //     VL_ → NOFX_ → default; DB/DB_RESEARCH defaults use the install-root rule
 //     ($HOME/vl when present, else $HOME/nofx — never /home/hoang).
 //   deploy/nofx-lock.sh       sha256 bb0b09d5… — the five lock envs are the
