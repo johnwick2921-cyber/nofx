@@ -7,7 +7,7 @@ package api
 // named by the property it pins and carries a positive control.
 //
 // The triage findings M3-RT-F1 and M3-RT-F2 were RED here (gated on
-// NOFX_M3_OPEN_FINDINGS) until the fix commit removed the gate; they are
+// VL_M3_OPEN_FINDINGS) until the fix commit removed the gate; they are
 // now ordinary pins.
 
 import (

@@ -182,7 +182,7 @@ func TestUpdatesRefusalWarnsOncePerRouteAndCategoryThenCounts(t *testing.T) {
 // fails here), then one refusal ⇒ exactly that one pair, at 1, and every
 // other pair still absent.
 func TestUpdatesRefusalSeriesIsAbsentUntilTheFirstRefusal(t *testing.T) {
-	const childEnv = "NOFX_TEST_REFUSAL_SERIES_CHILD"
+	const childEnv = "VL_TEST_REFUSAL_SERIES_CHILD"
 	if os.Getenv(childEnv) != "1" {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestUpdatesRefusalSeriesIsAbsentUntilTheFirstRefusal$", "-test.count=1", "-test.v")
 		cmd.Env = append(os.Environ(), childEnv+"=1")

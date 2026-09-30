@@ -6,9 +6,9 @@
 #      from that exact commit in a THROWAWAY clone — the live install
 #      (~/nofx) is never checked out, never modified, never built over.
 #   2. %h/.config/nofx-updater/env (mode 0600) must exist and set
-#      NOFX_RELEASE_DIR (absolute, OUTSIDE the install — the same containment
+#      VL_RELEASE_DIR (absolute, OUTSIDE the install — the same containment
 #      the worker enforces, internal/updaterworker/releaseroot.go) and
-#      NOFX_CUTOVER_TOKEN (non-empty; never printed here).
+#      VL_CUTOVER_TOKEN (non-empty; never printed here).
 #   3. go build -trimpath, then `go version -m` must report vcs.modified=false
 #      and vcs.revision=<sha> — a dirty or mis-labelled build is refused.
 #   4. The unit template at THAT sha is copied into ~/.config/systemd/user/
@@ -17,7 +17,7 @@
 #      serve refuses root, the bot's cgroup, and a set TZ — this unit avoids
 #      all three by construction.
 #
-# The token: NOFX_CUTOVER_TOKEN is a gate-jwt whose lifetime is 24 HOURS
+# The token: VL_CUTOVER_TOKEN is a gate-jwt whose lifetime is 24 HOURS
 # (auth/auth.go:227). There is NO longer-lived token type — refresh it before
 # each attended install window by re-minting and replacing the line in the env
 # file. This script never prints it (pinned: the deploy test refuses a run
@@ -52,7 +52,7 @@ ENV_FILE="$HOME/.config/nofx-updater/env"
 [ -f "$ENV_FILE" ] || {
   echo "install-updater-worker: REFUSED — $ENV_FILE does not exist." >&2
   echo "  create it (mode 0600, owner you) with exactly two lines (VL_ names win):" >&2
-  echo "    VL_RELEASE_DIR=/absolute/path/outside/vl   (or NOFX_RELEASE_DIR — R5 removes)" >&2
+  echo "    VL_RELEASE_DIR=/absolute/path/outside/vl   (or the pre-rename key — R5 removes)" >&2
   echo "    VL_CUTOVER_TOKEN=<a fresh gate-jwt — 24h lifetime, refresh before each install window>" >&2
   exit 2
 }
@@ -62,18 +62,18 @@ ENV_FILE="$HOME/.config/nofx-updater/env"
 }
 
 # Read the two required values WITHOUT printing them. The VL_ key wins when
-# non-empty; the NOFX_ key is the fallback (R5 removes it).
+# non-empty; the pre-rename key is the fallback (R5 removes it).
 release_dir="$(awk -F= '$1=="VL_RELEASE_DIR"{print $2}' "$ENV_FILE" | tail -1)"
 [ -n "$release_dir" ] || release_dir="$(awk -F= '$1=="NOFX_RELEASE_DIR"{print $2}' "$ENV_FILE" | tail -1)"
 token_ok=no
 grep -Eq '^(VL|NOFX)_CUTOVER_TOKEN=.+' "$ENV_FILE" && token_ok=yes
 { [ -n "$release_dir" ] && [ "$token_ok" = "yes" ]; } || {
-  echo "install-updater-worker: REFUSED — $ENV_FILE must set VL_RELEASE_DIR/NOFX_RELEASE_DIR and VL_CUTOVER_TOKEN/NOFX_CUTOVER_TOKEN (both non-empty)" >&2
+  echo "install-updater-worker: REFUSED — $ENV_FILE must set VL_RELEASE_DIR and VL_CUTOVER_TOKEN (both non-empty)" >&2
   exit 2
 }
 case "$release_dir" in
   /*) : ;;
-  *) echo "install-updater-worker: REFUSED — NOFX_RELEASE_DIR must be an absolute path" >&2; exit 2 ;;
+  *) echo "install-updater-worker: REFUSED — VL_RELEASE_DIR must be an absolute path" >&2; exit 2 ;;
 esac
 # The containment check, on resolved paths, element-wise ("$install"/*) —
 # never a string prefix (releaseroot.go's PathWithin is the worker's own one;
