@@ -8,7 +8,7 @@
 ## Verdict
 
 The plan's three core claims for this slice HOLD at the cited lines, verified [A]. No P0.
-Four P1s, two P2s, three P3s — all are fixes to the plan/dispatch TEXT, none invalidate the
+Three P1s, two P2s, three P3s — all are fixes to the plan/dispatch TEXT, none invalidate the
 design. The highest-risk item is the account.txt dual-read precedence (P1-1): it is the only
 spot in this slice where the rename can silently change WHICH account the AddOn trades.
 
