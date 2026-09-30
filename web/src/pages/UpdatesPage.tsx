@@ -419,7 +419,7 @@ export default function UpdatesPage() {
             type="button"
             disabled={installDisabled || !authz?.ok || installing}
             onClick={doInstall}
-            className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium bg-nofx-gold text-black disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium bg-vl-neo-gold text-black disabled:opacity-50"
             data-testid="update-button"
           >
             {installing && <Loader2 size={15} className="animate-spin" />}
@@ -583,7 +583,7 @@ export default function UpdatesPage() {
                   type="button"
                   onClick={downloadReceipt}
                   disabled={receiptBusy}
-                  className="inline-flex items-center gap-1.5 text-xs text-nofx-gold hover:underline disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 text-xs text-vl-neo-gold hover:underline disabled:opacity-60"
                   data-testid="receipt-link"
                 >
                   {receiptBusy ? (
@@ -656,7 +656,7 @@ export default function UpdatesPage() {
                     type="button"
                     onClick={confirmReloadHistory}
                     disabled={historyReloading}
-                    className="rounded-lg px-3 py-1.5 text-xs font-medium bg-nofx-gold text-black disabled:opacity-50"
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium bg-vl-neo-gold text-black disabled:opacity-50"
                     data-testid="confirm-backfill"
                   >
                     {historyReloading

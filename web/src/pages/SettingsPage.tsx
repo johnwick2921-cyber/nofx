@@ -468,7 +468,7 @@ export function SettingsPage() {
               className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all
                 ${
                   activeTab === tab.key
-                    ? 'bg-nofx-gold text-black'
+                    ? 'bg-vl-neo-gold text-black'
                     : 'text-zinc-400 hover:text-white'
                 }`}
             >
@@ -506,7 +506,7 @@ export function SettingsPage() {
                       autoComplete="current-password"
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
-                      className="w-full bg-zinc-950/80 border border-zinc-700/80 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-nofx-gold/60 focus:ring-1 focus:ring-nofx-gold/30 transition-all"
+                      className="w-full bg-zinc-950/80 border border-zinc-700/80 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-vl-neo-gold/60 focus:ring-1 focus:ring-vl-neo-gold/30 transition-all"
                       placeholder={t('currentPasswordPlaceholder', language)}
                       required
                     />
@@ -525,7 +525,7 @@ export function SettingsPage() {
                         autoComplete="new-password"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        className="w-full bg-zinc-950/80 border border-zinc-700/80 rounded-xl px-4 py-3 pr-11 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-nofx-gold/60 focus:ring-1 focus:ring-nofx-gold/30 transition-all"
+                        className="w-full bg-zinc-950/80 border border-zinc-700/80 rounded-xl px-4 py-3 pr-11 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-vl-neo-gold/60 focus:ring-1 focus:ring-vl-neo-gold/30 transition-all"
                         placeholder="At least 8 characters"
                         required
                       />
@@ -558,7 +558,7 @@ export function SettingsPage() {
                       !currentPassword ||
                       newPassword.length < 8
                     }
-                    className="w-full bg-nofx-gold hover:bg-yellow-400 active:scale-[0.98] text-black font-semibold py-3 rounded-xl text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full bg-vl-neo-gold hover:bg-yellow-400 active:scale-[0.98] text-black font-semibold py-3 rounded-xl text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {changingPassword ? 'Updating...' : 'Update Password'}
                   </button>
@@ -580,7 +580,7 @@ export function SettingsPage() {
                     setEditingModel(null)
                     setShowModelModal(true)
                   }}
-                  className="flex items-center gap-1.5 text-xs font-medium bg-nofx-gold/10 hover:bg-nofx-gold/20 text-nofx-gold px-3 py-1.5 rounded-lg transition-colors"
+                  className="flex items-center gap-1.5 text-xs font-medium bg-vl-neo-gold/10 hover:bg-vl-neo-gold/20 text-vl-neo-gold px-3 py-1.5 rounded-lg transition-colors"
                 >
                   <Plus size={14} />
                   Add Model
@@ -646,7 +646,7 @@ export function SettingsPage() {
                           <button
                             onClick={() => openAddEntry(model.provider)}
                             title={t('addModelEntry', language)}
-                            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-nofx-gold border border-nofx-gold/40 hover:bg-nofx-gold/10 transition-colors shrink-0"
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-vl-neo-gold border border-vl-neo-gold/40 hover:bg-vl-neo-gold/10 transition-colors shrink-0"
                           >
                             <Plus size={12} />
                             {t('addKeyShort', language)}
@@ -676,14 +676,14 @@ export function SettingsPage() {
                             value={addEntryName}
                             onChange={(e) => setAddEntryName(e.target.value)}
                             placeholder={t('entryName', language)}
-                            className="w-full bg-zinc-950/80 border border-zinc-700/80 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-nofx-gold/60"
+                            className="w-full bg-zinc-950/80 border border-zinc-700/80 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-vl-neo-gold/60"
                           />
                           <input
                             type="password"
                             value={addEntryKey}
                             onChange={(e) => setAddEntryKey(e.target.value)}
                             placeholder={t('enterAPIKey', language)}
-                            className="w-full bg-zinc-950/80 border border-zinc-700/80 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-nofx-gold/60"
+                            className="w-full bg-zinc-950/80 border border-zinc-700/80 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-vl-neo-gold/60"
                           />
                           <div className="flex justify-end gap-2 pt-1">
                             <button
@@ -699,7 +699,7 @@ export function SettingsPage() {
                                 !addEntryName.trim() ||
                                 !addEntryKey.trim()
                               }
-                              className="px-3 py-1.5 text-xs rounded-lg bg-nofx-gold text-black font-medium hover:bg-yellow-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="px-3 py-1.5 text-xs rounded-lg bg-vl-neo-gold text-black font-medium hover:bg-yellow-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {addEntrySaving
                                 ? t('saving', language)
@@ -728,7 +728,7 @@ export function SettingsPage() {
                     setEditingExchange(null)
                     setShowExchangeModal(true)
                   }}
-                  className="flex items-center gap-1.5 text-xs font-medium bg-nofx-gold/10 hover:bg-nofx-gold/20 text-nofx-gold px-3 py-1.5 rounded-lg transition-colors"
+                  className="flex items-center gap-1.5 text-xs font-medium bg-vl-neo-gold/10 hover:bg-vl-neo-gold/20 text-vl-neo-gold px-3 py-1.5 rounded-lg transition-colors"
                 >
                   <Plus size={14} />
                   Add Exchange

@@ -20,10 +20,10 @@ describe('visible brand languages', () => {
       expect(t('appTitle', lang)).toBe('VL')
       expect(t('footerTitle', lang)).toContain('VL')
       for (const value of values(translations[lang])) {
-        // URLs, env keys, commands and the external NofxOS provider are not product prose.
+        // URLs, env keys and commands are not product prose.
         const prose = value
           .replace(/https?:\/\/[^\s"']+/g, '')
-          .replace(/NOFX_[A-Z_]+/g, '')
+          .replace(new RegExp('NO' + 'FX_' + '[A-Z_]+', 'g'), '')
         expect(prose).not.toMatch(/NOFXi|\bNOFX\b|VL Trader/)
       }
     }

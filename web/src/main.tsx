@@ -16,7 +16,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         position="top-center"
         duration={2200}
         toastOptions={{
-          className: 'nofx-toast',
+          className: 'vl-neo-toast',
           style: {
             background: '#0b0e11',
             border: '1px solid var(--panel-border)',
