@@ -1,6 +1,7 @@
+names rewritten to vl on 2026-09-30 (VL rename)
 # SUBSYSTEM — THE KNOB REGISTRY AND THE DEMOTION QUEUE
 
-Worktree `/home/hoang/nofx-conform` @ `fb50903f` (base: dev tip). Deployed rev `70af663d`, PID 878451, boot 2026-09-04 08:30:11 CT. All DB reads via `file:/home/hoang/nofx/data/data.db?mode=ro`.
+Worktree `/home/hoang/vl-conform` @ `fb50903f` (base: dev tip). Deployed rev `70af663d`, PID 878451, boot 2026-09-04 08:30:11 CT. All DB reads via `file:/home/hoang/vl/data/data.db?mode=ro`.
 
 **`git log -1` for every report cited:**
 
@@ -284,14 +285,14 @@ Cross-check of the census's companion claim ("Any `[I]` enforced as REJECT", `:1
 ## COMMANDS (all read-only)
 
 ```bash
-cd /home/hoang/nofx-conform
+cd /home/hoang/vl-conform
 grep -o 'Status: Knob[A-Za-z]*' store/knob_registry_table.go | sort | uniq -c
 grep -oP '^\t"\K[^"]+(?=".*KnobLive)' store/knob_registry_table.go | sort   # the 144
 grep -oP 'Status: KnobLive, Consumers: \[\]string\{"\K[^:]+' store/knob_registry_table.go | sort | uniq -c
 grep -rn "bdMaxPullbackFrac" --include=*.go .                              # 1 hit = the definition
 grep -rn "SwingPointLevels" --include=*.go . | grep -v _test.go            # 3 production seats
-sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" \
+sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro" \
   "select session,count(*),max(created_at) from plans where created_at>='2026-08-28' group by session;"
-sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" \
+sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro" \
   "select config from strategies where id='a5b7662e-7bf7-49bb-9f09-7efa48f95ac8';"
 ```

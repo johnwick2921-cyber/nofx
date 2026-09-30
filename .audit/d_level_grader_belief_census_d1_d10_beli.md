@@ -1,6 +1,7 @@
+names rewritten to vl on 2026-09-30 (VL rename)
 even# SUBSYSTEM D — LEVEL GRADER · research-conformance re-check
 
-**Snapshot** 2026-09-04 08:46:27 CT · deployed rev `70af663d` (PID 878451, booted 08:30:11 CT) · worktree `/home/hoang/nofx-conform` @ `fb50903f` (base dev `492d2067`) · **READ-ONLY**, DB opened `mode=ro` only.
+**Snapshot** 2026-09-04 08:46:27 CT · deployed rev `70af663d` (PID 878451, booted 08:30:11 CT) · worktree `/home/hoang/vl-conform` @ `fb50903f` (base dev `492d2067`) · **READ-ONLY**, DB opened `mode=ro` only.
 
 Report pins (`git log -1 -- <path>`):
 
@@ -42,7 +43,7 @@ day_plan.proximity_filter_atr  = 1      (boot line says "retuned 0.3")
 
 Live corroboration, independent of the DB:
 
-* `data/nofx_2026-09-04.log` — `kernel/levels_score.go:575  🗺️ seated 12/526 in-band levels (proximity band ±510pt, 12 of them retained)` — 81 such lines today at cap **12**, 76 at cap **24** (the `eff*2` pre-seat pool), 5 at cap 4 (the planner's HTF-zone sub-table, `trader/auto_trader_planner.go:2154` passes literal 4).
+* `data/vl_2026-09-04.log` — `kernel/levels_score.go:575  🗺️ seated 12/526 in-band levels (proximity band ±510pt, 12 of them retained)` — 81 such lines today at cap **12**, 76 at cap **24** (the `eff*2` pre-seat pool), 5 at cap 4 (the planner's HTF-zone sub-table, `trader/auto_trader_planner.go:2154` passes literal 4).
 * `candidate_pool` (8 reads, 2026-09-04 00:30:54 → 08:32:00 CT): **12 seated of 24** every read except 01:30:48 (11).
 * Band arithmetic: `band = proximityK × DailyRangeProxy` (`kernel/levels_score.go:417`, `kernel/levels_assemble.go:291`). The proxy is the mean completed session-day H−L in the bar window; with a ~2000-bar 1m window that is exactly the prior session day. From `bars` (MNQ 1m): session-day **2026-09-03 range = 510.00 pt** → today's band **±510pt** ⇒ **k = 1.0**. Cross-check: session-day 2026-09-02 range = 285.25 → 09-03's band `±285pt` ⇒ k = 1.0 again. At k=0.3 today's band would be ±153pt.
 
@@ -66,7 +67,7 @@ No gate, weight, filter, prompt line or grade reads `touch_outcomes` or `candida
 
 ## 1. THE RULE TABLE — every ladder/weight with its value NOW
 
-All `file:line` are `/home/hoang/nofx-conform/…` and identical to deployed `70af663d`.
+All `file:line` are `/home/hoang/vl-conform/…` and identical to deployed `70af663d`.
 "Prod callers" = the 9 production call sites that reach `scoreLevelsPool`: `kernel/engine_analysis.go:410`, `:468`; `trader/auto_trader_planner.go:714`, `:2132`, `:2154`, `:2167`; `trader/auto_trader_levelstate.go:57`, `:200`; `trader/auto_trader_watcher.go:324`.
 
 | # | rule | file:line | resolved value NOW | label | grounding (report:line) | live effect | conforms? |
@@ -170,7 +171,7 @@ Only **3 of 18 kinds** clear n=30 after 2 days of live recording. VWAP's 0.6143 
 
 The ordinal-decay hypothesis (H8 in `level-kind-replay.md`) **cannot be tested at all** on the live table: only ordinal 1 clears the floor. Nothing here distinguishes 0.50 anywhere.
 
-CSVs (frozen at `id ≤ 424`): `/home/hoang/nofx-conform/docs/superpowers/reports/2026-09-04-research-conformance-data/D5b-touch_outcomes-by-kind.csv`, `-by-session.csv`, `-by-ordinal.csv`, plus `D5b-candidate_pool-by-kind.csv`.
+CSVs (frozen at `id ≤ 424`): `/home/hoang/vl-conform/docs/superpowers/reports/2026-09-04-research-conformance-data/D5b-touch_outcomes-by-kind.csv`, `-by-session.csv`, `-by-ordinal.csv`, plus `D5b-candidate_pool-by-kind.csv`.
 
 `candidate_pool` (192 rows at dispatch time, still 192 at 08:46): 8 reads, 24 candidates each, 12 seated. Distribution of the cut: OB 60 candidates / 6 seated · DEMAND 30/13 · SUPPLY 16/1 — the zone family supplies 106 of 192 candidates (55%) and takes 20 of 96 seats (21%).
 
@@ -219,19 +220,19 @@ Every Go reference to the two tables or their stores, excluding `_test.go`:
 ## 6. COMMANDS USED (reproducible, read-only)
 
 ```
-cd /home/hoang/nofx-conform
+cd /home/hoang/vl-conform
 git show ee64a494:kernel/levels_score.go | md5sum
 git show 70af663d:kernel/levels_score.go | md5sum
 md5sum kernel/levels_score.go
 git log -12 --format='%h %ci %s' -- kernel/levels_score.go
 git diff --stat 70af663d -- kernel/levels_score.go kernel/levels_swing.go kernel/levels_role.go
 
-sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" \
+sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro" \
   "select json_extract(config,'\$.day_plan') from strategies where id='a5b7662e-7bf7-49bb-9f09-7efa48f95ac8';"
-sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" \
+sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro" \
   "select date(datetime(open_time_ms/1000,'unixepoch','+2 hours')) d, round(max(h)-min(l),2)
    from bars where symbol='MNQ' and tf='1m' group by 1;"     -- session-day roll = 17:00 CT
-grep -h "proximity band" /home/hoang/nofx/data/nofx_2026-09-04.log | sed 's/.*proximity band/proximity band/' | sort | uniq -c
+grep -h "proximity band" /home/hoang/vl/data/vl_2026-09-04.log | sed 's/.*proximity band/proximity band/' | sort | uniq -c
 ```
 
 ---

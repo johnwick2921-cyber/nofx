@@ -1,9 +1,10 @@
+names rewritten to vl on 2026-09-30 (VL rename)
 > Wait — I need to change the framing on this one before the table. The dispatch asks "what is ON right now". The measured answer is that **every prop-firm guardrail in this subsystem is off, and every size cap that "REMAINS enforced" is structurally unable to bind at size 1**. The only entry cap that has ever refused a trade in 20 days of logs is the day-plan per-session cap, which nobody's research names. That reframes D9 from "is the 3-trade cap inert?" to "the guardrail layer has no teeth at all, and the boot WARN's reassuring second clause is true-but-empty."
 
 # SUBSYSTEM — GUARDRAILS / SIZING · D9 · read-only, 2026-09-04
 
-**Resolved from:** running binary PID 878451 (`/home/hoang/nofx/nofx-bin`, rev `70af663d`), boot 8 at 09-04 08:30:11 CT; DB `file:/home/hoang/nofx/data/data.db?mode=ro`; log files `/home/hoang/nofx/data/nofx_2026-08-16.log … nofx_2026-09-04.log` (20 files).
-**Source tree:** `/home/hoang/nofx-conform` @ `fb50903f` (claim commit on dev tip `492d2067`).
+**Resolved from:** running binary PID 878451 (`/home/hoang/vl/vl-bin`, rev `70af663d`), boot 8 at 09-04 08:30:11 CT; DB `file:/home/hoang/vl/data/data.db?mode=ro`; log files `/home/hoang/vl/data/vl_2026-08-16.log … vl_2026-09-04.log` (20 files).
+**Source tree:** `/home/hoang/vl-conform` @ `fb50903f` (claim commit on dev tip `492d2067`).
 **Auth-gated and NOT read this session:** `/api/config/resolved`, `/api/risk/gate-blocks`, `/api/risk/status` — all return `{"error":"Missing Authorization header"}`. Gate-block counters are **in-memory only** (`telemetry/gate_blocks.go:38-45`, a mutex-guarded map — no DB table), so there is no read-only substitute; the log census in M3 is what replaces them.
 
 ## Report provenance (`git log -1 -- <path>`)
@@ -53,7 +54,7 @@ ABSENT: consecutive_loss_halt · consistency_enabled/consistency_max_day_pct ·
 day_plan.sessions max_trades = NY 10 / ASIA 7 / LONDON 10
 ```
 
-Env (`/home/hoang/nofx/.env`, variable **names** only — 27 keys): `STAGE_A_CONTRACT_CAP`, `RISK_MAX_DAILY_LOSS_USD`, `RISK_MAX_CONCURRENT_TRADES`, `RISK_MAX_NOTIONAL_USD`, `NT_ALLOWED_ACCOUNTS` are **all unset** → code defaults govern (`config/config.go:175,176,188` = 500 / 2 / 50 000; `kernel/risk_limits.go:305` StageA = 1). `/proc/878451/environ` carries none of them either (it is exec-time only; godotenv `os.Setenv` does not appear there, so this confirms the launch env, not the file). **[A]**
+Env (`/home/hoang/vl/.env`, variable **names** only — 27 keys): `STAGE_A_CONTRACT_CAP`, `RISK_MAX_DAILY_LOSS_USD`, `RISK_MAX_CONCURRENT_TRADES`, `RISK_MAX_NOTIONAL_USD`, `NT_ALLOWED_ACCOUNTS` are **all unset** → code defaults govern (`config/config.go:175,176,188` = 500 / 2 / 50 000; `kernel/risk_limits.go:305` StageA = 1). `/proc/878451/environ` carries none of them either (it is exec-time only; godotenv `os.Setenv` does not appear there, so this confirms the launch env, not the file). **[A]**
 
 Live equity, latest snapshot `trader_equity_snapshots` id 37779, 2026-09-04 13:50:09Z: **$51,906.50**, `position_count=0`. **[A]**
 
@@ -62,7 +63,7 @@ Live equity, latest snapshot `trader_equity_snapshots` id 37779, 2026-09-04 13:5
 ```
 08:30:11 trader/auto_trader.go:43  🧾 ledger boot: … · guardrails=master=OFF (soft-audit only) ·
                                     … trailing=2.0×ATR14 arm=after_breakeven (source: studio) …
-08:30:11 nofx/main.go:335          🛑 exits: stop=max(anchor+clr, 1.5×ATR5m) · anchor_max=3.0×ATR5m ·
+08:30:11 vl/main.go:335          🛑 exits: stop=max(anchor+clr, 1.5×ATR5m) · anchor_max=3.0×ATR5m ·
                                     BE=off · trail=off · size=1 · re-arm-after-sweep=on (0B)
 08:30:11 kernel/risk_limits.go:172 Plan 3 T21 / Strategy Studio: daily window reset to CME session-day 2026-09-03
 08:30:11 → 08:46:10 kernel/engine_analysis.go:173  ⚠️ Strategy Studio: risk guardrails master OFF …
@@ -189,7 +190,7 @@ Zero clamp log lines in 20 days corroborates this. The sentence reassures about 
 2. **[A] Two persisted, UI-rendered knobs are read by nothing.** `max_contracts_enabled=false` and `notional_cap_enabled=false` are parsed into `store/strategy.go:1741,1748` and referenced only by `kernel/risk_config_truth_test.go:50` and `trader/caps_always_on_test.go:15-16`. The code even documents `NotionalCapEnabled` as *"Deprecated (6.4 ruling B) — parse-only"*. An owner toggling them sees nothing change.
 3. **[A] The drawdown auto-close cannot arm on MNQ.** `positionPnLPct` multiplies by the position's `leverage`, and NT8 hardcodes `"leverage": 1.0` (`trader/ninjatrader/tcp_trader.go:933`). So `currentPnLPct > 5.0` demands a **5 % raw price move in your favour** — ~1 450 MNQ points, ~$2 900 at qty 1. Measured max MFE across n=251 closed rows (65 with MFE>0) is **156.75 pt = 0.533 %**, 9.4× short. 0 fires, 0 near-miss lines (`📊 Drawdown monitoring:` also 0). This is an [I] invented rule with real teeth on paper and none in fact.
 4. **[A] `/api/risk/status` would report the wrong numbers.** `api/handler_risk.go:191-198` builds its response from `kernel.LoadRiskLimitsFromConfig()` — i.e. the **env** limits 500 / 2 / 50 000 — and sets `KillSwitchArmed: limits.MaxDailyLossUSD > 0` = **true**. A reader of that endpoint would see a $500 daily-loss kill switch "armed" while the enforced state is master-OFF and `daily_loss_enabled=false`. I could not call it (no Authorization header); this is read from code.
-5. **[A] D44 re-verified at boot 8:** the same boot prints `🛑 exits: … BE=off · trail=off` (`nofx/main.go:335`) and `🧾 ledger boot: … trailing=2.0×ATR14 arm=after_breakeven (source: studio)` (`trader/auto_trader_pause.go:201`, resolved from `trailingConfig(rc)` which sees `trailing_enabled=true`). Two boot lines, one boot, opposite claims — two-day audit `:930`.
+5. **[A] D44 re-verified at boot 8:** the same boot prints `🛑 exits: … BE=off · trail=off` (`vl/main.go:335`) and `🧾 ledger boot: … trailing=2.0×ATR14 arm=after_breakeven (source: studio)` (`trader/auto_trader_pause.go:201`, resolved from `trailingConfig(rc)` which sees `trailing_enabled=true`). Two boot lines, one boot, opposite claims — two-day audit `:930`.
 6. **[B] Split-arm capacity is 2, not the boot line's "capacity=1".** `kernel/levels_volume_boot.go:26` prints the **literal** string *"split legs > capacity rejected (capacity=1 unless max_contracts_per_order raises)"*. `armLegCapacity` (`trader/armed_executor.go:678-683`) → `splitLegCapacity(2)` → **2**, so a 2-leg split arm is admissible on this strategy, and each leg places qty 1 → up to **2 contracts** on an account whose boot line says `size=1`. `oneLiveArmGuard` refuses an arm while a *position* is open, but two legs authored while flat are both resting orders, not positions. Not observed on tape (0 split arms in the window), which is why this is [B] and not [A].
 
 ---
@@ -200,13 +201,13 @@ Zero clamp log lines in 20 days corroborates this. The sentence reassures about 
 # bound strategy resolved config (never LIMIT 1)
 python3 - <<'PY'
 import json,sqlite3
-c=sqlite3.connect('file:/home/hoang/nofx/data/data.db?mode=ro',uri=True)
+c=sqlite3.connect('file:/home/hoang/vl/data/data.db?mode=ro',uri=True)
 cfg=json.loads(list(c.execute("select config from strategies where id='a5b7662e-7bf7-49bb-9f09-7efa48f95ac8'"))[0][0])
 print(json.dumps(cfg['ai_config']['risk_control'],indent=2))
 PY
 
 # entries per CME session-day (17:00 CT roll)
-sqlite3 -header -column "file:/home/hoang/nofx/data/data.db?mode=ro" "
+sqlite3 -header -column "file:/home/hoang/vl/data/data.db?mode=ro" "
 select date(datetime(entry_time/1000,'unixepoch','-5 hours','-17 hours')) session_day,
        count(*) entries,
        min(datetime(entry_time/1000,'unixepoch','-5 hours')) first_ct,
@@ -216,7 +217,7 @@ where trader_id='8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_17812462
   and entry_time >= strftime('%s','2026-08-29')*1000 group by 1 order by 1;"
 
 # MFE ceiling vs the 5% drawdown-close threshold
-sqlite3 -header -column "file:/home/hoang/nofx/data/data.db?mode=ro" "
+sqlite3 -header -column "file:/home/hoang/vl/data/data.db?mode=ro" "
 select count(*) n_closed, sum(case when mfe is not null and mfe>0 then 1 else 0 end) n_mfe_pos,
        round(max(mfe),2) max_mfe_pts, round(max(mfe*100.0/entry_price),4) max_mfe_pct
 from trader_positions where trader_id='8d5c8af5_…' and status='CLOSED' and entry_price>0;"
@@ -226,15 +227,15 @@ for p in "guardrail WOULD have tripped" "Strategy Studio daily guardrail tripped
          "concurrent-position gate tripped" "Already at max positions" "exceeds max" \
          "consecutive-loss halt" "blackout window active" "consistency rule" \
          "not tradeable" "Drawdown close position condition triggered" "trade cap reached"; do
-  printf "%-45s %s\n" "$p" "$(grep -h "$p" /home/hoang/nofx/data/nofx_*.log | wc -l)"; done
+  printf "%-45s %s\n" "$p" "$(grep -h "$p" /home/hoang/vl/data/vl_*.log | wc -l)"; done
 
 # boot-8 resolved lines from the running process
-awk '$1=="09-04" && $2>="08:29:00" && $2<="08:31:30"' /home/hoang/nofx/data/nofx_2026-09-04.log
+awk '$1=="09-04" && $2>="08:29:00" && $2<="08:31:30"' /home/hoang/vl/data/vl_2026-09-04.log
 ```
 
 ## 8. Files written (worktree only)
 
-- `/home/hoang/nofx-conform/docs/superpowers/reports/2026-09-04-research-conformance-data/guardrails-sizing-rules.csv` — 18 rule rows in the dispatch's column shape
-- `/home/hoang/nofx-conform/docs/superpowers/reports/2026-09-04-research-conformance-data/guardrails-d9-measurements.md` — M1–M6 raw measurements behind every number above
+- `/home/hoang/vl-conform/docs/superpowers/reports/2026-09-04-research-conformance-data/guardrails-sizing-rules.csv` — 18 rule rows in the dispatch's column shape
+- `/home/hoang/vl-conform/docs/superpowers/reports/2026-09-04-research-conformance-data/guardrails-d9-measurements.md` — M1–M6 raw measurements behind every number above
 
-No file in `/home/hoang/nofx` was written, edited, or checked out.
+No file in `/home/hoang/vl` was written, edited, or checked out.

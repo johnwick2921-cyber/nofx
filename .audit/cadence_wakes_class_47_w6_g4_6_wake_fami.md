@@ -1,8 +1,9 @@
-> **Note on this deliverable.** This is subagent report content returned as text, per the dispatch's OUTPUT contract. Two data fragments were written to `/home/hoang/nofx-conform/docs/superpowers/reports/2026-09-04-research-conformance-data/` (CSVs only — no report .md).
+names rewritten to vl on 2026-09-30 (VL rename)
+> **Note on this deliverable.** This is subagent report content returned as text, per the dispatch's OUTPUT contract. Two data fragments were written to `/home/hoang/vl-conform/docs/superpowers/reports/2026-09-04-research-conformance-data/` (CSVs only — no report .md).
 
 # CADENCE / WAKES — research-conformance re-check
 
-Source tree `/home/hoang/nofx-conform` @ `fb50903f` (claim commit on `docs/research-conformance-0904`, base = dev tip `492d2067`). Running binary rev `70af663d`, PID 878451, booted 2026-09-04 08:30:09 CT. Measurement window closes 08:49:25 CT. All DB reads via `sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro"`. **[A]** unless marked.
+Source tree `/home/hoang/vl-conform` @ `fb50903f` (claim commit on `docs/research-conformance-0904`, base = dev tip `492d2067`). Running binary rev `70af663d`, PID 878451, booted 2026-09-04 08:30:09 CT. Measurement window closes 08:49:25 CT. All DB reads via `sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro"`. **[A]** unless marked.
 
 ## `git log -1` for every report cited
 
@@ -20,10 +21,10 @@ INDEX.md has **no wake entry** (`grep -ni wake` → one unrelated line, `INDEX.m
 
 ## The full boot line, read from the log (not the constant)
 
-`/home/hoang/nofx/data/nofx_2026-09-04.log:3853`:
+`/home/hoang/vl/data/vl_2026-09-04.log:3853`:
 
 ```
-09-04 08:30:11 [INFO] nofx/main.go:340 ⏱ wakes: cutoff=25m(enforce) cooldown=30m(enforce,
+09-04 08:30:11 [INFO] vl/main.go:340 ⏱ wakes: cutoff=25m(enforce) cooldown=30m(enforce,
 fast-market≥1.5×ATR exempt) cross-session=on stale-arm-expiry=on (class 47) — cutoffs govern
 LEVEL_EVENT/structure_mss wakes ONLY; scheduled reads, death re-plans and owner resets are
 untouched; the cutoff is NOT exempted by a fast market
@@ -42,7 +43,7 @@ Producer: `trader/class47_wake_cadence.go:220-225`, called from `main.go:340` (1
 | W3 | scheduled read NY | `kernel/session_registry.go:108` + live registry | `read_ct=08:00 CT`, window 08:30→14:45 | [O] | knob-census.md:100 | gate → authors v1 | yes | 1 — `auto_trader_planner.go:206` |
 | W4 | wake trigger **level_event** | `trader/auto_trader_wake_levels.go:376` | ON; 6 sub-toggles; ≤1 candidate/cycle | **[T] weak** | belief-census.md:87 (E5 — "52 re-plans/7 days, 7 ever armed") | **full REPLAN trigger, budget-free** | **NO** — census demotion queue #3 (`belief-census.md:132`) says *demote to advisory until n improves*; live it is still a full replan trigger | 1 — `auto_trader_planner.go:347` (+ `:274`, `:282` for dormant / no_trade rows) |
 | W5 | wake trigger **structure_mss** | `trader/auto_trader_transition.go:206` | ON; dedupe + `wake_min_interval_min` only. **No cutoff, no cooldown, no cross-session defer, no counters** | [I] | verify-class47-mss-wake-ungoverned.md:1-3 (verdict CONFIRMED) | full REPLAN trigger, budget-free | **NO** — boot line asserts the cutoffs govern it; the code applies none | 1 — `auto_trader_planner.go:341` |
-| W6 | **wake cutoff** (minutes to session flat) | `trader/class47_wake_cadence.go:52` (`WakeCutoffMinDefault`), resolver `:61` | **25 min** — `WAKE_CUTOFF_MIN` absent from `/home/hoang/nofx/.env` | [O] (owner ruling, `class47_wake_cadence.go:30`) | level-event-wake-audit.md:117-124 — N derived = 15 (last-entry) + p90 planner 9.3 min (n=255 calls) ≈ 25 | **REJECT** (wake returns; counter + WARN line) | yes on the number (25 = 25); **NO on the promotion basis** — see Drift D3 | 1 — `auto_trader_wake_levels.go:316` |
+| W6 | **wake cutoff** (minutes to session flat) | `trader/class47_wake_cadence.go:52` (`WakeCutoffMinDefault`), resolver `:61` | **25 min** — `WAKE_CUTOFF_MIN` absent from `/home/hoang/vl/.env` | [O] (owner ruling, `class47_wake_cadence.go:30`) | level-event-wake-audit.md:117-124 — N derived = 15 (last-entry) + p90 planner 9.3 min (n=255 calls) ≈ 25 | **REJECT** (wake returns; counter + WARN line) | yes on the number (25 = 25); **NO on the promotion basis** — see Drift D3 | 1 — `auto_trader_wake_levels.go:316` |
 | W7 | **wake cooldown** (since last *wake-authored* version) | `trader/class47_wake_cadence.go:59`, resolver `:62` | **30 min** — `WAKE_COOLDOWN_MIN` absent from `.env` | **[I]** | **none found.** level-event-wake-audit.md:106-135 proposes only P1 (cutoff) and P2 (stream defer). `:121-122` names 30 and *declines* it ("the arm-lead sample is n=6 and version-contaminated, so 25 is what the evidence carries") | **REJECT** (wake returns) | **NO** — no report derives a 30 m wake-authored cooldown; the rule was invented alongside the ruling | 1 — `auto_trader_wake_levels.go:336` |
 | W8 | fast-market cooldown exemption | `trader/class47_wake_cadence.go:164-166` (`FastMarketBypass`), threshold `trader/auto_trader_loop.go:80-87` | **≥1.5×ATR5m** — `FAST_MARKET_ATR` absent from `.env` | **[I]** | knob-census.md:31 (`FAST_MARKET_ATR` **1.5** ×ATR5m, `auto_trader_loop.go:86`, label **[I]**) | bypass — waives the **cooldown only**; the cutoff is never waived (`class47_wake_cadence.go:151-154`) | yes (1.5 = 1.5) | 1 — `auto_trader_wake_levels.go:299` |
 | W9 | **cross-session claim** (stream defer) | `trader/class47_wake_cadence.go:106-116` (`anyPlannerStreamOpen`), gate `auto_trader_wake_levels.go:353` | **on** — unconditional, no knob | [R] | level-event-wake-audit.md:129-135 (P2: "a process-wide 'a planner stream is open' flag … must NOT apply to scheduled reads") | defer — wake returns, **dedupe key deliberately not consumed** (`:351-352`) so the event re-tries next cycle | yes; scheduled reads correctly exempt (`class47_wake_cadence.go:102-105`) | 1 — `auto_trader_wake_levels.go:353` |
@@ -119,7 +120,7 @@ The 15 versions, by id: `2026-08-28:NY` v5 (`filled#10`,`cancelled#11`), v6 (`fi
 
 ## 4. MEASURED SINCE BOOT 8 (2026-09-04 08:30:11 → 08:49:25 CT, **19 m 14 s**)
 
-Source `/home/hoang/nofx/data/nofx_2026-09-04.log`, sliced at the `BOOT INTEGRITY OK … 70af663d` line (log line 3812).
+Source `/home/hoang/vl/data/vl_2026-09-04.log`, sliced at the `BOOT INTEGRITY OK … 70af663d` line (log line 3812).
 
 | Event | n | Detail |
 |---|---|---|
@@ -146,7 +147,7 @@ Source `/home/hoang/nofx/data/nofx_2026-09-04.log`, sliced at the `BOOT INTEGRIT
 
 The A24 reasoning for that (`class47_wake_cadence.go:132-135` — an unresolved value must not manufacture a skip out of a zero) is sound. The consequence is not obviously intended: **the cooldown never protects a freshly-authored scheduled/owner/death plan.** The 30-minute drumbeat the class-47 comment complains about (`:21-25`, "NY produced 12 plan versions on that pattern") can restart within seconds of every session read. Worth an owner ruling on whether the cooldown should measure from the last plan version of *any* kind.
 
-### Cross-boot comparison (grouped by the **in-line** date stamp, not the filename — the log file is named for the process start day, so LONDON 02:00–07:38 CT of 09-04 lives inside `nofx_2026-09-03.log`)
+### Cross-boot comparison (grouped by the **in-line** date stamp, not the filename — the log file is named for the process start day, so LONDON 02:00–07:38 CT of 09-04 lives inside `vl_2026-09-03.log`)
 
 | Calendar day (CT) | level wake FIRED | skipped min-interval | skipped cutoff | skipped cooldown | stream defers | fast-market bypasses | WARN-first `would_skip` |
 |---|---|---|---|---|---|---|---|
@@ -290,26 +291,26 @@ The live `system_config.session_registry` has **`"enabled": false` for ASIA and 
 
 ```bash
 # Boot slice
-grep -n "BOOT INTEGRITY OK" /home/hoang/nofx/data/nofx_2026-09-04.log      # → line 3812 = boot 8
-tail -n +3812 /home/hoang/nofx/data/nofx_2026-09-04.log > boot8.log
+grep -n "BOOT INTEGRITY OK" /home/hoang/vl/data/vl_2026-09-04.log      # → line 3812 = boot 8
+tail -n +3812 /home/hoang/vl/data/vl_2026-09-04.log > boot8.log
 
 # Wake events, grouped by the IN-LINE date stamp (NOT the filename)
-cd /home/hoang/nofx/data
-grep -hE "⏱ wake SKIPPED: [0-9]+ min to flat" nofx_2026-09-0*.log | grep -oE "^09-[0-9]{2}" | sort | uniq -c
-grep -hE "⏱ wake SKIPPED: cooldown"           nofx_2026-09-0*.log | grep -oE "^09-[0-9]{2}" | sort | uniq -c
-grep -hF "waking the planner (W6, 5th wake-up)"   nofx_2026-09-0*.log | grep -oE "^09-[0-9]{2}" | sort | uniq -c
-grep -hF "waking the planner (G4.6, 4th wake-up)" nofx_2026-09-0*.log | grep -oE "^09-[0-9]{2}" | sort | uniq -c
+cd /home/hoang/vl/data
+grep -hE "⏱ wake SKIPPED: [0-9]+ min to flat" vl_2026-09-0*.log | grep -oE "^09-[0-9]{2}" | sort | uniq -c
+grep -hE "⏱ wake SKIPPED: cooldown"           vl_2026-09-0*.log | grep -oE "^09-[0-9]{2}" | sort | uniq -c
+grep -hF "waking the planner (W6, 5th wake-up)"   vl_2026-09-0*.log | grep -oE "^09-[0-9]{2}" | sort | uniq -c
+grep -hF "waking the planner (G4.6, 4th wake-up)" vl_2026-09-0*.log | grep -oE "^09-[0-9]{2}" | sort | uniq -c
 
 # Counters
-sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" \
+sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro" \
   "select key,value from system_config where key like '%wake%' or key like '%arm%super%' order by key;"
 
 # Trigger census
-sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" \
+sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro" \
   "select trigger_reason,count(*),min(date(created_at,'-5 hours')),max(date(created_at,'-5 hours')) from plans group by 1;"
 
 # Live day_plan (resolved via the resolvers, not the file defaults)
-sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" \
+sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro" \
   "select config from strategies where id='a5b7662e-7bf7-49bb-9f09-7efa48f95ac8';" | python3 -m json.tool
 
 # D1 proof
@@ -323,7 +324,7 @@ git log --oneline origin/fix/wake-predicate --not origin/dev   # empty → fully
 
 ## Fragments written
 
-- `/home/hoang/nofx-conform/docs/superpowers/reports/2026-09-04-research-conformance-data/cadence-wakes-rules.csv` — the 21-row rule table.
-- `/home/hoang/nofx-conform/docs/superpowers/reports/2026-09-04-research-conformance-data/cadence-wakes-measurements.csv` — every count above with its n and note.
+- `/home/hoang/vl-conform/docs/superpowers/reports/2026-09-04-research-conformance-data/cadence-wakes-rules.csv` — the 21-row rule table.
+- `/home/hoang/vl-conform/docs/superpowers/reports/2026-09-04-research-conformance-data/cadence-wakes-measurements.csv` — every count above with its n and note.
 
-Nothing was written, edited, checked out or reset in `/home/hoang/nofx`. DB opened `mode=ro` only.
+Nothing was written, edited, checked out or reset in `/home/hoang/vl`. DB opened `mode=ro` only.
