@@ -923,12 +923,12 @@ const coinSource: KnobSpec[] = [
   {
     label: 'Source type',
     where: 'Strategy → Coin source → Source Type',
-    what: 'Which symbol universe the engine trades from: static (the list below) | hyper_all (Hyperliquid all markets) | hyper_main (Hyperliquid main markets). An empty stored value reads "static".',
+    what: 'Which symbol universe the engine trades from: static (the list below) | hyper_all (Hyperliquid all markets) | hyper_main (Hyperliquid main markets) | mixed (hyper_all and hyper_main together — each enabled half contributes its coins, labelled by source). An empty stored value reads "static".',
     trader:
       'The engine fetches candidates ONLY from the chosen source; static is the fallback list inside every branch.',
     consumer:
-      'kernel/engine.go — the SourceType switch over the strategyConfigSchema enum (static / hyper_all / hyper_main); default "static" when empty.',
-    range: 'static | hyper_all | hyper_main',
+      'kernel/engine.go — the SourceType switch over the strategyConfigSchema enum (static / hyper_all / hyper_main / mixed); default "static" when empty.',
+    range: 'static | hyper_all | hyper_main | mixed',
     systemDefault: 'static (empty string reads static)',
     recommended:
       'static for CME futures (MNQ); crypto per your data-source preference.',
