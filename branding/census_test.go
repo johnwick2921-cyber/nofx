@@ -100,9 +100,6 @@ var censusTable = map[string][]censusEntry{
 	"deploy/{OLD}_db_backup_test.go": {
 		{count: 17, phase: "R5", reason: "transitional — re-pinned at final"},
 	},
-	"internal/updaterwire/resume_census_test.go": {
-		{count: 17, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
 	"docs/superpowers/reports/2026-09-10-scenario-level-identity-data/remote-ci-setup-failures.txt": {
 		{count: 16, phase: "R4", reason: "transitional — re-pinned at final"},
 	},
@@ -723,13 +720,13 @@ var censusTable = map[string][]censusEntry{
 	},
 }
 
-// Ceiling = sum of allowed counts at the R1b merge (1550).
-const censusCeiling = 1550
+// Ceiling = sum of allowed counts at the R1b merge (1533).
+const censusCeiling = 1533
 
 func TestCensusGuard(t *testing.T) {
 	tok := "no" + "fx" // runtime assembly — never the literal
-	// expand() the table keys once: table keys hold the {OLD} placeholder,
-	// real paths hold the literal.
+	// expand() the table keys once: table keys hold the {OLD}
+	// placeholder, real paths hold the literal.
 	expandedTable := make(map[string][]censusEntry, len(censusTable))
 	for k, es := range censusTable {
 		expandedTable[expand(k)] = es
