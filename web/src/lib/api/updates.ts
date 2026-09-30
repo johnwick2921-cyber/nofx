@@ -171,12 +171,8 @@ export function parseInstallAuthorization(
   } catch {
     return {
       ok: false,
-<<<<<<< HEAD
-      error: 'not JSON — paste the one line vl-updater-bootstrap authorize prints',
-=======
       error:
         'not JSON — paste the one line vl-updater-bootstrap authorize prints',
->>>>>>> c59dc5270
     }
   }
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
