@@ -6,8 +6,13 @@
 # writer, and a pid that went stale when its session was resumed. Every pin
 # below is one of those, or the rule that makes them un-representable.
 set -uo pipefail
+# (d) run from anywhere: the wrappers below resolve by $PWD, so resolve this
+# file's directory ONCE (a second dirname walk after the cd fails) and pin the
+# cwd to it. The repo root used to produce 11 false FAILs.
+SDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" || { echo "cannot resolve the suite dir" >&2; exit 1; }
+cd "$SDIR"
 
-LOCK_SH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/vl-lock.sh"
+LOCK_SH="$SDIR/vl-lock.sh"
 PASS=0; FAIL=0
 ok()   { PASS=$((PASS+1)); printf '  ok   %s\n' "$1"; }
 bad()  { FAIL=$((FAIL+1)); printf '  FAIL %s\n     %s\n' "$1" "${2:-}"; }
@@ -25,7 +30,18 @@ if [ ! -f "$LOCK_SH" ]; then
   exit 1
 fi
 
-WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
+WORK="$(mktemp -d)"
+cleanup() {
+  # keepers poll for the dir; a plain rm leaves them looping on a missing lock.
+  # Kill every keeper group the suite spawned BEFORE removing the dirs.
+  find "$WORK" -name keeper.pid 2>/dev/null | while read -r kp; do
+    pg="$(cat "$kp" 2>/dev/null || true)"
+    [ -n "$pg" ] && kill -KILL -- "-$pg" 2>/dev/null || true
+  done
+  sleep 0.2
+  rm -rf "$WORK"
+}
+trap cleanup EXIT
 o=no; o=${o}fx   # the pre-rename prefix, assembled at runtime (never written literal)
 W=no; W=${W}fx   # same prefix for the wrapper file names
 mkdir -p "$WORK/home"; export HOME="$WORK/home"   # OTHER_HOME is $HOME/vl-main.lock.d; never the real HOME
@@ -499,24 +515,41 @@ echo "== one home, THREE copies: this tool, the wrapper, and a pre-rename copy =
 # and whichever copy wins, every copy must read the same holder.
 KCONT="$WORK/cont.lock.d"
 WRAP="$PWD/$W-lock.sh"
-git show e6c8ada29:deploy/$W-lock.sh > "$WORK/legacy-lock.sh" 2>/dev/null \
+git show 9d52f5dc6:deploy/$W-lock.sh > "$WORK/legacy-lock.sh" 2>/dev/null \
   || cp "$LOCK_SH" "$WORK/legacy-lock.sh"
 chmod +x "$WORK/legacy-lock.sh"
 VL_LOCK_DIR="$KCONT" bash "$LOCK_SH" acquire sess-1 'three copies, one home' 60 >/dev/null
 has   "the wrapper reads the same holder"   "$(VL_LOCK_DIR="$KCONT" "$WRAP" status 2>&1)" "sess-1"
-hasi  "and the pre-rename copy too"         "$(VL_LOCK_DIR="$KCONT" bash "$WORK/legacy-lock.sh" status 2>&1)" "sess-1"
+hasi  "and the boot-7 copy too"            "$(VL_LOCK_DIR="$KCONT" NOFX_LOCK_DIR="$KCONT" bash "$WORK/legacy-lock.sh" status 2>&1)" "sess-1"
 VL_LOCK_DIR="$KCONT" "$WRAP" release sess-1 >/dev/null
 check "the wrapper releases what the tool acquired" "$([ -d "$KCONT" ] && echo held || echo gone)" "gone"
 for i in $(seq 1 10); do
   rm -rf "$KCONT"
   VL_LOCK_DIR="$KCONT" bash "$LOCK_SH" acquire r-$i 'race' 60 >/dev/null 2>&1 &
   VL_LOCK_DIR="$KCONT" "$WRAP" acquire r-$i 'race' 60 >/dev/null 2>&1 &
-  VL_LOCK_DIR="$KCONT" bash "$WORK/legacy-lock.sh" acquire r-$i 'race' 60 >/dev/null 2>&1 &
+  VL_LOCK_DIR="$KCONT" NOFX_LOCK_DIR="$KCONT" bash "$WORK/legacy-lock.sh" acquire r-$i 'race' 60 >/dev/null 2>&1 &
   wait
   n="$(VL_LOCK_DIR="$KCONT" bash "$LOCK_SH" status 2>&1 | grep -c "held by 'r-")"
   check "one-home race round $i has exactly one holder" "$n" "1"
   VL_LOCK_DIR="$KCONT" bash "$LOCK_SH" release r-$i >/dev/null 2>&1
 done
+
+echo "== (c) boot-7 interop: tonight's box copy and this tool take one lock =="
+#
+# FWD: the copy on the box tonight (9d52f5dc6) acquires its default home; this
+# tool reads the same holder, checks rc 1, and releases rc 0. REV: this tool
+# acquires; the boot-7 copy reads the same holder. Both prove one home, one
+# lock, across the rename.
+B7="$WORK/b7home"; mkdir -p "$B7"
+( unset VL_LOCK_DIR NOFX_LOCK_DIR; HOME="$B7" VL_LOCK_BEAT_SECONDS=60 VL_LOCK_STALE_SECONDS=600 bash "$WORK/legacy-lock.sh" acquire sess-B7 'the box tonight' 60 >/dev/null )
+has   "vl reads the boot-7 holder"  "$(unset VL_LOCK_DIR NOFX_LOCK_DIR; HOME="$B7" bash "$LOCK_SH" status 2>&1)" "sess-B7"
+check "vl check beside the boot-7 lock is 1" "$(unset VL_LOCK_DIR NOFX_LOCK_DIR; HOME="$B7" bash "$LOCK_SH" check >/dev/null 2>&1; echo $?)" "1"
+check "vl release clears the boot-7 lock"    "$(unset VL_LOCK_DIR NOFX_LOCK_DIR; HOME="$B7" bash "$LOCK_SH" release sess-B7 >/dev/null 2>&1; echo $?)" "0"
+check "and the dir is gone"                  "$([ -d "$B7/$o-main.lock.d" ] && echo yes || echo no)" "no"
+( unset VL_LOCK_DIR NOFX_LOCK_DIR; HOME="$B7" VL_LOCK_BEAT_SECONDS=60 VL_LOCK_STALE_SECONDS=600 bash "$LOCK_SH" acquire sess-V 'vl first' 60 >/dev/null )
+has   "the boot-7 copy reads the vl holder"  "$(HOME="$B7" bash "$WORK/legacy-lock.sh" status 2>&1)" "sess-V"
+( unset VL_LOCK_DIR NOFX_LOCK_DIR; HOME="$B7" bash "$LOCK_SH" release sess-V >/dev/null 2>&1 )
+rm -rf "$B7"
 
 echo "== the keeper re-invoked THROUGH the wrapper beats, and dies with it =="
 KWP="$WORK/wrap.lock.d"
@@ -584,27 +617,33 @@ NEWB2 release sess-B >/dev/null
 rm -rf "$XH"
 
 
-echo "== Z18 home: with the envs unset, the DEFAULT is the ONE old home until R5 =="
+echo "== (a) DEFAULT-HOME: envs unset, the ONE old home, the vl home never born =="
 #
 # R1a flipped the default to $HOME/vl-main.lock.d at 84dec7f4f while promising
 # byte-identical behaviour. An empty NEW home reads "free" while the deploy
 # session holds the real lock in the OLD home (the updater's attended C19 check
-# included), and the post-boot release would refuse. A temp HOME is the
-# production call site: no env vars, the real default.
-ZH="$WORK/zhome"; mkdir -p "$ZH"
-DEFAULT() { VL_LOCK_DIR= NOFX_LOCK_DIR= HOME="$ZH" VL_LOCK_BEAT_SECONDS=60 VL_LOCK_STALE_SECONDS=600 bash "$LOCK_SH" "$@" 2>&1; }
-hasi  "an env-less status reads the old home free" "$(DEFAULT status 2>&1)" "free"
-DEFAULT acquire sess-Z 'the one home' 60 >/dev/null
-check "an env-less acquire parks in the old home"  "$([ -d "$ZH/$o-main.lock.d" ] && echo yes || echo no)" "yes"
-check "and NEVER creates the vl home"               "$([ -d "$ZH/vl-main.lock.d" ] && echo yes || echo no)" "no"
-DEFAULT release sess-Z >/dev/null
-WRAPD() { VL_LOCK_DIR= NOFX_LOCK_DIR= HOME="$ZH" "$WRAP" "$@" 2>&1; }
-WRAPD acquire sess-Z 'the wrapper default' 60 >/dev/null
-has   "the tool reads the wrapper's default home"   "$(DEFAULT status 2>&1)" "sess-Z"
-check "and it is the SAME old home"                 "$([ -d "$ZH/$o-main.lock.d" ] && echo yes || echo no)" "yes"
-check "the wrapper never creates the vl home either" "$([ -d "$ZH/vl-main.lock.d" ] && echo yes || echo no)" "no"
-WRAPD release sess-Z >/dev/null
-rm -rf "$ZH"
+# included), and the post-boot release would refuse. $WORK/home is the
+# production call site: a temp HOME, both env vars unset, the real default.
+ZD="$WORK/home"
+( unset VL_LOCK_DIR NOFX_LOCK_DIR; HOME="$ZD" VL_LOCK_BEAT_SECONDS=60 VL_LOCK_STALE_SECONDS=600 bash "$LOCK_SH" acquire sess-D 'default home' 60 >/dev/null )
+check "an env-less acquire parks in the old home"  "$([ -d "$ZD/$o-main.lock.d" ] && echo yes || echo no)" "yes"
+check "and the vl home is never created"           "$([ -e "$ZD/vl-main.lock.d" ] && echo yes || echo no)" "no"
+( unset VL_LOCK_DIR NOFX_LOCK_DIR; HOME="$ZD" bash "$LOCK_SH" release sess-D >/dev/null 2>&1 )
+check "and release clears the old home"            "$([ -d "$ZD/$o-main.lock.d" ] && echo yes || echo no)" "no"
+# the old-name wrapper and the tool resolve the SAME default home
+( unset VL_LOCK_DIR NOFX_LOCK_DIR; HOME="$ZD" "$WRAP" acquire sess-D 'wrapper default' 60 >/dev/null )
+has   "the tool reads the wrapper's default home"  "$(unset VL_LOCK_DIR NOFX_LOCK_DIR; HOME="$ZD" bash "$LOCK_SH" status 2>&1)" "sess-D"
+check "and it is the SAME old home"                "$([ -d "$ZD/$o-main.lock.d" ] && echo yes || echo no)" "yes"
+check "the wrapper never creates the vl home"      "$([ -e "$ZD/vl-main.lock.d" ] && echo yes || echo no)" "no"
+( unset VL_LOCK_DIR NOFX_LOCK_DIR; HOME="$ZD" "$WRAP" release sess-D >/dev/null 2>&1 )
+rm -rf "$ZD/$o-main.lock.d" "$ZD/vl-main.lock.d"
+echo "== (b) the old-name wrapper is an exec, never a fork =="
+if grep -q '^exec env VL_LOCK_DIR=' "$WRAP"; then
+  ok "the wrapper's action line starts with exec env VL_LOCK_DIR="
+else
+  bad "the wrapper's action line starts with exec env VL_LOCK_DIR=" "missing in $WRAP"
+fi
+
 echo "== the wrappers run DIRECTLY on their own shebang, never via bash =="
 KDC="$WORK/direct.lock.d"
 VL_LOCK_DIR="$KDC" "$WRAP" acquire sess-D 'direct exec' 60 >/dev/null

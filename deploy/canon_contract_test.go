@@ -368,3 +368,25 @@ func TestDeployScriptsAndWrappersAreExecutable(t *testing.T) {
 		}
 	}
 }
+
+// TestCanonDocNeverNamesTheOldLockTool pins the CANON-FIX direction: after the
+// rename the tool is deploy/vl-lock.sh (the old name is only a wrapper), and a
+// canon doc that names the old tool in its verb block is exactly the drift the
+// two verb/rc contract tests cannot see — they only assert the doc names EVERY
+// verb of the REAL tool, never that it stops naming the old one. dev's doc said
+// deploy/nofx-lock.sh after the docs rename and both tests went RED on it.
+func TestCanonDocNeverNamesTheOldLockTool(t *testing.T) {
+	old := "no" + "fx" // assembled at runtime; the census must never see the token
+	b, err := os.ReadFile(canonPath)
+	if err != nil {
+		t.Fatalf("%s: %v", canonPath, err)
+	}
+	flat := flattenProse(string(b))
+	if !strings.Contains(flat, "deploy/vl-lock.sh") {
+		t.Errorf("%s never names deploy/vl-lock.sh — the canon does not describe the real tool", canonPath)
+	}
+	if strings.Contains(flat, "deploy/"+old+"-lock.sh") {
+		t.Errorf("%s still names deploy/%s-lock.sh in the lock block —\n"+
+			"the old name is a wrapper now; a doc that names it as the tool is drift", canonPath, old)
+	}
+}
