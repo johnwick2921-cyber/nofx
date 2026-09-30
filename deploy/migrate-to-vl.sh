@@ -323,9 +323,12 @@ step0() {
   done
   say "release dir OK: $given"
   # Re-resolve: if the given dir lives under the moved releases dir, rewrite the
-  # prefix now (pure path math, valid before and after the move).
+  # prefix now (pure path math, valid before and after the move). The anchor is
+  # the PRE-MOVE realpath, saved for step 2's re-check (after the move the
+  # old path resolves through the new symlink and would match everything).
   local real_oldrel
   real_oldrel="$(realpath -m "$HOME/$o-releases" 2>/dev/null || echo "$HOME/$o-releases")"
+  OLD_REL_REAL="$real_oldrel"
   case "$real_rel" in
     "$real_oldrel"/*) RELEASE_DIR="$HOME/vl-releases/${real_rel#"$real_oldrel"/}" ;;
   esac
@@ -496,11 +499,10 @@ steps_1_5() {
       say "env file rewritten (values never printed; original kept as env.pre-vl)"
     fi
 
-    local real_rel real_vl real_oldrel
+    local real_rel real_vl
     real_rel="$(realpath -m "$RELEASE_DIR" 2>/dev/null || echo "$RELEASE_DIR")"
-    real_oldrel="$(realpath -m "$HOME/$o-releases" 2>/dev/null || echo "$HOME/$o-releases")"
     case "$real_rel" in
-      "$real_oldrel"/*) stepdie "release dir still resolves under the moved releases dir after the re-resolve — refuse" ;;
+      "$OLD_REL_REAL"/*) stepdie "release dir still resolves under the moved releases dir after the re-resolve — refuse" ;;
     esac
     real_vl="$(realpath -m "$VL_ROOT" 2>/dev/null || echo "$VL_ROOT")"
     if [ "$real_rel" != "$RELEASE_DIR" ]; then
