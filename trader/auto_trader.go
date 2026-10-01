@@ -250,7 +250,7 @@ type AutoTraderConfig struct {
 	AIModelID string
 
 	// Trading platform selection
-	Exchange   string // Exchange type: "binance", "bybit", "okx", "bitget", "gate", "hyperliquid", "aster", "lighter", "indodax", or "ninjatrader"
+	Exchange   string // Exchange type: "ninjatrader" (futures-only build)
 	ExchangeID string // Exchange account UUID (for multi-account support)
 
 	// Binance API configuration
@@ -359,7 +359,7 @@ type AutoTrader struct {
 	id                string // Trader unique identifier
 	name              string // Trader display name
 	aiModel           string // AI model name
-	exchange          string // Trading platform type (binance/bybit/etc)
+	exchange          string // Trading platform type ("ninjatrader")
 	exchangeID        string // Exchange account UUID
 	showInCompetition bool   // Whether to show in competition page
 	config            AutoTraderConfig
@@ -674,13 +674,7 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 	// stale-bar discard in runCycle is the second half of the guarantee.
 	applyDecisionCallTimeout(mcpClient, config.Exchange)
 
-	// Payment providers (claw402) ignore customURL
-	switch aiModel {
-	case "claw402":
-		mcpClient.SetAPIKey(apiKey, "", config.CustomModelName)
-	default:
-		mcpClient.SetAPIKey(apiKey, customURL, config.CustomModelName)
-	}
+	mcpClient.SetAPIKey(apiKey, customURL, config.CustomModelName)
 	logger.Infof("🤖 [%s] Using %s AI", config.Name, aiModel)
 
 	if config.CustomAPIURL != "" || config.CustomModelName != "" {
@@ -689,14 +683,14 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 
 	// Set default trading platform
 	if config.Exchange == "" {
-		config.Exchange = "binance"
+		config.Exchange = "ninjatrader"
 	}
 
 	// CTO F2 (critic G1), fail-closed at the SOURCE: the NinjaTrader venue
 	// trades CME futures only. A trader configured on it with a non-CME symbol
-	// (its NT8 symbol or a strategy static coin) is REFUSED here — named, never
-	// started — instead of reading that symbol from a crypto source every
-	// cycle (CoinAnk exchange=Binance + Binance OI/funding).
+	// (its NT8 symbol or a strategy static symbol) is REFUSED here — named,
+	// never started — instead of reading that symbol from an outside source
+	// every cycle.
 	if strings.EqualFold(strings.TrimSpace(config.Exchange), "ninjatrader") {
 		if bad := nonCMESymbolsForNT8(config); len(bad) > 0 {
 			return nil, fmt.Errorf("refused: trader %q is on the NinjaTrader venue but trades %s — not CME futures symbols; this trader does not load", config.Name, strings.Join(bad, ","))
@@ -784,7 +778,7 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		}
 		if foundBalance > 0 {
 			config.InitialBalance = foundBalance
-			logger.Infof("✓ [%s] Auto-fetched initial balance: %.2f USDT", config.Name, foundBalance)
+			logger.Infof("✓ [%s] Auto-fetched initial balance: %.2f", config.Name, foundBalance)
 			// Save to database so it persists across restarts
 			if st != nil {
 				if err := st.Trader().UpdateInitialBalance(userID, config.ID, foundBalance); err != nil {
@@ -932,7 +926,6 @@ func (at *AutoTrader) Run() error {
 	at.logInfof("⚙️  Scan interval: %v", at.config.ScanInterval)
 	logger.Info("🤖 AI will make full decisions on leverage, position size, stop loss/take profit, etc.")
 
-	// Pre-launch checks for claw402 users
 	at.monitorWg.Add(1)
 	defer at.monitorWg.Done()
 
