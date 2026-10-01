@@ -65,6 +65,18 @@
       "max_items": 4,
       "description": "多周期分析时间框架列表，例如 [\"5m\",\"15m\",\"1h\"]；手动页面最多选择 4 个。"
     },
+    "btceth_max_leverage": {
+      "type": "int",
+      "min": 1,
+      "max": 20,
+      "description": "主力合约组最大杠杆倍数，范围 1～20。"
+    },
+    "altcoin_max_leverage": {
+      "type": "int",
+      "min": 1,
+      "max": 20,
+      "description": "非主力合约组最大杠杆倍数，范围 1～20。"
+    },
     "min_confidence": {
       "type": "int",
       "min": 50,
