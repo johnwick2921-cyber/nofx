@@ -28,7 +28,7 @@ either way, so the correct action is to stand aside and wait for acceptance.
 </decision>`
 
 func TestWaitDecisionKeepsItsReasoning(t *testing.T) {
-	full, err := parseFullDecisionResponse(waitResponseWithReasoning, 50000, 5, 5, 5, 1, 3, 65, 20, nil)
+	full, err := parseFullDecisionResponse(waitResponseWithReasoning, 50000, 5, 1, 3, 65, 20, nil)
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -55,7 +55,7 @@ Broad context: trend up, POC below, buyers in control.
 </decision>`
 	// The decision may or may not pass the risk gate depending on sizing rules;
 	// either way its reasoning must survive, so we do not require err == nil.
-	full, _ := parseFullDecisionResponse(resp, 50000, 5, 5, 5, 1, 1.5, 50, 20, nil)
+	full, _ := parseFullDecisionResponse(resp, 50000, 5, 1, 1.5, 50, 20, nil)
 	if len(full.Decisions) != 1 {
 		t.Fatalf("want 1 decision, got %d", len(full.Decisions))
 	}
@@ -71,7 +71,7 @@ func TestNoDecisionIsStoredWithoutAReasonWhenOneWasGiven(t *testing.T) {
 		"wait":       waitResponseWithReasoning,
 		"multi-wait": strings.Replace(waitResponseWithReasoning, `[{"action":"wait"`, `[{"action":"wait","x":0},{"action":"wait"`, 1),
 	} {
-		full, err := parseFullDecisionResponse(resp, 50000, 5, 5, 5, 1, 3, 65, 20, nil)
+		full, err := parseFullDecisionResponse(resp, 50000, 5, 1, 3, 65, 20, nil)
 		if err != nil {
 			continue // a malformed variant is a different test's problem
 		}

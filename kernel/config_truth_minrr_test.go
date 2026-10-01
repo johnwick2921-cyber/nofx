@@ -40,11 +40,11 @@ func TestConfigTruth_MinRR_SavedRowReadEnforced(t *testing.T) {
 
 	// 3+4. READ + ENFORCED — the row's min_rr gates the REAL R:R.
 	// entry 100, SL 90, TP 130 → risk 10, reward 30, real R:R 3.0 < 3.5 → REJECT.
-	if err := validateDecision(mk(90, 130), 50000, 10, 5, 5, 1, row.RiskControl.MinRiskRewardRatio, 0, 20, ctx); err == nil {
+	if err := validateDecision(mk(90, 130), 50000, 5, 1, row.RiskControl.MinRiskRewardRatio, 0, 20, ctx); err == nil {
 		t.Fatal("BROKEN-verdict regression: real R:R 3.0 must be REJECTED at the configured min 3.5")
 	}
 	// entry 100, SL 90, TP 140 → risk 10, reward 40, real R:R 4.0 ≥ 3.5 → PASS.
-	if err := validateDecision(mk(90, 140), 50000, 10, 5, 5, 1, row.RiskControl.MinRiskRewardRatio, 0, 20, ctx); err != nil {
+	if err := validateDecision(mk(90, 140), 50000, 5, 1, row.RiskControl.MinRiskRewardRatio, 0, 20, ctx); err != nil {
 		t.Fatalf("real R:R 4.0 must PASS at the configured min 3.5 (proves the gate binds, not blocks-all), got: %v", err)
 	}
 }

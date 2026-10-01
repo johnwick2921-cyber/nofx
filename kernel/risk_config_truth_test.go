@@ -38,7 +38,7 @@ var riskFields = []string{
 func fullRiskConfig() store.RiskControlConfig {
 	tr := func(b bool) *bool { return &b }
 	return store.RiskControlConfig{
-		MaxPositions: 3, BTCETHMaxLeverage: 5, AltcoinMaxLeverage: 5,
+		MaxPositions: 3,
 		BTCETHMaxPositionValueRatio: 5, AltcoinMaxPositionValueRatio: 1,
 		MaxMarginUsage: 0.9, MinPositionSize: 12,
 		MinRiskRewardRatio: 3, MinConfidence: 65,

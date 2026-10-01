@@ -1148,12 +1148,6 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 		marginUsedPct = (totalMarginUsed / totalEquity) * 100
 	}
 
-	// 5. Get leverage from strategy config
-	strategyConfig := at.strategyEngine.GetConfig()
-	btcEthLeverage := strategyConfig.RiskControl.BTCETHMaxLeverage
-	altcoinLeverage := strategyConfig.RiskControl.AltcoinMaxLeverage
-	logger.Infof("📋 [%s] Strategy leverage config: BTC/ETH=%dx, Altcoin=%dx", at.name, btcEthLeverage, altcoinLeverage)
-
 	// 6. Build context
 	ctx := &kernel.Context{
 		CurrentTime:     kernel.FormatCT(time.Now()), // CT canonical (P0 timezone)
@@ -1161,8 +1155,6 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 		CallCount:       at.callCount,
 		TraderID:        at.id,                  // B6: per-trader gate-block counters
 		SnapshotMs:      time.Now().UnixMilli(), // B4 evaluates the feed at THIS instant, not post-call
-		BTCETHLeverage:  btcEthLeverage,
-		AltcoinLeverage: altcoinLeverage,
 		Account: kernel.AccountInfo{
 			TotalEquity:      totalEquity,
 			AvailableBalance: availableBalance,

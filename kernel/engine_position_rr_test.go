@@ -29,7 +29,7 @@ func mnqRR(action string, sl, tp float64) *Decision {
 // fail, exact-threshold, and a zero/negative-risk reject) and asserts the code's
 // accept/reject matches the math. entry is supplied via the ctx snapshot.
 func TestF1_RealRR_HandComputedMatrix(t *testing.T) {
-	eq, b, a, br, ar := gateArgs()
+	eq, br, ar := gateArgs()
 
 	cases := []struct {
 		name       string
@@ -55,7 +55,7 @@ func TestF1_RealRR_HandComputedMatrix(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			d := mnqRR(c.action, c.sl, c.tp)
-			err := validateDecision(d, eq, b, a, br, ar, c.minRR, 0, 20, mdCtx("MNQ", c.entry))
+			err := validateDecision(d, eq, br, ar, c.minRR, 0, 20, mdCtx("MNQ", c.entry))
 			if c.wantReject && err == nil {
 				t.Fatalf("expected REJECT (hand R:R=%.2f, min=%.2f) but passed", c.wantRR, c.minRR)
 			}
@@ -69,18 +69,18 @@ func TestF1_RealRR_HandComputedMatrix(t *testing.T) {
 // TestF1_LimitEntryWins: an explicit AI limit price (d.Price) is the entry reference,
 // overriding the current-price snapshot.
 func TestF1_LimitEntryWins(t *testing.T) {
-	eq, b, a, br, ar := gateArgs()
+	eq, br, ar := gateArgs()
 	// Snapshot says 999 (would give a wildly different R:R); the AI limit price 100
 	// must win → risk 10, reward 30, R:R 3.0 ≥ 3.0 → PASS.
 	d := mnqRR("open_long", 90, 130)
 	d.Price = 100.0
-	if err := validateDecision(d, eq, b, a, br, ar, 3.0, 0, 20, mdCtx("MNQ", 999)); err != nil {
+	if err := validateDecision(d, eq, br, ar, 3.0, 0, 20, mdCtx("MNQ", 999)); err != nil {
 		t.Fatalf("explicit limit entry 100 should give R:R 3.0 and PASS, got: %v", err)
 	}
 	// Same limit but min 3.5 → 3.0 < 3.5 → FAIL (proves the limit price drove it).
 	d2 := mnqRR("open_long", 90, 130)
 	d2.Price = 100.0
-	if err := validateDecision(d2, eq, b, a, br, ar, 3.5, 0, 20, mdCtx("MNQ", 999)); err == nil {
+	if err := validateDecision(d2, eq, br, ar, 3.5, 0, 20, mdCtx("MNQ", 999)); err == nil {
 		t.Fatal("limit-entry R:R 3.0 should be REJECTED at min 3.5")
 	}
 }
@@ -88,13 +88,13 @@ func TestF1_LimitEntryWins(t *testing.T) {
 // TestF1_NilGuards: no ctx / no market data → the R:R gate fails OPEN (skips), never
 // panics, so a data gap can't wedge the validator.
 func TestF1_NilGuards(t *testing.T) {
-	eq, b, a, br, ar := gateArgs()
+	eq, br, ar := gateArgs()
 	// Would-be R:R = 0.1 (terrible), but nil ctx → no entry ref → gate skipped → PASS.
-	if err := validateDecision(mnqRR("open_long", 90, 91), eq, b, a, br, ar, 3.0, 0, 20, nil); err != nil {
+	if err := validateDecision(mnqRR("open_long", 90, 91), eq, br, ar, 3.0, 0, 20, nil); err != nil {
 		t.Fatalf("nil ctx must skip the R:R gate (fail-open), got: %v", err)
 	}
 	// ctx present but the symbol absent → entryRef 0 → skipped → PASS.
-	if err := validateDecision(mnqRR("open_long", 90, 91), eq, b, a, br, ar, 3.0, 0, 20, mdCtx("ES", 100)); err != nil {
+	if err := validateDecision(mnqRR("open_long", 90, 91), eq, br, ar, 3.0, 0, 20, mdCtx("ES", 100)); err != nil {
 		t.Fatalf("missing symbol in ctx must skip the R:R gate, got: %v", err)
 	}
 }
@@ -106,11 +106,11 @@ func TestF1_RRGateCounter(t *testing.T) {
 	_, before := telemetry.GateBlockSnapshot()
 	start := before["TID"]["rr_gate"]
 
-	eq, b, a, br, ar := gateArgs()
+	eq, br, ar := gateArgs()
 	ctx := mdCtx("MNQ", 100)
 	ctx.TraderID = "TID"
 	// R:R 2.5 < 3.0 → reject → counter++.
-	_ = validateDecision(mnqRR("open_long", 90, 125), eq, b, a, br, ar, 3.0, 0, 20, ctx)
+	_ = validateDecision(mnqRR("open_long", 90, 125), eq, br, ar, 3.0, 0, 20, ctx)
 
 	_, after := telemetry.GateBlockSnapshot()
 	if after["TID"]["rr_gate"] != start+1 {

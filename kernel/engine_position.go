@@ -28,9 +28,9 @@ const futuresMaxNotionalLeverage = 20.0
 // Decision Validation
 // ============================================================================
 
-func validateDecisions(decisions []Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64, minRiskReward float64, minConfidence int, maxNotionalLev float64, ctx *Context) error {
+func validateDecisions(decisions []Decision, accountEquity float64, btcEthPosRatio, altcoinPosRatio float64, minRiskReward float64, minConfidence int, maxNotionalLev float64, ctx *Context) error {
 	for i := range decisions {
-		if err := validateDecision(&decisions[i], accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio, minRiskReward, minConfidence, maxNotionalLev, ctx); err != nil {
+		if err := validateDecision(&decisions[i], accountEquity, btcEthPosRatio, altcoinPosRatio, minRiskReward, minConfidence, maxNotionalLev, ctx); err != nil {
 			return fmt.Errorf("decision #%d validation failed: %w", i+1, err)
 		}
 	}
@@ -40,7 +40,7 @@ func validateDecisions(decisions []Decision, accountEquity float64, btcEthLevera
 // validateDecision code-enforces the trade rules on one decision. ctx (nil-safe)
 // supplies the F1 entry reference (MarketDataMap[symbol].CurrentPrice) and the
 // TraderID for the rr_gate counter; pass nil in unit tests that don't exercise R:R.
-func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64, minRiskReward float64, minConfidence int, maxNotionalLev float64, ctx *Context) error {
+func validateDecision(d *Decision, accountEquity float64, btcEthPosRatio, altcoinPosRatio float64, minRiskReward float64, minConfidence int, maxNotionalLev float64, ctx *Context) error {
 	validActions := map[string]bool{
 		"open_long":   true,
 		"open_short":  true,
@@ -55,7 +55,13 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 	}
 
 	if d.Action == "open_long" || d.Action == "open_short" {
-		maxLeverage := altcoinLeverage
+		// Leverage clamp: crypto-era decisions validated against the BTC/ETH and
+		// altcoin configured maxima; those knobs are gone with the crypto venues
+		// (stored rows still load — unknown JSON fields ignored). The futures
+		// path keeps the old DEFAULT altcoin maximum as the clamp ceiling, so a
+		// decision that would have been admitted on the default config is still
+		// admitted byte-for-byte.
+		maxLeverage := 5
 		posRatio := altcoinPosRatio
 		maxPositionValue := accountEquity * posRatio
 		isFutures := market.IsCMEFuturesSymbol(d.Symbol)
@@ -70,10 +76,6 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 			} else {
 				maxPositionValue = accountEquity * 1e9
 			}
-		case d.Symbol == "BTCUSDT" || d.Symbol == "ETHUSDT":
-			maxLeverage = btcEthLeverage
-			posRatio = btcEthPosRatio
-			maxPositionValue = accountEquity * posRatio
 		}
 
 		if d.Leverage <= 0 {
@@ -89,16 +91,9 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 		}
 
 		const minPositionSizeGeneral = 12.0
-		const minPositionSizeBTCETH = 60.0
 
-		if d.Symbol == "BTCUSDT" || d.Symbol == "ETHUSDT" {
-			if d.PositionSizeUSD < minPositionSizeBTCETH {
-				return fmt.Errorf("%s opening amount too small (%.2f USDT), must be ≥%.2f USDT", d.Symbol, d.PositionSizeUSD, minPositionSizeBTCETH)
-			}
-		} else {
-			if d.PositionSizeUSD < minPositionSizeGeneral {
-				return fmt.Errorf("opening amount too small (%.2f USDT), must be ≥%.2f USDT", d.PositionSizeUSD, minPositionSizeGeneral)
-			}
+		if d.PositionSizeUSD < minPositionSizeGeneral {
+			return fmt.Errorf("opening amount too small (%.2f USDT), must be ≥%.2f USDT", d.PositionSizeUSD, minPositionSizeGeneral)
 		}
 
 		tolerance := maxPositionValue * 0.01
@@ -106,8 +101,6 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 			switch {
 			case isFutures:
 				return fmt.Errorf("%s futures notional cannot exceed %.0f USD (%.0fx account equity), actual: %.0f", d.Symbol, maxPositionValue, maxNotionalLev, d.PositionSizeUSD)
-			case d.Symbol == "BTCUSDT" || d.Symbol == "ETHUSDT":
-				return fmt.Errorf("BTC/ETH single coin position value cannot exceed %.0f USDT (%.1fx account equity), actual: %.0f", maxPositionValue, posRatio, d.PositionSizeUSD)
 			default:
 				return fmt.Errorf("altcoin single coin position value cannot exceed %.0f USDT (%.1fx account equity), actual: %.0f", maxPositionValue, posRatio, d.PositionSizeUSD)
 			}

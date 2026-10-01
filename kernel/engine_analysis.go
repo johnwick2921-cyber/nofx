@@ -557,8 +557,6 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 		fd, err := parseFullDecisionResponse(
 			resp,
 			ctx.Account.TotalEquity,
-			riskConfig.BTCETHMaxLeverage,
-			riskConfig.AltcoinMaxLeverage,
 			riskConfig.BTCETHMaxPositionValueRatio,
 			riskConfig.AltcoinMaxPositionValueRatio,
 			riskConfig.MinRiskRewardRatio,
@@ -860,7 +858,7 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 // AI Response Parsing
 // ============================================================================
 
-func parseFullDecisionResponse(aiResponse string, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64, minRiskReward float64, minConfidence int, maxNotionalLev float64, ctx *Context) (*FullDecision, error) {
+func parseFullDecisionResponse(aiResponse string, accountEquity float64, btcEthPosRatio, altcoinPosRatio float64, minRiskReward float64, minConfidence int, maxNotionalLev float64, ctx *Context) (*FullDecision, error) {
 	cotTrace := extractCoTTrace(aiResponse)
 
 	decisions, err := extractDecisions(aiResponse)
@@ -875,7 +873,7 @@ func parseFullDecisionResponse(aiResponse string, accountEquity float64, btcEthL
 	// refusals panel is exactly where the owner asks why something was refused.
 	backfillReasoningFromCoT(decisions, cotTrace)
 
-	if err := validateDecisions(decisions, accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio, minRiskReward, minConfidence, maxNotionalLev, ctx); err != nil {
+	if err := validateDecisions(decisions, accountEquity, btcEthPosRatio, altcoinPosRatio, minRiskReward, minConfidence, maxNotionalLev, ctx); err != nil {
 		return &FullDecision{
 			CoTTrace:  cotTrace,
 			Decisions: decisions,

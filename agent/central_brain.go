@@ -1174,8 +1174,6 @@ func strategyProductDefaultTemplateResource(lang, strategyType string) map[strin
 					"enable_funding_rate": cfg.Indicators.EnableFundingRate,
 				},
 				"risk_control": map[string]any{
-					"btc_eth_max_leverage":  cfg.RiskControl.BTCETHMaxLeverage,
-					"altcoin_max_leverage":  cfg.RiskControl.AltcoinMaxLeverage,
 					"min_confidence":        cfg.RiskControl.MinConfidence,
 					"min_risk_reward_ratio": cfg.RiskControl.MinRiskRewardRatio,
 				},

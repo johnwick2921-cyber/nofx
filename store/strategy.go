@@ -150,20 +150,6 @@ func (c *StrategyConfig) ClampLimits() {
 		c.RiskControl.MaxPositions = MaxPositions
 	}
 
-	// Clamp leverage limits to the same bounds as the manual config UI.
-	if c.RiskControl.BTCETHMaxLeverage < MinLeverage {
-		c.RiskControl.BTCETHMaxLeverage = MinLeverage
-	}
-	if c.RiskControl.BTCETHMaxLeverage > MaxBTCETHLeverage {
-		c.RiskControl.BTCETHMaxLeverage = MaxBTCETHLeverage
-	}
-	if c.RiskControl.AltcoinMaxLeverage < MinLeverage {
-		c.RiskControl.AltcoinMaxLeverage = MinLeverage
-	}
-	if c.RiskControl.AltcoinMaxLeverage > MaxAltLeverage {
-		c.RiskControl.AltcoinMaxLeverage = MaxAltLeverage
-	}
-
 	// Clamp position value ratio limits.
 	if c.RiskControl.BTCETHMaxPositionValueRatio < MinPositionRatio {
 		c.RiskControl.BTCETHMaxPositionValueRatio = MinPositionRatio
@@ -625,8 +611,6 @@ func StrategyClampWarnings(before, after StrategyConfig, lang string) []string {
 	}
 
 	appendInt("最大持仓数", "max_positions", before.RiskControl.MaxPositions, after.RiskControl.MaxPositions)
-	appendInt("BTC/ETH 最大杠杆", "btc_eth_max_leverage", before.RiskControl.BTCETHMaxLeverage, after.RiskControl.BTCETHMaxLeverage)
-	appendInt("山寨币最大杠杆", "altcoin_max_leverage", before.RiskControl.AltcoinMaxLeverage, after.RiskControl.AltcoinMaxLeverage)
 	appendFloat("BTC/ETH 最大仓位价值倍数", "btc_eth_max_position_value_ratio", before.RiskControl.BTCETHMaxPositionValueRatio, after.RiskControl.BTCETHMaxPositionValueRatio)
 	appendFloat("山寨币最大仓位价值倍数", "altcoin_max_position_value_ratio", before.RiskControl.AltcoinMaxPositionValueRatio, after.RiskControl.AltcoinMaxPositionValueRatio)
 	appendFloat("最小盈亏比", "min_risk_reward_ratio", before.RiskControl.MinRiskRewardRatio, after.RiskControl.MinRiskRewardRatio)
@@ -1945,11 +1929,6 @@ type RiskControlConfig struct {
 	// Max number of coins held simultaneously (CODE ENFORCED)
 	MaxPositions int `json:"max_positions"`
 
-	// BTC/ETH exchange leverage for opening positions (AI guided)
-	BTCETHMaxLeverage int `json:"btc_eth_max_leverage"`
-	// Altcoin exchange leverage for opening positions (AI guided)
-	AltcoinMaxLeverage int `json:"altcoin_max_leverage"`
-
 	// BTC/ETH single position max value = equity × this ratio (CODE ENFORCED, default: 5)
 	BTCETHMaxPositionValueRatio float64 `json:"btc_eth_max_position_value_ratio"`
 	// Altcoin single position max value = equity × this ratio (CODE ENFORCED, default: 1)
@@ -2130,8 +2109,6 @@ func GetDefaultStrategyConfig(lang string) StrategyConfig {
 		},
 		RiskControl: RiskControlConfig{
 			MaxPositions:                 3,   // Max 3 coins simultaneously (CODE ENFORCED)
-			BTCETHMaxLeverage:            5,   // BTC/ETH exchange leverage (AI guided)
-			AltcoinMaxLeverage:           5,   // Altcoin exchange leverage (AI guided)
 			BTCETHMaxPositionValueRatio:  5.0, // BTC/ETH: max position = 5x equity (CODE ENFORCED)
 			AltcoinMaxPositionValueRatio: 1.0, // Altcoin: max position = 1x equity (CODE ENFORCED)
 			MaxMarginUsage:               0.9, // Max 90% margin usage (CODE ENFORCED)

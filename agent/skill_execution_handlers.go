@@ -857,25 +857,6 @@ func applyStrategyConfigPatch(cfg *store.StrategyConfig, field, value string) er
 			return fmt.Errorf("最小盈亏比需要是数字")
 		}
 		cfg.RiskControl.MinRiskRewardRatio = parsed
-	case "leverage":
-		parsed, err := strconv.Atoi(value)
-		if err != nil {
-			return fmt.Errorf("杠杆需要是整数")
-		}
-		cfg.RiskControl.BTCETHMaxLeverage = parsed
-		cfg.RiskControl.AltcoinMaxLeverage = parsed
-	case "btceth_max_leverage":
-		parsed, err := strconv.Atoi(value)
-		if err != nil {
-			return fmt.Errorf("BTC/ETH 最大杠杆需要是整数")
-		}
-		cfg.RiskControl.BTCETHMaxLeverage = parsed
-	case "altcoin_max_leverage":
-		parsed, err := strconv.Atoi(value)
-		if err != nil {
-			return fmt.Errorf("山寨币最大杠杆需要是整数")
-		}
-		cfg.RiskControl.AltcoinMaxLeverage = parsed
 	case "btceth_max_position_value_ratio":
 		return fmt.Errorf("%s", strategyLockedFieldError("zh", field))
 	case "altcoin_max_position_value_ratio":

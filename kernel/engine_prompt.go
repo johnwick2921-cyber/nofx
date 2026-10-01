@@ -86,8 +86,6 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant, symbo
 	sb.WriteString(fmt.Sprintf("- Min Position Size: ≥%.0f USDT\n\n", riskControl.MinPositionSize))
 
 	sb.WriteString("## AI GUIDED (Recommended, you should follow):\n")
-	sb.WriteString(fmt.Sprintf("- Trading Leverage: Altcoins max %dx | BTC/ETH max %dx\n",
-		riskControl.AltcoinMaxLeverage, riskControl.BTCETHMaxLeverage))
 	sb.WriteString(fmt.Sprintf("- Risk-Reward Ratio: ≥1:%.1f (take_profit / stop_loss)\n", riskControl.MinRiskRewardRatio))
 	sb.WriteString(fmt.Sprintf("- Min Confidence: ≥%d to open position\n\n", riskControl.MinConfidence))
 
@@ -151,11 +149,6 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant, symbo
 	sb.WriteString("<decision>\n")
 	sb.WriteString("Step 2: JSON decision array\n\n")
 	sb.WriteString("```json\n[\n")
-	// Use the actual configured position value ratio for BTC/ETH in the example
-	examplePositionSize := accountEquity * btcEthPosValueRatio
-	sb.WriteString(fmt.Sprintf("  {\"symbol\": \"BTCUSDT\", \"action\": \"open_short\", \"leverage\": %d, \"position_size_usd\": %.0f, \"stop_loss\": 97000, \"take_profit\": 91000, \"confidence\": 85, \"risk_usd\": 300},\n",
-		riskControl.BTCETHMaxLeverage, examplePositionSize))
-	sb.WriteString("  {\"symbol\": \"ETHUSDT\", \"action\": \"close_long\"}\n")
 	sb.WriteString("]\n```\n")
 	sb.WriteString("</decision>\n\n")
 	sb.WriteString("## Field Description\n\n")

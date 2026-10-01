@@ -244,12 +244,6 @@ func (at *AutoTrader) ClearPeakPnLCache(symbol, side string) {
 // Risk Control Helpers
 // ============================================================================
 
-// isBTCETH checks if a symbol is BTC or ETH
-func isBTCETH(symbol string) bool {
-	symbol = strings.ToUpper(symbol)
-	return strings.HasPrefix(symbol, "BTC") || strings.HasPrefix(symbol, "ETH")
-}
-
 // enforcePositionValueRatio checks and enforces position value ratio limits (CODE ENFORCED)
 // Returns the adjusted position size (capped if necessary) and whether the position was capped
 // positionSizeUSD: the original position size in USD
@@ -273,11 +267,6 @@ func (at *AutoTrader) enforcePositionValueRatio(positionSizeUSD float64, equity 
 		maxPositionValueRatio = kernel.ResolveNotionalLeverage(riskControl.MaxNotionalLeverage, futuresMaxNotionalLeverage)
 		if maxPositionValueRatio <= 0 {
 			maxPositionValueRatio = futuresMaxNotionalLeverage
-		}
-	case isBTCETH(symbol):
-		maxPositionValueRatio = riskControl.BTCETHMaxPositionValueRatio
-		if maxPositionValueRatio <= 0 {
-			maxPositionValueRatio = 5.0 // Default: 5x for BTC/ETH
 		}
 	default:
 		maxPositionValueRatio = riskControl.AltcoinMaxPositionValueRatio
