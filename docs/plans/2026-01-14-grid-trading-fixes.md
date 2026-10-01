@@ -110,7 +110,7 @@ func (at *AutoTrader) InitializeGrid() error {
 
 ```bash
 go build ./trader/
-go test -v -run "TestLighter.*Leverage" ./trader/ -timeout 60s
+go test -v -run "TestDex.*Leverage" ./trader/ -timeout 60s
 ```
 
 ### Step 1.4: 提交
