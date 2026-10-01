@@ -927,13 +927,6 @@
 | `web/src/components/strategy/CoinSourceEditor.tsx` | 240 | `lighter` | KEEP | CR-C | existing vl-neo token — false positive of \blighter\b |
 | `web/src/components/strategy/CoinSourceEditor.tsx` | 261 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/strategy/CoinSourceEditor.tsx` | 317 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/GridConfigEditor.tsx` | 15 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/GridConfigEditor.tsx` | 85 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/GridConfigEditor.tsx` | 86 | `ETHUSDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/GridConfigEditor.tsx` | 87 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/GridConfigEditor.tsx` | 88 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/GridConfigEditor.tsx` | 89 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/GridConfigEditor.tsx` | 90 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/strategy/IndicatorEditor.tsx` | 601 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/strategy/RiskControlEditor.tsx` | 86 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/strategy/RiskControlEditor.tsx` | 474 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
@@ -961,18 +954,18 @@
 | `web/src/components/trader/PositionHistory.tsx` | 225 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/PositionHistory.tsx` | 407 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/PositionHistory.tsx` | 1017 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/TraderConfigModal.tsx` | 45 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/TraderConfigModal.tsx` | 46 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/TraderConfigModal.tsx` | 49 | `okx` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/TraderConfigModal.tsx` | 50 | `bybit` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/TraderConfigModal.tsx` | 51 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/TraderConfigModal.tsx` | 52 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/TraderConfigModal.tsx` | 55 | `aster` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/TraderConfigModal.tsx` | 56 | `asterdex` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/TraderConfigModal.tsx` | 59 | `lighter` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/TraderConfigModal.tsx` | 60 | `lighter` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/TraderConfigModal.tsx` | 429 | `hyper_all` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/TraderConfigModal.tsx` | 432 | `hyper_main` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/trader/TraderConfigModal.tsx` | 45 | `binance` | CUT | CR-C | web crypto surface — CR-C row — done c3 b2  |
+| `web/src/components/trader/TraderConfigModal.tsx` | 46 | `binance` | CUT | CR-C | web crypto surface — CR-C row — done c3 b2  |
+| `web/src/components/trader/TraderConfigModal.tsx` | 49 | `okx` | CUT | CR-C | web crypto surface — CR-C row — done c3 b2  |
+| `web/src/components/trader/TraderConfigModal.tsx` | 50 | `bybit` | CUT | CR-C | web crypto surface — CR-C row — done c3 b2  |
+| `web/src/components/trader/TraderConfigModal.tsx` | 51 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done c3 b2  |
+| `web/src/components/trader/TraderConfigModal.tsx` | 52 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done c3 b2  |
+| `web/src/components/trader/TraderConfigModal.tsx` | 55 | `aster` | CUT | CR-C | web crypto surface — CR-C row — done c3 b2  |
+| `web/src/components/trader/TraderConfigModal.tsx` | 56 | `asterdex` | CUT | CR-C | web crypto surface — CR-C row — done c3 b2  |
+| `web/src/components/trader/TraderConfigModal.tsx` | 59 | `lighter` | CUT | CR-C | web crypto surface — CR-C row — done c3 b2  |
+| `web/src/components/trader/TraderConfigModal.tsx` | 60 | `lighter` | CUT | CR-C | web crypto surface — CR-C row — done c3 b2  |
+| `web/src/components/trader/TraderConfigModal.tsx` | 429 | `hyper_all` | CUT | CR-C | web crypto surface — CR-C row — done c3 b2  |
+| `web/src/components/trader/TraderConfigModal.tsx` | 432 | `hyper_main` | CUT | CR-C | web crypto surface — CR-C row — done c3 b2  |
 | `web/src/components/trader/TradersList.tsx` | 54 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/model-constants.ts` | 2 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/ui/alert-dialog.tsx` | 107 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
@@ -1666,5 +1659,5 @@
 | `docs/superpowers/reports/exports/2026-09-02-losses/decisions.csv` | - | `count=5318` | KEEP | CR-C | dated research export / generated artifact — historical record, not shipped code, KEEP byte-identical |
 | `docs/superpowers/research/2026-09-12-stop-target-geometry/README.md` | - | `count=1` | KEEP | CR-C | dated research export / generated artifact — historical record, not shipped code, KEEP byte-identical |
 | `docs/superpowers/research/2026-09-16-round-23/s4_analysis.py` | - | `count=2` | KEEP | CR-C | dated research export / generated artifact — historical record, not shipped code, KEEP byte-identical |
-| `web/src/components/trader/TraderConfigModal.tsx` | 434 | `'mixed' (single-quoted)` | CUT | CR-C | named trap (not regex-visible): single-quoted mixed — CUT with the trader legacy fields |
+| `web/src/components/trader/TraderConfigModal.tsx` | 434 | `'mixed' (single-quoted)` | CUT | CR-C | named trap (not regex-visible): single-quoted mixed — CUT with the trader legacy fields — done c3 b2  |
 | `web/src/components/plan/ExecutorVerdict.tsx` | 114 | `'mixed' (single-quoted)` | KEEP | CR-C | named trap (not regex-visible): web twin of the plan-state string — must stay byte-identical |

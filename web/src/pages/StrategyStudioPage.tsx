@@ -38,6 +38,7 @@ import type {
   AIModel,
   GridStrategyConfig,
 } from '../types'
+import { defaultGridConfig } from '../types/strategy'
 import { confirmToast, notify } from '../lib/notify'
 import { isCMEFutures } from '../lib/instrument'
 import { CoinSourceEditor } from '../components/strategy/CoinSourceEditor'
@@ -48,10 +49,6 @@ import { useStudioEffective } from '../components/strategy/useStudioEffective'
 import { tp } from '../i18n/plan-translations'
 import { PromptSectionsEditor } from '../components/strategy/PromptSectionsEditor'
 import { PublishSettingsEditor } from '../components/strategy/PublishSettingsEditor'
-import {
-  GridConfigEditor,
-  defaultGridConfig,
-} from '../components/strategy/GridConfigEditor'
 import { TokenEstimateBar } from '../components/strategy/TokenEstimateBar'
 import { StrategyTradingBadge } from '../components/strategy/StrategyTradingBadge'
 import { DeepVoidBackground } from '../components/common/DeepVoidBackground'
@@ -852,21 +849,6 @@ export function StrategyStudioPage() {
 
   const configSections = [
     // Grid Config - only for grid_trading
-    {
-      key: 'gridConfig' as const,
-      icon: Activity,
-      color: '#0ECB81',
-      title: tr('gridConfig'),
-      forStrategyType: 'grid_trading' as const,
-      content: editingConfig?.grid_config && (
-        <GridConfigEditor
-          config={editingConfig.grid_config}
-          onChange={(gridConfig) => updateConfig('grid_config', gridConfig)}
-          disabled={selectedStrategy?.is_default}
-          language={language}
-        />
-      ),
-    },
     // AI Trading sections
     {
       key: 'coinSource' as const,
