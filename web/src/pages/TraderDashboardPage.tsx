@@ -741,7 +741,6 @@ export function TraderDashboardPage({
                 selectedTrader.exchange_id,
                 exchanges
               )}
-              isFutures={isFutures}
             />
           </div>
 
@@ -749,10 +748,7 @@ export function TraderDashboardPage({
             className="min-w-0"
             aria-label={t('accountEquityCurve', language)}
           >
-            <EquityChart
-              traderId={selectedTrader.trader_id}
-              isFutures={isFutures}
-            />
+            <EquityChart traderId={selectedTrader.trader_id} />
           </section>
           {/* Day Plan card — futures only (day_plan is a futures feature);
                 additive + dormant: renders its no-plan state until a plan arms. */}
