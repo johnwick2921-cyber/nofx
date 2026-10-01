@@ -8,9 +8,9 @@
 // ============================================================================
 export const coinSource = {
   sourceType: {
-    zh: '数据源类型（static / hyper_all / hyper_main / mixed）',
-    en: 'Source Type (static | hyper_all | hyper_main | mixed)',
-    es: 'Tipo de fuente (static | hyper_all | hyper_main | mixed)',
+    zh: '数据源类型（static）',
+    en: 'Source Type (static)',
+    es: 'Tipo de fuente (static)',
   },
   static: { zh: '静态列表', en: 'Static List', es: 'Lista Estática' },
   hyperAll: {
