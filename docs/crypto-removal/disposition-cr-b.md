@@ -1,10 +1,10 @@
 # Crypto-removal disposition table — CR-B (DS-107), plan v10 FINAL
 # The gate (scripts/crypto-union-gate.sh, DS-102) owns this format: headers below + plain pipe rows.
 branch-point: e7e7cc3d20621f9bf4ad4884ef62ebde2b4d828f
-integrator-tip: 56afb74687f174cc7560835516b3bacf0e0163ea
+integrator-tip: 8f1a56a4404cbf0e32d90fdee8a74b641b6dbc90
 paths: manager kernel market config store agent branding internal ninjascript screenshots cmd scripts deploy docker nginx .github patches hook telegram provider/ninjatrader provider/databento trader/ninjatrader SECURITY.md Makefile .env.example docs/superpowers/AUDIT-CHECKLIST.md docs/superpowers/SYSTEM-MAP.md trader/auto_trader_decision.go api/handler_debug.go api/strategy_effective.go api/handler_competition.go api/handler_plan_order_truth.go api/handler_order.go api/handler_trader_config.go trader/protection_reconciler.go
 regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续|btc|ethusdt|\beth\b|altcoin|ethereum
-# Generated: crypto-removal-cr-b-table @ 56afb74687f1 (2026-10-01T16:17:02.435907+00:00); branch + sha only, never a filesystem path
+# Generated: crypto-removal-cr-b-table @ 8f1a56a4404c (2026-10-01T16:17:49.464254+00:00); branch + sha only, never a filesystem path
 # Swept: 640 tracked non-test files under CR-B paths (git ls-files -z, grep -I semantics); hits in 88 files.
 # EXACTLY ONE OWNER PER HIT LINE (Finding 3 file-level ruling): CR-A-owned lines are ceded rows (owner CR-A, disposition mirrored from their canonical table); everything else here is CR-B. One file, one owner.
 # Dispositions are reconciled to the tree (CTO ruling 2026-10-01): KEEP =
