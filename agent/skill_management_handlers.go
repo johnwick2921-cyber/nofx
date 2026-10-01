@@ -768,6 +768,8 @@ func strategyCreateFieldInlineHint(lang, field string) string {
 			return "Primary timeframe: 1m / 3m / 5m / 15m / 30m / 1h / 2h / 4h / 6h / 8h / 12h / 1d / 3d / 1w"
 		case "selected_timeframes":
 			return "Multi-timeframes: up to 4, e.g. 5m,15m,1h"
+		case "btceth_max_leverage", "altcoin_max_leverage":
+			return strategyCreateFieldDisplayName(lang, field) + ": 1-20"
 		case "min_confidence":
 			return "Minimum confidence: 50-100"
 		case "min_risk_reward_ratio":
@@ -806,6 +808,10 @@ func strategyCreateFieldInlineHint(lang, field string) string {
 		return "主周期：1m / 3m / 5m / 15m / 30m / 1h / 2h / 4h / 6h / 8h / 12h / 1d / 3d / 1w"
 	case "selected_timeframes":
 		return "多周期时间框架：最多 4 个，例如 5m,15m,1h"
+	case "btceth_max_leverage":
+		return "BTC/ETH 最大杠杆：1～20 倍"
+	case "altcoin_max_leverage":
+		return "山寨币最大杠杆：1～20 倍"
 	case "min_confidence":
 		return "最低置信度：50～100，越高越谨慎"
 	case "min_risk_reward_ratio":
@@ -950,6 +956,10 @@ func strategyCreateFieldDisplayName(lang, field string) string {
 		return "主周期"
 	case "selected_timeframes":
 		return "多周期时间框架"
+	case "btceth_max_leverage":
+		return "BTC/ETH 最大杠杆"
+	case "altcoin_max_leverage":
+		return "山寨币最大杠杆"
 	case "min_confidence":
 		return "最低置信度"
 	case "min_risk_reward_ratio":
@@ -1093,9 +1103,13 @@ func formatStrategyCreateFinalConfirmation(lang string, session skillSession, cf
 				fmt.Sprintf("- K线数量：%d", cfg.Indicators.Klines.PrimaryCount),
 				fmt.Sprintf("- 多周期：%s", defaultIfEmpty(strings.Join(cfg.Indicators.Klines.SelectedTimeframes, ","), "未设置")),
 				fmt.Sprintf("- 指标：%s", formatEnabledAIIndicatorsZH(cfg)),
+				fmt.Sprintf("- BTC/ETH 最大杠杆：%d倍", cfg.RiskControl.BTCETHMaxLeverage),
+				fmt.Sprintf("- 山寨币最大杠杆：%d倍", cfg.RiskControl.AltcoinMaxLeverage),
 				fmt.Sprintf("- 最小置信度：%d", cfg.RiskControl.MinConfidence),
 				fmt.Sprintf("- 最小盈亏比：%.2f", cfg.RiskControl.MinRiskRewardRatio),
 				fmt.Sprintf("- 最大持仓数（System enforced）：%d", cfg.RiskControl.MaxPositions),
+				fmt.Sprintf("- BTC/ETH 单币仓位上限（System enforced）：账户权益 %.2f 倍", cfg.RiskControl.BTCETHMaxPositionValueRatio),
+				fmt.Sprintf("- 山寨币单币仓位上限（System enforced）：账户权益 %.2f 倍", cfg.RiskControl.AltcoinMaxPositionValueRatio),
 				fmt.Sprintf("- 最大保证金使用率（AI 提示，非代码强制）：%.0f%%", cfg.RiskControl.MaxMarginUsage*100),
 				fmt.Sprintf("- 最小开仓金额（System enforced）：$%.2f", cfg.RiskControl.MinPositionSize),
 				fmt.Sprintf("- 角色定义：%s", compactSummaryText(cfg.PromptSections.RoleDefinition)),
@@ -1536,8 +1550,8 @@ func formatStrategyDetailResponse(lang string, strategy *store.Strategy, cfg sto
 		if len(timeframes) > 0 {
 			lines = append(lines, "- K线周期："+strings.Join(timeframes, " / "))
 		}
-		lines = append(lines, fmt.Sprintf("- 仓位风险：最多持仓 %d，最低置信度 %d",
-			cfg.RiskControl.MaxPositions, cfg.RiskControl.MinConfidence))
+		lines = append(lines, fmt.Sprintf("- 仓位风险：最多持仓 %d，BTC/ETH 最大杠杆 %d，山寨最大杠杆 %d，最低置信度 %d",
+			cfg.RiskControl.MaxPositions, cfg.RiskControl.BTCETHMaxLeverage, cfg.RiskControl.AltcoinMaxLeverage, cfg.RiskControl.MinConfidence))
 		lines = append(lines, fmt.Sprintf("- 风控阈值：最小盈亏比 %.2f；最大保证金使用率 %.2f；最小开仓金额 %.2f",
 			cfg.RiskControl.MinRiskRewardRatio, cfg.RiskControl.MaxMarginUsage, cfg.RiskControl.MinPositionSize))
 		if len(indicatorBits) > 0 {
@@ -1584,8 +1598,8 @@ func formatStrategyDetailResponse(lang string, strategy *store.Strategy, cfg sto
 	if len(timeframes) > 0 {
 		lines = append(lines, "- Timeframes: "+strings.Join(timeframes, " / "))
 	}
-	lines = append(lines, fmt.Sprintf("- Risk: max positions %d, min confidence %d",
-		cfg.RiskControl.MaxPositions, cfg.RiskControl.MinConfidence))
+	lines = append(lines, fmt.Sprintf("- Risk: max positions %d, BTC/ETH max leverage %d, alt max leverage %d, min confidence %d",
+		cfg.RiskControl.MaxPositions, cfg.RiskControl.BTCETHMaxLeverage, cfg.RiskControl.AltcoinMaxLeverage, cfg.RiskControl.MinConfidence))
 	lines = append(lines, fmt.Sprintf("- Risk thresholds: min RR %.2f, max margin usage %.2f, min position size %.2f",
 		cfg.RiskControl.MinRiskRewardRatio, cfg.RiskControl.MaxMarginUsage, cfg.RiskControl.MinPositionSize))
 	if len(indicatorBits) > 0 {
@@ -2138,6 +2152,8 @@ func formatCreatedStrategyReply(lang, name string, cfg store.StrategyConfig, war
 				"- 类型：AI 策略",
 				fmt.Sprintf("- 选币来源：%s", defaultIfEmpty(cfg.CoinSource.SourceType, "未设置")),
 				fmt.Sprintf("- 主周期：%s", defaultIfEmpty(cfg.Indicators.Klines.PrimaryTimeframe, "未设置")),
+				fmt.Sprintf("- BTC/ETH 最大杠杆：%d倍", cfg.RiskControl.BTCETHMaxLeverage),
+				fmt.Sprintf("- 山寨币最大杠杆：%d倍", cfg.RiskControl.AltcoinMaxLeverage),
 				fmt.Sprintf("- 最小置信度：%d", cfg.RiskControl.MinConfidence),
 				fmt.Sprintf("- 最小盈亏比：%.2f", cfg.RiskControl.MinRiskRewardRatio),
 			)
