@@ -20,8 +20,6 @@ import (
 
 // binanceHostAllowlist: "<file>:<enclosing func or const/var name>" → why.
 var binanceHostAllowlist = map[string]string{
-	"market/data.go:getOpenInterestData":           "crypto-perp OI; called only from the crypto branch (checked below)",
-	"market/data.go:getFundingRate":                "crypto-perp funding; called only from the crypto branch (checked below)",
 	"market/api_client.go:baseURL":                 "APIClient's base URL; NewAPIClient is constructed only inside the two fetchers above",
 	"market/historical.go:binanceFuturesKlinesURL": "GetKlinesRange — no caller anywhere (dead on the live path); deleted in W-NO-BINANCE Part B",
 }
