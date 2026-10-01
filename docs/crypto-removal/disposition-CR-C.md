@@ -1443,9 +1443,9 @@
 | `web/src/types/strategy.ts` | 239 | `hyper_all` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/types/strategy.ts` | 240 | `hyper_main` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/types/strategy.ts` | 241 | `hyper_main` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/strategy.ts` | 290 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/strategy.ts` | 291 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/strategy.ts` | 295 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/types/strategy.ts` | 290 | `btc` | KEEPCUT — P0: live futures risk caps (crypto-named) — rename is a separate owner-gated wave (CTO 10:5x) | CR-C | web crypto surface — CR-C row
+| `web/src/types/strategy.ts` | 291 | `altcoin` | KEEPCUT — P0: live futures risk caps (crypto-named) — rename is a separate owner-gated wave (CTO 10:5x) | CR-C | web crypto surface — CR-C row
+| `web/src/types/strategy.ts` | 295 | `btc` | KEEPCUT — P0: live futures risk caps (crypto-named) — rename is a separate owner-gated wave (CTO 10:5x) | CR-C | web crypto surface — CR-C row
 | `web/src/types/strategy.ts` | 296 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/types/strategy.ts` | 300 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/types/trading.ts` | 20 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
