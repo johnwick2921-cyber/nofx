@@ -1,10 +1,10 @@
 # Crypto-removal disposition table — CR-B (DS-107), plan v10 FINAL
 # The gate (scripts/crypto-union-gate.sh, DS-102) owns this format: headers below + plain pipe rows.
 branch-point: e7e7cc3d20621f9bf4ad4884ef62ebde2b4d828f
-integrator-tip: 8f1a56a4404cbf0e32d90fdee8a74b641b6dbc90
+integrator-tip: 191984dc189461532fe2cd721081cc6335b08a69
 paths: manager kernel market config store agent branding internal ninjascript screenshots cmd scripts deploy docker nginx .github patches hook telegram provider/ninjatrader provider/databento trader/ninjatrader SECURITY.md Makefile .env.example docs/superpowers/AUDIT-CHECKLIST.md docs/superpowers/SYSTEM-MAP.md trader/auto_trader_decision.go api/handler_debug.go api/strategy_effective.go api/handler_competition.go api/handler_plan_order_truth.go api/handler_order.go api/handler_trader_config.go trader/protection_reconciler.go
 regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续|btc|ethusdt|\beth\b|altcoin|ethereum
-# Generated: crypto-removal-cr-b-table @ 8f1a56a4404c (2026-10-01T16:17:49.464254+00:00); branch + sha only, never a filesystem path
+# Generated: crypto-removal-cr-b-table @ 191984dc1894 (2026-10-01T16:18:15.840521+00:00); branch + sha only, never a filesystem path
 # Swept: 640 tracked non-test files under CR-B paths (git ls-files -z, grep -I semantics); hits in 88 files.
 # EXACTLY ONE OWNER PER HIT LINE (Finding 3 file-level ruling): CR-A-owned lines are ceded rows (owner CR-A, disposition mirrored from their canonical table); everything else here is CR-B. One file, one owner.
 # Dispositions are reconciled to the tree (CTO ruling 2026-10-01): KEEP =
@@ -939,7 +939,7 @@ regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\bast
 | store/exchange.go | 375 | binance | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
 | store/exchange.go | 377 | hyperliquid | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
 | store/exchange.go | 393 | Hyperliquid | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/indicator_fingerprint.go | 12 | quant | KEEP | CR-B | records the D2-DEAD removal — historical note, keep |
+| store/indicator_fingerprint.go | 12 | quant | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
 | store/knob_registry_table.go | 14 | altcoin | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
 | store/knob_registry_table.go | 15 | altcoin | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
 | store/knob_registry_table.go | 26 | btc | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
@@ -1013,7 +1013,7 @@ regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\bast
 | store/strategy.go | 2190 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
 | store/strategy.go | 2201 | Binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
 | store/strategy.go | 2202 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
-| store/strategy.go | 2414 | ai500 | KEEP | CR-B | records the D2-DEAD removal — historical note, keep |
+| store/strategy.go | 2414 | ai500 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
 | store/strategy.go | 2419 | ai500 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
 | store/strategy.go | 2512 | claw402 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
 | store/strategy.go | 2514 | claw402 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
