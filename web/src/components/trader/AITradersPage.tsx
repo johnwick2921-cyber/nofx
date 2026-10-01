@@ -45,9 +45,6 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
   const [allModels, setAllModels] = useState<AIModel[]>([])
   const [allExchanges, setAllExchanges] = useState<Exchange[]>([])
   const [supportedModels, setSupportedModels] = useState<AIModel[]>([])
-  const [visibleTraderAddresses, setVisibleTraderAddresses] = useState<
-    Set<string>
-  >(new Set())
   const [visibleExchangeAddresses, setVisibleExchangeAddresses] = useState<
     Set<string>
   >(new Set())
@@ -68,19 +65,6 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
     setAllModels(modelConfigs)
     setAllExchanges(exchangeConfigs)
     setSupportedModels(models)
-  }
-
-  // Toggle wallet address visibility for a trader
-  const toggleTraderAddressVisibility = (traderId: string) => {
-    setVisibleTraderAddresses((prev) => {
-      const next = new Set(prev)
-      if (next.has(traderId)) {
-        next.delete(traderId)
-      } else {
-        next.add(traderId)
-      }
-      return next
-    })
   }
 
   // Toggle wallet address visibility for an exchange
@@ -706,8 +690,6 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
           models={allModels}
           configuredModelsCount={configuredModels.length}
           configuredExchangesCount={configuredExchanges.length}
-          visibleTraderAddresses={visibleTraderAddresses}
-          copiedId={copiedId}
           language={language}
           activeTraderId={activeTraderId}
           onTraderSelect={onTraderSelect}
@@ -716,8 +698,6 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
           onToggleTrader={handleToggleTrader}
           onToggleCompetition={handleToggleCompetition}
           onDeleteTrader={handleDeleteTrader}
-          onToggleTraderAddress={toggleTraderAddressVisibility}
-          onCopyAddress={handleCopyAddress}
         />
 
         {/* Create Trader Modal */}
