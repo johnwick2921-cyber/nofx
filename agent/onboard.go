@@ -126,22 +126,10 @@ var setupMessages = map[string]map[string]string{
 	},
 	"ask_exchange": {
 		"zh": "🏦 *选择你的交易所*\n\n" +
-			"1️⃣ Binance（币安）\n" +
-			"2️⃣ OKX（欧易）\n" +
-			"3️⃣ Bybit\n" +
-			"4️⃣ Bitget\n" +
-			"5️⃣ Gate\n" +
-			"6️⃣ KuCoin（库币）\n" +
-			"7️⃣ Hyperliquid\n\n" +
+			"1️⃣ NinjaTrader 8（CME 期货）\n\n" +
 			"发送数字或名称选择：",
 		"en": "🏦 *Choose your exchange*\n\n" +
-			"1️⃣ Binance\n" +
-			"2️⃣ OKX\n" +
-			"3️⃣ Bybit\n" +
-			"4️⃣ Bitget\n" +
-			"5️⃣ Gate\n" +
-			"6️⃣ KuCoin\n" +
-			"7️⃣ Hyperliquid\n\n" +
+			"1️⃣ NinjaTrader 8 (CME futures)\n\n" +
 			"Send number or name:",
 	},
 	"invalid_exchange": {

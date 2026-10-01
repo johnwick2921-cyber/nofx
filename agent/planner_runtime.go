@@ -154,7 +154,7 @@ func isConfigOrTraderIntent(text string) bool {
 	keywords := []string{
 		"交易员", "trader", "exchange", "交易所", "模型", "model", "api key", "apikey",
 		"绑定", "配置", "setup", "configure", "deepseek", "openai", "claude", "gemini",
-		"okx", "binance", "bybit", "gate", "kucoin", "hyperliquid", "aster", "lighter",
+		"ninjatrader",
 	}
 	for _, kw := range keywords {
 		if strings.Contains(lower, kw) {
@@ -1749,7 +1749,7 @@ func shouldSuspendInterruptedTask(text string) bool {
 		return isEphemeralReadFastPathKind(req.Kind)
 	}
 	return containsAny(lower, []string{
-		"btc", "eth", "sol", "价格", "行情", "balance", "position", "positions", "portfolio",
+		"sol", "价格", "行情", "balance", "position", "positions", "portfolio",
 		"market", "price", "仓位", "持仓", "余额", "账户", "trade history", "历史成交",
 	})
 }
@@ -2257,7 +2257,7 @@ func looksLikeNewTopLevelIntent(text string) bool {
 		return true
 	}
 	return containsAny(lower, []string{
-		"btc", "eth", "sol", "市场", "行情", "余额", "仓位", "持仓", "订单", "账户",
+		"sol", "市场", "行情", "余额", "仓位", "持仓", "订单", "账户",
 		"price", "market", "balance", "position", "portfolio", "account",
 	})
 }
