@@ -514,7 +514,7 @@ func statusMsg(st *store.Store, userID string, apiPort int, lang string) string 
 
 📊 "查看我的持仓"
 💰 "账户余额多少"
-🤖 "帮我创建 BTC 趋势策略并启动"
+🤖 "帮我创建 MNQ 趋势策略并启动"
 ⏹ "停止所有交易员"
 
 /help 查看更多 · /lang 切换语言`
@@ -525,7 +525,7 @@ Just tell me what you want:
 
 📊 "Show my positions"
 💰 "What's my balance?"
-🤖 "Create a BTC trend strategy and start it"
+🤖 "Create an MNQ trend strategy and start it"
 ⏹ "Stop all traders"
 
 /help for more · /lang to change language`
@@ -559,8 +559,8 @@ func helpMsg(lang string) string {
 • "列出我的交易员"
 
 *创建 & 启动*
-• "帮我创建 BTC 趋势策略并跑起来"
-• "保守型策略，只交易 BTC 和 ETH"
+• "帮我创建 MNQ 趋势策略并跑起来"
+• "保守型策略，只交易 MNQ"
 
 *控制*
 • "启动交易员"
@@ -580,8 +580,8 @@ func helpMsg(lang string) string {
 • "List my traders"
 
 *Create & start*
-• "Create a BTC trend strategy and start it"
-• "Conservative strategy, BTC and ETH only"
+• "Create an MNQ trend strategy and start it"
+• "Conservative strategy, MNQ only"
 
 *Control*
 • "Start trader"

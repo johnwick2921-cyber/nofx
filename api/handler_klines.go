@@ -73,9 +73,8 @@ func (s *Server) handleKlines(c *gin.Context) {
 	case "ninjatrader":
 		// CME futures (e.g. MNQ) via the live NT8 BarCache — the SAME feed the
 		// kernel reads (market.FuturesBarsProvider), so the chart matches
-		// decisions. No CoinAnk, no second source. Returns empty (HTTP 200, [])
-		// when the provider is unbound or the cache is cold (e.g. NT8 closed)
-		// instead of falling through to crypto.
+		// decisions. No second source. Returns empty (HTTP 200, [])
+		// when the provider is unbound or the cache is cold (e.g. NT8 closed).
 		// W-ROLL-DAY-CHART: when a prior-contract segment was stitched, the
 		// response is an envelope {klines, roll} so the chart can render the
 		// derived + basis-adjusted segment and its legend; otherwise the bare
@@ -303,8 +302,8 @@ func klinesWithAggregatedDepth(base []market.Kline, provider func(string, string
 
 // handleSymbols returns available symbols for a given exchange
 func (s *Server) handleSymbols(c *gin.Context) {
-	// The crypto symbol lists went with the hyperliquid provider; the futures
-	// venues have no per-symbol catalog endpoint (the strategy lists MNQ).
+	// The futures venues have no per-symbol catalog endpoint (the strategy
+	// lists MNQ).
 	c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported exchange for symbol listing"})
 }
 
