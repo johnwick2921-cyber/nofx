@@ -1,8 +1,8 @@
 # Crypto-removal disposition table — CR-B (DS-107)
 
 - Branch point: `dc630ad8f` (origin/dev tip the branch was cut from)
-- Integrator tip: `f195e40eb4c7e8e5899df8397db983b2c7b3d745` (claim head the sweep ran against)
-- Generated: 2026-10-01T05:41:58.489339+00:00
+- Integrator tip: `26316d8bcedfa0f3225c7cab9980bdbde3ada8e9` (claim head the sweep ran against)
+- Generated: 2026-10-01T05:47:03.164963+00:00
 - Sweep regex: extracted PROGRAMMATICALLY from plan v10 line 108 (the C13 "THE assembled regex" bullet; GO item 2 = NO, so the BASE literal without alpaca/twelvedata/sina). Never hand-typed; when DS-102's guard lands, the gate asserts this table's regex byte-for-byte against it.
 - Swept: 639 tracked non-test files under CR-B paths (git ls-files -z, grep -I semantics); hits in 90 files.
 - CANONICAL FORMAT (CTO ruling 2026-10-01 00:40 CDT): one row per hit line, six columns path|line|token|disposition|owner|reason — machine-parseable.
@@ -315,42 +315,42 @@
 | `SECURITY.md` | 412 | `Hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `SECURITY.md` | 413 | `Binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `SECURITY.md` | 413 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `agent/agent.go` | 29 | `wallet` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 64 | `Wallet` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 64 | `wallet` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 65 | `USDC` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 65 | `wallet` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 65 | `USDC` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
+| `agent/agent.go` | 29 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/agent.go` | 64 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/agent.go` | 64 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/agent.go` | 65 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/agent.go` | 65 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/agent.go` | 65 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `agent/agent.go` | 71 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `agent/agent.go` | 71 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `agent/agent.go` | 71 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `agent/agent.go` | 169 | `wallet` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 169 | `usdc` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 169 | `USDC` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 177 | `claw402` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 178 | `x402` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 226 | `USDC` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 236 | `USDC` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 238 | `USDC` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 249 | `USDC` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 249 | `USDC` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 250 | `USDC` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 250 | `USDC` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 277 | `USDC` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 278 | `USDC` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 285 | `wallet` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 285 | `Wallet` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 286 | `wallet` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 289 | `USDC` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 289 | `wallet` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 296 | `USDC` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 298 | `claw402` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 298 | `blockrun` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 326 | `wallet` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 362 | `claw402` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 362 | `claw402` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 459 | `Wallet` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
-| `agent/agent.go` | 508 | `Wallet` | CUT | CR-A | ceded to CR-A — payment lines (wallet import, USDC balance ranking, claw402 provider cases + URL, wallet-balance question gate) go; the native provider path stays |
+| `agent/agent.go` | 169 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/agent.go` | 169 | `usdc` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/agent.go` | 169 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/agent.go` | 177 | `claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/agent.go` | 178 | `x402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/agent.go` | 226 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/agent.go` | 236 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/agent.go` | 238 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/agent.go` | 249 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/agent.go` | 249 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/agent.go` | 250 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/agent.go` | 250 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/agent.go` | 277 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/agent.go` | 278 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/agent.go` | 285 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/agent.go` | 285 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/agent.go` | 286 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/agent.go` | 289 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/agent.go` | 289 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/agent.go` | 296 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/agent.go` | 298 | `claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/agent.go` | 298 | `blockrun` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/agent.go` | 326 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/agent.go` | 362 | `claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/agent.go` | 362 | `claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/agent.go` | 459 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/agent.go` | 508 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
 | `agent/agent.go` | 745 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `agent/agent.go` | 758 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `agent/agent.go` | 761 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
@@ -1120,18 +1120,18 @@
 | `agent/skills/trader_management.json` | 146 | `claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `agent/skills/trader_management.json` | 158 | `claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `agent/skills/trader_management.json` | 158 | `blockrun` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `agent/tools.go` | 24 | `aster` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 25 | `binance` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 26 | `bitget` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 27 | `bybit` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 29 | `hyperliquid` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 29 | `hyperliquid` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 30 | `indodax` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 31 | `kucoin` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 32 | `lighter` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 34 | `okx` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 41 | `binance` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 41 | `binance` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
+| `agent/tools.go` | 24 | `aster` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 25 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 26 | `bitget` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 27 | `bybit` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 29 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 29 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 30 | `indodax` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 31 | `kucoin` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 32 | `lighter` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 34 | `okx` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 41 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 41 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `agent/tools.go` | 64 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
 | `agent/tools.go` | 76 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
 | `agent/tools.go` | 79 | `usdt` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
@@ -1218,45 +1218,45 @@
 | `agent/tools.go` | 1037 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
 | `agent/tools.go` | 1041 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
 | `agent/tools.go` | 1041 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `agent/tools.go` | 1065 | `binance` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1066 | `binance` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1067 | `bybit` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1068 | `bybit` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1068 | `Bybit` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1069 | `okx` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1070 | `okx` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1070 | `OKX` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1071 | `bitget` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1072 | `bitget` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1072 | `Bitget` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1075 | `kucoin` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1076 | `kucoin` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1076 | `KuCoin` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1077 | `indodax` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1078 | `indodax` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1078 | `Indodax` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1079 | `hyperliquid` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1080 | `hyperliquid` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1080 | `Hyperliquid` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1082 | `Hyperliquid` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1082 | `Wallet` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1084 | `Hyperliquid` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1086 | `aster` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1087 | `aster` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1092 | `lighter` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1093 | `lighter` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1094 | `Wallet` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1110 | `Wallet` | KEEP | CR-A | ceded to CR-A — NT8 account-snapshot shape — same totalWalletBalance key family, the agent balance extractor (CTO ruling) |
-| `agent/tools.go` | 1110 | `wallet` | KEEP | CR-A | ceded to CR-A — NT8 account-snapshot shape — same totalWalletBalance key family, the agent balance extractor (CTO ruling) |
-| `agent/tools.go` | 1146 | `USDC` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1149 | `wallet` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1149 | `Wallet` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1149 | `wallet` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1150 | `Wallet` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1150 | `wallet` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1151 | `USDC` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1151 | `wallet` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1152 | `USDC` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
+| `agent/tools.go` | 1065 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1066 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1067 | `bybit` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1068 | `bybit` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1068 | `Bybit` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1069 | `okx` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1070 | `okx` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1070 | `OKX` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1071 | `bitget` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1072 | `bitget` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1072 | `Bitget` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1075 | `kucoin` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1076 | `kucoin` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1076 | `KuCoin` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1077 | `indodax` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1078 | `indodax` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1078 | `Indodax` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1079 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1080 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1080 | `Hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1082 | `Hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1082 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1084 | `Hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1086 | `aster` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1087 | `aster` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1092 | `lighter` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1093 | `lighter` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1094 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1110 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1110 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1146 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1149 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1149 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1149 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1150 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1150 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1151 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1151 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1152 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `agent/tools.go` | 1472 | `Hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `agent/tools.go` | 1472 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
 | `agent/tools.go` | 1472 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
@@ -1282,73 +1282,73 @@
 | `agent/tools.go` | 1607 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
 | `agent/tools.go` | 1607 | `Hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `agent/tools.go` | 1607 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `agent/tools.go` | 1608 | `Hyperliquid` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1608 | `Wallet` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1609 | `Wallet` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1609 | `Hyperliquid` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1609 | `Wallet` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1619 | `Wallet` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1619 | `Wallet` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1620 | `Wallet` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1621 | `Wallet` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1621 | `Wallet` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1653 | `hyperliquid` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1653 | `Wallet` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1653 | `Wallet` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1657 | `Wallet` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1657 | `Wallet` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1672 | `Wallet` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 1677 | `Wallet` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 2390 | `AI500` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 2413 | `AI500` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 2413 | `AI500` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 2485 | `AI500` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 2485 | `AI500` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3013 | `binance` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3014 | `binance` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3050 | `USDT` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3051 | `USDT` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3081 | `binance` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3093 | `binance` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3102 | `binance` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3107 | `binance` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3248 | `USDT` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3250 | `USDT` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3308 | `USDT` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3309 | `USDT` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3328 | `binance` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3610 | `hyper_all` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3611 | `hyper_main` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3612 | `hyper_main` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3643 | `USDT` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3643 | `USDC` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3645 | `USDT` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3727 | `USDT` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3734 | `USDT` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3735 | `USDC` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3756 | `USDT` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3765 | `USDT` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3766 | `USDT` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3767 | `USDT` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3773 | `USDT` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3791 | `USDT` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/tools.go` | 3791 | `USDC` | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL + the model-list USDC block go; the ninjatrader factory arm stays |
-| `agent/trade.go` | 21 | `USDT` | KEEP | CR-A | ceded to CR-A — futures-active chat-entry notional caps (tradeLargeOrderNotionalUSDT/tradeHardMaxOrderNotionalUSDT + hard-cap/min-size messages) — the MNQ path uses the same admission chain; USDT here is legacy naming for the value currency |
-| `agent/trade.go` | 22 | `USDT` | KEEP | CR-A | ceded to CR-A — futures-active chat-entry notional caps (tradeLargeOrderNotionalUSDT/tradeHardMaxOrderNotionalUSDT + hard-cap/min-size messages) — the MNQ path uses the same admission chain; USDT here is legacy naming for the value currency |
-| `agent/trade.go` | 60 | `USDT` | CUT | CR-A | ceded to CR-A — crypto symbol example/comment and the USDT-suffix stripping go; the chat-entry admission chain stays |
-| `agent/trade.go` | 327 | `USDT` | KEEP | CR-A | ceded to CR-A — futures-active chat-entry notional caps (tradeLargeOrderNotionalUSDT/tradeHardMaxOrderNotionalUSDT + hard-cap/min-size messages) — the MNQ path uses the same admission chain; USDT here is legacy naming for the value currency |
-| `agent/trade.go` | 328 | `USDT` | KEEP | CR-A | ceded to CR-A — futures-active chat-entry notional caps (tradeLargeOrderNotionalUSDT/tradeHardMaxOrderNotionalUSDT + hard-cap/min-size messages) — the MNQ path uses the same admission chain; USDT here is legacy naming for the value currency |
-| `agent/trade.go` | 328 | `USDT` | KEEP | CR-A | ceded to CR-A — futures-active chat-entry notional caps (tradeLargeOrderNotionalUSDT/tradeHardMaxOrderNotionalUSDT + hard-cap/min-size messages) — the MNQ path uses the same admission chain; USDT here is legacy naming for the value currency |
-| `agent/trade.go` | 346 | `USDT` | KEEP | CR-A | ceded to CR-A — futures-active chat-entry notional caps (tradeLargeOrderNotionalUSDT/tradeHardMaxOrderNotionalUSDT + hard-cap/min-size messages) — the MNQ path uses the same admission chain; USDT here is legacy naming for the value currency |
-| `agent/trade.go` | 346 | `USDT` | KEEP | CR-A | ceded to CR-A — futures-active chat-entry notional caps (tradeLargeOrderNotionalUSDT/tradeHardMaxOrderNotionalUSDT + hard-cap/min-size messages) — the MNQ path uses the same admission chain; USDT here is legacy naming for the value currency |
-| `agent/trade.go` | 357 | `USDT` | KEEP | CR-A | ceded to CR-A — futures-active chat-entry notional caps (tradeLargeOrderNotionalUSDT/tradeHardMaxOrderNotionalUSDT + hard-cap/min-size messages) — the MNQ path uses the same admission chain; USDT here is legacy naming for the value currency |
-| `agent/trade.go` | 362 | `USDT` | CUT | CR-A | ceded to CR-A — crypto symbol example/comment and the USDT-suffix stripping go; the chat-entry admission chain stays |
-| `agent/trade.go` | 400 | `USDT` | KEEP | CR-A | ceded to CR-A — futures-active chat-entry notional caps (tradeLargeOrderNotionalUSDT/tradeHardMaxOrderNotionalUSDT + hard-cap/min-size messages) — the MNQ path uses the same admission chain; USDT here is legacy naming for the value currency |
-| `agent/trade.go` | 400 | `USDT` | KEEP | CR-A | ceded to CR-A — futures-active chat-entry notional caps (tradeLargeOrderNotionalUSDT/tradeHardMaxOrderNotionalUSDT + hard-cap/min-size messages) — the MNQ path uses the same admission chain; USDT here is legacy naming for the value currency |
-| `agent/trade.go` | 413 | `USDT` | KEEP | CR-A | ceded to CR-A — futures-active chat-entry notional caps (tradeLargeOrderNotionalUSDT/tradeHardMaxOrderNotionalUSDT + hard-cap/min-size messages) — the MNQ path uses the same admission chain; USDT here is legacy naming for the value currency |
-| `agent/trade.go` | 413 | `USDT` | KEEP | CR-A | ceded to CR-A — futures-active chat-entry notional caps (tradeLargeOrderNotionalUSDT/tradeHardMaxOrderNotionalUSDT + hard-cap/min-size messages) — the MNQ path uses the same admission chain; USDT here is legacy naming for the value currency |
-| `agent/trade.go` | 486 | `USDT` | CUT | CR-A | ceded to CR-A — crypto symbol example/comment and the USDT-suffix stripping go; the chat-entry admission chain stays |
-| `agent/trade.go` | 487 | `USDT` | CUT | CR-A | ceded to CR-A — crypto symbol example/comment and the USDT-suffix stripping go; the chat-entry admission chain stays |
+| `agent/tools.go` | 1608 | `Hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1608 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1609 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1609 | `Hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1609 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1619 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1619 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1620 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1621 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1621 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1653 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 1653 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1653 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1657 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1657 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1672 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 1677 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `agent/tools.go` | 2390 | `AI500` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 2413 | `AI500` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 2413 | `AI500` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 2485 | `AI500` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 2485 | `AI500` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3013 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3014 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3050 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3051 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3081 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3093 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3102 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3107 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3248 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3250 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3308 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3309 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3328 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3610 | `hyper_all` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3611 | `hyper_main` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3612 | `hyper_main` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3643 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3643 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3645 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3727 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3734 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3735 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3756 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3765 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3766 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3767 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3773 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3791 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/tools.go` | 3791 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/trade.go` | 21 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/trade.go` | 22 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/trade.go` | 60 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/trade.go` | 327 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/trade.go` | 328 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/trade.go` | 328 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/trade.go` | 346 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/trade.go` | 346 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/trade.go` | 357 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/trade.go` | 362 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/trade.go` | 400 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/trade.go` | 400 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/trade.go` | 413 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/trade.go` | 413 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/trade.go` | 486 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `agent/trade.go` | 487 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `agent/web.go` | 50 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `agent/web.go` | 56 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `agent/web.go` | 56 | `Binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
@@ -1399,11 +1399,11 @@
 | `hook/hooks.go` | 37 | `BINANCE` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `hook/hooks.go` | 37 | `BINANCE` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `hook/hooks.go` | 37 | `Binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `hook/trader_hook.go` | 7 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `hook/trader_hook.go` | 10 | `Binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `hook/trader_hook.go` | 15 | `Binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `hook/trader_hook.go` | 17 | `Binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `hook/trader_hook.go` | 22 | `Binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `hook/trader_hook.go` | 7 | `binance` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `hook/trader_hook.go` | 10 | `Binance` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `hook/trader_hook.go` | 15 | `Binance` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `hook/trader_hook.go` | 17 | `Binance` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `hook/trader_hook.go` | 22 | `Binance` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
 | `kernel/engine.go` | 15 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `kernel/engine.go` | 55 | `hyper_all` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `kernel/engine.go` | 55 | `hyper_main` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
@@ -1772,13 +1772,13 @@
 | `market/futures_data.go` | 5 | `CoinAnk` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `market/futures_symbol.go` | 5 | `CoinAnk` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `market/futures_symbol.go` | 38 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `market/historical.go` | 12 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `market/historical.go` | 12 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `market/historical.go` | 13 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `market/historical.go` | 36 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `market/historical.go` | 44 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `market/historical.go` | 60 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `market/historical.go` | 98 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `market/historical.go` | 12 | `binance` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `market/historical.go` | 12 | `binance` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `market/historical.go` | 13 | `binance` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `market/historical.go` | 36 | `binance` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `market/historical.go` | 44 | `binance` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `market/historical.go` | 60 | `binance` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `market/historical.go` | 98 | `binance` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
 | `market/types.go` | 38 | `BINANCE` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `market/types.go` | 127 | `Binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `ninjascript/VLContractResolver.cs` | 66 | `USDT` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
@@ -1790,130 +1790,130 @@
 | `provider/ninjatrader/bar_source.go` | 18 | `"mixed"` | KEEP | CR-B | BarSourceMixed = "mixed" — futures bar-source enum (plan C13) |
 | `provider/ninjatrader/tcp_framing.go` | 675 | `"mixed"` | KEEP | CR-B | comment describes BarSourceMixed (plan C13) |
 | `scripts/replay_write_time_feasibility.py` | 162 | `"mixed"` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_charge.go` | 152 | `Claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_charge.go` | 152 | `claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_charge.go` | 153 | `Claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_charge.go` | 154 | `claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_charge.go` | 157 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_charge.go` | 158 | `usdc` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_charge.go` | 165 | `usdc` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_charge.go` | 166 | `usdc` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_model.go` | 64 | `Claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_model.go` | 64 | `claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_model.go` | 65 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/ai_model.go` | 66 | `Claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_model.go` | 68 | `claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_model.go` | 70 | `claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_model.go` | 431 | `Claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_model.go` | 431 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/ai_model.go` | 431 | `claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_model.go` | 431 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/ai_model.go` | 432 | `claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_model.go` | 433 | `claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_model.go` | 434 | `claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_model.go` | 436 | `Claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_model.go` | 436 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/ai_model.go` | 442 | `claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_model.go` | 443 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/ai_model.go` | 444 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/ai_model.go` | 445 | `claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_model.go` | 445 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/ai_model.go` | 447 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/ai_model.go` | 456 | `claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_model.go` | 456 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/ai_model.go` | 461 | `claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_model.go` | 471 | `claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/ai_model.go` | 471 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `store/ai_charge.go` | 152 | `Claw402` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_charge.go` | 152 | `claw402` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_charge.go` | 153 | `Claw402` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_charge.go` | 154 | `claw402` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_charge.go` | 157 | `USDC` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_charge.go` | 158 | `usdc` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_charge.go` | 165 | `usdc` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_charge.go` | 166 | `usdc` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 64 | `Claw402` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 64 | `claw402` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 65 | `wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 66 | `Claw402` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 68 | `claw402` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 70 | `claw402` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 431 | `Claw402` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 431 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 431 | `claw402` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 431 | `wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 432 | `claw402` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 433 | `claw402` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 434 | `claw402` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 436 | `Claw402` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 436 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 442 | `claw402` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 443 | `wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 444 | `wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 445 | `claw402` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 445 | `wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 447 | `wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 456 | `claw402` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 456 | `wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 461 | `claw402` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 471 | `claw402` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/ai_model.go` | 471 | `wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
 | `store/bar_history.go` | 151 | `"mixed"` | KEEP | CR-B | NT8 live+historical census value + boot-line mixed=%d (plan C13) |
 | `store/bar_history_across_roll.go` | 82 | `"mixed"` | KEEP | CR-B | comment describes the roll-straddling ("mixed") state (plan C13) |
-| `store/exchange.go` | 32 | `Hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 32 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 32 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 32 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 32 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 32 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 33 | `Hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 33 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 33 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 37 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 37 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 37 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 101 | `Hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 101 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 105 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 131 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 131 | `bybit` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 131 | `okx` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 131 | `bitget` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 131 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 131 | `aster` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 131 | `lighter` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 145 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 145 | `bybit` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 145 | `okx` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 145 | `bitget` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 145 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 145 | `aster` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 145 | `lighter` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 155 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 210 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 211 | `Binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 212 | `bybit` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 213 | `Bybit` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 214 | `okx` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 215 | `OKX` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 216 | `bitget` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 217 | `Bitget` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 218 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 219 | `Hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 220 | `aster` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 221 | `Aster` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 222 | `lighter` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 223 | `LIGHTER` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 224 | `indodax` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 225 | `Indodax` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 238 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 238 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 238 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 240 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 245 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 245 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 246 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 274 | `Hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 274 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 274 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 274 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 275 | `Hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 275 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 279 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 279 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 298 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 298 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 298 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 299 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 307 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 307 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 307 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 307 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 308 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 308 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 311 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 311 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 388 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 388 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 391 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 391 | `bybit` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 391 | `okx` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 391 | `bitget` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 391 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 391 | `aster` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 391 | `lighter` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 393 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 393 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 409 | `Hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 409 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/exchange.go` | 409 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/exchange.go` | 409 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `store/exchange.go` | 32 | `Hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 32 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 32 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 32 | `wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 32 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 32 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 33 | `Hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 33 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 33 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 37 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 37 | `wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 37 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 101 | `Hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 101 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 105 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 131 | `binance` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 131 | `bybit` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 131 | `okx` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 131 | `bitget` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 131 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 131 | `aster` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 131 | `lighter` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 145 | `binance` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 145 | `bybit` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 145 | `okx` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 145 | `bitget` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 145 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 145 | `aster` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 145 | `lighter` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 155 | `binance` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 210 | `binance` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 211 | `Binance` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 212 | `bybit` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 213 | `Bybit` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 214 | `okx` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 215 | `OKX` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 216 | `bitget` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 217 | `Bitget` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 218 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 219 | `Hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 220 | `aster` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 221 | `Aster` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 222 | `lighter` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 223 | `LIGHTER` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 224 | `indodax` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 225 | `Indodax` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 238 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 238 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 238 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 240 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 245 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 245 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 246 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 274 | `Hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 274 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 274 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 274 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 275 | `Hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 275 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 279 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 279 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 298 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 298 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 298 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 299 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 307 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 307 | `wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 307 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 307 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 308 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 308 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 311 | `wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 311 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 388 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 388 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 391 | `binance` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 391 | `bybit` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 391 | `okx` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 391 | `bitget` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 391 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 391 | `aster` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 391 | `lighter` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 393 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 393 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 409 | `Hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 409 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 409 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/exchange.go` | 409 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
 | `store/indicator_fingerprint.go` | 12 | `quant` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `store/knob_registry_table.go` | 73 | `hyper_main` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `store/knob_registry_table.go` | 73 | `hyper_main` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
@@ -1973,37 +1973,37 @@
 | `store/trader.go` | 67 | `oi_top` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `store/trader.go` | 163 | `AI500` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
 | `store/trader.go` | 164 | `oi_top` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/visibility.go` | 5 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/visibility.go` | 5 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/visibility.go` | 5 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/visibility.go` | 7 | `binance` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/visibility.go` | 7 | `bybit` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/visibility.go` | 7 | `indodax` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/visibility.go` | 12 | `okx` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/visibility.go` | 12 | `bitget` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/visibility.go` | 12 | `kucoin` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/visibility.go` | 18 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/visibility.go` | 21 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/visibility.go` | 21 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/visibility.go` | 21 | `hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/visibility.go` | 21 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/visibility.go` | 23 | `aster` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/visibility.go` | 29 | `lighter` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/visibility.go` | 31 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/visibility.go` | 31 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/visibility.go` | 80 | `Hyperliquid` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `store/visibility.go` | 80 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| `store/visibility.go` | 84 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| `store/visibility.go` | 5 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/visibility.go` | 5 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/visibility.go` | 5 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/visibility.go` | 7 | `binance` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/visibility.go` | 7 | `bybit` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/visibility.go` | 7 | `indodax` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/visibility.go` | 12 | `okx` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/visibility.go` | 12 | `bitget` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/visibility.go` | 12 | `kucoin` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/visibility.go` | 18 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/visibility.go` | 21 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/visibility.go` | 21 | `wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/visibility.go` | 21 | `hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/visibility.go` | 21 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/visibility.go` | 23 | `aster` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/visibility.go` | 29 | `lighter` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/visibility.go` | 31 | `wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/visibility.go` | 31 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/visibility.go` | 80 | `Hyperliquid` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/visibility.go` | 80 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `store/visibility.go` | 84 | `Wallet` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
 | `telegram/agent/prompt.go` | 79 | `ai500` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `telegram/bot.go` | 427 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `telegram/bot.go` | 428 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `telegram/bot.go` | 443 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `telegram/bot.go` | 444 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `telegram/bot.go` | 467 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `telegram/bot.go` | 467 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `telegram/bot.go` | 467 | `x402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `telegram/bot.go` | 468 | `USDC` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
-| `telegram/bot.go` | 469 | `claw402` | DELETE | CR-B | crypto-only site (plan v10 C4/C6/C7 family — review before code) |
+| `telegram/bot.go` | 427 | `USDC` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `telegram/bot.go` | 428 | `USDC` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `telegram/bot.go` | 443 | `USDC` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `telegram/bot.go` | 444 | `USDC` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `telegram/bot.go` | 467 | `USDC` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `telegram/bot.go` | 467 | `USDC` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `telegram/bot.go` | 467 | `x402` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `telegram/bot.go` | 468 | `USDC` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
+| `telegram/bot.go` | 469 | `claw402` | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
 | `trader/auto_trader_decision.go` | 131 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
 | `trader/auto_trader_decision.go` | 136 | `wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
 | `trader/auto_trader_decision.go` | 136 | `Wallet` | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
