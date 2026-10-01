@@ -49,13 +49,6 @@ func detectCatalogField(text string, catalog []entityFieldMeta) string {
 	if lower == "" {
 		return ""
 	}
-	if strings.Contains(lower, "api key index") {
-		for _, meta := range catalog {
-			if meta.Key == "lighter_api_key_index" {
-				return meta.Key
-			}
-		}
-	}
 	bestKey := ""
 	bestLen := -1
 	for _, meta := range catalog {
