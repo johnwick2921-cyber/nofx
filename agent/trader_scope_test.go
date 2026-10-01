@@ -906,8 +906,8 @@ func TestAIStrategySystemEnforcedFieldsAreDisplayedButNotEditable(t *testing.T) 
 	reply := formatStrategyCreateFinalConfirmation("zh", session, cfg)
 	// Max Margin is displayed as an advisory ("AI 提示，非代码强制") in the create
 	// summary — it was reclassified from code-enforced to advisory — yet the Agent
-	// still cannot patch it (asserted below). The other three remain System enforced.
-	for _, want := range []string{"最大持仓数（System enforced）", "BTC/ETH 单币仓位上限（System enforced）", "最大保证金使用率（AI 提示，非代码强制）", "最小开仓金额（System enforced）"} {
+	// still cannot patch it (asserted below). The other two remain System enforced.
+	for _, want := range []string{"最大持仓数（System enforced）", "最大保证金使用率（AI 提示，非代码强制）", "最小开仓金额（System enforced）"} {
 		if !strings.Contains(reply, want) {
 			t.Fatalf("expected final summary to display %q, got: %s", want, reply)
 		}
@@ -1612,8 +1612,8 @@ func TestStrategyCreateOptionsQuestionExplainsCurrentMissingField(t *testing.T) 
 }
 
 func TestStrategyCreateMissingFieldsIncludeInlineOptions(t *testing.T) {
-	reply := formatStrategyCreateConfigNeeded("zh", "source_type,primary_timeframe,btceth_max_leverage,min_confidence,trading_frequency")
-	for _, want := range []string{"static", "1m", "1h", "1～20", "50～100", "每天最多"} {
+	reply := formatStrategyCreateConfigNeeded("zh", "source_type,primary_timeframe,selected_timeframes,min_confidence,trading_frequency")
+	for _, want := range []string{"static", "1m", "1h", "多周期时间框架", "50～100", "每天最多"} {
 		if !strings.Contains(reply, want) {
 			t.Fatalf("expected missing-field prompt to include option/range %q, got: %s", want, reply)
 		}
@@ -1663,7 +1663,7 @@ func TestStrategyCreateConfigPatchReplyUsesStructuredMissingFields(t *testing.T)
 	if strings.Contains(reply, "我建议按高频但稳健来填") {
 		t.Fatalf("LLM free-form recommendation should not be used as the current plan, got: %s", reply)
 	}
-	if !strings.Contains(reply, "BTC/ETH 最大杠杆") || !strings.Contains(reply, "开仓标准") {
+	if !strings.Contains(reply, "开仓标准") {
 		t.Fatalf("expected deterministic missing template fields, got: %s", reply)
 	}
 }
@@ -1709,7 +1709,7 @@ func TestStrategyCreateFirstStageConfigProgressUsesStructuredMissingFields(t *te
 	if strings.Contains(reply, "其他我建议按高频稳健来定") {
 		t.Fatalf("LLM free-form recommendation should not be used as the current plan, got: %s", reply)
 	}
-	if !strings.Contains(reply, "主周期") || !strings.Contains(reply, "BTC/ETH 最大杠杆") {
+	if !strings.Contains(reply, "主周期") {
 		t.Fatalf("expected deterministic missing template fields, got: %s", reply)
 	}
 }

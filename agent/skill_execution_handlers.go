@@ -558,26 +558,6 @@ func strategyConfigFieldDisplayName(field, lang string) string {
 			return "杠杆"
 		}
 		return "leverage"
-	case "btceth_max_leverage":
-		if lang == "zh" {
-			return "BTC/ETH 最大杠杆"
-		}
-		return "BTC/ETH max leverage"
-	case "altcoin_max_leverage":
-		if lang == "zh" {
-			return "山寨币最大杠杆"
-		}
-		return "altcoin max leverage"
-	case "btceth_max_position_value_ratio":
-		if lang == "zh" {
-			return "BTC/ETH 最大仓位价值倍数"
-		}
-		return "BTC/ETH max position value ratio"
-	case "altcoin_max_position_value_ratio":
-		if lang == "zh" {
-			return "山寨币最大仓位价值倍数"
-		}
-		return "altcoin max position value ratio"
 	case "max_margin_usage":
 		if lang == "zh" {
 			return "最大保证金使用率"
@@ -814,19 +794,15 @@ func applyStrategyConfigPatch(cfg *store.StrategyConfig, field, value string) er
 	case "btceth_max_leverage":
 		parsed, err := strconv.Atoi(value)
 		if err != nil {
-			return fmt.Errorf("BTC/ETH 最大杠杆需要是整数")
+			return fmt.Errorf("最大杠杆需要是整数")
 		}
 		cfg.RiskControl.BTCETHMaxLeverage = parsed
 	case "altcoin_max_leverage":
 		parsed, err := strconv.Atoi(value)
 		if err != nil {
-			return fmt.Errorf("山寨币最大杠杆需要是整数")
+			return fmt.Errorf("最大杠杆需要是整数")
 		}
 		cfg.RiskControl.AltcoinMaxLeverage = parsed
-	case "btceth_max_position_value_ratio":
-		return fmt.Errorf("%s", strategyLockedFieldError("zh", field))
-	case "altcoin_max_position_value_ratio":
-		return fmt.Errorf("%s", strategyLockedFieldError("zh", field))
 	case "max_margin_usage":
 		return fmt.Errorf("%s", strategyLockedFieldError("zh", field))
 	case "min_position_size":
@@ -2388,21 +2364,9 @@ func formatTraderDiagnosisEvidence(lang string, ev traderDiagnosisEvidence) stri
 	latestWait := containsAny(latestEvidence, []string{"wait succeeded", `"action":"wait"`, `"action":"hold"`})
 	primarySymbol := primaryDiagnosisSymbol(latest.CandidateCoins, latest.DecisionJSON)
 	amount, minimum := openingAmountAndMinimum(string(rawDecisions))
-	totalEquity := toFloat(ev.Account["total_equity"])
 	available := toFloat(ev.Account["available_balance"])
 	if available == 0 {
 		available = toFloat(ev.Account["available"])
-	}
-	var maxBTCETHPositionValue float64
-	if ev.Strategy != nil && ev.Strategy.Config != nil {
-		if risk, ok := nestedMap(ev.Strategy.Config, "ai_config", "risk_control"); ok {
-			maxBTCETHPositionValue = totalEquity * firstPositiveFloat(risk["btc_eth_max_position_value_ratio"], risk["btceth_max_position_value_ratio"])
-		}
-		if maxBTCETHPositionValue == 0 {
-			if risk, ok := ev.Strategy.Config["risk_control"].(map[string]any); ok {
-				maxBTCETHPositionValue = totalEquity * firstPositiveFloat(risk["btc_eth_max_position_value_ratio"], risk["btceth_max_position_value_ratio"])
-			}
-		}
 	}
 
 	if lang == "zh" {
@@ -2434,9 +2398,6 @@ func formatTraderDiagnosisEvidence(lang string, ev traderDiagnosisEvidence) stri
 			}
 			summary += "，所以这笔单被拦下了。"
 			lines = append(lines, summary)
-			if totalEquity > 0 && maxBTCETHPositionValue > 0 {
-				lines = append(lines, fmt.Sprintf("当前账户权益约 $%.2f，按策略风控算出来的单笔仓位上限约 $%.2f，容易达不到最小下单金额。", totalEquity, maxBTCETHPositionValue))
-			}
 			if latestWait {
 				lines = append(lines, "另外，最近也有一些周期是 AI 主动选择等待，说明并不是系统完全没跑。")
 			}

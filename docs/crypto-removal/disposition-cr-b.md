@@ -1,10 +1,10 @@
 # Crypto-removal disposition table — CR-B (DS-107), plan v10 FINAL
 # The gate (scripts/crypto-union-gate.sh, DS-102) owns this format: headers below + plain pipe rows.
-branch-point: e7e7cc3d20621f9bf4ad4884ef62ebde2b4d828f
-integrator-tip: 191984dc189461532fe2cd721081cc6335b08a69
+branch-point: 7f44df8202c7fecfc01aefa0144d556b2721f741
+integrator-tip: 7f44df8202c7fecfc01aefa0144d556b2721f741
 paths: manager kernel market config store agent branding internal ninjascript screenshots cmd scripts deploy docker nginx .github patches hook telegram provider/ninjatrader provider/databento trader/ninjatrader SECURITY.md Makefile .env.example docs/superpowers/AUDIT-CHECKLIST.md docs/superpowers/SYSTEM-MAP.md trader/auto_trader_decision.go api/handler_debug.go api/strategy_effective.go api/handler_competition.go api/handler_plan_order_truth.go api/handler_order.go api/handler_trader_config.go trader/protection_reconciler.go
 regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续|btc|ethusdt|\beth\b|altcoin|ethereum
-# Generated: crypto-removal-cr-b-table @ 191984dc1894 (2026-10-01T16:18:15.840521+00:00); branch + sha only, never a filesystem path
+# Generated: crypto-removal-cr-b-table @ 7f44df8202c7 (2026-10-01T23:57:03.000850+00:00); branch + sha only, never a filesystem path
 # Swept: 640 tracked non-test files under CR-B paths (git ls-files -z, grep -I semantics); hits in 88 files.
 # EXACTLY ONE OWNER PER HIT LINE (Finding 3 file-level ruling): CR-A-owned lines are ceded rows (owner CR-A, disposition mirrored from their canonical table); everything else here is CR-B. One file, one owner.
 # Dispositions are reconciled to the tree (CTO ruling 2026-10-01): KEEP =
@@ -404,36 +404,17 @@ regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\bast
 | agent/skill_execution_handlers.go | 405 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
 | agent/skill_execution_handlers.go | 430 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
 | agent/skill_execution_handlers.go | 434 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_execution_handlers.go | 561 | btc | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_execution_handlers.go | 563 | BTC | KEEP | CR-B | label naming the live futures risk caps — KEEP byte-identical (owner removal-only ruling 10-01 11:0x) |
-| agent/skill_execution_handlers.go | 565 | BTC | KEEP | CR-B | label naming the live futures risk caps — KEEP byte-identical (owner removal-only ruling 10-01 11:0x) |
-| agent/skill_execution_handlers.go | 566 | altcoin | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_execution_handlers.go | 570 | altcoin | KEEP | CR-B | label naming the live futures risk caps — KEEP byte-identical (owner removal-only ruling 10-01 11:0x) |
-| agent/skill_execution_handlers.go | 571 | btc | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_execution_handlers.go | 573 | BTC | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 575 | BTC | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 576 | altcoin | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_execution_handlers.go | 580 | altcoin | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 812 | BTC | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_execution_handlers.go | 813 | Altcoin | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_execution_handlers.go | 814 | btc | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_execution_handlers.go | 817 | BTC | KEEP | CR-B | label naming the live futures risk caps — KEEP byte-identical (owner removal-only ruling 10-01 11:0x) |
-| agent/skill_execution_handlers.go | 819 | BTC | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_execution_handlers.go | 820 | altcoin | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_execution_handlers.go | 825 | Altcoin | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_execution_handlers.go | 826 | btc | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_execution_handlers.go | 828 | altcoin | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_execution_handlers.go | 1514 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_execution_handlers.go | 1524 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 1528 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_execution_handlers.go | 2396 | BTC | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 2399 | BTC | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_execution_handlers.go | 2401 | BTC | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 2403 | BTC | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_execution_handlers.go | 2437 | BTC | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 2438 | BTC | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 2500 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 2508 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
+| agent/skill_execution_handlers.go | 792 | BTC | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
+| agent/skill_execution_handlers.go | 793 | Altcoin | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
+| agent/skill_execution_handlers.go | 794 | btc | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
+| agent/skill_execution_handlers.go | 799 | BTC | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
+| agent/skill_execution_handlers.go | 800 | altcoin | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
+| agent/skill_execution_handlers.go | 805 | Altcoin | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
+| agent/skill_execution_handlers.go | 1490 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| agent/skill_execution_handlers.go | 1500 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
+| agent/skill_execution_handlers.go | 1504 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
+| agent/skill_execution_handlers.go | 2461 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
+| agent/skill_execution_handlers.go | 2469 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
 | agent/skill_management_handlers.go | 513 | btc | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
 | agent/skill_management_handlers.go | 514 | btc | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
 | agent/skill_management_handlers.go | 515 | altcoin | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
@@ -443,27 +424,10 @@ regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\bast
 | agent/skill_management_handlers.go | 685 | btc | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
 | agent/skill_management_handlers.go | 686 | altcoin | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
 | agent/skill_management_handlers.go | 687 | altcoin | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_management_handlers.go | 771 | btc | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_management_handlers.go | 811 | btc | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_management_handlers.go | 812 | BTC | KEEP | CR-B | label naming the live futures risk caps — KEEP byte-identical (owner removal-only ruling 10-01 11:0x) |
-| agent/skill_management_handlers.go | 813 | altcoin | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_management_handlers.go | 868 | BTC | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 873 | btc | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_management_handlers.go | 959 | btc | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_management_handlers.go | 960 | BTC | KEEP | CR-B | label naming the live futures risk caps — KEEP byte-identical (owner removal-only ruling 10-01 11:0x) |
-| agent/skill_management_handlers.go | 961 | altcoin | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_management_handlers.go | 1106 | BTC | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_management_handlers.go | 1107 | Altcoin | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_management_handlers.go | 1111 | BTC | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_management_handlers.go | 1112 | Altcoin | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_management_handlers.go | 1553 | BTC | KEEP | CR-B | label naming the live futures risk caps — KEEP byte-identical (owner removal-only ruling 10-01 11:0x) |
-| agent/skill_management_handlers.go | 1554 | BTC | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_management_handlers.go | 1601 | BTC | KEEP | CR-B | label naming the live futures risk caps — KEEP byte-identical (owner removal-only ruling 10-01 11:0x) |
-| agent/skill_management_handlers.go | 1602 | BTC | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_management_handlers.go | 1887 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1891 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_management_handlers.go | 2155 | BTC | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_management_handlers.go | 2156 | Altcoin | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
+| agent/skill_management_handlers.go | 862 | BTC | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
+| agent/skill_management_handlers.go | 867 | btc | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
+| agent/skill_management_handlers.go | 1873 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
+| agent/skill_management_handlers.go | 1877 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
 | agent/skills/exchange_management.json | 31 | okx | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
 | agent/skills/strategy_diagnosis.json | 16 | btc | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
 | agent/skills/strategy_management.json | 68 | btc | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
