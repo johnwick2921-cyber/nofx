@@ -14,6 +14,7 @@ func TestDecisionCloseOnNinjaTraderDefersToTheFillFrame(t *testing.T) {
 	for _, action := range []string{"close_long", "close_short"} {
 		at := plannerTestTrader(t)
 		at.id = "nt-close-defer-" + action
+		at.trader = &stubTrader{} // the poll must survive the deleted-deferral mutant, so the row-count assertion is what fires (CTO P3)
 		before, err := at.store.Order().GetTraderOrders(at.id, 100)
 		if err != nil {
 			t.Fatalf("%s: orders before: %v", action, err)
