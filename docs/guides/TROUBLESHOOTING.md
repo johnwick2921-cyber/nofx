@@ -20,23 +20,6 @@ Before reporting a bug, please check:
 
 ### 1. Trading Issues
 
-#### ❌ Leverage Error: `Subaccounts restricted to 5x leverage`
-
-**Symptom:** Orders fail with leverage error when trying to use >5x leverage.
-
-**Solution:**
-1. Open Web UI → Trader Settings
-2. Set leverage to 5x or lower:
-   ```json
-   {
-     "btc_eth_leverage": 5,
-     "altcoin_leverage": 5
-   }
-   ```
-3. Or use main account (supports up to 50x BTC/ETH, 20x altcoins)
-
----
-
 #### ❌ Positions Not Executing
 
 **Check these:**

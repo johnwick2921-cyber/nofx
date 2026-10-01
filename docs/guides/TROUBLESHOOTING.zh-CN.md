@@ -33,7 +33,7 @@ names rewritten to vl on 2026-09-30 (VL rename)
      "altcoin_leverage": 5
    }
    ```
-3. 或使用主账户（支持最高 50倍 BTC/ETH，20倍山寨币）
+
 
 ---
 

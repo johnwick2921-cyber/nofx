@@ -284,20 +284,16 @@ export const translations = {
     leverageRecommendation:
       'Recommended: BTC/ETH 5-10x, Altcoins 3-5x for risk control',
     tradingSymbols: 'Trading Symbols',
-    tradingSymbolsPlaceholder:
-      'Enter symbols, comma separated (e.g., BTCUSDT,ETHUSDT,SOLUSDT)',
+    tradingSymbolsPlaceholder: 'Enter symbols, comma separated (e.g., MNQ)',
     selectSymbols: 'Select Symbols',
     selectTradingSymbols: 'Select Trading Symbols',
     selectedSymbolsCount: 'Selected {count} symbols',
     clearSelection: 'Clear All',
     confirmSelection: 'Confirm',
-    tradingSymbolsDescription:
-      'Empty = use default symbols. Must end with USDT (e.g., BTCUSDT, ETHUSDT)',
+    tradingSymbolsDescription: 'Empty = use default symbols.',
     btcEthLeverageValidation: 'BTC/ETH leverage must be between 1-50x',
     altcoinLeverageValidation: 'Altcoin leverage must be between 1-20x',
-    invalidSymbolFormat: 'Invalid symbol format: {symbol}, must end with USDT',
 
-    // System Prompt Templates
     systemPromptTemplate: 'System Prompt Template',
     promptTemplateDefault: 'Default Stable',
     promptTemplateAdaptive: 'Conservative Strategy',
@@ -310,10 +306,10 @@ export const translations = {
       'Maximize Sharpe ratio, balanced risk-reward, suitable for beginners and stable long-term trading',
     promptDescAdaptive: '🛡️ Conservative Strategy (v6.0.0)',
     promptDescAdaptiveContent:
-      'Strict risk control, BTC mandatory confirmation, high win rate priority, suitable for conservative traders',
+      'Strict risk control, mandatory confirmation, high win rate priority, suitable for conservative traders',
     promptDescAdaptiveRelaxed: '⚡ Aggressive Strategy (v6.0.0)',
     promptDescAdaptiveRelaxedContent:
-      'High-frequency trading, BTC optional confirmation, pursue trading opportunities, suitable for volatile markets',
+      'High-frequency trading, optional confirmation, pursue trading opportunities, suitable for volatile markets',
     promptDescHansen: '🎯 Hansen Strategy',
     promptDescHansenContent:
       'Hansen custom strategy, maximize Sharpe ratio, for professional traders',
@@ -652,7 +648,7 @@ export const translations = {
     faqIsProfitableAnswer:
       'AI trading is experimental and NOT guaranteed to be profitable. Cryptocurrency futures are highly volatile and risky. ' +
       PERSONA_NAME +
-      ' is designed for educational and research purposes. We strongly recommend: starting with small amounts (10-50 USDT), never investing more than you can afford to lose, thoroughly testing before live trading, and understanding that past performance does not guarantee future results.',
+      ' is designed for educational and research purposes. We strongly recommend: starting small, never investing more than you can afford to lose, thoroughly testing before live trading, and understanding that past performance does not guarantee future results.',
 
     faqSupportedAIModels: 'Which AI models are supported?',
     faqSupportedAIModelsAnswer:
@@ -1214,7 +1210,7 @@ export const translations = {
       exportKey: 'Export private key from MetaMask, Rabby, etc.',
 
       privateKeyNote:
-        'Private key is only used locally for signing. Never uploaded. No ETH or gas needed.',
+        'Private key is only used locally for signing. Never uploaded.',
 
       back: 'Back',
       startTrading: 'Start Trading',
@@ -1606,20 +1602,16 @@ export const translations = {
     altcoinLeverage: '山寨币杠杆',
     leverageRecommendation: '推荐：BTC/ETH 5-10倍，山寨币 3-5倍，控制风险',
     tradingSymbols: '交易币种',
-    tradingSymbolsPlaceholder:
-      '输入币种，逗号分隔（如：BTCUSDT,ETHUSDT,SOLUSDT）',
+    tradingSymbolsPlaceholder: '输入币种，逗号分隔（如：MNQ）',
     selectSymbols: '选择币种',
     selectTradingSymbols: '选择交易币种',
     selectedSymbolsCount: '已选择 {count} 个币种',
     clearSelection: '清空选择',
     confirmSelection: '确认选择',
-    tradingSymbolsDescription:
-      '留空 = 使用默认币种。必须以USDT结尾（如：BTCUSDT, ETHUSDT）',
+    tradingSymbolsDescription: '留空 = 使用默认币种。',
     btcEthLeverageValidation: 'BTC/ETH杠杆必须在1-50倍之间',
     altcoinLeverageValidation: '山寨币杠杆必须在1-20倍之间',
-    invalidSymbolFormat: '无效的币种格式：{symbol}，必须以USDT结尾',
 
-    // System Prompt Templates
     systemPromptTemplate: '系统提示词模板',
     promptTemplateDefault: '默认稳健',
     promptTemplateAdaptive: '保守策略',
@@ -1632,10 +1624,10 @@ export const translations = {
       '最大化夏普比率，平衡风险收益，适合新手和长期稳定交易',
     promptDescAdaptive: '🛡️ 保守策略 (v6.0.0)',
     promptDescAdaptiveContent:
-      '严格风控，BTC 强制确认，高胜率优先，适合保守型交易者',
+      '严格风控，强制确认，高胜率优先，适合保守型交易者',
     promptDescAdaptiveRelaxed: '⚡ 激进策略 (v6.0.0)',
     promptDescAdaptiveRelaxedContent:
-      '高频交易，BTC 可选确认，追求交易机会，适合波动市场',
+      '高频交易，可选确认，追求交易机会，适合波动市场',
     promptDescHansen: '🎯 Hansen 策略',
     promptDescHansenContent: 'Hansen 定制策略，最大化夏普比率，专业交易者专用',
     promptDescNof1: '🌐 NoF1 英文框架',
@@ -1939,7 +1931,7 @@ export const translations = {
     faqIsProfitableAnswer:
       'AI 交易是实验性的，不保证盈利。加密货币期货波动性大、风险高。' +
       PERSONA_NAME +
-      ' 仅用于教育和研究目的。我们强烈建议：从小额开始（10-50 USDT），不要投入超过承受能力的资金，在实盘交易前充分回测，并理解过去的表现不代表未来的结果。',
+      ' 仅用于教育和研究目的。我们强烈建议：从小额开始，不要投入超过承受能力的资金，在实盘交易前充分回测，并理解过去的表现不代表未来的结果。',
 
     faqSupportedAIModels: '支持哪些 AI 模型？',
     faqSupportedAIModelsAnswer:
@@ -2481,8 +2473,7 @@ export const translations = {
 
       exportKey: '可以用 MetaMask、Rabby 等钱包导出私钥',
 
-      privateKeyNote:
-        '私钥仅在本地签名使用，不会上传或发送交易。无需 ETH，无 Gas 费用。',
+      privateKeyNote: '私钥仅在本地签名使用，不会上传或发送交易。',
 
       back: '返回',
       startTrading: '开始交易',
@@ -2878,18 +2869,16 @@ export const translations = {
       'Disarankan: BTC/ETH 5-10x, Altcoin 3-5x untuk kontrol risiko',
     tradingSymbols: 'Simbol Trading',
     tradingSymbolsPlaceholder:
-      'Masukkan simbol, pisahkan dengan koma (misal BTCUSDT,ETHUSDT,SOLUSDT)',
+      'Masukkan simbol, pisahkan dengan koma (misal MNQ)',
     selectSymbols: 'Pilih Simbol',
     selectTradingSymbols: 'Pilih Simbol Trading',
     selectedSymbolsCount: '{count} simbol dipilih',
     clearSelection: 'Hapus Semua',
     confirmSelection: 'Konfirmasi',
-    tradingSymbolsDescription:
-      'Kosong = gunakan simbol default. Harus berakhiran USDT (misal BTCUSDT, ETHUSDT)',
+    tradingSymbolsDescription: 'Kosong = gunakan simbol default.',
     btcEthLeverageValidation: 'Leverage BTC/ETH harus antara 1-50x',
     altcoinLeverageValidation: 'Leverage Altcoin harus antara 1-20x',
-    invalidSymbolFormat:
-      'Format simbol tidak valid: {symbol}, harus berakhiran USDT',
+
     systemPromptTemplate: 'Template Prompt Sistem',
     promptTemplateDefault: 'Default Stabil',
     promptTemplateAdaptive: 'Strategi Konservatif',
@@ -2902,10 +2891,10 @@ export const translations = {
       'Maksimalkan rasio Sharpe, risiko-imbalan seimbang, cocok untuk pemula dan trading jangka panjang stabil',
     promptDescAdaptive: '🛡️ Strategi Konservatif (v6.0.0)',
     promptDescAdaptiveContent:
-      'Kontrol risiko ketat, konfirmasi BTC wajib, prioritas win rate tinggi, cocok untuk trader konservatif',
+      'Kontrol risiko ketat, konfirmasi wajib, prioritas win rate tinggi, cocok untuk trader konservatif',
     promptDescAdaptiveRelaxed: '⚡ Strategi Agresif (v6.0.0)',
     promptDescAdaptiveRelaxedContent:
-      'Trading frekuensi tinggi, konfirmasi BTC opsional, mengejar peluang trading, cocok untuk pasar volatil',
+      'Trading frekuensi tinggi, konfirmasi opsional, mengejar peluang trading, cocok untuk pasar volatil',
     promptDescHansen: '🎯 Strategi Hansen',
     promptDescHansenContent:
       'Strategi kustom Hansen, maksimalkan rasio Sharpe, untuk trader profesional',
@@ -3216,7 +3205,7 @@ export const translations = {
     faqIsProfitableAnswer:
       'Trading AI bersifat eksperimental dan TIDAK dijamin menguntungkan. Futures kripto sangat volatil dan berisiko. ' +
       PERSONA_NAME +
-      ' dirancang untuk tujuan edukasi dan riset. Kami sangat menyarankan: mulai dengan jumlah kecil (10-50 USDT), jangan investasi melebihi yang sanggup Anda rugi, uji sebelum trading nyata.',
+      ' dirancang untuk tujuan edukasi dan riset. Kami sangat menyarankan: mulai dengan jumlah kecil, jangan investasi melebihi yang sanggup Anda rugi, uji sebelum trading nyata.',
 
     faqSupportedAIModels: 'Model AI mana yang didukung?',
     faqSupportedAIModelsAnswer:
@@ -3705,7 +3694,7 @@ export const translations = {
       exportKey: 'Ekspor private key dari MetaMask, Rabby, dll.',
 
       privateKeyNote:
-        'Private key hanya digunakan untuk signing lokal. Tidak pernah diunggah. Tidak perlu ETH atau gas.',
+        'Private key hanya digunakan untuk signing lokal. Tidak pernah diunggah.',
 
       back: 'Kembali',
       startTrading: 'Mulai Trading',
