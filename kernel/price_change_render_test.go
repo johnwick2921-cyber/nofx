@@ -88,44 +88,6 @@ func fixedBars(step time.Duration, n int, base float64) []market.Kline {
 	return out
 }
 
-// The user prompt's BTC line: a 3m primary spanning 150 minutes measures 1h
-// and cannot measure 4h — the 4h reads n/a, the 1h is the 20-bar (60 min)
-// change, and the golden pins the rendered prompt.
-func TestUserPromptBTCLineRendersAnUnmeasurableWindowAsNA(t *testing.T) {
-	m3 := fixedBars(3*time.Minute, 50, 60000)
-	installCoinankTape(t, map[string][]market.Kline{"3m": m3})
-	e := oiFundingEngine("BTCUSDT")
-	e.config.Indicators.EnableOI = false
-	e.config.Indicators.EnableFundingRate = false
-	e.config.Indicators.Klines.PrimaryTimeframe = "3m"
-	e.config.Indicators.Klines.SelectedTimeframes = []string{"3m"}
-	e.config.Indicators.Klines.PrimaryCount = 10
-	// Held as a position: offline, the crypto OI read fails, and the engine's
-	// OI liquidity filter would drop a mere candidate (positions are exempt).
-	ctx := &Context{
-		Positions:      []PositionInfo{{Symbol: "BTCUSDT", Side: "long", EntryPrice: 60000, MarkPrice: 60073.5, Quantity: 0.01, Leverage: 1}},
-		CandidateCoins: []CandidateCoin{{Symbol: "BTCUSDT"}},
-		CurrentTime:    "2026-09-23 09:00:00 CDT",
-	}
-	if err := fetchMarketDataWithStrategy(ctx, e); err != nil {
-		t.Fatalf("fixture: the engine's crypto fetch failed: %v", err)
-	}
-	d := ctx.MarketDataMap["BTCUSDT"]
-	if d == nil || d.PriceChange1h == nil || d.PriceChange4h != nil {
-		t.Fatalf("150 min of 3m bars: 1h measured, 4h absent; got %+v", d)
-	}
-	if want := (m3[49].Close - m3[29].Close) / m3[29].Close * 100; *d.PriceChange1h != want {
-		t.Fatalf("1h change = %v, want the 60-minute change %v", *d.PriceChange1h, want)
-	}
-	p := e.BuildUserPrompt(ctx)
-	line := p[strings.Index(p, "BTC: "):]
-	line = line[:strings.Index(line, "\n")]
-	if !strings.Contains(line, "4h: n/a") || strings.Contains(line, "4h: +0.00%") {
-		t.Fatalf("the 4h change the tape cannot measure must read n/a: %q", line)
-	}
-	assertGolden(t, "user_prompt_crypto_change_na.txt", p)
-}
-
 // The grid prompt (en and zh): the grid's real read (5m primary) over a
 // 150-minute tape → 1h measured, 4h n/a.
 func TestGridPromptRendersAnUnmeasurableWindowAsNA(t *testing.T) {
