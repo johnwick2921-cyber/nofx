@@ -150,46 +150,54 @@ regex: bybit
 		t.Fatalf("expected FILE DOUBLE-CLAIM on src/kept.go:\n%s", out)
 	}
 
-	// glob exclusion (Finding 4): a dated-export file with a hit is excluded
-	// by an explicit glob KEEP row carrying its reason — never a silent skip
+	// blanket row + dialect (Finding 4 + CR-C): a dated-export file with a hit
+	// is excluded by one blanket row with count=N — the count is VERIFIED; the
+	// CR-C dialect (bullet headers, backticked fields, extraction-note regex)
+	// parses too
 	write(t, filepath.Join(tmp, "src/gen/report.tsv"), "bybit\thit\n")
 	git("add", "-A")
 	git("commit", "-qm", "gen-export")
 	head = strings.TrimSpace(git("rev-parse", "HEAD"))
-	tableE := fmt.Sprintf(`branch-point: %s
-integrator-tip: %s
-paths: .
-regex: bybit
-| branding/no_crypto.go | %d | bybit | KEEP | CR-B | guard's own exported literal |
-| src/kept.go | %d | bybit | KEEP | CR-A | deliberate keep for the proof |
-| src/gen/*.tsv | * | * | KEEP | CR-C | dated research export — historical record, not shipped code, KEEP byte-identical |
+	tableE := fmt.Sprintf(`- branch point: %s (origin/dev tip, cut at accept)
+- integrator tip at generation: %s
+- paths: .
+- regex: extracted programmatically from plan v10 line 108 (len 240)
+- line rows: 2 · blanket-KEEP paths: 1
+| path | line | token | disposition | OWNER | reason |
+|---|---|---|---|---|---|
+| `+"`branding/no_crypto.go`"+` | %d | `+"`bybit`"+` | KEEP | CR-B | guard's own exported literal |
+| `+"`src/kept.go`"+` | %d | `+"`bybit`"+` | KEEP | CR-A | deliberate keep for the proof |
+| `+"`src/gen/report.tsv`"+` | - | count=1 | KEEP | CR-C | dated research export — historical record, not shipped code, KEEP byte-identical |
 `, head, head, guardLine, keptLine)
 	tableEPath := filepath.Join(tblDir, "tblE.md")
 	write(t, tableEPath, tableE)
 	out, rc = runGate(tableEPath)
 	if rc != 0 {
-		t.Fatalf("clean union with a glob exclusion must exit 0, got %d:\n%s", rc, out)
+		t.Fatalf("dialect union with a count-verified blanket row must exit 0, got %d:\n%s", rc, out)
 	}
-	if !strings.Contains(out, "excluded 1 file(s)") {
-		t.Fatalf("expected the glob exclusion to be REPORTED:\n%s", out)
+	if !strings.Contains(out, "excluded with count=1") {
+		t.Fatalf("expected the blanket exclusion to be REPORTED:\n%s", out)
 	}
 
-	// a glob row matching nothing is a stale/typo exclusion -> FAIL
+	// a blanket count that disagrees with the sweep is a silent-skip-proof FAIL
 	tableF := fmt.Sprintf(`branch-point: %s
 integrator-tip: %s
 paths: .
 regex: bybit
-| src/gen/*.tsv | * | * | KEEP | CR-C | dated research export |
-| src/nope/*.tsv | * | * | KEEP | CR-C | typo glob, matches nothing |
+| src/gen/report.tsv | - | count=7 | KEEP | CR-C | dated research export |
+| src/nope.tsv | - | count=1 | KEEP | CR-C | typo row, matches nothing |
 `, head, head)
 	tableFPath := filepath.Join(tblDir, "tblF.md")
 	write(t, tableFPath, tableF)
 	out, rc = runGate(tableFPath)
 	if rc == 0 {
-		t.Fatalf("a glob row matching nothing must FAIL, got exit 0:\n%s", out)
+		t.Fatalf("count mismatch + stale blanket must FAIL, got exit 0:\n%s", out)
+	}
+	if !strings.Contains(out, "count mismatch") {
+		t.Fatalf("expected the count-mismatch FAIL:\n%s", out)
 	}
 	if !strings.Contains(out, "matches NO tracked file") {
-		t.Fatalf("expected the stale-glob FAIL:\n%s", out)
+		t.Fatalf("expected the stale-blanket FAIL:\n%s", out)
 	}
 }
 

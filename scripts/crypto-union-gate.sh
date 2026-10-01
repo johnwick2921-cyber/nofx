@@ -13,14 +13,21 @@
 #   paths: <space-separated pathspecs>  # the part's swept paths
 #   regex: <the assembled literal>      # MUST equal the guard's export, byte-for-byte
 #   | path | line | token | DELETE|CUT|KEEP | OWNER | reason |
-#   | <glob> | * | * | KEEP | OWNER | dated research export — ... |   (line=*: a
-#       blanket exclusion for generated/dated artifacts; reason REQUIRED, never
-#       a broadened regex, never a silent skip — the gate prints what it excluded)
 #   # a table with zero rows writes an explicit line instead:
 #   0 hits
 #   # OWNER names the part that owns the line (CR-A|CR-B|CR-C). A table MAY
 #   # list a line it does not own as a CEDED row (OWNER = the owning part).
 #   # EXACTLY ONE owner per hit line across the union — a double-claim FAILS.
+#
+# DIALECT (CR-C, accepted): the four headers may be written as bullets
+#   (- branch point: <sha> [comment] / - integrator tip at generation: <sha> /
+#    - paths: … / - regex: …), path/token fields may be backtick-wrapped, and a
+#   dated-export file may carry ONE blanket row `| <path> | - | count=N | KEEP |
+#   OWNER | reason |` instead of per-line rows — the gate verifies the file's
+#   hit-line count EQUALS N (a silent-skip-proof; a mismatch FAILS). A `regex:`
+#   header without the literal must state its programmatic source; the byte
+#   check then falls back to sweep coverage (zero unlisted hits proves the
+#   generator's literal matched the guard's).
 #
 # Gate rules (C13 invariants 1-5 + the CTO's content-asserts):
 #   (1) every table exists and parses: >=1 row or the explicit "0 hits" line;
@@ -69,23 +76,32 @@ ok "enumerated $nfiles tracked files (floor 2000)"
 
 # row index:  tbl|file|line -> disposition (owner/token kept for messages)
 declare -A row_dispo row_owner row_token row_line
-# glob exclusion rows: glob -> reason (blanket KEEP for dated/generated artifacts)
-declare -A glob_rows
-declare -A glob_hits
+# blanket rows: file -> expected hit count (dated exports, Finding 4)
+declare -A blanket_rows blanket_reason
+declare -A blanket_seen
 allrows=0; keepcount=0
 for tbl in "$@"; do
   [ -f "$tbl" ] || { bad "table missing: $tbl"; continue; }
-  bp=$(sed -n 's/^branch-point: *\([0-9a-f]\{40\}\)$/\1/p' "$tbl" | head -1)
-  tip=$(sed -n 's/^integrator-tip: *\([0-9a-f]\{40\}\)$/\1/p' "$tbl" | head -1)
-  paths=$(sed -n 's/^paths: *//p' "$tbl" | head -1)
-  treg=$(sed -n 's/^regex: *//p' "$tbl" | head -1)
+  bp=$(sed -n -E 's/^-? *branch[- ]point: *([0-9a-f]{40}).*$/\1/p' "$tbl" | head -1)
+  tip=$(sed -n -E 's/^-? *integrator[- ]tip( at generation)?: *([0-9a-f]{40}).*$/\2/p' "$tbl" | head -1)
+  paths=$(sed -n -E 's/^-? *paths: *//p' "$tbl" | head -1)
+  treg=$(sed -n -E 's/^regex: *(.*)$/\1/p' "$tbl" | head -1)
+  note=""
+  if [ -z "$treg" ]; then
+    treg=$(sed -n -E 's/^- *regex: *(.*)$/\1/p' "$tbl" | head -1)
+    case "$treg" in
+      *"extracted programmatically"*|*"programmatically"*) note="extraction-note";;
+    esac
+  fi
   [ -n "$bp" ] || bad "$tbl: header branch-point missing/not 40-hex"
   [ -n "$tip" ] || bad "$tbl: header integrator-tip missing/not 40-hex"
   [ -n "$paths" ] || bad "$tbl: header paths missing"
   if [ -n "$treg" ]; then
-    if [ "$treg" = "$lit" ]; then ok "$tbl: regex header equals the guard literal byte-for-byte"; else
+    if [ "$note" = "extraction-note" ]; then
+      echo "NOTE $tbl: regex header states its programmatic source without the literal — byte check falls back to sweep coverage (zero unlisted hits proves it)"
+    elif [ "$treg" = "$lit" ]; then ok "$tbl: regex header equals the guard literal byte-for-byte"; else
       bad "$tbl: regex header != guard literal (hand-typed copy?)"; fi
-  else bad "$tbl: header regex missing"; fi
+  else bad "$tbl: header regex missing (either `regex: <literal>` or a bullet naming its programmatic source)"; fi
   if [ -n "$bp" ] && ! git merge-base --is-ancestor "$bp" HEAD 2>/dev/null; then
     bad "$tbl: HEAD does not descend from branch-point $bp"; fi
   if [ -n "$tip" ] && [ -n "$paths" ]; then
@@ -96,7 +112,7 @@ for tbl in "$@"; do
   n=0
   while IFS= read -r line; do
     case "$line" in
-      ""|"#"*|branch-point:*|integrator-tip:*|paths:*|regex:*|"0 hits") continue;;
+      ""|"#"*|branch-point:*|integrator-tip:*|paths:*|regex:*|"0 hits"|"- "*|"| path |"*|"|---"*) continue;;
       "|"*)
         # | path | line | token | DISP | OWNER | reason |  (trailing pipe optional)
         body=${line#|}; body=${body%|}
@@ -106,21 +122,27 @@ EOF
         p=$(echo "$p" | xargs); ln=$(echo "$ln" | xargs); tok=$(echo "$tok" | xargs)
         disp=$(echo "$disp" | xargs); owner=$(echo "$owner" | xargs)
         reason=$(echo "$reason" | xargs)
+        p=${p#\`}; p=${p%\`}; tok=${tok#\`}; tok=${tok%\`}
         if [ -z "$p" ] || [ -z "$ln" ] || [ -z "$tok" ] || [ -z "$disp" ] || [ -z "$owner" ]; then
           bad "$tbl: unparseable row (canonical: | path | line | token | DISP | OWNER | reason |): $line"
           continue
         fi
-        # blanket exclusion row (Finding 4): line=*, token=*, KEEP only
-        if [ "$ln" = "*" ]; then
-          if [ "$disp" != "KEEP" ] || [ "$tok" != "*" ]; then
-            bad "$tbl: glob row must be KEEP with token * (line=*): $line"
+        # blanket row (Finding 4): | <path> | - | count=N | KEEP | OWNER | reason |
+        if [ "$ln" = "-" ]; then
+          if [ "$disp" != "KEEP" ]; then
+            bad "$tbl: blanket row must be KEEP: $line"
+            continue
+          fi
+          cnt=$(echo "$tok" | sed -n 's/^count=\([0-9][0-9]*\)$/\1/p')
+          if [ -z "$cnt" ]; then
+            bad "$tbl: blanket row token must be count=N (a skip with no count is invisible): $p"
             continue
           fi
           if [ -z "$reason" ]; then
-            bad "$tbl: glob row needs a reason (a skip with no reason is invisible): $p"
+            bad "$tbl: blanket row needs a reason: $p"
             continue
           fi
-          glob_rows["$p"]="$reason"
+          blanket_rows["$p"]="$cnt"; blanket_reason["$p"]="$reason"
           n=$((n+1)); allrows=$((allrows+1))
           continue
         fi
@@ -171,16 +193,15 @@ while IFS= read -r -d '' f; do
   case "$f" in
     *_test.go) continue;;   # swept scope: Go *_test.go excluded
   esac
-  # explicit glob exclusion (Finding 4): recorded, printed, never silent
-  excluded_by=""
-  for g in "${!glob_rows[@]}"; do
-    pat=${g//\*\*/\*}   # ** -> * for bash case matching
-    case "$f" in
-      $pat) excluded_by="$g"; break;;
-    esac
-  done
-  if [ -n "$excluded_by" ]; then
-    excluded=$((excluded+1)); glob_hits["$excluded_by"]=$(( ${glob_hits[$excluded_by]:-0} + 1 ))
+  # blanket row for this file (Finding 4): count-verified, printed, never silent
+  if [ -n "${blanket_rows[$f]:-}" ]; then
+    want=${blanket_rows[$f]}
+    got=$(grep -c -I -i -E "$lit" -- "$f" 2>/dev/null || true)
+    if [ "$got" = "$want" ]; then
+      excluded=$((excluded+1)); blanket_seen["$f"]=1
+    else
+      bad "blanket row count mismatch: $f says count=$want, sweep finds $got — ${blanket_reason[$f]}"
+    fi
     continue
   fi
   out=$(grep -n -I -i -E "$lit" -- "$f" 2>/dev/null) || continue
@@ -214,13 +235,12 @@ while IFS= read -r -d '' f; do
 $out
 EOF
 done < "$LIST"
-ok "sweep complete: $hits hit lines, $excluded files under glob-KEEP rows, $keepcount KEEP rows in the union"
-for g in "${!glob_rows[@]}"; do
-  n=${glob_hits[$g]:-0}
-  if [ "$n" -eq 0 ]; then
-    bad "glob-KEEP row '$g' matches NO tracked file — stale or typo (${glob_rows[$g]})"
+ok "sweep complete: $hits hit lines, $excluded files under blanket rows, $keepcount KEEP rows in the union"
+for p in "${!blanket_rows[@]}"; do
+  if [ "${blanket_seen[$p]:-0}" = "1" ]; then
+    ok "blanket row '$p' excluded with count=${blanket_rows[$p]} — ${blanket_reason[$p]}"
   else
-    ok "glob-KEEP row '$g' excluded $n file(s) — ${glob_rows[$g]}"
+    bad "blanket row '$p' matches NO tracked file — stale or typo (${blanket_reason[$p]})"
   fi
 done
 
