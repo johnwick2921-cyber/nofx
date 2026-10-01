@@ -1,11 +1,11 @@
 # Crypto-removal disposition table — CR-B (DS-107), plan v10 FINAL
 # The gate (scripts/crypto-union-gate.sh, DS-102) owns this format: headers below + plain pipe rows.
 branch-point: a4355d8305b1d94c3eed0a350df6d50785e6e93e
-integrator-tip: 94a3b981dbcccac2f94a07c52160515a9bd3f025
+integrator-tip: 7c2045f606fe3f51bf7c583550201efb083bbb48
 paths: manager kernel market config store agent branding internal ninjascript screenshots cmd scripts deploy docker nginx .github patches hook telegram provider/ninjatrader provider/databento trader/ninjatrader SECURITY.md Makefile .env.example docs/superpowers/AUDIT-CHECKLIST.md docs/superpowers/SYSTEM-MAP.md trader/auto_trader_decision.go api/handler_debug.go api/strategy_effective.go api/handler_competition.go api/handler_plan_order_truth.go api/handler_order.go api/handler_trader_config.go trader/protection_reconciler.go
 regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续|btc|ethusdt|\beth\b|altcoin|ethereum
-# Generated: 2026-10-01T15:30:05.153892+00:00
-# Swept: 640 tracked non-test files under CR-B paths (git ls-files -z, grep -I semantics); hits in 96 files.
+# Generated: crypto-removal-cr-b-table @ 7c2045f606fe (2026-10-01T15:39:59.321487+00:00); branch + sha only, never a filesystem path
+# Swept: 640 tracked non-test files under CR-B paths (git ls-files -z, grep -I semantics); hits in 87 files.
 # EXACTLY ONE OWNER PER HIT LINE (Finding 3 file-level ruling): CR-A-owned lines are ceded rows (owner CR-A, disposition mirrored from their canonical table); everything else here is CR-B. One file, one owner.
 # Dispositions are reconciled to the tree (CTO ruling 2026-10-01): KEEP =
 # futures-core text kept as-is; CUT = crypto content in a KEPT file, the cut is
@@ -618,96 +618,6 @@ regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\bast
 | agent/skill_semantic_gate.go | 159 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
 | agent/skill_semantic_gate.go | 160 | indodax | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
 | agent/skill_semantic_gate.go | 161 | Indodax | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skills/exchange_diagnosis.json | 8 | OKX | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_diagnosis.json | 13 | OKX | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_diagnosis.json | 15 | Hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 10 | binance | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 11 | 币安 | CUT | CR-B | Chinese crypto token — reworded away, nothing stays |
-| agent/skills/exchange_management.json | 31 | okx | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 32 | OKX | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 44 | hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 46 | hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 47 | Hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 49 | hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 52 | hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 53 | Hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 57 | aster | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 58 | Aster | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 62 | aster | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 63 | Aster | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 67 | aster | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 68 | Aster | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 70 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skills/exchange_management.json | 72 | lighter | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 73 | Lighter | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 77 | lighter | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 78 | Lighter | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 82 | lighter | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 83 | Lighter | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 89 | lighter | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 90 | Lighter | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 96 | OKX | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 97 | Bitget | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 98 | Hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 99 | Hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 100 | Hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 101 | Aster | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 102 | Lighter | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 107 | binance | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 108 | okx | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 109 | bybit | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 110 | bitget | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 112 | kucoin | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 113 | indodax | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 114 | hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 115 | aster | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 116 | lighter | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 122 | hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 126 | Binance | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 127 | OKX | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 138 | hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_diagnosis.json | 5 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_diagnosis.json | 8 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_diagnosis.json | 13 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 10 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 20 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 25 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 38 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 43 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 44 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 45 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 58 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 59 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 60 | blockrun | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 76 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 89 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 130 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 141 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/strategy_diagnosis.json | 13 | AI500 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/strategy_diagnosis.json | 16 | btc | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/strategy_management.json | 40 | BTC | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/strategy_management.json | 41 | BTC | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/strategy_management.json | 45 | ai500 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/strategy_management.json | 46 | ai500 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/strategy_management.json | 51 | BTC | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/strategy_management.json | 68 | btc | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/strategy_management.json | 72 | BTC | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/strategy_management.json | 74 | altcoin | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/strategy_management.json | 121 | USDT | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trade_execution.json | 23 | USDT | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trade_execution.json | 24 | USDT | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trade_execution.json | 26 | btc | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trade_execution.json | 27 | BTC | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trade_execution.json | 28 | USDT | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trader_diagnosis.json | 21 | btc | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trader_diagnosis.json | 26 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trader_management.json | 65 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trader_management.json | 67 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trader_management.json | 69 | OKX | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trader_management.json | 81 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trader_management.json | 114 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trader_management.json | 146 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trader_management.json | 158 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
 | agent/strategy_field_catalog.go | 43 | btc | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
 | agent/strategy_field_catalog.go | 44 | altcoin | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
 | agent/strategy_field_catalog.go | 102 | btc | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
