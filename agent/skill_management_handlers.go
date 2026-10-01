@@ -1988,7 +1988,7 @@ func (a *Agent) handleExchangeCreateSkill(storeUserID string, userID int64, lang
 		if lang == "zh" {
 			reply := "要创建交易所配置，还缺这些字段：" + formatMissingFieldList(lang, missing) + "。"
 			if exType == "" {
-				reply += "\n例如：OKX、Binance、Bybit。"
+				reply += "\n例如：ninjatrader。"
 			}
 			return reply
 		}
@@ -2006,6 +2006,7 @@ func (a *Agent) handleExchangeCreateSkill(storeUserID string, userID int64, lang
 		asterPrivateKey:         fieldValue(session, "aster_private_key"),
 		lighterWalletAddr:       fieldValue(session, "lighter_wallet_addr"),
 		lighterAPIKeyPrivateKey: fieldValue(session, "lighter_api_key_private_key"),
+		ntDataDir:               fieldValue(session, "nt_data_dir"),
 	}
 	if err := validator.Validate(); err != nil {
 		a.saveSkillSession(userID, session)
@@ -2023,7 +2024,7 @@ func (a *Agent) handleExchangeCreateSkill(storeUserID string, userID int64, lang
 		"exchange_type": exType,
 		"account_name":  accountName,
 	}
-	for _, field := range []string{"api_key", "secret_key", "passphrase", "hyperliquid_wallet_addr", "aster_user", "aster_signer", "aster_private_key", "lighter_wallet_addr", "lighter_api_key_private_key"} {
+	for _, field := range []string{"api_key", "secret_key", "passphrase", "hyperliquid_wallet_addr", "aster_user", "aster_signer", "aster_private_key", "lighter_wallet_addr", "lighter_api_key_private_key", "nt_data_dir", "nt_instrument_name"} {
 		if value := fieldValue(session, field); value != "" {
 			args[field] = value
 		}

@@ -1423,6 +1423,9 @@ func (a *Agent) toolManageExchangeConfig(storeUserID, argsJSON string) string {
 		LighterPrivateKey         string `json:"lighter_private_key"`
 		LighterAPIKeyPrivateKey   string `json:"lighter_api_key_private_key"`
 		LighterAPIKeyIndex        *int   `json:"lighter_api_key_index"`
+		NTDataDir                 string `json:"nt_data_dir"`
+		NTInstrumentName          string `json:"nt_instrument_name"`
+		NTDefaultContractQty      int    `json:"nt_default_contract_qty"`
 	}
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return fmt.Sprintf(`{"error":"invalid arguments: %s"}`, err)
@@ -1467,6 +1470,7 @@ func (a *Agent) toolManageExchangeConfig(storeUserID, argsJSON string) string {
 			lighterWalletAddr:       strings.TrimSpace(args.LighterWalletAddr),
 			lighterPrivateKey:       strings.TrimSpace(args.LighterPrivateKey),
 			lighterAPIKeyPrivateKey: strings.TrimSpace(args.LighterAPIKeyPrivateKey),
+			ntDataDir:               strings.TrimSpace(args.NTDataDir),
 		}).Validate(); err != nil {
 			return fmt.Sprintf(`{"error":"%s"}`, err)
 		}
@@ -1491,7 +1495,9 @@ func (a *Agent) toolManageExchangeConfig(storeUserID, argsJSON string) string {
 			strings.TrimSpace(args.LighterPrivateKey),
 			strings.TrimSpace(args.LighterAPIKeyPrivateKey),
 			lighterIndex,
-			"", "", 0, // NinjaTrader fields not exposed via the agent tool
+			strings.TrimSpace(args.NTDataDir),
+			strings.TrimSpace(args.NTInstrumentName),
+			args.NTDefaultContractQty,
 		)
 		if err != nil {
 			return fmt.Sprintf(`{"error":"failed to create exchange config: %s"}`, err)
@@ -1589,6 +1595,18 @@ func (a *Agent) toolManageExchangeConfig(storeUserID, argsJSON string) string {
 		if trimmed := strings.TrimSpace(args.LighterAPIKeyPrivateKey); trimmed != "" {
 			effectiveLighterAPIKeyPrivateKey = trimmed
 		}
+		ntDataDir := existing.NTDataDir
+		if trimmed := strings.TrimSpace(args.NTDataDir); trimmed != "" {
+			ntDataDir = trimmed
+		}
+		ntInstrument := existing.NTInstrumentName
+		if trimmed := strings.TrimSpace(args.NTInstrumentName); trimmed != "" {
+			ntInstrument = trimmed
+		}
+		ntQty := existing.NTDefaultContractQty
+		if args.NTDefaultContractQty != 0 {
+			ntQty = args.NTDefaultContractQty
+		}
 		validator := exchangeConfigValidator{
 			exchangeType:            existing.ExchangeType,
 			enabled:                 true,
@@ -1602,6 +1620,7 @@ func (a *Agent) toolManageExchangeConfig(storeUserID, argsJSON string) string {
 			lighterWalletAddr:       lighterWallet,
 			lighterPrivateKey:       effectiveLighterPrivateKey,
 			lighterAPIKeyPrivateKey: effectiveLighterAPIKeyPrivateKey,
+			ntDataDir:               ntDataDir,
 		}
 		if err := validator.Validate(); err != nil {
 			return fmt.Sprintf(`{"error":"%s"}`, err)
@@ -1623,7 +1642,7 @@ func (a *Agent) toolManageExchangeConfig(storeUserID, argsJSON string) string {
 			strings.TrimSpace(args.LighterPrivateKey),
 			strings.TrimSpace(args.LighterAPIKeyPrivateKey),
 			lighterIndex,
-			"", "", 0, // NinjaTrader fields not exposed via the agent tool
+			ntDataDir, ntInstrument, ntQty,
 		); err != nil {
 			return fmt.Sprintf(`{"error":"failed to update exchange config: %s"}`, err)
 		}

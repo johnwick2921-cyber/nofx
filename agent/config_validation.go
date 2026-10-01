@@ -79,6 +79,7 @@ type exchangeConfigValidator struct {
 	lighterWalletAddr       string
 	lighterPrivateKey       string
 	lighterAPIKeyPrivateKey string
+	ntDataDir               string
 }
 
 func (v exchangeConfigValidator) Validate() error {
@@ -104,6 +105,7 @@ func (v exchangeConfigValidator) Validate() error {
 			v.asterPrivateKey,
 			v.lighterWalletAddr,
 			v.lighterAPIKeyPrivateKey,
+			v.ntDataDir,
 		)
 		if len(missing) > 0 {
 			return fmt.Errorf("cannot enable exchange config before required fields are complete: %s", strings.Join(missing, ", "))
@@ -160,6 +162,7 @@ func (v traderBindingValidator) Validate() error {
 		lighterWalletAddr:       exchange.LighterWalletAddr,
 		lighterPrivateKey:       strings.TrimSpace(string(exchange.LighterPrivateKey)),
 		lighterAPIKeyPrivateKey: strings.TrimSpace(string(exchange.LighterAPIKeyPrivateKey)),
+		ntDataDir:               exchange.NTDataDir,
 	}).Validate(); err != nil {
 		return fmt.Errorf("exchange config is incomplete: %w", err)
 	}
@@ -201,7 +204,7 @@ func (a *Agent) validateModelDraft(storeUserID, modelID, provider string, enable
 	}).Validate()
 }
 
-func (a *Agent) validateExchangeDraft(storeUserID, exchangeID, exchangeType string, enabled bool, apiKey, secretKey, passphrase, hyperliquidWalletAddr, asterUser, asterSigner, asterPrivateKey, lighterWalletAddr, lighterAPIKeyPrivateKey string) error {
+func (a *Agent) validateExchangeDraft(storeUserID, exchangeID, exchangeType string, enabled bool, apiKey, secretKey, passphrase, hyperliquidWalletAddr, asterUser, asterSigner, asterPrivateKey, lighterWalletAddr, lighterAPIKeyPrivateKey, ntDataDir string) error {
 	if a == nil || a.store == nil {
 		return fmt.Errorf("store unavailable")
 	}

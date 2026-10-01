@@ -1605,6 +1605,7 @@ func (a *Agent) executeExchangeManagementAction(storeUserID string, userID int64
 			asString(payload["aster_private_key"]),
 			asString(payload["lighter_wallet_addr"]),
 			asString(payload["lighter_api_key_private_key"]),
+			asString(payload["nt_data_dir"]),
 		); err != nil {
 			a.saveSkillSession(userID, session)
 			return formatValidationFeedback(lang, "exchange", err)
