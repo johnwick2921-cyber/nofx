@@ -411,7 +411,7 @@ echo "== release NEVER signals a group it did not create =="
 # dead code into a live shell-killer. Hence: identify positively, or signal
 # nothing.
 KWN="$(mktemp -d)"
-N() { VL_LOCK_DIR="$KWN/lock.d" VL_LOCK_STALE_SECONDS=600 VL_LOCK_BEAT_SECONDS=30 bash "$LOCK_SH" "$@" 2>&1; }
+N() { VL_LOCK_DIR="$KWN/lock.d" VL_LOCK_STALE_SECONDS=600 VL_LOCK_BEAT_SECONDS=1 bash "$LOCK_SH" "$@" 2>&1; }
 N acquire sess-N 'a holder whose keeper.pid lies' 60 >/dev/null
 # An innocent bystander in its OWN group, standing in for the invoking shell.
 setsid bash -c 'sleep 30' >/dev/null 2>&1 &
@@ -432,7 +432,7 @@ rm -rf "$KWN"
 
 echo "== a keeper.pid that is not a number is inert =="
 KWJ="$(mktemp -d)"
-J() { VL_LOCK_DIR="$KWJ/lock.d" VL_LOCK_STALE_SECONDS=600 VL_LOCK_BEAT_SECONDS=30 bash "$LOCK_SH" "$@" 2>&1; }
+J() { VL_LOCK_DIR="$KWJ/lock.d" VL_LOCK_STALE_SECONDS=600 VL_LOCK_BEAT_SECONDS=1 bash "$LOCK_SH" "$@" 2>&1; }
 J acquire sess-J 'a holder with a corrupt stop handle' 60 >/dev/null
 printf 'not-a-pid' > "$KWJ/lock.d/keeper.pid"
 out="$(J release sess-J 2>&1)"; rc=$?
@@ -527,7 +527,7 @@ for i in $(seq 1 10); do
   rm -rf "$KCONT"
   VL_LOCK_DIR="$KCONT" bash "$LOCK_SH" acquire r-$i 'race' 60 >/dev/null 2>&1 &
   VL_LOCK_DIR="$KCONT" "$WRAP" acquire r-$i 'race' 60 >/dev/null 2>&1 &
-  VL_LOCK_DIR="$KCONT" NOFX_LOCK_DIR="$KCONT" bash "$WORK/legacy-lock.sh" acquire r-$i 'race' 60 >/dev/null 2>&1 &
+  VL_LOCK_DIR="$KCONT" NOFX_LOCK_DIR="$KCONT" NOFX_LOCK_BEAT_SECONDS=1 bash "$WORK/legacy-lock.sh" acquire r-$i 'race' 60 >/dev/null 2>&1 &
   wait
   n="$(VL_LOCK_DIR="$KCONT" bash "$LOCK_SH" status 2>&1 | grep -c "held by 'r-")"
   check "one-home race round $i has exactly one holder" "$n" "1"
@@ -541,7 +541,7 @@ echo "== (c) boot-7 interop: tonight's box copy and this tool take one lock =="
 # acquires; the boot-7 copy reads the same holder. Both prove one home, one
 # lock, across the rename.
 B7="$WORK/b7home"; mkdir -p "$B7"
-( unset VL_LOCK_DIR NOFX_LOCK_DIR; HOME="$B7" VL_LOCK_BEAT_SECONDS=60 VL_LOCK_STALE_SECONDS=600 bash "$WORK/legacy-lock.sh" acquire sess-B7 'the box tonight' 60 >/dev/null )
+( unset VL_LOCK_DIR NOFX_LOCK_DIR; HOME="$B7" NOFX_LOCK_BEAT_SECONDS=1 VL_LOCK_BEAT_SECONDS=60 VL_LOCK_STALE_SECONDS=600 bash "$WORK/legacy-lock.sh" acquire sess-B7 'the box tonight' 60 >/dev/null )
 has   "vl reads the boot-7 holder"  "$(unset VL_LOCK_DIR NOFX_LOCK_DIR; HOME="$B7" bash "$LOCK_SH" status 2>&1)" "sess-B7"
 check "vl check beside the boot-7 lock is 1" "$(unset VL_LOCK_DIR NOFX_LOCK_DIR; HOME="$B7" bash "$LOCK_SH" check >/dev/null 2>&1; echo $?)" "1"
 check "vl release clears the boot-7 lock"    "$(unset VL_LOCK_DIR NOFX_LOCK_DIR; HOME="$B7" bash "$LOCK_SH" release sess-B7 >/dev/null 2>&1; echo $?)" "0"
@@ -657,6 +657,21 @@ done
 out="$("$PWD/$W-claim.sh" 2>&1)"; rc=$?
 check "claim wrapper direct-exec refuses a bare call" "$rc" "1"
 hasi  "and prints its own usage"                       "$out" "vl-claim"
+echo "== KEEPER-DRAIN: no keeper outlives the suite =="
+#
+# The corrupt-handle sections (sess-N, sess-J) release WITHOUT killing their
+# keepers by design — those keepers exit via the dir-watch within one beat. A
+# keeper that outlives a 35s drain is a real leak, not test hygiene.
+drain_pat="$SDIR/vl-lock.sh heartbeat|$SDIR/$W-lock.sh heartbeat|$WORK/legacy-lock.sh heartbeat"
+KEEP_BASE=$(pgrep -fc "$drain_pat" 2>/dev/null || true); KEEP_BASE=${KEEP_BASE:-0}
+pkill -KILL -f "$drain_pat" 2>/dev/null || true
+n=$KEEP_BASE; drain=0
+while [ "$n" -gt "$KEEP_BASE" ] && [ "$drain" -lt 35 ]; do
+  sleep 1; drain=$((drain+1))
+  n=$(pgrep -fc "$drain_pat" 2>/dev/null || echo 0)
+done
+check "no keeper outlives the suite (35s drain)" "$([ "$n" -le "$KEEP_BASE" ] && echo yes || echo no)" "yes"
+
 echo
 printf 'pass=%d fail=%d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
