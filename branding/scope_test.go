@@ -46,6 +46,7 @@ func importTargets(source []byte) (map[string]bool, error) {
 // fails the pin — this is an explicit removal allowlist, never a loosened rule.
 var cryptoRemovalDeletedGoFileAllowlist = []string{
 	"agent/agent_model_selection_test.go", // CTO fix-list item 4 (07:43 mail): helper went with the wallet family
+	"agent/market_snapshot_test.go",       // deleted with the crypto market-snapshot surface (integration b7334aa51)
 	"api/handler_wallet.go",               // wallet-family handler, GO item 1 (C4 family)
 	"api/onboarding_owner_test.go",        // CTO fix-list item 3 (07:43 mail): same
 }
