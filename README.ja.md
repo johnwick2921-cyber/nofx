@@ -42,81 +42,17 @@ Telegram開発者コミュニティに参加して、議論、アイデアの共
 
 ## 🆕 最新情報（最新アップデート）
 
-### 🚀 マルチ取引所対応！
+### 🚀 NinjaTrader 8 対応！
 
-VLは現在、**3つの主要取引所**をサポートしています：Binance、Hyperliquid、Aster DEX！
-
-#### **Hyperliquid取引所**
-
-高性能な分散型無期限先物取引所！
-
-**主な機能:**
-- ✅ フル取引サポート（ロング/ショート、レバレッジ、ストップロス/テイクプロフィット）
-- ✅ 自動精度処理（注文サイズ＆価格）
-- ✅ 統一トレーダーインターフェース（シームレスな取引所切り替え）
-- ✅ メインネットとテストネットの両方をサポート
-- ✅ APIキー不要 - Ethereum秘密鍵のみ
-
-**なぜHyperliquid？**
-- 🔥 中央集権型取引所より低い手数料
-- 🔒 非カストディアル - 資金を自分で管理
-- ⚡ オンチェーン決済による高速実行
-- 🌍 KYC不要
-
-**クイックスタート:**
-1. MetaMaskの秘密鍵を取得（`0x`プレフィックスを削除）
-2. config.jsonで`"exchange": "hyperliquid"`を設定
-3. `"hyperliquid_private_key": "your_key"`を追加
-4. 取引開始！
-
-詳細は[設定ガイド](#-代替hyperliquid取引所の使用)をご覧ください。
-
-#### **Aster DEX取引所**（NEW! v2.0.2）
-
-Binance互換の分散型無期限先物取引所！
-
-**主な機能:**
-- ✅ BinanceスタイルAPI（Binanceからの移行が簡単）
-- ✅ Web3ウォレット認証（安全で分散型）
-- ✅ 自動精度処理によるフル取引サポート
-- ✅ CEXより低い取引手数料
-- ✅ EVM互換（Ethereum、BSC、Polygonなど）
-
-**なぜAster？**
-- 🎯 **Binance互換API** - 最小限のコード変更で済む
-- 🔐 **APIウォレットシステム** - セキュリティのための独立した取引ウォレット
-- 💰 **競争力のある手数料** - ほとんどの中央集権型取引所より低い
-- 🌐 **マルチチェーンサポート** - お好みのEVMチェーンで取引
-
-**クイックスタート:**
-1. [Aster APIウォレット](https://www.asterdex.com/en/api-wallet)にアクセス
-2. メインウォレットを接続してAPIウォレットを作成
-3. API Signerアドレスと秘密鍵をコピー
-4. config.jsonで`"exchange": "aster"`を設定
-5. `"aster_user"`、`"aster_signer"`、`"aster_private_key"`を追加
-
----
+VLは現在、**NinjaTrader 8（CME先物・MNQ）**をサポートしています。
+リアルタイム相場とSIM注文実行が同じTCPブリッジで接続されます。
 
 ## 対応取引所
 
-### CEX（中央集権型取引所）
+### 対応取引所
 
-| 取引所 | ステータス | 登録（手数料割引） |
-| <img src="web/public/exchange-icons/binance.jpg" width="20" height="20" style="vertical-align: middle;"/> **Binance** | ✅ | [登録](https://www.binance.com/join?) |
-| <img src="web/public/exchange-icons/bybit.png" width="20" height="20" style="vertical-align: middle;"/> **Bybit** | ✅ | [登録](https://partner.bybit.com/b/83856) |
-| <img src="web/public/exchange-icons/okx.svg" width="20" height="20" style="vertical-align: middle;"/> **OKX** | ✅ | [登録](https://www.okx.com/join/1865360) |
-| <img src="web/public/exchange-icons/bitget.svg" width="20" height="20" style="vertical-align: middle;"/> **Bitget** | ✅ | [登録](https://www.bitget.com/referral/register?from=referral&clacCode=c8a43172) |
-| <img src="web/public/exchange-icons/kucoin.svg" width="20" height="20" style="vertical-align: middle;"/> **KuCoin** | ✅ | [登録](https://www.kucoin.com/r/broker/CXEV7XKK) |
-| <img src="web/public/exchange-icons/gate.svg" width="20" height="20" style="vertical-align: middle;"/> **Gate** | ✅ | [登録](https://www.gatenode.xyz/share/VQBGUAxY) |
-
-### Perp-DEX（分散型無期限取引所）
-
-| 取引所 | ステータス | 登録（手数料割引） |
-| <img src="web/public/exchange-icons/hyperliquid.png" width="20" height="20" style="vertical-align: middle;"/> **Hyperliquid** | ✅ | [登録](https://app.hyperliquid.xyz/join/AITRADING) |
-| <img src="web/public/exchange-icons/aster.svg" width="20" height="20" style="vertical-align: middle;"/> **Aster DEX** | ✅ | [登録](https://www.asterdex.com/en/referral/fdfc0e) |
-| <img src="web/public/exchange-icons/lighter.png" width="20" height="20" style="vertical-align: middle;"/> **Lighter** | ✅ | [登録](https://app.lighter.xyz/?referral=68151432) |
-
----
+| 取引所 | ステータス |
+| **NinjaTrader 8** | ✅ — SIM実行；相場と注文は同一TCPブリッジ |
 
 ## 対応AIモデル
 
@@ -157,7 +93,7 @@ VLは現在、以下の実証済み機能で**暗号通貨市場において完�
 - **過去フィードバックシステム**: 各判断前に過去20取引サイクルを分析
 - **スマートパフォーマンス分析**:
   - 最高/最悪パフォーマンス資産の特定
-  - 実際のUSDT建てで勝率、損益比、平均利益を計算
+  - 実際のUSD建てで勝率、損益比、平均利益を計算
   - 繰り返しミスを回避（連続損失パターン）
   - 成功戦略を強化（高勝率パターン）
 - **動的戦略調整**: AIはバックテスト結果に基づいて取引スタイルを自律的に適応
@@ -167,7 +103,7 @@ VLは現在、以下の実証済み機能で**暗号通貨市場において完�
 - **テクニカル指標**: EMA20/50、MACD、RSI(7/14)、ATR
 - **建玉追跡**: マーケットセンチメント、資金フロー分析
 - **流動性フィルタリング**: 低流動性資産（<1500万USD）の自動フィルタリング
-- **クロス取引所サポート**: 統一データインターフェースでBinance、Hyperliquid、Aster DEX
+- **単一経路**: NinjaTrader 8のリアルタイム相場とSIM実行
 
 ### 🎯 統一リスク管理システム
 - **ポジション制限**: 資産ごとの制限（アルトコイン≤1.5x エクイティ、BTC/ETH≤10x エクイティ）
@@ -177,13 +113,13 @@ VLは現在、以下の実証済み機能で**暗号通貨市場において完�
 - **重複防止**: 同じ資産/方向での重複ポジションを防止
 
 ### ⚡ 低レイテンシ実行エンジン
-- **マルチ取引所API統合**: Binance Futures、Hyperliquid DEX、Aster DEX
+- **NinjaTrader 8統合**: リアルタイム相場 + SIM実行
 - **自動精度処理**: 取引所ごとのスマートな注文サイズと価格フォーマット
 - **優先実行**: 既存ポジションを先にクローズし、その後新規を開く
 - **スリッページ管理**: 実行前検証、リアルタイム精度チェック
 
 ### 🎨 プロフェッショナルモニタリングインターフェース
-- **Binanceスタイルダッシュボード**: リアルタイム更新付きプロフェッショナルダークテーマ
+- **プロフェッショナルダッシュボード**: リアルタイム更新付きダークテーマ
 - **エクイティカーブ**: 過去のアカウント価値追跡（USD/パーセンテージ切り替え）
 - **パフォーマンスチャート**: ライブ更新付きマルチエージェントROI比較
 - **完全な判断ログ**: すべての取引の完全な思考連鎖（CoT）推論
@@ -216,7 +152,7 @@ vl/
 │
 ├── trader/                         # トレーディングコア
 │   ├── auto_trader.go              # 自動取引メインコントローラー（単一トレーダー）
-│   └── binance_futures.go          # Binance先物APIラッパー
+│   └── tcp_trader.go               # NT8 TCPトレーダー
 │
 ├── manager/                        # マルチトレーダー管理
 │   └── trader_manager.go           # 複数のトレーダーインスタンスを管理
@@ -231,7 +167,7 @@ vl/
 │   └── data.go                     # マーケットデータ＆テクニカル指標（K線、RSI、MACD）
 │
 ├── provider/                       # データプロバイダー管理
-│   └── data_provider.go            # AI500 + OI Top データプロバイダー
+│   └── data_provider.go            # NT8バー供給
 │
 ├── logger/                         # ロギングシステム
 │   └── decision_logger.go          # 判断記録 + パフォーマンス分析
@@ -248,7 +184,7 @@ vl/
     │   │   └── CompetitionPage.tsx # 競争リーダーボード
     │   ├── lib/api.ts              # API呼び出しラッパー
     │   ├── types/index.ts          # TypeScript型
-    │   ├── index.css               # BinanceスタイルCSS
+    │   ├── index.css               # ダークテーマCSS
     │   └── App.tsx                 # メインアプリ
     └── package.json
 ```
@@ -256,7 +192,7 @@ vl/
 ### コア依存関係
 
 **バックエンド（Go）**
-- `github.com/adshao/go-binance/v2` - Binance APIクライアント
+- NinjaTrader 8 TCPブリッジ（`provider/ninjatrader/`）
 - `github.com/markcheno/go-talib` - テクニカル指標計算（TA-Lib）
 - `github.com/gin-gonic/gin` - HTTP APIフレームワーク
 
@@ -265,34 +201,6 @@ vl/
 - `recharts` - チャートライブラリ（エクイティカーブ、比較チャート）
 - `swr` - データフェッチングとキャッシング
 - `tailwindcss` - CSSフレームワーク
-
----
-
-## 💰 Binanceアカウント登録（手数料節約！）
-
-このシステムを使用する前に、Binance先物アカウントが必要です。**紹介リンクを使用して取引手数料を節約しましょう：**
-
-**🎁 [Binance登録 - 手数料割引を取得](https://www.binance.com/join?ref=TINKLEVIP)**
-
-### 登録手順：
-
-1. **上記のリンクをクリック**してBinance登録ページにアクセス
-2. メール/電話番号で**登録を完了**
-3. **KYC認証を完了**（先物取引に必要）
-4. **先物アカウントを有効化**：
-   - Binanceホームページ → デリバティブ → USDT無期限先物
-   - 「今すぐ開設」をクリックして先物取引を有効化
-5. **APIキーを作成**：
-   - アカウント → API管理
-   - 新しいAPIキーを作成、**「先物」権限を有効化**
-   - APIキーとシークレットキーを保存（config.jsonに必要）
-   - **重要**: セキュリティのためIPアドレスをホワイトリストに追加
-
-### 手数料割引の利点：
-
-- ✅ **現物取引**: 最大30%の手数料割引
-- ✅ **先物取引**: 最大30%の手数料割引
-- ✅ **生涯有効**: すべての取引で永久割引
 
 ---
 
@@ -462,8 +370,7 @@ cp config.json.example config.json
       "id": "my_trader",
       "name": "My AI Trader",
       "ai_model": "deepseek",
-      "binance_api_key": "YOUR_BINANCE_API_KEY",
-      "binance_secret_key": "YOUR_BINANCE_SECRET_KEY",
+      "exchange": "ninjatrader",
       "use_qwen": false,
       "deepseek_key": "sk-xxxxxxxxxxxxx",
       "qwen_key": "",
@@ -485,134 +392,23 @@ cp config.json.example config.json
 **ステップ3**: プレースホルダーを実際のキーに置き換え
 
 | プレースホルダー | 置き換え先 | 取得場所 |
-| `YOUR_BINANCE_API_KEY` | BinanceのAPIキー | Binance → アカウント → API管理 |
-| `YOUR_BINANCE_SECRET_KEY` | Binanceのシークレットキー | 上記と同じ |
+| `sk-xxxxxxxxxxxxx` | DeepSeek APIキー | [platform.deepseek.com](https://platform.deepseek.com) |
 | `sk-xxxxxxxxxxxxx` | DeepSeek APIキー | [platform.deepseek.com](https://platform.deepseek.com) |
 
 **ステップ4**: 初期残高を調整（オプション）
 
-- `initial_balance`: 実際のBinance先物アカウント残高に設定
+- `initial_balance`: 実際のNT8 SIMアカウント残高に設定
 - 損益パーセンテージの計算に使用
-- 例：500 USDTがある場合、`"initial_balance": 500.0`に設定
+- 例：500 USDがある場合、`"initial_balance": 500.0`に設定
 
 **✅ 設定チェックリスト：**
 
-- [ ] Binance APIキーを入力（引用符の問題なし）
-- [ ] Binanceシークレットキーを入力（引用符の問題なし）
+- [ ] 取引所を`ninjatrader`に設定
+- [ ] NT8 AddOnのTCP接続を確認
 - [ ] DeepSeek APIキーを入力（`sk-`で始まる）
 - [ ] `use_default_coins`を`true`に設定（初心者向け）
 - [ ] `initial_balance`をアカウント残高と一致させる
 - [ ] ファイルを`config.json`として保存（`.example`ではない）
-
----
-
-#### 🔷 代替：Hyperliquid取引所の使用
-
-**VLはHyperliquidもサポート** - 分散型無期限先物取引所。Binanceの代わりにHyperliquidを使用するには：
-
-**ステップ1**: Ethereum秘密鍵を取得（Hyperliquid認証用）
-
-1. **MetaMask**（または任意のEthereumウォレット）を開く
-2. 秘密鍵をエクスポート
-3. キーから**`0x`プレフィックスを削除**
-4. [Hyperliquid](https://hyperliquid.xyz)でウォレットに資金を入金
-
-**ステップ2**: Hyperliquid用に`config.json`を設定
-
-```json
-{
-  "traders": [
-    {
-      "id": "hyperliquid_trader",
-      "name": "My Hyperliquid Trader",
-      "enabled": true,
-      "ai_model": "deepseek",
-      "exchange": "hyperliquid",
-      "hyperliquid_private_key": "your_private_key_without_0x",
-      "hyperliquid_wallet_addr": "your_ethereum_address",
-      "hyperliquid_testnet": false,
-      "deepseek_key": "sk-xxxxxxxxxxxxx",
-      "initial_balance": 1000.0,
-      "scan_interval_minutes": 3
-    }
-  ],
-  "use_default_coins": true,
-  "api_server_port": 8080
-}
-```
-
-**Binance設定との主な違い:**
-- `binance_api_key` + `binance_secret_key`を`hyperliquid_private_key`に置き換え
-- `"exchange": "hyperliquid"`フィールドを追加
-- メインネットには`hyperliquid_testnet: false`、テストネットには`true`を設定
-
-**⚠️ セキュリティ警告**: 秘密鍵は絶対に共有しないでください！メインウォレットではなく、取引専用のウォレットを使用してください。
-
----
-
-#### 🔶 代替：Aster DEX取引所の使用
-
-**VLはAster DEXもサポート** - Binance互換の分散型無期限先物取引所！
-
-**なぜAsterを選ぶ？**
-- 🎯 Binance互換API（簡単な移行）
-- 🔐 APIウォレットセキュリティシステム
-- 💰 低い取引手数料
-- 🌐 マルチチェーンサポート（ETH、BSC、Polygon）
-- 🌍 KYC不要
-
-**ステップ1**: Aster APIウォレットを作成
-
-1. [Aster APIウォレット](https://www.asterdex.com/en/api-wallet)にアクセス
-2. メインウォレットを接続（MetaMask、WalletConnectなど）
-3. 「APIウォレットを作成」をクリック
-4. **これらの3つの項目をすぐに保存：**
-   - メインウォレットアドレス（User）
-   - APIウォレットアドレス（Signer）
-   - APIウォレット秘密鍵（⚠️ 一度だけ表示！）
-
-**ステップ2**: Aster用に`config.json`を設定
-
-```json
-{
-  "traders": [
-    {
-      "id": "aster_deepseek",
-      "name": "Aster DeepSeek Trader",
-      "enabled": true,
-      "ai_model": "deepseek",
-      "exchange": "aster",
-
-      "aster_user": "0x63DD5aCC6b1aa0f563956C0e534DD30B6dcF7C4e",
-      "aster_signer": "0x21cF8Ae13Bb72632562c6Fff438652Ba1a151bb0",
-      "aster_private_key": "4fd0a42218f3eae43a6ce26d22544e986139a01e5b34a62db53757ffca81bae1",
-
-      "deepseek_key": "sk-xxxxxxxxxxxxx",
-      "initial_balance": 1000.0,
-      "scan_interval_minutes": 3
-    }
-  ],
-  "use_default_coins": true,
-  "api_server_port": 8080,
-  "leverage": {
-    "btc_eth_leverage": 5,
-    "altcoin_leverage": 5
-  }
-}
-```
-
-**主要設定フィールド:**
-- `"exchange": "aster"` - 取引所をAsterに設定
-- `aster_user` - メインウォレットアドレス
-- `aster_signer` - APIウォレットアドレス（ステップ1から）
-- `aster_private_key` - APIウォレット秘密鍵（`0x`プレフィックスなし）
-
-**📖 詳細なセットアップ手順については**: [Aster統合ガイド](ASTER_INTEGRATION.md)を参照
-
-**⚠️ セキュリティ注意事項**:
-- APIウォレットはメインウォレットとは別（追加のセキュリティレイヤー）
-- API秘密鍵は絶対に共有しない
-- [asterdex.com](https://www.asterdex.com/en/api-wallet)でいつでもAPIウォレットアクセスを取り消し可能
 
 ---
 
@@ -627,8 +423,7 @@ cp config.json.example config.json
       "id": "qwen_trader",
       "name": "Qwen AI Trader",
       "ai_model": "qwen",
-      "binance_api_key": "YOUR_BINANCE_API_KEY_1",
-      "binance_secret_key": "YOUR_BINANCE_SECRET_KEY_1",
+      "exchange": "ninjatrader",
       "use_qwen": true,
       "qwen_key": "sk-xxxxx",
       "deepseek_key": "",
@@ -639,8 +434,7 @@ cp config.json.example config.json
       "id": "deepseek_trader",
       "name": "DeepSeek AI Trader",
       "ai_model": "deepseek",
-      "binance_api_key": "YOUR_BINANCE_API_KEY_2",
-      "binance_secret_key": "YOUR_BINANCE_SECRET_KEY_2",
+      "exchange": "ninjatrader",
       "use_qwen": false,
       "qwen_key": "",
       "deepseek_key": "sk-xxxxx",
@@ -656,9 +450,9 @@ cp config.json.example config.json
 ```
 
 **競争モードの要件:**
-- 2つの別々のBinance先物アカウント（異なるAPIキー）
+- 2つの別々のNT8 SIMアカウント
 - 両方のAI APIキー（Qwen + DeepSeek）
-- テスト用により多くの資本（推奨：アカウントあたり500+ USDT）
+- テスト用により多くの資本（推奨：アカウントあたり500+ USD）
 
 ---
 
@@ -669,12 +463,7 @@ cp config.json.example config.json
 | `name` | 表示名 | `"My AI Trader"` | ✅ はい |
 | `enabled` | このトレーダーが有効かどうか<br>起動をスキップする場合は`false`に設定 | `true`または`false` | ✅ はい |
 | `ai_model` | 使用するAIプロバイダー | `"deepseek"`または`"qwen"`または`"custom"` | ✅ はい |
-| `exchange` | 使用する取引所 | `"binance"`または`"hyperliquid"`または`"aster"` | ✅ はい |
-| `binance_api_key` | Binance APIキー | `"abc123..."` | Binance使用時に必須 |
-| `binance_secret_key` | Binanceシークレットキー | `"xyz789..."` | Binance使用時に必須 |
-| `hyperliquid_private_key` | Hyperliquid秘密鍵<br>⚠️ `0x`プレフィックスを削除 | `"your_key..."` | Hyperliquid使用時に必須 |
-| `hyperliquid_wallet_addr` | Hyperliquidウォレットアドレス | `"0xabc..."` | Hyperliquid使用時に必須 |
-| `hyperliquid_testnet` | テストネットを使用 | `true`または`false` | ❌ いいえ（デフォルトはfalse） |
+| `exchange` | 使用する取引所 | `"ninjatrader"` | ✅ はい |
 | `use_qwen` | Qwenを使用するかどうか | `true`または`false` | ✅ はい |
 | `deepseek_key` | DeepSeek APIキー | `"sk-xxx"` | DeepSeek使用時 |
 | `qwen_key` | Qwen APIキー | `"sk-xxx"` | Qwen使用時 |
@@ -697,7 +486,7 @@ cp config.json.example config.json
 
 **レバレッジ設定とは？**
 
-レバレッジ設定は、AIが各取引で使用できる最大レバレッジを制御します。これは、特にレバレッジ制限があるBinanceサブアカウントでリスク管理に重要です。
+レバレッジ設定は、AIが各取引で使用できる最大レバレッジを制御します。
 
 **設定形式：**
 
@@ -708,11 +497,10 @@ cp config.json.example config.json
 }
 ```
 
-**⚠️ 重要：Binanceサブアカウント制限**
+**⚠️ 重要：レバレッジ上限**
 
-- **サブアカウント**: Binanceにより**≤5xレバレッジ**に制限
-- **メインアカウント**: 最大20x（アルトコイン）または50x（BTC/ETH）を使用可能
-- サブアカウントを使用していてレバレッジを>5xに設定すると、取引は**失敗**し、エラーが表示されます：`Subaccounts are restricted from using leverage greater than 5x`
+- レバレッジ上限は戦略のリスク管理設定で制御されます
+- 上限を超える設定は**失敗**し、エラーが表示されます：`Subaccounts are restricted from using leverage greater than 5x`
 
 **推奨設定：**
 
@@ -818,7 +606,7 @@ go build -o vl
 **⚠️ エラーが表示される場合：**
 
 | エラーメッセージ | 解決策 |
-| `invalid API key` | config.jsonのBinance APIキーを確認 |
+| `invalid API key` | AIモデルのAPIキーを確認 |
 | `TA-Lib not found` | `brew install ta-lib`を実行（macOS） |
 | `port 8080 already in use` | config.jsonの`api_server_port`を変更 |
 | `DeepSeek API error` | DeepSeek APIキーと残高を確認 |
@@ -927,11 +715,11 @@ curl http://localhost:8080/health
 │ 1. 📊 過去パフォーマンスを分析（過去20サイクル）           │
 ├──────────────────────────────────────────────────────────┤
 │  ✓ 総合勝率、平均利益、損益比を計算                       │
-│  ✓ コインごとの統計（勝率、平均損益（USDT））             │
+│  ✓ 銘柄ごとの統計（勝率、平均損益（USD））              │
 │  ✓ 最高/最悪パフォーマンスコインを特定                    │
 │  ✓ 正確なPnLを含む最後の5取引の詳細をリスト              │
 │  ✓ リスク調整パフォーマンスのシャープレシオを計算          │
-│  📌 NEW（v2.0.2）：レバレッジを含む正確なUSDT PnL         │
+│  📌 NEW（v2.0.2）：レバレッジを含む正確なUSD PnL         │
 └──────────────────────────────────────────────────────────┘
                            ↓
 ┌──────────────────────────────────────────────────────────┐
@@ -961,7 +749,7 @@ curl http://localhost:8080/health
 ├──────────────────────────────────────────────────────────┤
 │  • コインプールを取得（2モード）：                        │
 │    🌟 デフォルトモード：BTC、ETH、SOL、BNB、XRPなど       │
-│    ⚙️  高度モード：AI500（上位20）+ OI Top（上位20）     │
+│    ⚙️  銘柄ソース：静的リスト                          │
 │  • 候補コインをマージして重複削除                         │
 │  • フィルター：低流動性を削除（<1500万USD OI値）          │
 │  • 市場データ + テクニカル指標をバッチ取得                │
@@ -995,8 +783,8 @@ curl http://localhost:8080/health
 │    - ポジションサイズ制限（アルトコイン1.5x、BTC 10x）    │
 │    - 重複ポジションなし（同じコイン + 方向）              │
 │    - 証拠金使用量が90%制限内                              │
-│  • Binance LOT_SIZE精度を自動取得して適用                 │
-│  • Binance Futures APIで注文を実行                        │
+│  • NT8のティックサイズを自動適用                        │
+│  • NT8 TCPブリッジで注文を実行                          │
 │  • クローズ後：すべての保留注文を自動キャンセル           │
 │  • 実際の実行価格と注文IDを記録                           │
 │  📌 期間計算のためにポジションオープン時間を追跡          │
@@ -1015,7 +803,7 @@ curl http://localhost:8080/health
 │  • パフォーマンスデータベースを更新：                     │
 │    - symbol_sideキーでオープン/クローズペアをマッチ       │
 │      📌 NEW：ロング/ショート競合を防止                    │
-│    - 正確なUSDT PnLを計算：                               │
+│    - 正確なUSD PnLを計算：                              │
 │      PnL = ポジション価値 × 価格変化% × レバレッジ        │
 │      📌 NEW：数量 + レバレッジを考慮                      │
 │    - 保存：数量、レバレッジ、オープン時間、クローズ時間   │
@@ -1035,8 +823,8 @@ curl http://localhost:8080/health
 
 **📌 正確なPnL計算：**
 - 以前：パーセンテージのみ（100U@5% = 1000U@5% = 両方とも「5.0」と表示）
-- 現在：実際のUSDT利益 = ポジション価値 × 価格変化 × レバレッジ
-- 例：1000 USDT × 5% × 20x = 1000 USDT実際の利益
+- 現在：実際のUSD利益 = ポジション価値 × 価格変化 × レバレッジ
+- 例：1000 USD × 5% × 20x = 1000 USD実際の利益
 
 **📌 AI自由度の向上：**
 - AIはすべての生シーケンスデータを自由に分析可能
@@ -1044,7 +832,7 @@ curl http://localhost:8080/health
 - 独自のトレンド分析、サポート/レジスタンス計算を実行可能
 
 **📌 改善されたポジション追跡：**
-- `symbol_side`キーを使用（例：「BTCUSDT_long」）
+- `symbol_side`キーを使用（例：「MNQ_long」）
 - ロングとショートの両方を保有する際の競合を防止
 - 完全なデータを保存：数量、レバレッジ、オープン/クローズ時間
 
@@ -1064,20 +852,16 @@ curl http://localhost:8080/health
 - **損益比**: 1.52:1
 
 ### 最近の取引
-1. BTCUSDT LONG: 95000.0000 → 97500.0000 = +2.63% ✓
-2. ETHUSDT SHORT: 3500.0000 → 3450.0000 = +1.43% ✓
-3. SOLUSDT LONG: 185.0000 → 180.0000 = -2.70% ✗
-4. BNBUSDT LONG: 610.0000 → 625.0000 = +2.46% ✓
-5. ADAUSDT LONG: 0.8500 → 0.8300 = -2.35% ✗
+1. MNQ LONG: 20500.0000 → 20600.0000 = +0.49% ✓
 
 ### コインパフォーマンス
-- **最高**: BTCUSDT（勝率75%、平均+2.5%）
-- **最悪**: SOLUSDT（勝率25%、平均-1.8%）
+- **最高**: MNQ（勝率75%、平均+2.5%）
+- **最悪**: 記録なし（勝率25%、平均-1.8%）
 ```
 
 ### AIのフィードバック使用方法
 
-1. **連続損失を回避**: SOLUSDTが3回連続でストップロスになっているのを見て、AIは回避するかより慎重になる
+1. **連続損失を回避**: 同じ銘柄が3回連続でストップロスになっているのを見て、AIは回避するかより慎重になる
 2. **成功戦略を強化**: BTCブレイクアウトロングが75%の勝率で、AIはこのパターンを継続
 3. **動的スタイル調整**: 勝率<40% → 保守的；損益比>2 → 積極的を維持
 4. **市場状況の特定**: 連続損失は荒れた市場を示す可能性があり、取引頻度を減らす
@@ -1158,7 +942,7 @@ GET /api/config               # システム設定
 
 ✅ **推奨**
 - テストには失っても構わない資金のみを使用
-- 少額から始める（推奨100-500 USDT）
+- 少額から始める（推奨1枚のMNQ）
 - システムの動作状態を定期的に確認
 - アカウント残高の変化を監視
 - AI判断ログを分析して戦略を理解
@@ -1187,7 +971,7 @@ sudo apt-get install libta-lib0-dev
 
 ### 2. 精度エラー：Precision is over the maximum
 
-**解決策**: システムがBinance LOT_SIZEから精度を自動処理します。エラーが続く場合は、ネットワーク接続を確認してください。
+**解決策**: システムがNT8のティックサイズを自動処理します。エラーが続く場合は、ネットワーク接続を確認してください。
 
 ### 3. AI APIタイムアウト
 
@@ -1215,10 +999,10 @@ sudo apt-get install libta-lib0-dev
 ## 📈 パフォーマンス最適化のヒント
 
 1. **合理的な判断サイクルを設定**: 3-5分を推奨、過剰取引を避ける
-2. **候補コイン数を制御**: システムはデフォルトでAI500上位20 + OI Top上位20
+2. **候補銘柄を制御**: システムはデフォルトで静的リスト
 3. **ログを定期的にクリーン**: 過度なディスク使用を避ける
-4. **API呼び出し数を監視**: Binanceレート制限のトリガーを避ける
-5. **少額資本でテスト**: まず100-500 USDTで戦略検証をテスト
+4. **API呼び出し数を監視**: レート制限のトリガーを避ける
+5. **少額でテスト**: まず1枚のMNQで戦略検証をテスト
 
 ---
 
@@ -1232,14 +1016,14 @@ sudo apt-get install libta-lib0-dev
 
 **1. PnL計算 - 主要エラー修正**（logger/decision_logger.go）
 - **問題**: 以前はパーセンテージのみで計算され、ポジションサイズとレバレッジを完全に無視
-  - 例：100 USDTポジションが5%獲得と1000 USDTポジションが5%獲得の両方が利益として`5.0`と表示
+  - 例：100 USDポジションが5%獲得と1000 USDポジションが5%獲得の両方が利益として`5.0`と表示
   - これによりパフォーマンス分析が完全に不正確に
-- **解決策**: 実際のUSDT利益額を計算
+- **解決策**: 実際のUSD利益額を計算
   ```
-  PnL（USDT）= ポジション価値 × 価格変化% × レバレッジ
-  例：1000 USDT × 5% × 20x = 1000 USDT実際の利益
+  PnL（USD）= ポジション価値 × 価格変化% × レバレッジ
+  例：1000 USD × 5% × 20x = 1000 USD実際の利益
   ```
-- **影響**: 勝率、利益率、シャープレシオが正確なUSDT額に基づくようになりました
+- **影響**: 勝率、利益率、シャープレシオが正確なUSD額に基づくようになりました
 
 **2. ポジション追跡 - 重要データの欠落**
 - **問題**: オープンポジション記録が価格と時間のみを保存、数量とレバレッジが欠落
@@ -1250,8 +1034,8 @@ sudo apt-get install libta-lib0-dev
 
 **3. ポジションキーロジック - ロング/ショート競合**
 - **問題**: `symbol`をポジションキーとして使用し、ロングとショートの両方を保有する際にデータ競合を引き起こす
-  - 例：BTCUSDTロングとBTCUSDTショートが互いに上書き
-- **解決策**: `symbol_side`形式に変更（例：`BTCUSDT_long`、`BTCUSDT_short`）
+  - 例：MNQロングとMNQショートが互いに上書き
+- **解決策**: `symbol_side`形式に変更（例：`MNQ_long`、`MNQ_short`）
   - ロングとショートポジションを適切に区別
 
 **4. シャープレシオ計算 - コード最適化**
@@ -1260,7 +1044,7 @@ sudo apt-get install libta-lib0-dev
   - より信頼性が高く、保守可能で効率的
 
 **このアップデートが重要な理由：**
-- ✅ 過去取引統計が無意味なパーセンテージではなく**実際のUSDT損益**を表示
+- ✅ 過去取引統計が無意味なパーセンテージではなく**実際のUSD損益**を表示
 - ✅ 異なるレバレッジ取引間のパフォーマンス比較が正確に
 - ✅ AI自己学習メカニズムが正しい過去フィードバックを受信
 - ✅ 利益率とシャープレシオの計算が意味を持つように
@@ -1294,7 +1078,7 @@ sudo apt-get install libta-lib0-dev
 **主要アップデート：**
 - ✅ AI自己学習メカニズム（過去フィードバック、パフォーマンス分析）
 - ✅ マルチトレーダー競争モード（Qwen対DeepSeek）
-- ✅ BinanceスタイルUI（完全なBinanceインターフェース模倣）
+- ✅ プロフェッショナルUI（ダークテーマ）
 - ✅ パフォーマンス比較チャート（リアルタイムROI比較）
 - ✅ リスク管理最適化（コインごとのポジション制限調整）
 
@@ -1339,7 +1123,7 @@ IssueとPull Requestを歓迎します！
 
 ## 🙏 謝辞
 
-- [Binance API](https://binance-docs.github.io/apidocs/futures/en/) - Binance先物API
+- [NinjaTrader 8](https://ninjatrader.com/) - CME先物（MNQ）、SIM実行
 - [DeepSeek](https://platform.deepseek.com/) - DeepSeek AI API
 - [Qwen](https://dashscope.aliyuncs.com/) - Alibaba Cloud Qwen
 - [TA-Lib](https://ta-lib.org/) - テクニカル指標ライブラリ
