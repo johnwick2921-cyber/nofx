@@ -1,8 +1,8 @@
 # CR-A disposition table — brokers + payments + providers (crypto removal, part CR-A)
 
 base sha (branch point): db412e61c
-integrator tip generated against: 0425864b0
-generated: 2026-10-01T11:09:16-05:00 (worktree /home/hoang/nofx-104-cra, branch crypto-removal-integration)
+integrator tip generated against: a4200b8fc
+generated: 2026-10-01T11:15:36-05:00 (branch crypto-removal-integration @ a4200b8fc — provenance: branch + sha only, never a filesystem path)
 sweep regex (exported programmatically from branding/no_crypto.go SweepRegexLiteral — the guard's amended literal, never hand-typed):
   `binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续|btc|ethusdt|\beth\b|altcoin|ethereum`
 

@@ -578,6 +578,11 @@ func (s *Server) handleUpdateTrader(c *gin.Context) {
 		ExchangeID:           req.ExchangeID,
 		StrategyID:           strategyID, // Associated strategy ID
 		InitialBalance:       initialBalance,
+		// P0 CAPS (CTO ruling 10-01 10:5x): these columns are live futures
+		// risk caps in the crypto-named storage — preserve the stored values
+		// on every update (C1: never write 0 over the owner's configured caps).
+		BTCETHLeverage:       existingTrader.BTCETHLeverage,
+		AltcoinLeverage:      existingTrader.AltcoinLeverage,
 		TradingSymbols:       req.TradingSymbols,
 		CustomPrompt:         req.CustomPrompt,
 		OverrideBasePrompt:   req.OverrideBasePrompt,
