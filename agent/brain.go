@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 	"vl/kernel"
-	"vl/market"
 	"vl/safe"
 )
 
@@ -205,15 +204,7 @@ func (b *Brain) sendBrief(hour int) {
 		title = "🌙 *晚间市场简报*"
 	}
 
-	// C5/C8 — the crypto ticker fetch is gone with the payment family; the
-	// brief reads the NT8 bridge when wired (no external market call on the
-	// futures path).
-	brief := title
-	if bars := market.FuturesBarsProvider("MNQ", "5m", 1); len(bars) > 0 {
-		brief = fmt.Sprintf("%s\n\n• MNQ: %.2f\n\n_%s_", title, bars[len(bars)-1].Close, kernel.FormatCT(time.Now()))
-	} else {
-		brief = fmt.Sprintf("%s\n\n_%s_", title, kernel.FormatCT(time.Now()))
-	}
+	brief := fmt.Sprintf("%s\n\n_%s_", title, kernel.FormatCT(time.Now()))
 
 	b.agent.notifyAll(brief)
 }

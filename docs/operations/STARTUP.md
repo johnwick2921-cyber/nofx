@@ -13,7 +13,7 @@ Before launching, verify every item below. Each unchecked item is a likely incid
 grep -E "^(JWT_SECRET|DATABENTO_API_KEY|NINJATRADER_DATA_DIR)=" .env
 ```
 
-Expected output: 4 non-empty lines. If `JWT_SECRET` is missing the bot will boot with the insecure default `default-jwt-secret-change-in-production` (config/config.go:86); regenerate with:
+Expected output: 3 non-empty lines. If `JWT_SECRET` is missing the bot will boot with the insecure default `default-jwt-secret-change-in-production` (config/config.go:86); regenerate with:
 
 ```bash
 openssl rand -base64 64
@@ -26,11 +26,6 @@ openssl rand -base64 64
 - VLTrader attached to active MNQ chart (e.g. `MNQH6` for March 2026 contract)
 - WSL2 mirrored networking active on the host: `wsl --version` must report mode = `mirrored` (Win11 22H2+ required for `127.0.0.1` to reach Windows-side NT8)
 
-**Trading mode set to futures** (if NQ path desired):
-
-```bash
-grep TRADING_MODE .env   # must be ABSENT (futures-only build; any value is ignored with a boot warning)
-```
 
 ## 2. Cold start
 
