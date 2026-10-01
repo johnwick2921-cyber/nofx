@@ -2,7 +2,7 @@ package store
 
 import "strings"
 
-func MissingRequiredExchangeCredentialFields(exchangeType, apiKey, secretKey, passphrase, hyperliquidWalletAddr, asterUser, asterSigner, asterPrivateKey, lighterWalletAddr, lighterAPIKeyPrivateKey string, ntDataDir ...string) []string {
+func MissingRequiredExchangeCredentialFields(exchangeType, apiKey, secretKey, passphrase string, ntDataDir ...string) []string {
 	switch strings.ToLower(strings.TrimSpace(exchangeType)) {
 	case "ninjatrader":
 		ntDir := ""

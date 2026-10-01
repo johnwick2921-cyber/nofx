@@ -302,12 +302,7 @@ func missingExchangeCredentials(exchangeCfg *store.Exchange) (status string, cod
 		string(exchangeCfg.APIKey),
 		string(exchangeCfg.SecretKey),
 		string(exchangeCfg.Passphrase),
-		exchangeCfg.HyperliquidWalletAddr,
-		exchangeCfg.AsterUser,
-		exchangeCfg.AsterSigner,
-		string(exchangeCfg.AsterPrivateKey),
-		exchangeCfg.LighterWalletAddr,
-		string(exchangeCfg.LighterAPIKeyPrivateKey),
+		exchangeCfg.NTDataDir,
 	)
 	if len(missingFields) > 0 {
 		if len(missingFields) == 1 && missingFields[0] == "exchange_type" {

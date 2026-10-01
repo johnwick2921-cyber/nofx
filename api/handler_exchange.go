@@ -218,12 +218,6 @@ func (s *Server) handleUpdateExchangeConfigs(c *gin.Context) {
 			effectiveAPIKey,
 			effectiveSecretKey,
 			effectivePassphrase,
-			"",
-			"",
-			"",
-			"",
-			"",
-			"",
 			effectiveNTDataDir,
 		); len(missing) > 0 {
 			c.JSON(http.StatusBadRequest, gin.H{
@@ -345,12 +339,6 @@ func (s *Server) handleCreateExchange(c *gin.Context) {
 		req.APIKey,
 		req.SecretKey,
 		req.Passphrase,
-		"",
-		"",
-		"",
-		"",
-		"",
-		"",
 		req.NTDataDir,
 	); len(missing) > 0 {
 		c.JSON(http.StatusBadRequest, gin.H{

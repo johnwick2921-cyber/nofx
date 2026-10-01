@@ -98,12 +98,6 @@ func (s *ExchangeStore) cleanupIncompleteExchangeConfigs() error {
 			string(exchange.APIKey),
 			string(exchange.SecretKey),
 			string(exchange.Passphrase),
-			exchange.HyperliquidWalletAddr,
-			exchange.AsterUser,
-			exchange.AsterSigner,
-			string(exchange.AsterPrivateKey),
-			exchange.LighterWalletAddr,
-			string(exchange.LighterAPIKeyPrivateKey),
 			exchange.NTDataDir,
 		)
 		if len(missing) > 0 {
@@ -226,8 +220,6 @@ func (s *ExchangeStore) Create(userID, exchangeType, accountName string, enabled
 
 	if missing := MissingRequiredExchangeCredentialFields(
 		exchangeType, apiKey, secretKey, passphrase,
-		hyperliquidWalletAddr, asterUser, asterSigner, asterPrivateKey,
-		lighterWalletAddr, lighterApiKeyPrivateKey,
 		ntDataDir,
 	); len(missing) > 0 {
 		return "", fmt.Errorf("missing required exchange fields: %s", strings.Join(missing, ", "))

@@ -90,11 +90,6 @@ func (v exchangeConfigValidator) Validate() error {
 			v.apiKey,
 			v.secretKey,
 			v.passphrase,
-			"", // legacy crypto credential fields are gone (C1: rows still load)
-			"",
-			"",
-			"",
-			"",
 			v.ntDataDir,
 		)
 		if len(missing) > 0 {
