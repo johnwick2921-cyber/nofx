@@ -37,18 +37,18 @@
     },
     "symbol": {
       "type": "enum",
-      "values": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT"],
-      "description": "网格策略页面交易对下拉选项，只能从 BTCUSDT、ETHUSDT、SOLUSDT、BNBUSDT、XRPUSDT、DOGEUSDT 中选择。用户问“交易对有哪些选项”时，直接列出这些选项。"
+      "values": ["MNQ"],
+      "description": "网格策略页面合约下拉选项，当前构建只支持 MNQ（CME 微型纳指期货）。用户问“合约有哪些选项”时，直接说明只有 MNQ。"
     },
     "source_type": {
       "type": "enum",
-      "values": ["static", "ai500", "oi_top", "oi_low"],
-      "description": "选币来源类型。static=用户指定静态币池，ai500=AI500榜单，oi_top=持仓量增长，oi_low=持仓量下降。"
+      "values": ["static"],
+      "description": "选币来源类型。static=用户指定静态合约列表；当前构建的行情只来自 NinjaTrader 8 桥接。"
     },
     "static_coins": {
       "type": "string_array",
       "max_items": 10,
-      "description": "静态币池，例如 [\"BTCUSDT\", \"ETHUSDT\"]，source_type=static 时使用，手动页面最多 10 个。页面支持常规合约币种，也支持 xyz: 前缀资产（如 xyz:TSLA、xyz:GOLD、xyz:XYZ100）。"
+      "description": "静态合约池，例如 [\"MNQ\"]，source_type=static 时使用，手动页面最多 10 个。当前构建支持 CME 期货合约。"
     },
     "excluded_coins": {
       "type": "string_array",
@@ -64,18 +64,6 @@
       "values": ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w"],
       "max_items": 4,
       "description": "多周期分析时间框架列表，例如 [\"5m\",\"15m\",\"1h\"]；手动页面最多选择 4 个。"
-    },
-    "btceth_max_leverage": {
-      "type": "int",
-      "min": 1,
-      "max": 20,
-      "description": "BTC/ETH 最大杠杆倍数，范围 1～20。"
-    },
-    "altcoin_max_leverage": {
-      "type": "int",
-      "min": 1,
-      "max": 20,
-      "description": "山寨币最大杠杆倍数，范围 1～20。"
     },
     "min_confidence": {
       "type": "int",
@@ -118,7 +106,7 @@
     "total_investment": {
       "type": "float",
       "min": 100,
-      "description": "网格总投入金额，grid_trading 类型专用，表示用户实际投入/保证金预算，不是杠杆后的名义仓位；名义仓位约等于 total_investment × leverage。手动页面最小 100 USDT，步进 100。"
+      "description": "网格总投入金额，grid_trading 类型专用，表示用户实际投入/保证金预算，不是杠杆后的名义仓位；名义仓位约等于 total_investment × leverage。手动页面最小 100 美元，步进 100。"
     },
     "leverage": {
       "type": "int",
