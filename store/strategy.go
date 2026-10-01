@@ -221,7 +221,7 @@ func (c *StrategyConfig) NormalizeProductSchema() {
 	c.StrategyType = normalizeStrategyType(c.StrategyType)
 	c.CoinSource.SourceType = normalizeCoinSourceType(c.CoinSource.SourceType)
 	switch c.CoinSource.SourceType {
-	case "ai500", "oi_top", "oi_low":
+	case "ai500", "oi_top", "oi_low", "hyper_all", "hyper_main", "mixed":
 		// D2-DEAD (item 12): these sources were backed by the deleted legacy
 		// provider; stored rows degrade to the static coin list.
 		c.CoinSource.SourceType = "static"
@@ -2387,7 +2387,7 @@ func (c *StrategyConfig) applyMissingDefaults() {
 		c.CoinSource.SourceType = "static"
 	}
 	switch c.CoinSource.SourceType {
-	case "ai500", "oi_top", "oi_low":
+	case "ai500", "oi_top", "oi_low", "hyper_all", "hyper_main", "mixed":
 		c.CoinSource.SourceType = "static"
 	}
 

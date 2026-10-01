@@ -36,3 +36,25 @@ func TestLegacyStrategyRowWithHyperCoinSourceKeysStillLoads(t *testing.T) {
 		}
 	}
 }
+
+// Plan C1 (crypto removal): every legacy coin source type degrades to "static"
+// at load. The degrade switch must cover hyper_all / hyper_main / mixed (and the
+// pre-existing ai500 / oi_top / oi_low), otherwise a stored legacy row reaches
+// the engine as an unknown source_type instead of static. Mutant guard: dropping
+// "mixed" from the case must make this test fail.
+func TestLegacyCoinSourceTypesDegradeToStatic(t *testing.T) {
+	for _, legacy := range []string{"hyper_all", "hyper_main", "mixed", "ai500", "oi_top", "oi_low"} {
+		blob := []byte(`{"strategy_type":"ai_trading","ai_config":{"coin_source":{
+			"source_type": "` + legacy + `",
+			"static_coins": ["MNQ"]
+		}}}`)
+		var cfg StrategyConfig
+		if err := json.Unmarshal(blob, &cfg); err != nil {
+			t.Fatalf("legacy row with source_type %q must load, got: %v", legacy, err)
+		}
+		cfg.NormalizeProductSchema()
+		if cfg.CoinSource.SourceType != "static" {
+			t.Fatalf("legacy source_type %q must degrade to static, got %q", legacy, cfg.CoinSource.SourceType)
+		}
+	}
+}
