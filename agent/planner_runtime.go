@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"vl/branding"
 	"sort"
 	"strings"
 	"time"
+	"vl/branding"
 
 	"vl/mcp"
 	"vl/safe"
@@ -2667,7 +2667,7 @@ Choose the immediate next action batch. Do not generate a long multi-step execut
 
 CRITICAL — Minimal tool principle:
 - Only call tools that DIRECTLY answer the user's Goal.
-- Do NOT call extra tools "just in case" or "for context". If the user asks about their wallet address, do NOT also fetch market data or balances.
+- Do NOT call extra tools "just in case" or "for context". If the user asks about their account, do NOT also fetch market data or balances.
 - If the user asks one question, call one tool (or zero if you already have the answer).
 
 Allowed step types:
@@ -3764,9 +3764,9 @@ func (a *Agent) thinkAndActLegacyWithStore(ctx context.Context, storeUserID stri
 	}
 	// NOTE: We intentionally do NOT inject conversation history into the legacy
 	// loop. Even a single prior round causes DeepSeek to hallucinate data from
-	// earlier topics (e.g. outputting strategy details when asked about a wallet).
+	// earlier topics (e.g. outputting strategy details when asked about their account).
 	// The planner path handles multi-turn context properly; the legacy loop is
-	// a single-turn fallback. References like "那binance的钱包呢" still work
+	// a single-turn fallback. References like "那NinjaTrader的账户呢" still work
 	// because the text itself contains enough keywords for domain routing.
 	messages = append(messages, mcp.NewUserMessage(userPrompt))
 
