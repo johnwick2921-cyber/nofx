@@ -284,6 +284,13 @@ func (e *StrategyEngine) BuildUserPrompt(ctx *Context) string {
 	sb.WriteString(fmt.Sprintf("Time: %s | Period: #%d | Runtime: %d minutes\n\n",
 		ctx.CurrentTime, ctx.CallCount, ctx.RuntimeMinutes))
 
+	// BTC market
+	if btcData, hasBTC := ctx.MarketDataMap["BTCUSDT"]; hasBTC {
+		sb.WriteString(fmt.Sprintf("BTC: %.2f (1h: %s, 4h: %s) | MACD: %.4f | RSI: %.2f\n\n",
+			btcData.CurrentPrice, market.PctOrNA(btcData.PriceChange1h, true), market.PctOrNA(btcData.PriceChange4h, true),
+			btcData.CurrentMACD, btcData.CurrentRSI7))
+	}
+
 	// Account information
 	sb.WriteString(fmt.Sprintf("Account: Equity %.2f | Balance %.2f (%.1f%%) | PnL %+.2f%% | Margin %.1f%% | Positions %d\n\n",
 		ctx.Account.TotalEquity,
