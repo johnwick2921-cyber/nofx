@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>Your personal AI trading assistant.</strong><br/>
-  <strong>Any market. Any model. Automated CME futures (MNQ) via NinjaTrader 8.</strong>
+  <strong>Any market. Any model.</strong>
 </p>
 
 > **Operator's manual + full UI reference (verified against code):**
@@ -27,9 +27,8 @@
 
 VL Intelligent is an open-source **autonomous** AI trading assistant. Unlike traditional AI tools that require you to manually configure models, manage API keys, and wire up data sources — VL Intelligent's AI **perceives markets, selects models, and fetches data entirely on its own**. Zero human intervention. You set the strategy, the AI handles everything else.
 
-**Fully autonomous**: The AI decides which model to use, what market data to pull, when to trade — all by itself. No manual model configuration. No juggling API keys for different services. Just connect NinjaTrader 8 and let it run.
+**Fully autonomous**: The AI decides which model to use, what market data to pull, when to trade — all by itself. No manual model configuration.
 
-What makes it different: **a single NinjaTrader 8 CME futures (MNQ) path** — real-time bars and SIM execution ride the same TCP bridge.
 
 ---
 
@@ -51,7 +50,6 @@ What makes it different: **a single NinjaTrader 8 CME futures (MNQ) path** — r
 
 | Feature             | Description                                                               |
 | **Multi-AI**        | DeepSeek, Qwen, GPT, Claude, Gemini, Grok, Kimi, MiniMax — switch anytime |
-| **NinjaTrader 8**   | CME futures (MNQ) — real-time bars + SIM execution    |
 | **Strategy Studio** | Visual builder — coin sources, indicators, risk controls                  |
 | **AI Competition**  | AIs compete in real-time, leaderboard ranks performance                   |
 | **Telegram Agent**  | Chat with your trading assistant — streaming, tool calling, memory        |
@@ -60,11 +58,6 @@ What makes it different: **a single NinjaTrader 8 CME futures (MNQ) path** — r
 ### Markets
 
 Crypto · US Stocks · Forex · Metals
-
-### Exchanges
-
-| Exchange | Status |
-| **NinjaTrader 8** | ✅ — SIM execution; bars and orders ride one TCP bridge |
 
 ### AI Models (API Key Mode)
 
@@ -187,8 +180,8 @@ Everything through the web UI at **http://127.0.0.1:3000**.
     │    └───────────┘  └───────────┘  └───────────┘  │
     ├─────────────────────────────────────────────────┤
     │             Exchange Connectors                   │
-    │            NinjaTrader 8 (CME futures)             │
-    │                     (SIM)                          │
+    │                                                   │
+    │                                                   │
     └─────────────────────────────────────────────────┘
 ```
 

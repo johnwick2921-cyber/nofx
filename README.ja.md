@@ -40,20 +40,6 @@ Telegram開発者コミュニティに参加して、議論、アイデアの共
 
 ---
 
-## 🆕 最新情報（最新アップデート）
-
-### 🚀 NinjaTrader 8 対応！
-
-VLは現在、**NinjaTrader 8（CME先物・MNQ）**をサポートしています。
-リアルタイム相場とSIM注文実行が同じTCPブリッジで接続されます。
-
-## 対応取引所
-
-### 対応取引所
-
-| 取引所 | ステータス |
-| **NinjaTrader 8** | ✅ — SIM実行；相場と注文は同一TCPブリッジ |
-
 ## 対応AIモデル
 
 | AIモデル | ステータス | APIキー取得 |
@@ -93,8 +79,7 @@ VLは現在、以下の実証済み機能で**暗号通貨市場において完�
 - **過去フィードバックシステム**: 各判断前に過去20取引サイクルを分析
 - **スマートパフォーマンス分析**:
   - 最高/最悪パフォーマンス資産の特定
-  - 実際のUSD建てで勝率、損益比、平均利益を計算
-  - 繰り返しミスを回避（連続損失パターン）
+    - 繰り返しミスを回避（連続損失パターン）
   - 成功戦略を強化（高勝率パターン）
 - **動的戦略調整**: AIはバックテスト結果に基づいて取引スタイルを自律的に適応
 
@@ -103,7 +88,7 @@ VLは現在、以下の実証済み機能で**暗号通貨市場において完�
 - **テクニカル指標**: EMA20/50、MACD、RSI(7/14)、ATR
 - **建玉追跡**: マーケットセンチメント、資金フロー分析
 - **流動性フィルタリング**: 低流動性資産（<1500万USD）の自動フィルタリング
-- **単一経路**: NinjaTrader 8のリアルタイム相場とSIM実行
+
 
 ### 🎯 統一リスク管理システム
 - **ポジション制限**: 資産ごとの制限（アルトコイン≤1.5x エクイティ、BTC/ETH≤10x エクイティ）
@@ -113,13 +98,13 @@ VLは現在、以下の実証済み機能で**暗号通貨市場において完�
 - **重複防止**: 同じ資産/方向での重複ポジションを防止
 
 ### ⚡ 低レイテンシ実行エンジン
-- **NinjaTrader 8統合**: リアルタイム相場 + SIM実行
+
 - **自動精度処理**: 取引所ごとのスマートな注文サイズと価格フォーマット
 - **優先実行**: 既存ポジションを先にクローズし、その後新規を開く
 - **スリッページ管理**: 実行前検証、リアルタイム精度チェック
 
 ### 🎨 プロフェッショナルモニタリングインターフェース
-- **プロフェッショナルダッシュボード**: リアルタイム更新付きダークテーマ
+
 - **エクイティカーブ**: 過去のアカウント価値追跡（USD/パーセンテージ切り替え）
 - **パフォーマンスチャート**: ライブ更新付きマルチエージェントROI比較
 - **完全な判断ログ**: すべての取引の完全な思考連鎖（CoT）推論
@@ -152,7 +137,7 @@ vl/
 │
 ├── trader/                         # トレーディングコア
 │   ├── auto_trader.go              # 自動取引メインコントローラー（単一トレーダー）
-│   └── tcp_trader.go               # NT8 TCPトレーダー
+
 │
 ├── manager/                        # マルチトレーダー管理
 │   └── trader_manager.go           # 複数のトレーダーインスタンスを管理
@@ -167,7 +152,7 @@ vl/
 │   └── data.go                     # マーケットデータ＆テクニカル指標（K線、RSI、MACD）
 │
 ├── provider/                       # データプロバイダー管理
-│   └── data_provider.go            # NT8バー供給
+
 │
 ├── logger/                         # ロギングシステム
 │   └── decision_logger.go          # 判断記録 + パフォーマンス分析
@@ -184,7 +169,7 @@ vl/
     │   │   └── CompetitionPage.tsx # 競争リーダーボード
     │   ├── lib/api.ts              # API呼び出しラッパー
     │   ├── types/index.ts          # TypeScript型
-    │   ├── index.css               # ダークテーマCSS
+
     │   └── App.tsx                 # メインアプリ
     └── package.json
 ```
@@ -192,7 +177,6 @@ vl/
 ### コア依存関係
 
 **バックエンド（Go）**
-- NinjaTrader 8 TCPブリッジ（`provider/ninjatrader/`）
 - `github.com/markcheno/go-talib` - テクニカル指標計算（TA-Lib）
 - `github.com/gin-gonic/gin` - HTTP APIフレームワーク
 
@@ -370,7 +354,6 @@ cp config.json.example config.json
       "id": "my_trader",
       "name": "My AI Trader",
       "ai_model": "deepseek",
-      "exchange": "ninjatrader",
       "use_qwen": false,
       "deepseek_key": "sk-xxxxxxxxxxxxx",
       "qwen_key": "",
@@ -393,18 +376,13 @@ cp config.json.example config.json
 
 | プレースホルダー | 置き換え先 | 取得場所 |
 | `sk-xxxxxxxxxxxxx` | DeepSeek APIキー | [platform.deepseek.com](https://platform.deepseek.com) |
-| `sk-xxxxxxxxxxxxx` | DeepSeek APIキー | [platform.deepseek.com](https://platform.deepseek.com) |
 
 **ステップ4**: 初期残高を調整（オプション）
 
-- `initial_balance`: 実際のNT8 SIMアカウント残高に設定
 - 損益パーセンテージの計算に使用
-- 例：500 USDがある場合、`"initial_balance": 500.0`に設定
 
 **✅ 設定チェックリスト：**
 
-- [ ] 取引所を`ninjatrader`に設定
-- [ ] NT8 AddOnのTCP接続を確認
 - [ ] DeepSeek APIキーを入力（`sk-`で始まる）
 - [ ] `use_default_coins`を`true`に設定（初心者向け）
 - [ ] `initial_balance`をアカウント残高と一致させる
@@ -423,7 +401,6 @@ cp config.json.example config.json
       "id": "qwen_trader",
       "name": "Qwen AI Trader",
       "ai_model": "qwen",
-      "exchange": "ninjatrader",
       "use_qwen": true,
       "qwen_key": "sk-xxxxx",
       "deepseek_key": "",
@@ -434,7 +411,6 @@ cp config.json.example config.json
       "id": "deepseek_trader",
       "name": "DeepSeek AI Trader",
       "ai_model": "deepseek",
-      "exchange": "ninjatrader",
       "use_qwen": false,
       "qwen_key": "",
       "deepseek_key": "sk-xxxxx",
@@ -450,9 +426,7 @@ cp config.json.example config.json
 ```
 
 **競争モードの要件:**
-- 2つの別々のNT8 SIMアカウント
 - 両方のAI APIキー（Qwen + DeepSeek）
-- テスト用により多くの資本（推奨：アカウントあたり500+ USD）
 
 ---
 
@@ -463,7 +437,6 @@ cp config.json.example config.json
 | `name` | 表示名 | `"My AI Trader"` | ✅ はい |
 | `enabled` | このトレーダーが有効かどうか<br>起動をスキップする場合は`false`に設定 | `true`または`false` | ✅ はい |
 | `ai_model` | 使用するAIプロバイダー | `"deepseek"`または`"qwen"`または`"custom"` | ✅ はい |
-| `exchange` | 使用する取引所 | `"ninjatrader"` | ✅ はい |
 | `use_qwen` | Qwenを使用するかどうか | `true`または`false` | ✅ はい |
 | `deepseek_key` | DeepSeek APIキー | `"sk-xxx"` | DeepSeek使用時 |
 | `qwen_key` | Qwen APIキー | `"sk-xxx"` | Qwen使用時 |
@@ -486,7 +459,7 @@ cp config.json.example config.json
 
 **レバレッジ設定とは？**
 
-レバレッジ設定は、AIが各取引で使用できる最大レバレッジを制御します。
+
 
 **設定形式：**
 
@@ -497,10 +470,11 @@ cp config.json.example config.json
 }
 ```
 
-**⚠️ 重要：レバレッジ上限**
 
-- レバレッジ上限は戦略のリスク管理設定で制御されます
-- 上限を超える設定は**失敗**し、エラーが表示されます：`Subaccounts are restricted from using leverage greater than 5x`
+
+
+- **メインアカウント**: 最大20x（アルトコイン）または50x（BTC/ETH）を使用可能
+- サブアカウントを使用していてレバレッジを>5xに設定すると、取引は**失敗**し、エラーが表示されます：`Subaccounts are restricted from using leverage greater than 5x`
 
 **推奨設定：**
 
@@ -606,7 +580,6 @@ go build -o vl
 **⚠️ エラーが表示される場合：**
 
 | エラーメッセージ | 解決策 |
-| `invalid API key` | AIモデルのAPIキーを確認 |
 | `TA-Lib not found` | `brew install ta-lib`を実行（macOS） |
 | `port 8080 already in use` | config.jsonの`api_server_port`を変更 |
 | `DeepSeek API error` | DeepSeek APIキーと残高を確認 |
@@ -715,11 +688,9 @@ curl http://localhost:8080/health
 │ 1. 📊 過去パフォーマンスを分析（過去20サイクル）           │
 ├──────────────────────────────────────────────────────────┤
 │  ✓ 総合勝率、平均利益、損益比を計算                       │
-│  ✓ 銘柄ごとの統計（勝率、平均損益（USD））              │
 │  ✓ 最高/最悪パフォーマンスコインを特定                    │
 │  ✓ 正確なPnLを含む最後の5取引の詳細をリスト              │
 │  ✓ リスク調整パフォーマンスのシャープレシオを計算          │
-│  📌 NEW（v2.0.2）：レバレッジを含む正確なUSD PnL         │
 └──────────────────────────────────────────────────────────┘
                            ↓
 ┌──────────────────────────────────────────────────────────┐
@@ -749,7 +720,7 @@ curl http://localhost:8080/health
 ├──────────────────────────────────────────────────────────┤
 │  • コインプールを取得（2モード）：                        │
 │    🌟 デフォルトモード：BTC、ETH、SOL、BNB、XRPなど       │
-│    ⚙️  銘柄ソース：静的リスト                          │
+
 │  • 候補コインをマージして重複削除                         │
 │  • フィルター：低流動性を削除（<1500万USD OI値）          │
 │  • 市場データ + テクニカル指標をバッチ取得                │
@@ -783,8 +754,8 @@ curl http://localhost:8080/health
 │    - ポジションサイズ制限（アルトコイン1.5x、BTC 10x）    │
 │    - 重複ポジションなし（同じコイン + 方向）              │
 │    - 証拠金使用量が90%制限内                              │
-│  • NT8のティックサイズを自動適用                        │
-│  • NT8 TCPブリッジで注文を実行                          │
+
+
 │  • クローズ後：すべての保留注文を自動キャンセル           │
 │  • 実際の実行価格と注文IDを記録                           │
 │  📌 期間計算のためにポジションオープン時間を追跡          │
@@ -803,7 +774,6 @@ curl http://localhost:8080/health
 │  • パフォーマンスデータベースを更新：                     │
 │    - symbol_sideキーでオープン/クローズペアをマッチ       │
 │      📌 NEW：ロング/ショート競合を防止                    │
-│    - 正確なUSD PnLを計算：                              │
 │      PnL = ポジション価値 × 価格変化% × レバレッジ        │
 │      📌 NEW：数量 + レバレッジを考慮                      │
 │    - 保存：数量、レバレッジ、オープン時間、クローズ時間   │
@@ -823,8 +793,6 @@ curl http://localhost:8080/health
 
 **📌 正確なPnL計算：**
 - 以前：パーセンテージのみ（100U@5% = 1000U@5% = 両方とも「5.0」と表示）
-- 現在：実際のUSD利益 = ポジション価値 × 価格変化 × レバレッジ
-- 例：1000 USD × 5% × 20x = 1000 USD実際の利益
 
 **📌 AI自由度の向上：**
 - AIはすべての生シーケンスデータを自由に分析可能
@@ -832,7 +800,7 @@ curl http://localhost:8080/health
 - 独自のトレンド分析、サポート/レジスタンス計算を実行可能
 
 **📌 改善されたポジション追跡：**
-- `symbol_side`キーを使用（例：「MNQ_long」）
+
 - ロングとショートの両方を保有する際の競合を防止
 - 完全なデータを保存：数量、レバレッジ、オープン/クローズ時間
 
@@ -852,16 +820,12 @@ curl http://localhost:8080/health
 - **損益比**: 1.52:1
 
 ### 最近の取引
-1. MNQ LONG: 20500.0000 → 20600.0000 = +0.49% ✓
 
 ### コインパフォーマンス
-- **最高**: MNQ（勝率75%、平均+2.5%）
-- **最悪**: 記録なし（勝率25%、平均-1.8%）
 ```
 
 ### AIのフィードバック使用方法
 
-1. **連続損失を回避**: 同じ銘柄が3回連続でストップロスになっているのを見て、AIは回避するかより慎重になる
 2. **成功戦略を強化**: BTCブレイクアウトロングが75%の勝率で、AIはこのパターンを継続
 3. **動的スタイル調整**: 勝率<40% → 保守的；損益比>2 → 積極的を維持
 4. **市場状況の特定**: 連続損失は荒れた市場を示す可能性があり、取引頻度を減らす
@@ -942,7 +906,6 @@ GET /api/config               # システム設定
 
 ✅ **推奨**
 - テストには失っても構わない資金のみを使用
-- 少額から始める（推奨1枚のMNQ）
 - システムの動作状態を定期的に確認
 - アカウント残高の変化を監視
 - AI判断ログを分析して戦略を理解
@@ -971,7 +934,6 @@ sudo apt-get install libta-lib0-dev
 
 ### 2. 精度エラー：Precision is over the maximum
 
-**解決策**: システムがNT8のティックサイズを自動処理します。エラーが続く場合は、ネットワーク接続を確認してください。
 
 ### 3. AI APIタイムアウト
 
@@ -999,10 +961,7 @@ sudo apt-get install libta-lib0-dev
 ## 📈 パフォーマンス最適化のヒント
 
 1. **合理的な判断サイクルを設定**: 3-5分を推奨、過剰取引を避ける
-2. **候補銘柄を制御**: システムはデフォルトで静的リスト
 3. **ログを定期的にクリーン**: 過度なディスク使用を避ける
-4. **API呼び出し数を監視**: レート制限のトリガーを避ける
-5. **少額でテスト**: まず1枚のMNQで戦略検証をテスト
 
 ---
 
@@ -1016,14 +975,11 @@ sudo apt-get install libta-lib0-dev
 
 **1. PnL計算 - 主要エラー修正**（logger/decision_logger.go）
 - **問題**: 以前はパーセンテージのみで計算され、ポジションサイズとレバレッジを完全に無視
-  - 例：100 USDポジションが5%獲得と1000 USDポジションが5%獲得の両方が利益として`5.0`と表示
   - これによりパフォーマンス分析が完全に不正確に
-- **解決策**: 実際のUSD利益額を計算
   ```
-  PnL（USD）= ポジション価値 × 価格変化% × レバレッジ
-  例：1000 USD × 5% × 20x = 1000 USD実際の利益
+
+
   ```
-- **影響**: 勝率、利益率、シャープレシオが正確なUSD額に基づくようになりました
 
 **2. ポジション追跡 - 重要データの欠落**
 - **問題**: オープンポジション記録が価格と時間のみを保存、数量とレバレッジが欠落
@@ -1034,8 +990,8 @@ sudo apt-get install libta-lib0-dev
 
 **3. ポジションキーロジック - ロング/ショート競合**
 - **問題**: `symbol`をポジションキーとして使用し、ロングとショートの両方を保有する際にデータ競合を引き起こす
-  - 例：MNQロングとMNQショートが互いに上書き
-- **解決策**: `symbol_side`形式に変更（例：`MNQ_long`、`MNQ_short`）
+
+
   - ロングとショートポジションを適切に区別
 
 **4. シャープレシオ計算 - コード最適化**
@@ -1044,7 +1000,6 @@ sudo apt-get install libta-lib0-dev
   - より信頼性が高く、保守可能で効率的
 
 **このアップデートが重要な理由：**
-- ✅ 過去取引統計が無意味なパーセンテージではなく**実際のUSD損益**を表示
 - ✅ 異なるレバレッジ取引間のパフォーマンス比較が正確に
 - ✅ AI自己学習メカニズムが正しい過去フィードバックを受信
 - ✅ 利益率とシャープレシオの計算が意味を持つように
@@ -1078,7 +1033,7 @@ sudo apt-get install libta-lib0-dev
 **主要アップデート：**
 - ✅ AI自己学習メカニズム（過去フィードバック、パフォーマンス分析）
 - ✅ マルチトレーダー競争モード（Qwen対DeepSeek）
-- ✅ プロフェッショナルUI（ダークテーマ）
+
 - ✅ パフォーマンス比較チャート（リアルタイムROI比較）
 - ✅ リスク管理最適化（コインごとのポジション制限調整）
 
@@ -1123,7 +1078,6 @@ IssueとPull Requestを歓迎します！
 
 ## 🙏 謝辞
 
-- [NinjaTrader 8](https://ninjatrader.com/) - CME先物（MNQ）、SIM実行
 - [DeepSeek](https://platform.deepseek.com/) - DeepSeek AI API
 - [Qwen](https://dashscope.aliyuncs.com/) - Alibaba Cloud Qwen
 - [TA-Lib](https://ta-lib.org/) - テクニカル指標ライブラリ
