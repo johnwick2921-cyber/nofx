@@ -27,16 +27,16 @@ type ExchangeConfig struct {
 
 // SafeExchangeConfig Safe exchange configuration structure (does not contain sensitive information)
 type SafeExchangeConfig struct {
-	ID           string `json:"id"`            // UUID
-	ExchangeType string `json:"exchange_type"` // "ninjatrader"
-	AccountName  string `json:"account_name"`  // User-defined account name
-	Name         string `json:"name"`          // Display name
-	Type         string `json:"type"`          // "futures"
-	Enabled      bool   `json:"enabled"`
-	HasAPIKey    bool   `json:"has_api_key"`
-	HasSecretKey bool   `json:"has_secret_key"`
-	HasPassphrase bool  `json:"has_passphrase"`
-	Testnet      bool   `json:"testnet,omitempty"`
+	ID            string `json:"id"`            // UUID
+	ExchangeType  string `json:"exchange_type"` // "ninjatrader"
+	AccountName   string `json:"account_name"`  // User-defined account name
+	Name          string `json:"name"`          // Display name
+	Type          string `json:"type"`          // "futures"
+	Enabled       bool   `json:"enabled"`
+	HasAPIKey     bool   `json:"has_api_key"`
+	HasSecretKey  bool   `json:"has_secret_key"`
+	HasPassphrase bool   `json:"has_passphrase"`
+	Testnet       bool   `json:"testnet,omitempty"`
 	// NinjaTrader CSV bridge (no secrets — all non-sensitive)
 	NTDataDir            string `json:"nt_data_dir,omitempty"`
 	NTInstrumentName     string `json:"nt_instrument_name,omitempty"`

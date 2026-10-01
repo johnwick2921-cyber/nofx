@@ -692,7 +692,7 @@ func (s *Server) handleGetSystemConfig(c *gin.Context) {
 		// RunningRevision is the vcs.revision embedded in THIS binary — bug
 		// reports can now be checked against the running rev without a shell
 		// (master-audit v1 finding 5.6).
-		"revision":         kernel.RunningRevision(),
+		"revision": kernel.RunningRevision(),
 		// SANDBOX (isolated demo instance) → the UI paints a permanent banner so a
 		// sandbox can never be mistaken for the live system. false in production.
 		"sandbox": SandboxMode(),

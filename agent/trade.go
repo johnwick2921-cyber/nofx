@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
-	"vl/market"
-	"vl/store"
-	"vl/trader"
-	ntTrader "vl/trader/ninjatrader"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+	"vl/market"
+	"vl/store"
+	"vl/trader"
+	ntTrader "vl/trader/ninjatrader"
 )
 
 const (

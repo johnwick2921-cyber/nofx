@@ -4,7 +4,6 @@ import (
 	"fmt"
 )
 
-
 func calculateTimeframeSeries(klines []Kline, timeframe string, count int, ip IndicatorPeriods) *TimeframeSeriesData {
 	if count <= 0 {
 		count = 10 // default

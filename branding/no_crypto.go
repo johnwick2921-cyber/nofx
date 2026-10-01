@@ -20,17 +20,19 @@ package branding
 // isBTCETHSymbol, ETHUSDT, the BTC/ETH prompt vocabulary).
 //
 // Amendment tokens, engineered the way \baster\b was:
-//   btc        — no English word contains it; catches BTC, BTCUSDT and the
-//                identifier forms isBTCETHSymbol / BTCETHMaxLeverage /
-//                btcEthPosValueRatio (a boundary form cannot — there is no
-//                boundary inside an identifier)
-//   ethusdt    — `\beth\b` does NOT match ETHUSDT (U is a word char); the
-//                bare pair-token catches it with zero flood
-//   \beth\b    — standalone ETH ("BTC/ETH max", quoted "ETH"), while a bare
-//                eth floods on method/together/ethernet/whether/threshold
-//   altcoin    — same-class vocabulary (AltcoinMaxLeverage, "Altcoins max") —
-//                included with the amendment, zero flood
-//   ethereum   — same class (go-ethereum imports, docs) — zero flood
+//
+//	btc        — no English word contains it; catches BTC, BTCUSDT and the
+//	             identifier forms isBTCETHSymbol / BTCETHMaxLeverage /
+//	             btcEthPosValueRatio (a boundary form cannot — there is no
+//	             boundary inside an identifier)
+//	ethusdt    — `\beth\b` does NOT match ETHUSDT (U is a word char); the
+//	             bare pair-token catches it with zero flood
+//	\beth\b    — standalone ETH ("BTC/ETH max", quoted "ETH"), while a bare
+//	             eth floods on method/together/ethernet/whether/threshold
+//	altcoin    — same-class vocabulary (AltcoinMaxLeverage, "Altcoins max") —
+//	             included with the amendment, zero flood
+//	ethereum   — same class (go-ethereum imports, docs) — zero flood
+//
 // bitcoin is ABSENT on purpose: zero non-test occurrences at dc630ad8
 // (surveyed 2026-10-01).
 // Run case-insensitive with Go regexp or GNU grep -E (`\b` is not POSIX ERE).

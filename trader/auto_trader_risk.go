@@ -2,11 +2,11 @@ package trader
 
 import (
 	"fmt"
+	"strings"
+	"time"
 	"vl/kernel"
 	"vl/logger"
 	"vl/market"
-	"strings"
-	"time"
 )
 
 // futuresMaxNotionalLeverage mirrors kernel.futuresMaxNotionalLeverage: the
@@ -268,7 +268,7 @@ func (at *AutoTrader) enforcePositionValueRatio(positionSizeUSD float64, equity 
 		if maxPositionValueRatio <= 0 {
 			maxPositionValueRatio = futuresMaxNotionalLeverage
 		}
-		default:
+	default:
 		maxPositionValueRatio = riskControl.AltcoinMaxPositionValueRatio
 		if maxPositionValueRatio <= 0 {
 			maxPositionValueRatio = 1.0 // Default: 1x for altcoins

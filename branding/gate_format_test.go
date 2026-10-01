@@ -11,7 +11,9 @@ import (
 
 // TestCryptoUnionGateCanonicalFormat drives scripts/crypto-union-gate.sh in a
 // synthetic repo and pins the CTO-ruled canonical table format:
-//   | path | line | token | DELETE|CUT|KEEP | OWNER | reason |
+//
+//	| path | line | token | DELETE|CUT|KEEP | OWNER | reason |
+//
 // plus the single-ownership invariant: a line claimed by TWO tables is a
 // DOUBLE-CLAIM FAIL, a prose/range line is an unparseable FAIL, and a clean
 // canonical union exits 0. (The production call site is the script itself.)

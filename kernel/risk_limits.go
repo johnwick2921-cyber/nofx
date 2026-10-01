@@ -16,14 +16,14 @@ package kernel
 
 import (
 	"fmt"
-	"vl/config"
-	"vl/logger"
-	"vl/store"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"vl/config"
+	"vl/logger"
+	"vl/store"
 )
 
 // RiskLimits caps the risk a strategy can take before the engine intervenes.

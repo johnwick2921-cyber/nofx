@@ -10,13 +10,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptrace"
-	"vl/safe"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+	"vl/safe"
 )
 
 const (

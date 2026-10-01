@@ -111,8 +111,8 @@ func TestFuturesPointValue(t *testing.T) {
 		{"ZF", 1000.0},
 		{"ZT", 2000.0},
 		// Monthly contract-code recognition (energy lists all 12 months).
-		{"NGF6", 10000.0},  // F = January
-		{"MCLZ6", 100.0},   // Z = December (MCL wins over CL — longest root)
+		{"NGF6", 10000.0}, // F = January
+		{"MCLZ6", 100.0},  // Z = December (MCL wins over CL — longest root)
 		// Non-futures / unknown → 0 (caller must not divide by it).
 		{"BTCUSDT", 0},
 		{"TSLA", 0},
