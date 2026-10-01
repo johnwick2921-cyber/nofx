@@ -255,12 +255,12 @@ func TestExchangeSkillOptionSummaryMatchesManualPage(t *testing.T) {
 	a := New(nil, st, DefaultConfig(), slog.Default())
 
 	summary := a.exchangeSkillOptionSummary("zh")
-	for _, expected := range []string{"Binance", "Bybit", "OKX", "Bitget", "Gate", "KuCoin", "Hyperliquid", "Aster", "Lighter", "Indodax"} {
+	for _, expected := range []string{"NinjaTrader"} {
 		if !strings.Contains(summary, expected) {
 			t.Fatalf("expected option %q in summary, got: %s", expected, summary)
 		}
 	}
-	for _, hidden := range []string{"Alpaca", "Forex", "Metals"} {
+	for _, hidden := range []string{"Alpaca", "Forex", "Metals", "Binance", "OKX"} {
 		if strings.Contains(summary, hidden) {
 			t.Fatalf("did not expect hidden manual-page option %q in summary: %s", hidden, summary)
 		}
@@ -331,7 +331,7 @@ func TestSkillVisibleFieldSummaryForExchangeUsesReadableNames(t *testing.T) {
 	a := New(nil, st, DefaultConfig(), slog.Default())
 
 	summary := a.skillVisibleFieldSummary("default", "zh", "exchange_management", "update")
-	for _, expected := range []string{"交易所类型", "账户名", "API Key", "Secret", "Passphrase", "Hyperliquid 钱包地址", "Aster User", "Lighter API Key 私钥", "Lighter API Key Index"} {
+	for _, expected := range []string{"交易所类型", "账户名", "API Key", "Secret", "Passphrase", "测试网"} {
 		if !strings.Contains(summary, expected) {
 			t.Fatalf("expected field label %q in summary, got: %s", expected, summary)
 		}
