@@ -1051,8 +1051,8 @@
 | `web/src/components/common/ModelIcons.tsx` | 17 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/common/ModelIcons.tsx` | 52 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/common/ModelIcons.tsx` | 53 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/modals/SetupPage.tsx` | 9 | `WALLET` | DELETE | CR-C | whole-file DELETE: crypto-era file (CR-C delete list) |
-| `web/src/components/modals/SetupPage.tsx` | 72 | `WALLET` | DELETE | CR-C | whole-file DELETE: crypto-era file (CR-C delete list) |
+| `web/src/components/modals/SetupPage.tsx` | 9 | `WALLET` | CUT | CR-C | system-setup page KEEPS (AppRoutes renders it); only the wallet mode-selector bits go — row corrected vs CR-C delete list |
+| `web/src/components/modals/SetupPage.tsx` | 72 | `WALLET` | CUT | CR-C | system-setup page KEEPS (AppRoutes renders it); only the wallet mode-selector bits go — row corrected vs CR-C delete list |
 | `web/src/components/plan/P4_3.test.tsx` | 255 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/strategy/CoinSourceEditor.tsx` | 26 | `hyper_all` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/strategy/CoinSourceEditor.tsx` | 27 | `hyper_main` | CUT | CR-C | web crypto surface — CR-C row |

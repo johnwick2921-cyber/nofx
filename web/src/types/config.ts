@@ -173,11 +173,3 @@ export interface BeginnerOnboardingResponse {
   reused_existing: boolean
   env_warning?: string
 }
-
-export interface CurrentBeginnerWalletResponse {
-  found: boolean
-  address?: string
-  balance_usdc?: string
-  source?: string
-  claw402_status?: string
-}
