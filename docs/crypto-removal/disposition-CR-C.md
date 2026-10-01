@@ -1,10 +1,10 @@
 # disposition-CR-C.md
 
-- branch point: b092108455e439e1dbd8fe560cabd6f69edbbc43
-- integrator tip at generation: b092108455e439e1dbd8fe560cabd6f69edbbc43
+- branch point: 2afe9d5f5bf2fe430c7cd9d410bca9c284df9f79
 - paths: web docs
+- integrator tip at generation: 2afe9d5f5bf2fe430c7cd9d410bca9c284df9f79
 - regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续|btc|ethusdt|\beth\b|altcoin|ethereum
-- generated: 2026-10-01T15:30:05.457535+00:00 by DS-105
+- generated: crypto-removal-cr-c2@2afe9d5f5bf2fe430c7cd9d410bca9c284df9f79 2026-10-01T15:37:11.147011+00:00 by DS-105
 - line rows: 1463 · blanket-KEEP paths: 209
 
 | path | line | token | disposition | OWNER | reason |
