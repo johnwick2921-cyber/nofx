@@ -9,7 +9,6 @@ import (
 	"vl/logger"
 	"vl/market"
 	"vl/mcp"
-	_ "vl/mcp/payment"
 	_ "vl/mcp/provider"
 	"vl/store"
 
