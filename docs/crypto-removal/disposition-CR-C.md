@@ -2,8 +2,9 @@
 
 - branch point: 9af56a2507f05041963151338271adf3b3c308c0 (origin/dev tip cut 00:41 CT; claim commit d39b2cb6f)
 - integrator tip at generation: 9af56a2507f05041963151338271adf3b3c308c0
-- regex: extracted programmatically from plan v10 line 108 (len 240); base literal, GO item 2 declined
+- regex: extracted programmatically from plan v10 line 108 (len 240); base literal, GO item 2 declined; CTO BTC/ETH amendment pending DS-102 literal — rows to append once landed
 - generated: 2026-10-01T05:46:37.264011+00:00 by DS-105
+- paths: web docs
 - line rows: 1902 · blanket-KEEP paths: 190
 
 | path | line | token | disposition | OWNER | reason |
