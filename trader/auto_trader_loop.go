@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"vl/config"
 	"vl/kernel"
 	"vl/logger"
 	"vl/market"
@@ -215,7 +214,6 @@ func (at *AutoTrader) runCycle() error {
 	// ENTIRE cycle — no context build, no NT8 round-trips, no AI — and idle with
 	// a longer cadence, logging only on the open⇄closed edge. This is the
 	// approved fix for the "bot scans while the market is closed" symptom.
-	// Crypto (TradingMode != "futures") returns false here → byte-identical.
 	if at.cmeSessionClosedSkip() {
 		return nil
 	}
@@ -926,12 +924,8 @@ func (at *AutoTrader) runCycle() error {
 
 // cmeSessionClosedSkip is the hoisted CME session gate (PART A). It returns true
 // when the whole cycle should be skipped because the futures market is closed —
-// after logging the open⇄closed edge and idling with a backoff. In non-futures
-// (crypto) mode it always returns false, so those traders are byte-identical.
+// after logging the open⇄closed edge and idling with a backoff.
 func (at *AutoTrader) cmeSessionClosedSkip() bool {
-	if config.Get().TradingMode != "futures" {
-		return false
-	}
 	open := kernel.IsCMEOpen(time.Now())
 	at.noteCMESessionEdge(open)
 	if open {

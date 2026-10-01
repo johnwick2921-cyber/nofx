@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"vl/kernel"
-	"vl/safe"
 	"strings"
 	"sync"
 	"time"
+	"vl/kernel"
+	"vl/market"
+	"vl/safe"
 )
 
 // Brain handles proactive intelligence: signals, news, market briefs.
@@ -204,35 +205,15 @@ func (b *Brain) sendBrief(hour int) {
 		title = "🌙 *晚间市场简报*"
 	}
 
-	// Fetch BTC/ETH prices for the brief
-	var btcPrice, ethPrice, btcChg, ethChg string
-	for _, sym := range []string{"BTCUSDT", "ETHUSDT"} {
-		resp, err := b.http.Get(fmt.Sprintf("https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=%s", sym))
-		if err != nil {
-			continue
-		}
-		body, readErr := safe.ReadAllLimited(resp.Body, 64*1024) // 64KB limit
-		statusOK := resp.StatusCode == http.StatusOK
-		resp.Body.Close()
-		if readErr != nil || !statusOK {
-			continue
-		}
-		var t map[string]string
-		if err := json.Unmarshal(body, &t); err != nil {
-			continue
-		}
-		if sym == "BTCUSDT" {
-			btcPrice = t["lastPrice"]
-			btcChg = t["priceChangePercent"]
-		}
-		if sym == "ETHUSDT" {
-			ethPrice = t["lastPrice"]
-			ethChg = t["priceChangePercent"]
-		}
+	// C5/C8 — the crypto ticker fetch is gone with the payment family; the
+	// brief reads the NT8 bridge when wired (no external market call on the
+	// futures path).
+	brief := title
+	if bars := market.FuturesBarsProvider("MNQ", "5m", 1); len(bars) > 0 {
+		brief = fmt.Sprintf("%s\n\n• MNQ: %.2f\n\n_%s_", title, bars[len(bars)-1].Close, kernel.FormatCT(time.Now()))
+	} else {
+		brief = fmt.Sprintf("%s\n\n_%s_", title, kernel.FormatCT(time.Now()))
 	}
-
-	brief := fmt.Sprintf("%s\n\n• BTC: $%s (%s%%)\n• ETH: $%s (%s%%)\n\n_%s_",
-		title, btcPrice, btcChg, ethPrice, ethChg, kernel.FormatCT(time.Now()))
 
 	b.agent.notifyAll(brief)
 }

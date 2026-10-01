@@ -1995,18 +1995,12 @@ func (a *Agent) handleExchangeCreateSkill(storeUserID string, userID int64, lang
 		return "One more thing: please tell me these details: " + formatMissingFieldList(lang, missing) + "."
 	}
 	validator := exchangeConfigValidator{
-		exchangeType:            exType,
-		enabled:                 fieldValue(session, "enabled") == "true",
-		apiKey:                  fieldValue(session, "api_key"),
-		secretKey:               fieldValue(session, "secret_key"),
-		passphrase:              fieldValue(session, "passphrase"),
-		hyperliquidWalletAddr:   fieldValue(session, "hyperliquid_wallet_addr"),
-		asterUser:               fieldValue(session, "aster_user"),
-		asterSigner:             fieldValue(session, "aster_signer"),
-		asterPrivateKey:         fieldValue(session, "aster_private_key"),
-		lighterWalletAddr:       fieldValue(session, "lighter_wallet_addr"),
-		lighterAPIKeyPrivateKey: fieldValue(session, "lighter_api_key_private_key"),
-		ntDataDir:               fieldValue(session, "nt_data_dir"),
+		exchangeType: exType,
+		enabled:      fieldValue(session, "enabled") == "true",
+		apiKey:       fieldValue(session, "api_key"),
+		secretKey:    fieldValue(session, "secret_key"),
+		passphrase:   fieldValue(session, "passphrase"),
+		ntDataDir:    fieldValue(session, "nt_data_dir"),
 	}
 	if err := validator.Validate(); err != nil {
 		a.saveSkillSession(userID, session)

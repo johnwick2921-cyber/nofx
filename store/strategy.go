@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"vl/config"
 	"vl/logger"
 
 	"gorm.io/gorm"
@@ -2079,18 +2078,11 @@ func (s *StrategyStore) initDefaultData() error {
 }
 
 // defaultCoinSource returns the seed coin source for a fresh strategy.
-// Futures mode (TRADING_MODE=futures) seeds the single NT8 instrument as a
-// static coin. Crypto mode seeds an empty static list — the AI500 pool went
-// with the legacy provider (D2-DEAD item 12), so the operator sets coins.
+// Futures-only build (C2): seeds the single NT8 instrument as a static coin.
 func defaultCoinSource() CoinSourceConfig {
-	if cfg := config.Get(); cfg != nil && cfg.TradingMode == "futures" {
-		return CoinSourceConfig{
-			SourceType:  "static",
-			StaticCoins: []string{"MNQ"},
-		}
-	}
 	return CoinSourceConfig{
-		SourceType: "static",
+		SourceType:  "static",
+		StaticCoins: []string{"MNQ"},
 	}
 }
 
@@ -2176,15 +2168,13 @@ Only enter positions when multiple signals resonate. Freely use any effective an
 	// enable the technical indicators the futures prompt leans on (the deleted
 	// crypto-only feeds need no disabling any more). Defaults-only (new-strategy
 	// template); existing saved strategies are never mutated. See helper.
-	if isFuturesMode() {
-		applyFuturesIndicatorDefaults(&config.Indicators)
-	}
+	applyFuturesIndicatorDefaults(&config.Indicators)
 
 	return config
 }
 
 // applyFuturesIndicatorDefaults tunes the indicator defaults for a NEW
-// CME-futures strategy (called only when isFuturesMode()):
+// CME-futures strategy:
 //
 //  1. Keep Open Interest OFF — it is the Binance crypto-perp feed and the
 //     futures path never reads it (W-NO-BINANCE A).
@@ -2207,14 +2197,6 @@ func applyFuturesIndicatorDefaults(ind *IndicatorConfig) {
 	ind.EnableATR = true
 	ind.EnableEMA = true
 	ind.EnableRSI = true
-}
-
-// isFuturesMode reports whether the bot is running in CME-futures mode. Lives
-// in its own function because GetDefaultStrategyConfig shadows the `config`
-// package name with a local StrategyConfig variable.
-func isFuturesMode() bool {
-	c := config.Get()
-	return c != nil && c.TradingMode == "futures"
 }
 
 // Create create a strategy

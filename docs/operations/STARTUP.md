@@ -10,7 +10,7 @@ Before launching, verify every item below. Each unchecked item is a likely incid
 **Environment variables** (must all be set in `.env` at repo root):
 
 ```bash
-grep -E "^(JWT_SECRET|DATABENTO_API_KEY|NINJATRADER_DATA_DIR|TRADING_MODE)=" .env
+grep -E "^(JWT_SECRET|DATABENTO_API_KEY|NINJATRADER_DATA_DIR)=" .env
 ```
 
 Expected output: 4 non-empty lines. If `JWT_SECRET` is missing the bot will boot with the insecure default `default-jwt-secret-change-in-production` (config/config.go:86); regenerate with:
@@ -29,7 +29,7 @@ openssl rand -base64 64
 **Trading mode set to futures** (if NQ path desired):
 
 ```bash
-grep TRADING_MODE .env   # must show TRADING_MODE=futures
+grep TRADING_MODE .env   # must be ABSENT (futures-only build; any value is ignored with a boot warning)
 ```
 
 ## 2. Cold start
@@ -73,7 +73,6 @@ Run the end-to-end NQ smoke (Databento → indicators → prompt → CSV signal 
 ```bash
 DATABENTO_API_KEY=$KEY \
 NINJATRADER_DATA_DIR=/mnt/c/Users/<u>/VLTrader/data \
-TRADING_MODE=futures \
 go run ./cmd/nq_smoke
 ```
 

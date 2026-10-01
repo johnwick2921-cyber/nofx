@@ -1,10 +1,6 @@
 package api
 
 import (
-	"strings"
-
-	"vl/config"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -24,13 +20,10 @@ func (s *Server) requireOwner(c *gin.Context) bool {
 	return users[0].ID == cl.UserID
 }
 
-// apiTradingMode is a seam: production reads config.Get().TradingMode, tests
-// swap it (config.Get on a nil global would Init from the environment).
+// apiTradingMode is a seam kept for tests: the build is futures-only (C2), so
+// it always reports "futures".
 var apiTradingMode = func() string {
-	if cfg := config.Get(); cfg != nil {
-		return strings.TrimSpace(cfg.TradingMode)
-	}
-	return ""
+	return "futures"
 }
 
 // tradingModeIsFutures reports whether this build is running the futures
