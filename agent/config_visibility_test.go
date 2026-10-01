@@ -229,7 +229,7 @@ func TestToolManageStrategyRejectsFixedMinPositionSizeUpdates(t *testing.T) {
 	}
 
 	resp := a.toolManageStrategy("default", `{"action":"update","strategy_id":"strategy-fixed-min-position","config":{"risk_control":{"min_position_size":20}}}`)
-	if !strings.Contains(resp, "固定值 12 USDT") {
+	if !strings.Contains(resp, "固定值 12 USD") {
 		t.Fatalf("expected fixed min position size rejection, got: %s", resp)
 	}
 
