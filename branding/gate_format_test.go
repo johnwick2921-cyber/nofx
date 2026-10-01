@@ -20,6 +20,7 @@ func TestCryptoUnionGateCanonicalFormat(t *testing.T) {
 		t.Skip("git not available")
 	}
 	tmp := t.TempDir()
+	tblDir := t.TempDir() // tables live OUTSIDE the swept repo
 
 	// minimal guard: the script extracts the literal from this exact line
 	write(t, filepath.Join(tmp, "branding/no_crypto.go"),
@@ -68,7 +69,7 @@ regex: bybit
 | branding/no_crypto.go | %d | bybit | KEEP | CR-B | guard's own exported literal |
 | src/kept.go | %d | bybit | KEEP | CR-A | deliberate keep for the proof |
 `, head, head, guardLine, keptLine)
-	tableAPath := filepath.Join(tmp, "tblA.md")
+	tableAPath := filepath.Join(tblDir, "tblA.md")
 	write(t, tableAPath, tableA)
 
 	runGate := func(args ...string) (string, int) {
@@ -104,7 +105,7 @@ paths: .
 regex: bybit
 | src/kept.go | %d | bybit | KEEP | CR-B | conflicting claim |
 `, head, head, keptLine)
-	tableBPath := filepath.Join(tmp, "tblB.md")
+	tableBPath := filepath.Join(tblDir, "tblB.md")
 	write(t, tableBPath, tableB)
 	out, rc = runGate(tableAPath, tableBPath)
 	if rc == 0 {
@@ -121,7 +122,7 @@ paths: .
 regex: bybit
 CUT src/kept.go [2] -- a prose range, not a canonical row
 `, head, head)
-	tableCPath := filepath.Join(tmp, "tblC.md")
+	tableCPath := filepath.Join(tblDir, "tblC.md")
 	write(t, tableCPath, tableC)
 	out, rc = runGate(tableCPath)
 	if rc == 0 {
@@ -129,6 +130,66 @@ CUT src/kept.go [2] -- a prose range, not a canonical row
 	}
 	if !strings.Contains(out, "unparseable") {
 		t.Fatalf("expected 'unparseable' in output:\n%s", out)
+	}
+
+	// file-level exclusivity (Finding 3): the same PATH claimed by two tables
+	// on DIFFERENT lines — per-line check passes, the file-level check must FAIL
+	tableD := fmt.Sprintf(`branch-point: %s
+integrator-tip: %s
+paths: .
+regex: bybit
+| src/kept.go | %d | bybit | KEEP | CR-B | same path, different line, different owner |
+`, head, head, keptLine+1)
+	tableDPath := filepath.Join(tblDir, "tblD.md")
+	write(t, tableDPath, tableD)
+	out, rc = runGate(tableAPath, tableDPath)
+	if rc == 0 {
+		t.Fatalf("file-level double-claim must FAIL, got exit 0:\n%s", out)
+	}
+	if !strings.Contains(out, "FILE DOUBLE-CLAIM") || !strings.Contains(out, "src/kept.go") {
+		t.Fatalf("expected FILE DOUBLE-CLAIM on src/kept.go:\n%s", out)
+	}
+
+	// glob exclusion (Finding 4): a dated-export file with a hit is excluded
+	// by an explicit glob KEEP row carrying its reason — never a silent skip
+	write(t, filepath.Join(tmp, "src/gen/report.tsv"), "bybit\thit\n")
+	git("add", "-A")
+	git("commit", "-qm", "gen-export")
+	head = strings.TrimSpace(git("rev-parse", "HEAD"))
+	tableE := fmt.Sprintf(`branch-point: %s
+integrator-tip: %s
+paths: .
+regex: bybit
+| branding/no_crypto.go | %d | bybit | KEEP | CR-B | guard's own exported literal |
+| src/kept.go | %d | bybit | KEEP | CR-A | deliberate keep for the proof |
+| src/gen/*.tsv | * | * | KEEP | CR-C | dated research export — historical record, not shipped code, KEEP byte-identical |
+`, head, head, guardLine, keptLine)
+	tableEPath := filepath.Join(tblDir, "tblE.md")
+	write(t, tableEPath, tableE)
+	out, rc = runGate(tableEPath)
+	if rc != 0 {
+		t.Fatalf("clean union with a glob exclusion must exit 0, got %d:\n%s", rc, out)
+	}
+	if !strings.Contains(out, "excluded 1 file(s)") {
+		t.Fatalf("expected the glob exclusion to be REPORTED:\n%s", out)
+	}
+
+	// a glob row matching nothing is a stale/typo exclusion -> FAIL
+	tableF := fmt.Sprintf(`branch-point: %s
+integrator-tip: %s
+paths: .
+regex: bybit
+| src/gen/*.tsv | * | * | KEEP | CR-C | dated research export |
+| src/nope/*.tsv | * | * | KEEP | CR-C | typo glob, matches nothing |
+`, head, head)
+	tableFPath := filepath.Join(tblDir, "tblF.md")
+	write(t, tableFPath, tableF)
+	out, rc = runGate(tableFPath)
+	if rc == 0 {
+		t.Fatalf("a glob row matching nothing must FAIL, got exit 0:\n%s", out)
+	}
+	if !strings.Contains(out, "matches NO tracked file") {
+		t.Fatalf("expected the stale-glob FAIL:\n%s", out)
 	}
 }
 

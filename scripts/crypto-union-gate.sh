@@ -13,6 +13,9 @@
 #   paths: <space-separated pathspecs>  # the part's swept paths
 #   regex: <the assembled literal>      # MUST equal the guard's export, byte-for-byte
 #   | path | line | token | DELETE|CUT|KEEP | OWNER | reason |
+#   | <glob> | * | * | KEEP | OWNER | dated research export — ... |   (line=*: a
+#       blanket exclusion for generated/dated artifacts; reason REQUIRED, never
+#       a broadened regex, never a silent skip — the gate prints what it excluded)
 #   # a table with zero rows writes an explicit line instead:
 #   0 hits
 #   # OWNER names the part that owns the line (CR-A|CR-B|CR-C). A table MAY
@@ -35,7 +38,9 @@
 #   files skipped). Every hit line must have rows in the union, EXACTLY ONE
 #   distinct owner across the union, and be covered by a KEEP row whose token
 #   the line contains (case-insensitive) — a DELETE/CUT-owned hit means the
-#   cut has not happened at this head.
+#   cut has not happened at this head. FILE-LEVEL exclusivity (Finding 3):
+#   every PATH appearing in any table has exactly ONE owner across the union;
+#   a path with two owners FAILS even when its lines split cleanly.
 #   Content asserts (single-quoted 'mixed' sites the regex cannot see):
 #       web/src/components/plan/ExecutorVerdict.tsx   arm.state === 'mixed'      -> must be PRESENT (KEEP)
 #       web/src/components/trader/TraderConfigModal.tsx source_type === 'mixed'  -> if present, the union must name it (CUT); absent = cut complete
@@ -64,6 +69,9 @@ ok "enumerated $nfiles tracked files (floor 2000)"
 
 # row index:  tbl|file|line -> disposition (owner/token kept for messages)
 declare -A row_dispo row_owner row_token row_line
+# glob exclusion rows: glob -> reason (blanket KEEP for dated/generated artifacts)
+declare -A glob_rows
+declare -A glob_hits
 allrows=0; keepcount=0
 for tbl in "$@"; do
   [ -f "$tbl" ] || { bad "table missing: $tbl"; continue; }
@@ -102,6 +110,20 @@ EOF
           bad "$tbl: unparseable row (canonical: | path | line | token | DISP | OWNER | reason |): $line"
           continue
         fi
+        # blanket exclusion row (Finding 4): line=*, token=*, KEEP only
+        if [ "$ln" = "*" ]; then
+          if [ "$disp" != "KEEP" ] || [ "$tok" != "*" ]; then
+            bad "$tbl: glob row must be KEEP with token * (line=*): $line"
+            continue
+          fi
+          if [ -z "$reason" ]; then
+            bad "$tbl: glob row needs a reason (a skip with no reason is invisible): $p"
+            continue
+          fi
+          glob_rows["$p"]="$reason"
+          n=$((n+1)); allrows=$((allrows+1))
+          continue
+        fi
         case "$disp" in
           DELETE|CUT|KEEP) ;;
           *) bad "$tbl: bad disposition '$disp' in row $p:$ln"; continue;;
@@ -128,12 +150,39 @@ EOF
 done
 [ "$allrows" -eq 0 ] && bad "union holds no rows and no table is an explicit 0-hits table"
 
+# -- FILE-LEVEL exclusivity (Finding 3): one owner per PATH across the union
+declare -A path_owners
+for key in "${!row_dispo[@]}"; do
+  p=${row_line[$key]%%|*}
+  o=${row_owner[$key]}
+  cur=${path_owners[$p]:-}
+  case " $cur " in *" $o "*) ;; *) path_owners[$p]="$cur $o";; esac
+done
+for p in "${!path_owners[@]}"; do
+  owners=$(echo "${path_owners[$p]}" | xargs)
+  if [ "$(echo "$owners" | wc -w)" -gt 1 ]; then
+    bad "FILE DOUBLE-CLAIM: $p owned by [$owners] — ownership follows the FILE (one file, one owner)"
+  fi
+done
+
 # -- the sweep: every hit line has rows, ONE owner, and a KEEP row covers it
-hits=0
+hits=0; excluded=0
 while IFS= read -r -d '' f; do
   case "$f" in
     *_test.go) continue;;   # swept scope: Go *_test.go excluded
   esac
+  # explicit glob exclusion (Finding 4): recorded, printed, never silent
+  excluded_by=""
+  for g in "${!glob_rows[@]}"; do
+    pat=${g//\*\*/\*}   # ** -> * for bash case matching
+    case "$f" in
+      $pat) excluded_by="$g"; break;;
+    esac
+  done
+  if [ -n "$excluded_by" ]; then
+    excluded=$((excluded+1)); glob_hits["$excluded_by"]=$(( ${glob_hits[$excluded_by]:-0} + 1 ))
+    continue
+  fi
   out=$(grep -n -I -i -E "$lit" -- "$f" 2>/dev/null) || continue
   while IFS= read -r line; do
     ln=${line%%:*}
@@ -165,7 +214,15 @@ while IFS= read -r -d '' f; do
 $out
 EOF
 done < "$LIST"
-ok "sweep complete: $hits hit lines, $keepcount KEEP rows in the union"
+ok "sweep complete: $hits hit lines, $excluded files under glob-KEEP rows, $keepcount KEEP rows in the union"
+for g in "${!glob_rows[@]}"; do
+  n=${glob_hits[$g]:-0}
+  if [ "$n" -eq 0 ]; then
+    bad "glob-KEEP row '$g' matches NO tracked file — stale or typo (${glob_rows[$g]})"
+  else
+    ok "glob-KEEP row '$g' excluded $n file(s) — ${glob_rows[$g]}"
+  fi
+done
 
 # -- invariant (4): canary over the union KEEP rows
 can=0
