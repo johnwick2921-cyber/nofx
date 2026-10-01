@@ -292,12 +292,8 @@ func formatDisplayBalance(value float64, asset string) string {
 }
 
 func accountAssetForExchange(exchangeType string) string {
-	switch exchangeType {
-	case "hyperliquid", "aster", "lighter":
-		return "USDC"
-	default:
-		return "USDT"
-	}
+	// Futures-only build: the value currency is USD on every venue.
+	return "USD"
 }
 
 func missingExchangeCredentials(exchangeCfg *store.Exchange) (status string, code string, message string, missing bool) {
