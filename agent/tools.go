@@ -21,17 +21,7 @@ import (
 	"vl/security"
 	"vl/store"
 	"vl/trader"
-	"vl/trader/aster"
-	"vl/trader/binance"
-	"vl/trader/bitget"
-	"vl/trader/bybit"
-	"vl/trader/gate"
-	hyperliquidtrader "vl/trader/hyperliquid"
-	"vl/trader/indodax"
-	"vl/trader/kucoin"
-	"vl/trader/lighter"
 	ntTrader "vl/trader/ninjatrader"
-	"vl/trader/okx"
 )
 
 // cachedTools holds the static tool definitions (built once, reused per message).
@@ -1062,40 +1052,6 @@ func defaultTraderInitialBalanceFetcher(exchangeCfg *store.Exchange, userID stri
 
 func buildTraderExchangeProbe(exchangeCfg *store.Exchange, userID string) (trader.Trader, error) {
 	switch exchangeCfg.ExchangeType {
-	case "binance":
-		return binance.NewFuturesTrader(string(exchangeCfg.APIKey), string(exchangeCfg.SecretKey), userID), nil
-	case "bybit":
-		return bybit.NewBybitTrader(string(exchangeCfg.APIKey), string(exchangeCfg.SecretKey)), nil
-	case "okx":
-		return okx.NewOKXTrader(string(exchangeCfg.APIKey), string(exchangeCfg.SecretKey), string(exchangeCfg.Passphrase)), nil
-	case "bitget":
-		return bitget.NewBitgetTrader(string(exchangeCfg.APIKey), string(exchangeCfg.SecretKey), string(exchangeCfg.Passphrase)), nil
-	case "gate":
-		return gate.NewGateTrader(string(exchangeCfg.APIKey), string(exchangeCfg.SecretKey)), nil
-	case "kucoin":
-		return kucoin.NewKuCoinTrader(string(exchangeCfg.APIKey), string(exchangeCfg.SecretKey), string(exchangeCfg.Passphrase)), nil
-	case "indodax":
-		return indodax.NewIndodaxTrader(string(exchangeCfg.APIKey), string(exchangeCfg.SecretKey)), nil
-	case "hyperliquid":
-		return hyperliquidtrader.NewHyperliquidTrader(
-			string(exchangeCfg.APIKey),
-			exchangeCfg.HyperliquidWalletAddr,
-			exchangeCfg.Testnet,
-			exchangeCfg.HyperliquidUnifiedAcct,
-		)
-	case "aster":
-		return aster.NewAsterTrader(
-			exchangeCfg.AsterUser,
-			exchangeCfg.AsterSigner,
-			string(exchangeCfg.AsterPrivateKey),
-		)
-	case "lighter":
-		return lighter.NewLighterTraderV2(
-			exchangeCfg.LighterWalletAddr,
-			string(exchangeCfg.LighterAPIKeyPrivateKey),
-			exchangeCfg.LighterAPIKeyIndex,
-			false,
-		)
 	case "ninjatrader":
 		return ntTrader.New(ntTrader.Config{
 			DataDir: exchangeCfg.NTDataDir,
@@ -1142,17 +1098,6 @@ func safeModelForTool(model *store.AIModel) safeModelToolConfig {
 		HasAPIKey:       model.APIKey != "",
 		CustomAPIURL:    model.CustomAPIURL,
 		CustomModelName: model.CustomModelName,
-	}
-	if agentProviderSupportsUSDCBalance(model.Provider) {
-		privateKey := strings.TrimSpace(string(model.APIKey))
-		if privateKey != "" {
-			if walletAddress, err := agentWalletAddressFromPrivateKey(privateKey); err == nil && strings.TrimSpace(walletAddress) != "" {
-				safeModel.WalletAddress = walletAddress
-				if balance, balanceErr := agentQueryUSDCBalanceCached(walletAddress); balanceErr == nil {
-					safeModel.BalanceUSDC = fmt.Sprintf("%.6f", balance)
-				}
-			}
-		}
 	}
 	return safeModel
 }

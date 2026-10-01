@@ -57,7 +57,7 @@ type tradeUnderlyingTrader interface {
 type TradeAction struct {
 	ID       string  `json:"id"`
 	Action   string  `json:"action"`   // "open_long", "open_short", "close_long", "close_short"
-	Symbol   string  `json:"symbol"`   // e.g. "BTCUSDT"
+	Symbol   string  `json:"symbol"`   // e.g. "MNQ"
 	Quantity float64 `json:"quantity"` // amount
 	Leverage int     `json:"leverage"` // leverage multiplier
 	// W1b E9 — the entry's OWN bracket (absolute prices). An open without a
@@ -358,8 +358,8 @@ func validateTradeAction(
 		trade.RequiresLargeOrderConfirmation = true
 	}
 
-	// W1b FOLD-5 — a CME futures contract is not judged by the crypto
-	// leverage/USDT-size/ratio rules below (a stock's rule set, which MNQ
+	// W1b FOLD-5 — a CME futures contract is not judged by the
+	// leverage/notional-size/ratio rules below (a stock's rule set, which MNQ
 	// was validated by while misclassified, stays its proposal check). Its
 	// real rails — reconcile-before-open, max positions, the same-side check,
 	// the max-contracts cap — are the execute path's, at the door.
@@ -483,9 +483,6 @@ func (a *Agent) handleTradeConfirmation(ctx context.Context, userID int64, text,
 
 	trade.Status = "executed"
 	symbol := trade.Symbol
-	if strings.HasSuffix(symbol, "USDT") {
-		symbol = strings.TrimSuffix(symbol, "USDT")
-	}
 	actionEmoji := "📈"
 	if strings.Contains(trade.Action, "short") {
 		actionEmoji = "📉"

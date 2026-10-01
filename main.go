@@ -17,7 +17,6 @@ import (
 	"vl/logger"
 	"vl/manager"
 	"vl/mcp"
-	_ "vl/mcp/payment"
 	_ "vl/mcp/provider"
 	"vl/researchsnapshot"
 	"vl/store"

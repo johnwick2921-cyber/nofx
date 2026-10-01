@@ -97,8 +97,6 @@ func GetWithExchange(symbol, exchange string) (*Data, error) {
 	// Normalize symbol
 	symbol = Normalize(symbol)
 
-	// Check if this is an xyz dex asset (use Hyperliquid API)
-	isXyzAsset := IsXyzDexAsset(symbol)
 	// CME futures (NT8) read the live BarCache via the injected provider —
 	// never CoinAnk. BarCache holds 5m/15m/1h (not 3m/4h), so we map 5m->short
 	// and 1h->longer. Crypto path below is untouched.
@@ -110,8 +108,6 @@ func GetWithExchange(symbol, exchange string) (*Data, error) {
 	}
 	isFutures := route == routeFutures
 
-	// For hyperliquid exchange, also use Hyperliquid API
-	useHyperliquidAPI := isXyzAsset || strings.ToLower(exchange) == "hyperliquid"
 
 	// Get 3-minute K-line data (or 5-minute for xyz assets as 3m may not be available)
 	if isFutures {
@@ -122,18 +118,11 @@ func GetWithExchange(symbol, exchange string) (*Data, error) {
 		if len(klines3m) == 0 {
 			return nil, fmt.Errorf("%s: no NT8 5m bars cached", symbol)
 		}
-	} else if useHyperliquidAPI {
-		// Use Hyperliquid API for xyz dex assets (use 5m since 3m may not be available)
-		klines3m, err = getKlinesFromHyperliquid(symbol, "5m", 100)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to get 5-minute K-line from Hyperliquid: %v", err)
-		}
 	} else {
-		// Use CoinAnk for regular crypto assets with exchange-specific data
-		klines3m, err = getKlinesFromCoinAnk(symbol, "3m", exchange, 100)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to get 3-minute K-line from CoinAnk (%s): %v", exchange, err)
-		}
+		// Crypto market reads were removed with the crypto venues. A non-CME
+		// symbol has no bar source, and a silent empty slice would read as
+		// "no data yet" instead of "unsupported" — so refuse explicitly.
+		return nil, fmt.Errorf("%s: no bar source — CME futures via NT8 is the only supported market", symbol)
 	}
 
 	// Data staleness detection: Prevent DOGEUSDT-style price freeze issues
@@ -148,16 +137,8 @@ func GetWithExchange(symbol, exchange string) (*Data, error) {
 		if len(klines4h) == 0 {
 			return nil, fmt.Errorf("%s: no NT8 1h bars cached", symbol)
 		}
-	} else if useHyperliquidAPI {
-		klines4h, err = getKlinesFromHyperliquid(symbol, "4h", 100)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to get 4-hour K-line from Hyperliquid: %v", err)
-		}
 	} else {
-		klines4h, err = getKlinesFromCoinAnk(symbol, "4h", exchange, 100)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to get 4-hour K-line from CoinAnk (%s): %v", exchange, err)
-		}
+		return nil, fmt.Errorf("%s: no bar source for the longer timeframe — CME futures via NT8 only", symbol)
 	}
 
 	// Check if data is empty
@@ -307,8 +288,6 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 	timeframeData := make(map[string]*TimeframeSeriesData)
 	var primaryKlines []Kline
 
-	// Check if this is an xyz dex asset (use Hyperliquid API)
-	isXyzAsset := IsXyzDexAsset(symbol)
 	// CME futures (NQ.c.0 / MNQ / ...) read the live NT8 bar feed via the
 	// injected FuturesBarsProvider — NEVER CoinAnk. Crypto path below is
 	// untouched.
@@ -317,7 +296,6 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 	// Get K-line data for each timeframe
 	for _, tf := range timeframes {
 		var klines []Kline
-		var err error
 
 		if isFutures {
 			// NT8 futures: read closed bars from the BarCache (Stage 3).
@@ -330,20 +308,11 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 				logger.Infof("⚠️ %s %s: no NT8 bars cached yet", symbol, tf)
 				continue
 			}
-		} else if isXyzAsset {
-			// Use Hyperliquid API for xyz dex assets
-			klines, err = getKlinesFromHyperliquid(symbol, tf, fetchDepth)
-			if err != nil {
-				logger.Infof("⚠️ Failed to get %s %s K-line from Hyperliquid: %v", symbol, tf, err)
-				continue
-			}
 		} else {
-			// Use CoinAnk for regular crypto assets (default to Binance)
-			klines, err = getKlinesFromCoinAnk(symbol, tf, "binance", fetchDepth)
-			if err != nil {
-				logger.Infof("⚠️ Failed to get %s %s K-line from CoinAnk: %v", symbol, tf, err)
-				continue
-			}
+			// Crypto market reads were removed with the crypto venues; a
+			// non-CME symbol has no bar source here.
+			logger.Infof("⚠️ %s %s: no bar source — CME futures via NT8 only; skipping", symbol, tf)
+			continue
 		}
 
 		if len(klines) == 0 {
