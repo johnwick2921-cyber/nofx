@@ -66,12 +66,11 @@ If you're using VL, please follow these security best practices:
 - ✅ **Implement IP whitelisting** for exchange API keys
 - ✅ **Enable 2FA** on all exchange accounts
 
-### Private Keys (Hyperliquid/Aster)
+### Credentials
 
 - ❌ **Never share** your private keys with anyone
-- ✅ **Use dedicated wallets** for trading (not your main wallet)
-- ✅ **Use agent wallets** when available (Hyperliquid)
-- ✅ **Limit wallet funds** to amounts you can afford to lose
+- ✅ **Use a dedicated SIM account** for trading
+- ✅ **Limit account funds** to amounts you can afford to lose
 - ✅ **Back up keys securely** using encrypted storage
 
 ### API Security
