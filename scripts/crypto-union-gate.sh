@@ -196,6 +196,7 @@ for tbl in "$@"; do
         # were smuggled in (CTO blocker 2)
         case "$line" in
           DELETE*|CUT*|KEEP*) bad "$tbl: unparseable line (looks like a disposition directive but is not a canonical pipe row): $(echo "$line" | cut -c1-80)";;
+          *\`*) continue;; # backticked embedded literal (CR-A's next-line regex blob, pre- or post-amendment edition)
           *"|"*) bad "$tbl: unparseable line (has a pipe but is not a canonical row): $(echo "$line" | cut -c1-80)";;
           *) continue;; # accepted prose
         esac

@@ -262,6 +262,7 @@ sweep regex (exported from plan v10 line 108, never hand-typed):
   `+"`bybit`"+`
 ownership: file-level per Finding 3
 provider/alpaca and its live branches are out of scope (declined) — accepted prose, no pipes
+  `+"`bybit|oldtoken`"+` — a pre-amendment embedded literal blob, skipped as a backticked line
 | path | line | token | disposition | owner | reason |
 |---|---|---|---|---|---|
 | agent/tools.go | 2 | bybit | - | CR-B | ceded to CR-B (union coverage) |
