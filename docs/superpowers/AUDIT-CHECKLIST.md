@@ -7809,3 +7809,27 @@ literals, `filepath.Join` calls, and variables assigned such a Join — and fail
 on them. **Probe:** for every test that creates a file, ask where the path
 points — a source tree is a shared fixture no test owns; only TempDir/testdata
 are private.
+
+## CLASS NN (assigned at merge) — file-mtime vs realtime freshness compare
+
+symptom: a freshness/staleness gate compares a file's stat mtime (kernel's
+coarse clock) to a realtime value (date +%s / time.Now()); on WSL2 ~0.42% of
+write-then-stat probes land the mtime in the PREVIOUS second (max lag ~8.4 ms),
+so a file written after a mark can look older → a good boot judged stale →
+rollback/refusal. probe: grep stat -c %Y/%Z beside date +%s (shell) or
+ModTime().Before/After(time.Now()) (Go); reproduce with a write-then-stat loop.
+fix: compare file clock to file clock (a mark FILE's mtime vs the target's
+mtime), or allow ≥1 s slack whenever a single write must be judged; reference:
+updaterworker/bootcheck.go verifyBootLine uses size/offset, no clock.
+
+## CLASS NN (assigned at merge) — consumer tested only against a self-shaped fake
+
+symptom: a script parses another program's output with jq/sed paths the fake
+fixture printed exactly, while the real binary nests the fields elsewhere (the
+backup receipt: migrate-to-vl.sh read top-level .integrity_check/.bytes; the
+real `vl-activate backup` puts bytes AS A STRING + integrity_check under
+.evidence) → real run refuses and the suite stays green. probe: for every script
+that parses a binary's output, diff the asserted jq/sed paths against the
+producer's actual struct tags/output. rule: every script that parses a binary's
+output has ≥1 test running the REAL binary (or its real serializer), never a
+hand-shaped fake.

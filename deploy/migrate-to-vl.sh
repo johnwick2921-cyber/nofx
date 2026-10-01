@@ -150,6 +150,38 @@ go_stamp() { # $1 binary — prints "rev mod"
 }
 newest_vl_log() { ls -1t "$VL_ROOT"/data/vl_*.log 2>/dev/null | head -1 || true; }
 
+# updater_job_in_flight — the step-0 (j) scan as a reusable probe: prints the
+# first NON-TERMINAL updater job YOUNGER than 30 min and returns 0; returns 1
+# when nothing is in flight (stale/recovery_needed/terminal jobs are listed and
+# left alone, exactly as step 0 always did).
+updater_job_in_flight() {
+  local job_file job_id job_state job_phase job_created age
+  for job_file in "$OLD_ROOT/data/updater/jobs"/*.json; do
+    [ -e "$job_file" ] || continue
+    job_id="$(jq -r '.job_id // "?"' "$job_file" 2>/dev/null || echo '?')"
+    job_state="$(jq -r '.state // "?"' "$job_file" 2>/dev/null || echo '?')"
+    job_phase="$(jq -r '.phase // "started"' "$job_file" 2>/dev/null || echo 'started')"
+    if [ "$job_state" = "recovery_needed" ]; then
+      say "updater job $job_id: recovery_needed (listed, left alone)" >&2
+      continue
+    fi
+    case "$job_state" in
+      complete|rolled_back|cancelled|refused) [ "$job_phase" = "done" ] && continue ;;
+    esac
+    job_created="$(jq -r '.created_at // ""' "$job_file" 2>/dev/null || true)"
+    if [ -n "$job_created" ]; then
+      age=$(( $(date +%s) - $(date -d "$job_created" +%s 2>/dev/null || echo 0) ))
+      if [ "$age" -gt 1800 ]; then
+        say "updater job $job_id: stale (age ${age}s) — left alone" >&2
+        continue
+      fi
+    fi
+    printf '%s (state=%s phase=%s)' "$job_id" "$job_state" "$job_phase"
+    return 0
+  done
+  return 1
+}
+
 # =============================================================================
 # STEP 0 — refuse, before anything changes
 # =============================================================================
@@ -282,29 +314,12 @@ step0() {
   # OLDER than 30 min is stale — the worker's sweep marks it recovery_needed —
   # so it is listed and left alone; recovery_needed jobs are listed and left
   # alone (worker.go's sweep at the base, verified by the checkers).
-  local job_file job_id job_state job_phase job_created age
-  for job_file in "$OLD_ROOT/data/updater/jobs"/*.json; do
-    [ -e "$job_file" ] || continue
-    job_id="$(jq -r '.job_id // "?"' "$job_file" 2>/dev/null || echo '?')"
-    job_state="$(jq -r '.state // "?"' "$job_file" 2>/dev/null || echo '?')"
-    job_phase="$(jq -r '.phase // "started"' "$job_file" 2>/dev/null || echo 'started')"
-    if [ "$job_state" = "recovery_needed" ]; then
-      say "updater job $job_id: recovery_needed (listed, left alone)"
-      continue
-    fi
-    case "$job_state" in
-      complete|rolled_back|cancelled|refused) [ "$job_phase" = "done" ] && continue ;;
-    esac
-    job_created="$(jq -r '.created_at // ""' "$job_file" 2>/dev/null || true)"
-    if [ -n "$job_created" ]; then
-      age=$(( $(date +%s) - $(date -d "$job_created" +%s 2>/dev/null || echo 0) ))
-      if [ "$age" -gt 1800 ]; then
-        say "updater job $job_id: stale (age ${age}s) — left alone"
-        continue
-      fi
-    fi
-    die "an updater job is in flight: $job_id (state=$job_state phase=$job_phase) — a resumed job would kill the new unit mid-verify; wait for it or clean it first"
-  done
+  # Extracted as updater_job_in_flight so step 1's 6b re-runs the same scan.
+  local inflight
+  inflight="$(updater_job_in_flight || true)"
+  if [ -n "$inflight" ]; then
+    die "an updater job is in flight: $inflight — a resumed job would kill the new unit mid-verify; wait for it or clean it first"
+  fi
 
   # (k) the installation gate.
   gate_check
@@ -427,6 +442,48 @@ LEGS
   say "installation gate READY — every required leg passed"
 }
 
+# gate_recheck — 6a (RA1): the step-0 verdict can be as old as the operator's
+# password prompt; the bot keeps trading until the system stop below. Re-read
+# the gate right before that stop and stepdie naming any failing required leg
+# (a stepdie here triggers the auto-rollback, which only restarts the old
+# updater — the system units were never stopped).
+gate_recheck() {
+  local tok hdr gate legs name pass bad=""
+  tok="$(token_or_die)"
+  hdr="$(mkt)"
+  ( umask 077; printf 'Authorization: Bearer %s' "$tok" > "$hdr" ) \
+    || stepdie "cannot write the token header file on the re-check"
+  gate="$(gate_payload "$hdr")"
+  rm -f "$hdr"
+  [ -n "$gate" ] || stepdie "the installation gate did not answer on the re-check — refusing before the bot is stopped"
+  legs="$(printf '%s' "$gate" | jq -r '.legs[]? | "\(.name)\t\(.pass)"' 2>/dev/null || true)"
+  [ -n "$legs" ] || stepdie "the installation gate payload names no legs on the re-check — refusing before the bot is stopped"
+  require_leg2() { # $1 = glob
+    local found=0
+    while IFS=$'\t' read -r name pass; do
+      case "$name" in $1)
+        found=$((found+1))
+        [ "$pass" = "true" ] || bad="$bad $name"
+        ;;
+      esac
+    done <<LEGS
+$legs
+LEGS
+    [ "$found" -gt 0 ] || stepdie "the installation gate names no $1 leg on the re-check — refusing before the bot is stopped"
+  }
+  require_leg2 'trader_cutover:*'
+  require_leg2 'ledger_exposure'
+  require_leg2 'planner_in_flight'
+  require_leg2 'traders_nt8'
+  if printf '%s\n' "$legs" | cut -f1 | grep -qx 'addon_census_prehold'; then
+    require_leg2 'addon_census_prehold'
+  fi
+  if [ -n "$bad" ]; then
+    stepdie "gate changed since step 0:$bad — refusing before the bot is stopped"
+  fi
+  say "gate re-check: READY ($(printf '%s' "$legs" | tr '\t' '=' | tr '\n' ' '))"
+}
+
 # =============================================================================
 # STEPS 1–5 — the move (forward mode). Runs in a subshell so that ANY failure
 # (a guarded stepdie or a bare failing command under set -e) returns non-zero
@@ -442,10 +499,20 @@ steps_1_5() {
     if [ "$NO_UPDATER" = 0 ]; then
       systemctl --user stop "$o-updater" || stepdie "cannot stop the old updater"
     fi
+    # 6b (RA2): the old worker could have created/advanced a job between step 0
+    # and its stop — re-run the step-0 (j) scan before anything else moves.
+    local inflight6b
+    inflight6b="$(updater_job_in_flight || true)"
+    if [ -n "$inflight6b" ]; then
+      stepdie "updater job appeared since step 0: $inflight6b — refusing before the bot is stopped"
+    fi
     if [ "$HAS_BACKUP_SVC" = 1 ]; then systemctl --user stop "$o-backup.service" || stepdie "cannot stop the backup service"; fi
     if [ "$HAS_CLOCK_SVC" = 1 ]; then systemctl --user stop "$o-clock-guard.service" || stepdie "cannot stop the clock-guard service"; fi
     if [ "$HAS_BACKUP_TMR" = 1 ]; then systemctl --user stop "$o-backup.timer" || stepdie "cannot stop the backup timer"; fi
     if [ "$HAS_CLOCK_TMR" = 1 ]; then systemctl --user stop "$o-clock-guard.timer" || stepdie "cannot stop the clock-guard timer"; fi
+    # 6a (RA1): the gate verdict predates the sudo password prompt — re-read it
+    # immediately before the bot is stopped.
+    gate_recheck
     sudo systemctl stop "$o" "$o-web" || stepdie "cannot stop the system units"
     local waited=0 mainpid=0
     while [ "$waited" -lt 30 ]; do
@@ -459,12 +526,16 @@ steps_1_5() {
     [ -f "$src" ] || stepdie "the DB at $src does not exist — refusing a backup that would create an empty file"
     dest="$HOME/$o-backups/pre-vl-rename-$TS/data.db"
     mkdir -p "$(dirname "$dest")"
-    receipt="$("$RELEASE_DIR/vl-activate" backup -db "$src" -dest "$dest" 2>/dev/null || true)"
+    receipt_err="$(mkt)"
+    receipt="$("$RELEASE_DIR/vl-activate" backup -db "$src" -dest "$dest" 2>"$receipt_err" || true)"
     ok="$(printf '%s' "$receipt" | jq -r '.ok // false' 2>/dev/null || echo false)"
-    integ="$(printf '%s' "$receipt" | jq -r '.integrity_check // ""' 2>/dev/null || true)"
-    bytes="$(printf '%s' "$receipt" | jq -r '.bytes // 0' 2>/dev/null || echo 0)"
-    if [ "$ok" != "true" ] || [ "$integ" != "ok" ] || [ "$bytes" -le 0 ] 2>/dev/null; then
-      stepdie "the DB backup receipt is not ok:true + integrity_check=ok + bytes>0 (got ok=$ok integrity=$integ bytes=$bytes) — refusing"
+    integ="$(printf '%s' "$receipt" | jq -r '.evidence.integrity_check // ""' 2>/dev/null || true)"
+    bytes="$(printf '%s' "$receipt" | jq -r '.evidence.bytes // ""' 2>/dev/null || true)"
+    if [ "$ok" != "true" ] || [ "$integ" != "ok" ] \
+       || ! printf '%s' "$bytes" | grep -Eq '^[0-9]+$' || [ "$bytes" -le 0 ] 2>/dev/null; then
+      err_json="$(printf '%s' "$receipt" | jq -r '.err // empty' 2>/dev/null || true)"
+      err_tail="$([ -s "$receipt_err" ] && tail -n 5 "$receipt_err" 2>/dev/null | tr '\n' ' ' | sed 's/  */ /g' || true)"
+      stepdie "the DB backup receipt is not ok:true + evidence.integrity_check=ok + numeric evidence.bytes>0 (got ok=$ok integrity=$integ bytes='$bytes' err='${err_json:-none}' stderr='${err_tail:-none}') — refusing"
     fi
     say "DB backed up to $dest (bytes=$bytes)"
 
@@ -599,31 +670,65 @@ steps_1_5() {
 # =============================================================================
 # verify_legs <mode>   mode=forward: auto legs decide (roll back on failure)
 #                      mode=rerun:   the already-migrated branch (no rollback)
+#
+# B2/B3 (R2 attempt-3): the bot needs seconds to write BOOT INTEGRITY OK and
+# serve :8080. Each deciding leg polls every 2 s up to VL_MIGRATE_VERIFY_WAIT_S
+# seconds (default 90; the env is a TEST SEAM only) and passes the moment it is
+# true, fails only at the deadline, and prints how long it took.
+verify_wait_secs() {
+  local v="${VL_MIGRATE_VERIFY_WAIT_S:-90}"
+  case "$v" in ''|*[!0-9]*) echo 90 ;; *) echo "$v" ;; esac
+}
+
+# wait_leg <secs> <probe...> — polls every 2 s until the probe exits 0; prints
+# the seconds waited on success, the seconds at the deadline on failure; rc 0 =
+# passed within the deadline.
+wait_leg() {
+  local max="$1" waited=0; shift
+  while [ "$waited" -lt "$max" ]; do
+    if "$@" >/dev/null 2>&1; then printf '%s' "$waited"; return 0; fi
+    sleep 2; waited=$((waited+2))
+  done
+  printf '%s' "$waited"; return 1
+}
+
+boot_line_ready() { # $1 mode (forward|rerun)
+  local mode="$1" log_file boot_epoch
+  log_file="$(newest_vl_log)"
+  boot_epoch="$(stat -c %Y "$log_file" 2>/dev/null || echo 0)"
+  if [ "$mode" = "rerun" ]; then
+    [ "$boot_epoch" -ge "$RUN_START" ] 2>/dev/null || return 1
+  else
+    [ "$boot_epoch" -ge "$STEP3_EPOCH" ] 2>/dev/null || return 1
+  fi
+  [ -n "$log_file" ] || return 1
+  grep -q "BOOT INTEGRITY OK — rev $SHA12" "$log_file" 2>/dev/null
+}
+
+health_ready() {
+  local h
+  h="$(health_rev)"
+  revs_agree "$h" "$(upper12 "$SHA")"
+}
+
 verify_legs() {
   local mode="$1" ok=1
   say "step 6: verify"
 
-  local log_file boot_epoch
-  log_file="$(newest_vl_log)"
-  boot_epoch="$(stat -c %Y "$log_file" 2>/dev/null || echo 0)"
-  if [ "$mode" = "rerun" ]; then
-    [ "$boot_epoch" -ge "$RUN_START" ] 2>/dev/null || ok=0
+  local max_wait waited
+  max_wait="$(verify_wait_secs)"
+
+  if waited="$(wait_leg "$max_wait" boot_line_ready "$mode")"; then
+    say "boot line OK after ${waited}s: $(newest_vl_log)"
   else
-    [ "$boot_epoch" -ge "$STEP3_EPOCH" ] 2>/dev/null || ok=0
-  fi
-  if [ "$ok" = 1 ] && [ -n "$log_file" ] && grep -q "BOOT INTEGRITY OK — rev $SHA12" "$log_file" 2>/dev/null; then
-    say "boot line OK: $log_file"
-  else
-    say "BOOT INTEGRITY leg FAIL: no 'BOOT INTEGRITY OK — rev $SHA12' in the newest vl log (${log_file:-none}) newer than the install"
+    say "BOOT INTEGRITY leg FAIL after ${waited}s: no 'BOOT INTEGRITY OK — rev $SHA12' in the newest vl log ($(newest_vl_log) or none) newer than the install"
     ok=0
   fi
 
-  local health_now
-  health_now="$(health_rev)"
-  if revs_agree "$health_now" "$(upper12 "$SHA")"; then
-    say "health revision OK: $health_now (a 7+ hex prefix of --sha — never == against 40 hex)"
+  if waited="$(wait_leg "$max_wait" health_ready)"; then
+    say "health revision OK after ${waited}s: $(health_rev) (a 7+ hex prefix of --sha — never == against 40 hex)"
   else
-    say "health revision leg FAIL: /api/health reports '${health_now:-none}' — not a 7+ hex prefix of --sha"
+    say "health revision leg FAIL after ${waited}s: /api/health reports '$(health_rev)' or none — not a 7+ hex prefix of --sha"
     ok=0
   fi
 
@@ -698,10 +803,19 @@ timers_leg() {
   if printf '%s' "$out" | grep -q 'vl-clock-guard'; then say "timer vl-clock-guard: next run listed"; else say "timer vl-clock-guard leg FAIL: not listed"; fi
 }
 
+vite_ready() {
+  [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:3000 2>/dev/null || true)" = "200" ]
+}
+
 vite_leg() {
-  local code
-  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:3000 2>/dev/null || true)"
-  if [ "$code" = "200" ]; then say "vite :3000 answers 200"; else say "vite :3000 leg FAIL: http $code"; fi
+  local max_wait waited code
+  max_wait="$(verify_wait_secs)"
+  if waited="$(wait_leg "$max_wait" vite_ready)"; then
+    say "vite :3000 answers 200 after ${waited}s"
+  else
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:3000 2>/dev/null || true)"
+    say "vite :3000 leg FAIL after ${waited}s: http ${code:-none}"
+  fi
 }
 
 postboot_leg() {
@@ -878,23 +992,33 @@ EOF
       || say "rollback step 6 FAIL: the old clock-guard service cannot start (the wrappers must be mode 100755)"
   fi
 
-  # 7. verify the OLD boot.
-  local log_file boot_epoch ok=1
-  log_file="$(ls -1t "$OLD_ROOT"/data/${o}_*.log 2>/dev/null | head -1 || true)"
-  boot_epoch="$(stat -c %Y "$log_file" 2>/dev/null || echo 0)"
-  [ "$boot_epoch" -ge "$RUN_START" ] 2>/dev/null || ok=0
-  if [ "$ok" = 1 ] && [ -n "$log_file" ] && grep -q "BOOT INTEGRITY OK — rev $old12_s" "$log_file" 2>/dev/null; then
-    say "rollback: OLD boot line OK ($log_file)"
+  # 7. verify the OLD boot (B3: poll — the old bot needs seconds to boot and
+  # serve after the re-enable; one immediate read rolled back a good boot).
+  rb_boot_ready() {
+    local log_file boot_epoch
+    log_file="$(ls -1t "$OLD_ROOT"/data/${o}_*.log 2>/dev/null | head -1 || true)"
+    boot_epoch="$(stat -c %Y "$log_file" 2>/dev/null || echo 0)"
+    [ "$boot_epoch" -ge "$RUN_START" ] 2>/dev/null || return 1
+    [ -n "$log_file" ] || return 1
+    grep -q "BOOT INTEGRITY OK — rev $old12_s" "$log_file" 2>/dev/null
+  }
+  rb_health_ready() {
+    local h
+    h="$(health_rev)"
+    revs_agree "$h" "$(upper12 "$rb_old")"
+  }
+  local max_wait waited ok=1
+  max_wait="$(verify_wait_secs)"
+  if waited="$(wait_leg "$max_wait" rb_boot_ready)"; then
+    say "rollback: OLD boot line OK after ${waited}s ($(ls -1t "$OLD_ROOT"/data/${o}_*.log 2>/dev/null | head -1 || true))"
   else
-    say "rollback step 7 FAIL: no fresh 'BOOT INTEGRITY OK — rev $old12_s' line in ${log_file:-none}"
+    say "rollback step 7 FAIL after ${waited}s: no fresh 'BOOT INTEGRITY OK — rev $old12_s' line in the newest old log"
     ok=0
   fi
-  local health_now
-  health_now="$(health_rev)"
-  if revs_agree "$health_now" "$(upper12 "$rb_old")"; then
-    say "rollback: health revision OK ($health_now)"
+  if waited="$(wait_leg "$max_wait" rb_health_ready)"; then
+    say "rollback: health revision OK after ${waited}s ($(health_rev))"
   else
-    say "rollback step 7 FAIL: /api/health reports '${health_now:-none}' — not a 7+ hex prefix of the old sha"
+    say "rollback step 7 FAIL after ${waited}s: /api/health reports '$(health_rev)' or none — not a 7+ hex prefix of the old sha"
     ok=0
   fi
   [ "$ok" = 1 ] || return 1
@@ -958,7 +1082,20 @@ dry_run() {
 # =============================================================================
 # main
 # =============================================================================
-RUN_START="$(date +%s)"
+# RUN_START is the FILE-CLOCK instant this process began, taken from a mark
+# file's mtime — the same coarse kernel clock the boot-line freshness checks
+# read from log files. Realtime (date +%s) MUST NOT be compared against file
+# mtimes: ~0.42% of writes get an mtime in the previous second relative to a
+# realtime read (CTO probe 2026-09-30), which fails good boots forever.
+# The mark is NOT created in dry-run mode: a dry run must change nothing on
+# disk (TestDryRunChangesNothing hashes the HOME tree), and RUN_START is
+# never read there.
+if [ "$MODE" != "dry" ]; then
+  RUN_MARK="${VL_MIGRATE_RUN_MARK:-$(mkt)}"
+  RUN_START="$(stat -c %Y "$RUN_MARK" 2>/dev/null || echo 0)"
+else
+  RUN_START=0
+fi
 
 if [ "$MODE" = "rollback" ]; then
   do_rollback
@@ -973,7 +1110,7 @@ step0
 write_state
 say "state file written: $STATE_FILE"
 
-STEP3_MARK="$(mkt)"
+STEP3_MARK="${VL_MIGRATE_STEP3_MARK:-$(mkt)}"
 STEP3_EPOCH=0
 # the capture pattern: errexit is OFF only around this one call, so the
 # function's own subshell keeps its set -e and its first failure is the rc
@@ -993,7 +1130,10 @@ if [ "$steps_rc" != 0 ]; then
   say "ERR in steps 1–5 — automatic rollback"
   if do_rollback; then exit 1; else say "ROLLBACK FAILED — a human must look now" >&2; exit 2; fi
 fi
-STEP3_EPOCH="$(cat "$STEP3_MARK" 2>/dev/null || echo 0)"
+# STEP3_EPOCH is the mark file's MTIME, not its content: the freshness checks
+# below compare file-clock to file-clock. The content (date +%s written at the
+# top of step 3) is kept only as a debugging hint and is NEVER read here.
+STEP3_EPOCH="$(stat -c %Y "$STEP3_MARK" 2>/dev/null || echo 0)"
 rm -f "$STEP3_MARK" 2>/dev/null || true
 
 if ! verify_legs "forward"; then

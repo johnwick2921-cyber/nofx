@@ -13,16 +13,70 @@ package deploy
 
 import (
 	"bufio"
+	"database/sql"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	_ "vl/store/sqlitedriver" // the ONE sqlite registration site (census)
 )
 
 func oldName() string { return "no" + "fx" }
+
+// buildRealActivate builds the production vl-activate CLI once per test process
+// (canon 53: the migrate script is exercised against the REAL backup binary,
+// not a printf fake).
+var (
+	activateOnce sync.Once
+	activateBin  string
+	activateErr  error
+)
+
+func buildRealActivate() (string, error) {
+	activateOnce.Do(func() {
+		wd, _ := os.Getwd()
+		root := filepath.Join(wd, "..")
+		dir, err := os.MkdirTemp("", "migrate-vl-activate-")
+		if err != nil {
+			activateErr = err
+			return
+		}
+		bin := filepath.Join(dir, "vl-activate")
+		cmd := exec.Command("go", "build", "-o", bin, "./cmd/vl-activate")
+		cmd.Dir = root
+		if out, err := cmd.CombinedOutput(); err != nil {
+			activateErr = fmt.Errorf("go build ./cmd/vl-activate: %v\n%s", err, out)
+			return
+		}
+		activateBin = bin
+	})
+	return activateBin, activateErr
+}
+
+// makeFixtureDB writes a REAL sqlite database (the backup step runs integrity
+// checks against it, so string bytes would be refused).
+func makeFixtureDB(t *testing.T, path string) {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open fixture db: %v", err)
+	}
+	if _, err := db.Exec("create table migrate_fixture(a int)"); err != nil {
+		t.Fatalf("create fixture table: %v", err)
+	}
+	if _, err := db.Exec("insert into migrate_fixture(a) values (1),(2),(3)"); err != nil {
+		t.Fatalf("seed fixture table: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close fixture db: %v", err)
+	}
+}
 
 // ---------------------------------------------------------------------------
 // fake environment
@@ -166,7 +220,16 @@ case "$cmd" in
     exit 0 ;;
   stop)
     shift
-    for u in "$@"; do log "stop $u"; deact "$u"; set_mp 0 "$u"; done
+    for u in "$@"; do
+      log "stop $u"
+      # 6b fixture: the old worker creates a job in the instant before it
+      # stops — step 1's re-scan must catch it.
+      if [ "$u" = "${OLDNAME}-updater" ] && [ "${JOB_APPEARS:-0}" = "1" ]; then
+        mkdir -p "$HOME/$OLDNAME/data/updater/jobs"
+        printf '{"job_id":"late-job","state":"running","phase":"started","created_at":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$HOME/$OLDNAME/data/updater/jobs/late.json"
+      fi
+      deact "$u"; set_mp 0 "$u"
+    done
     exit 0 ;;
   start)
     shift
@@ -188,10 +251,18 @@ case "$cmd" in
         ( cd "$HOME/vl" && ./vl-bin )
       fi
       if [ "$now" = 1 ] && [ "$u" = "$OLDNAME" ]; then
-        # the FAKE OLD BOT: a fresh old-prefix boot line + health
-        ( cd "$HOME/$OLDNAME" && mkdir -p data \
-          && echo "BOOT INTEGRITY OK — rev $OLD12" >> "data/${OLDNAME}_$(date +%F).log" \
-          && echo "$OLD12" > "$FAKE_STATE/health_rev.txt" )
+        # the FAKE OLD BOT: a fresh old-prefix boot line + health (optionally
+        # delayed so the rollback verify's poll is exercised).
+        oldboot(){
+          mkdir -p data
+          echo "BOOT INTEGRITY OK — rev $OLD12" >> "data/${OLDNAME}_$(date +%F).log"
+          echo "$OLD12" > "$FAKE_STATE/health_rev.txt"
+        }
+        if [ -n "${BOT_DELAY_S:-}" ]; then
+          ( cd "$HOME/$OLDNAME" && sleep "$BOT_DELAY_S" && oldboot ) &
+        else
+          ( cd "$HOME/$OLDNAME" && oldboot )
+        fi
       fi
       if [ "$now" = 1 ]; then set_mp 4242 "$u"; fi
     done
@@ -246,7 +317,18 @@ case "$url" in
     printf '{"status":"ok","revision":"%s"}\n' "$rev"
     exit 0 ;;
   *"/api/installation-gate")
-    cat "$ST/gate.json"
+    if [ "${GATE_PLANNER_FLIP:-0}" = "1" ]; then
+      # first read answers READY (step 0); every later read answers the
+      # NOT-ready payload (the gate changed while the operator typed sudo).
+      if [ -f "$ST/gate_read_once" ]; then
+        cat "$ST/gate2.json"
+      else
+        : > "$ST/gate_read_once"
+        cat "$ST/gate.json"
+      fi
+    else
+      cat "$ST/gate.json"
+    fi
     exit 0 ;;
   *":3000"*)
     if [ -n "$fmt" ]; then printf '200'; else printf 'ok'; fi
@@ -310,15 +392,35 @@ esac
 
 const fakeBot = `#!/usr/bin/env bash
 set -u
-m="$(tr -d '[:space:]' < deploy/RELEASE 2>/dev/null || true)"
-d="$(date +%F)"
-mkdir -p data
-if [ -n "$m" ] && [ "$(printf '%s' "$m" | cut -c1-12)" = "$BOT_SHA12" ]; then
-  echo "BOOT INTEGRITY OK — rev $BOT_SHA12" >> "data/vl_$d.log"
-  echo "$BOT_SHA12" > "$FAKE_STATE/health_rev.txt"
+bootwrite(){
+  m="$(tr -d '[:space:]' < deploy/RELEASE 2>/dev/null || true)"
+  d="$(date +%F)"
+  mkdir -p data
+  if [ -n "$m" ] && [ "$(printf '%s' "$m" | cut -c1-12)" = "$BOT_SHA12" ]; then
+    echo "BOOT INTEGRITY OK — rev $BOT_SHA12" >> "data/vl_$d.log"
+    echo "$BOT_SHA12" > "$FAKE_STATE/health_rev.txt"
+    if [ -n "${BOT_SKEW_MARK:-}" ]; then
+      # JOB 8 fixture: pin the log's mtime to the step-3 mark's mtime while the
+      # mark's CONTENT is realtime+2. File-clock vs file-clock compares equal
+      # and passes; reading the content (the pre-item-8 bug) compares strictly
+      # later and fails. Deterministic by construction — no second-boundary
+      # races.
+      printf '%s' "$(($(date +%s)+2))" > "$BOT_SKEW_MARK"
+      touch -r "$BOT_SKEW_MARK" "data/vl_$d.log"
+    fi
+  else
+    echo "BOOT INTEGRITY REFUSED — marker '$(printf '%s' "$m" | cut -c1-12)'" >> "data/vl_$d.log"
+    echo "$OLD12" > "$FAKE_STATE/health_rev.txt"
+  fi
+}
+if [ -n "${BOT_DELAY_S:-}" ]; then
+  # ONLY the delay tests set BOT_DELAY_S. Every other forward test relies on the
+  # synchronous path below: the boot line and health are written INLINE, before
+  # the systemctl enable --now vl call returns, so verify's first probe finds
+  # them and no 2 s wait_leg cost is paid. Do not introduce an async write here.
+  ( sleep "$BOT_DELAY_S"; bootwrite ) &
 else
-  echo "BOOT INTEGRITY REFUSED — marker '$(printf '%s' "$m" | cut -c1-12)'" >> "data/vl_$d.log"
-  echo "$OLD12" > "$FAKE_STATE/health_rev.txt"
+  bootwrite
 fi
 if [ "${BOT_HELLO:-0}" = "1" ]; then
   sleep 1.5
@@ -336,20 +438,35 @@ fi
 
 const fakeActivate = `#!/usr/bin/env bash
 set -u
-ST="$FAKE_STATE"
 src=""; dest=""
 while [ $# -gt 0 ]; do
   case "$1" in -db) src="$2"; shift 2;; -dest) dest="$2"; shift 2;; *) shift;; esac
 done
-echo "activate backup -db $src -dest $dest" >> "$ST/activate_args.log"
 if [ -f "$src" ] && [ "${ACTIVATE_ZERO:-0}" != "1" ]; then
   sz="$(stat -c%s "$src")"
   mkdir -p "$(dirname "$dest")"
   cp "$src" "$dest"
-  printf '{"ok":true,"integrity_check":"ok","bytes":%s}\n' "$sz"
+  if [ "${ACTIVATE_NONNUMERIC:-0}" = "1" ]; then
+    printf '{"step":"backup","started_at":"t","ended_at":"t","ok":true,"evidence":{"bytes":"abc","db":"%s","dest":"%s","integrity_check":"ok"}}\n' "$src" "$dest"
+  else
+    printf '{"step":"backup","started_at":"t","ended_at":"t","ok":true,"evidence":{"bytes":"%s","db":"%s","dest":"%s","integrity_check":"ok"}}\n' "$sz" "$src" "$dest"
+  fi
 else
-  printf '{"ok":false,"integrity_check":"missing","bytes":0}\n'
+  printf '{"step":"backup","started_at":"t","ended_at":"t","ok":false,"err":"fake activate zero","evidence":{}}\n'
 fi
+`
+
+// fakeActivateOldShape prints the PRE-FIX top-level receipt shape (canon 53:
+// the suite once proved self-consistency against this and missed the real
+// nested evidence shape — the script must now refuse it).
+const fakeActivateOldShape = `#!/usr/bin/env bash
+set -u
+src=""; dest=""
+while [ $# -gt 0 ]; do
+  case "$1" in -db) src="$2"; shift 2;; -dest) dest="$2"; shift 2;; *) shift;; esac
+done
+sz="$(stat -c%s "$src" 2>/dev/null || echo 0)"
+printf '{"ok":true,"integrity_check":"ok","bytes":%s}\n' "$sz"
 `
 
 const fakePostboot = `#!/usr/bin/env bash
@@ -412,7 +529,7 @@ func (fe *fakeEnv) writeOldTree() {
 	git("config", "user.name", "test")
 	fe.write(filepath.Join(tree, "deploy", "RELEASE"), fe.oldSHA+"\n")
 	fe.write(filepath.Join(tree, o+"-bin"), "old binary bytes")
-	fe.write(filepath.Join(tree, "data", "data.db"), "sqlite-ish bytes for the backup test")
+	makeFixtureDB(fe.t, filepath.Join(tree, "data", "data.db"))
 	fe.write(filepath.Join(tree, "deploy", o+"-lock.sh"),
 		strings.ReplaceAll(fakeLockTool, "<OLD>", o))
 	fe.write(filepath.Join(tree, "deploy", "vl-lock.sh"),
@@ -490,7 +607,15 @@ func (fe *fakeEnv) writeLockHome() {
 func (fe *fakeEnv) writeReleaseDir() {
 	fe.t.Helper()
 	fe.write(filepath.Join(fe.relDir, "vl-bin"), fakeBot)
-	fe.write(filepath.Join(fe.relDir, "vl-activate"), fakeActivate)
+	bin, err := buildRealActivate()
+	if err != nil {
+		fe.t.Fatalf("real vl-activate: %v", err)
+	}
+	b, err := os.ReadFile(bin)
+	if err != nil {
+		fe.t.Fatalf("read real vl-activate: %v", err)
+	}
+	fe.write(filepath.Join(fe.relDir, "vl-activate"), string(b))
 	fe.write(filepath.Join(fe.relDir, "updater", "vl-updater"), "updater bytes")
 	fe.write(filepath.Join(fe.relDir, "updater", "vl-updater-bootstrap"), "bootstrap bytes")
 	fe.write(filepath.Join(fe.relDir, "web", "dist", "index.html"), "<html>vl</html>")
@@ -583,6 +708,13 @@ func mustContain(t *testing.T, out, sub string) {
 	t.Helper()
 	if !strings.Contains(out, sub) {
 		t.Fatalf("output missing %q\n--- output ---\n%s", sub, out)
+	}
+}
+
+func mustNotContain(t *testing.T, out, sub string) {
+	t.Helper()
+	if strings.Contains(out, sub) {
+		t.Fatalf("output must NOT contain %q\n--- output ---\n%s", sub, out)
 	}
 }
 
@@ -703,7 +835,7 @@ func TestReleaseLockRefusedHeadAhead(t *testing.T) {
 
 func TestVerifyFailureAutoRollback(t *testing.T) {
 	fe := newFakeEnv(t)
-	out, code := runWithEnv(t, fe, []string{"BOT_SHA12=" + strings.Repeat("c", 12)}, fe.argsForward()...)
+	out, code := runWithEnv(t, fe, []string{"BOT_SHA12=" + strings.Repeat("c", 12), "VL_MIGRATE_VERIFY_WAIT_S=6"}, fe.argsForward()...)
 	if code == 0 {
 		t.Fatalf("expected verify failure, got success\n%s", out)
 	}
@@ -736,8 +868,11 @@ func TestStepErrorsAutoRollback(t *testing.T) {
 	}{
 		{
 			name: "step1 DB receipt zero bytes",
+			setup: func(fe *fakeEnv) {
+				fe.write(filepath.Join(fe.relDir, "vl-activate"), fakeActivate)
+			},
 			extra: []string{"ACTIVATE_ZERO=1"},
-			want: "receipt is not ok:true",
+			want:  "receipt is not ok:true",
 		},
 		{
 			name: "step2 env rewrite fails after the moves",
@@ -1134,16 +1269,62 @@ func TestOptionalUnitsAbsent(t *testing.T) {
 }
 
 func TestDBBackupAbsoluteAndReceipt(t *testing.T) {
-	o := oldName()
 	fe := newFakeEnv(t)
 	out, code := fe.run(t, fe.argsForward()...)
 	if code != 0 {
 		t.Fatalf("exit %d\n%s", code, out)
 	}
-	args := fe.readState("activate_args.log")
-	wantDB := filepath.Join(fe.home, o, "data", "data.db")
-	if !strings.Contains(args, "-db "+wantDB) {
-		t.Fatalf("backup did not use the absolute -db path: %q", args)
+	// The REAL vl-activate printed the production receipt shape and the script
+	// parsed it (canon 53): the step-1 line carries the numeric byte count.
+	re := regexp.MustCompile(`DB backed up to .* \(bytes=([0-9]+)\)`)
+	m := re.FindStringSubmatch(out)
+	if m == nil || m[1] == "0" {
+		t.Fatalf("no 'DB backed up … (bytes=N)' with N>0 in output\n%s", out)
+	}
+	// The copy under <old>-backups/pre-vl-rename-<ts>/data.db is a REAL sqlite
+	// DB (integrity_check=ok was required for the run to pass).
+	dests, err := filepath.Glob(filepath.Join(fe.home, "no"+"fx"+"-backups", "pre-vl-rename-*", "data.db"))
+	if err != nil || len(dests) != 1 {
+		t.Fatalf("backup dest glob: %v (%d matches)", err, len(dests))
+	}
+	db, err := sql.Open("sqlite", dests[0])
+	if err != nil {
+		t.Fatalf("backup does not open as sqlite: %v", err)
+	}
+	defer db.Close()
+	var n int
+	if err := db.QueryRow("select count(*) from migrate_fixture").Scan(&n); err != nil || n != 3 {
+		t.Fatalf("backup is not the fixture DB (count=%d err=%v)", n, err)
+	}
+}
+
+// TestDBBackupReceiptOldTopLevelShapeRefused: the pre-fix top-level receipt
+// shape (what the suite once printed as its fake) must now be REFUSED.
+func TestDBBackupReceiptOldTopLevelShapeRefused(t *testing.T) {
+	fe := newFakeEnv(t)
+	fe.write(filepath.Join(fe.relDir, "vl-activate"), fakeActivateOldShape)
+	out, code := fe.run(t, fe.argsForward()...)
+	if code == 0 {
+		t.Fatalf("expected refusal on the old top-level receipt shape, got success\n%s", out)
+	}
+	mustContain(t, out, "receipt is not ok:true")
+	if strings.Contains(out, "step 2") {
+		t.Fatalf("must not proceed past step 1 on an unknown receipt shape\n%s", out)
+	}
+}
+
+// TestDBBackupReceiptNonNumericBytesRefused: a real-shaped receipt whose
+// evidence.bytes is not a numeric string must be REFUSED (m4 target).
+func TestDBBackupReceiptNonNumericBytesRefused(t *testing.T) {
+	fe := newFakeEnv(t)
+	fe.write(filepath.Join(fe.relDir, "vl-activate"), fakeActivate)
+	out, code := runWithEnv(t, fe, []string{"ACTIVATE_NONNUMERIC=1"}, fe.argsForward()...)
+	if code == 0 {
+		t.Fatalf("expected refusal on non-numeric bytes, got success\n%s", out)
+	}
+	mustContain(t, out, "receipt is not ok:true")
+	if strings.Contains(out, "step 2") {
+		t.Fatalf("must not proceed past step 1 on non-numeric bytes\n%s", out)
 	}
 }
 
@@ -1197,16 +1378,19 @@ func TestNT8Legs(t *testing.T) {
 		gate     string
 		botExtra string
 		want     string
+		notWant  []string
 	}{
 		{
-			name: "absent key prints n/a no wait",
-			gate: `{` + base + `}`,
-			want: "NT8: n/a (no NT8 wire)",
+			name:    "absent key prints n/a no wait",
+			gate:    `{` + base + `}`,
+			want:    "NT8: n/a (no NT8 wire)",
+			notWant: []string{"NT8: not seen in", "NT8: hello seen"},
 		},
 		{
-			name: "eligible true prints n/a no wait",
-			gate: `{"nt8_absent":{"eligible":true,"ready":false,"build_id":"b1"},` + base + `}`,
-			want: "NT8: n/a (eligible",
+			name:    "eligible true prints n/a no wait",
+			gate:    `{"nt8_absent":{"eligible":true,"ready":false,"build_id":"b1"},` + base + `}`,
+			want:    "NT8: n/a (eligible — link down long enough; no wait)",
+			notWant: []string{"NT8: not seen in", "NT8: hello seen"},
 		},
 		{
 			name:     "eligible false waits for the hello",
@@ -1219,16 +1403,18 @@ func TestNT8Legs(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			fe := newFakeEnv(t)
 			fe.writeGate(tc.gate)
-			start := time.Now()
 			out, code := runWithEnv(t, fe, []string{tc.botExtra}, fe.argsForward()...)
-			elapsed := time.Since(start)
 			if code != 0 {
 				t.Fatalf("exit %d\n%s", code, out)
 			}
 			mustContain(t, out, tc.want)
-			if tc.botExtra == "" && elapsed > 5*time.Second {
-				t.Fatalf("leg took %v — should not wait", elapsed)
+			for _, nw := range tc.notWant {
+				mustNotContain(t, out, nw)
 			}
+			// No wall-clock bound: item 2 (real vl-activate backup) and item 3
+			// (wait_leg's 2 s first-probe cost) legitimately lengthen the WHOLE
+			// forward run. What "no wait" means is measured on the NT8 leg's own
+			// output — the want/notWant assertions above.
 		})
 	}
 }
@@ -1283,4 +1469,114 @@ func TestRecoveryNeededJobListedNotRefused(t *testing.T) {
 		t.Fatalf("recovery_needed must not refuse (exit %d)\n%s", code, out)
 	}
 	mustContain(t, out, "recovery_needed (listed, left alone)")
+}
+
+// TestGateChangedAfterStep0RefusesBeforeTheSystemStop (6a/RA1): the gate
+// answers READY at step 0 and NOT ready on the step-1 re-read — the run must
+// refuse BEFORE the system stop (the bot keeps trading until that stop).
+func TestGateChangedAfterStep0RefusesBeforeTheSystemStop(t *testing.T) {
+	o := oldName()
+	fe := newFakeEnv(t)
+	fe.writeGateDefault()
+	fe.writeState("gate2.json", `{
+  "ready": false,
+  "job_id": "gate-2",
+  "legs": [
+    {"name": "trader_cutover:open_positions", "pass": true},
+    {"name": "ledger_exposure", "pass": true},
+    {"name": "planner_in_flight", "pass": false},
+    {"name": "traders_nt8", "pass": true}
+  ]
+}`)
+	out, code := runWithEnv(t, fe, []string{"GATE_PLANNER_FLIP=1"}, fe.argsForward()...)
+	if code == 0 {
+		t.Fatalf("expected refusal, got success\n%s", out)
+	}
+	mustContain(t, out, "gate changed since step 0")
+	mustContain(t, out, "automatic rollback")
+	mustContain(t, out, "rollback DONE")
+	for _, l := range fe.journal() {
+		if l == "stop "+o || l == "stop "+o+"-web" {
+			t.Fatalf("the system units must never be stopped after the gate flipped\n%v", fe.journal())
+		}
+	}
+	if _, err := os.Lstat(filepath.Join(fe.home, o)); err != nil {
+		t.Fatalf("old tree missing: %v", err)
+	} else if fi, _ := os.Lstat(filepath.Join(fe.home, o)); fi.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("old tree is a symlink — the move must not have happened")
+	}
+}
+
+// TestUpdaterJobAppearingAfterStep0RefusesBeforeTheSystemStop (6b/RA2): the old
+// worker creates a job in the instant before it stops — the step-1 re-scan must
+// refuse before the system stop.
+func TestUpdaterJobAppearingAfterStep0RefusesBeforeTheSystemStop(t *testing.T) {
+	o := oldName()
+	fe := newFakeEnv(t)
+	out, code := runWithEnv(t, fe, []string{"JOB_APPEARS=1"}, fe.argsForward()...)
+	if code == 0 {
+		t.Fatalf("expected refusal, got success\n%s", out)
+	}
+	mustContain(t, out, "updater job appeared since step 0: late-job")
+	mustContain(t, out, "automatic rollback")
+	mustContain(t, out, "rollback DONE")
+	for _, l := range fe.journal() {
+		if l == "stop "+o || l == "stop "+o+"-web" {
+			t.Fatalf("the system units must never be stopped after the job appeared\n%v", fe.journal())
+		}
+	}
+}
+
+// TestForwardDelayedBootReachesDoneWithoutRollback: the bot writes its boot
+// line and health only after a delay — the verify poll must wait, then DONE,
+// with NO rollback (B2).
+func TestForwardDelayedBootReachesDoneWithoutRollback(t *testing.T) {
+	fe := newFakeEnv(t)
+	out, code := runWithEnv(t, fe, []string{"BOT_DELAY_S=4", "VL_MIGRATE_VERIFY_WAIT_S=20"}, fe.argsForward()...)
+	if code != 0 {
+		t.Fatalf("exit %d\n%s", code, out)
+	}
+	mustContain(t, out, "boot line OK after")
+	mustContain(t, out, "DONE — the box runs vl")
+	if strings.Contains(out, "automatic rollback") {
+		t.Fatalf("a boot that comes up in seconds must not roll back\n%s", out)
+	}
+}
+
+// TestForwardBootLinePassesWithLogMtimeEqualToTheStepMark (JOB 8): the CTO's
+// two-clock probe found ~0.42% of writes get an mtime in the PREVIOUS second
+// relative to a realtime read. Deterministic fixture: the fake bot rewrites the
+// step-3 mark with realtime+2 and pins the log's mtime to the mark's mtime.
+// File-clock vs file-clock compares equal and MUST pass; the pre-item-8
+// realtime epoch (mutant m8: cat the mark's content) compares strictly later
+// and MUST fail.
+func TestForwardBootLinePassesWithLogMtimeEqualToTheStepMark(t *testing.T) {
+	fe := newFakeEnv(t)
+	mark := filepath.Join(t.TempDir(), "step3mark")
+	out, code := runWithEnv(t, fe, []string{
+		"VL_MIGRATE_STEP3_MARK=" + mark,
+		"BOT_SKEW_MARK=" + mark,
+	}, fe.argsForward()...)
+	if code != 0 {
+		t.Fatalf("exit %d\n%s", code, out)
+	}
+	mustContain(t, out, "boot line OK after")
+	mustNotContain(t, out, "BOOT INTEGRITY leg FAIL")
+}
+
+// TestRollbackDelayedOldBootSaysDone: after a failed verify the rollback's old
+// bot comes up only after a delay — the rollback poll must wait and report
+// "rollback DONE" (B3).
+func TestRollbackDelayedOldBootSaysDone(t *testing.T) {
+	fe := newFakeEnv(t)
+	out, code := runWithEnv(t, fe, []string{
+		"BOT_SHA12=" + strings.Repeat("c", 12),
+		"BOT_DELAY_S=4",
+		"VL_MIGRATE_VERIFY_WAIT_S=6",
+	}, fe.argsForward()...)
+	if code == 0 {
+		t.Fatalf("expected verify failure, got success\n%s", out)
+	}
+	mustContain(t, out, "automatic rollback")
+	mustContain(t, out, "rollback DONE")
 }
