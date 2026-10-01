@@ -4,16 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"vl/config"
+	"regexp"
+	"strings"
+	"time"
 	"vl/discipline"
 	"vl/logger"
 	"vl/market"
 	"vl/mcp"
 	"vl/store"
 	"vl/telemetry"
-	"regexp"
-	"strings"
-	"time"
 )
 
 // ============================================================================
@@ -74,7 +73,7 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	// such symbol by dropping it from CandidateCoins BEFORE prompt assembly.
 	// (Existing positions on the expiring contract are NOT dropped — the AI
 	// still needs to evaluate close/hold for them.)
-	if config.Get().TradingMode == "futures" && len(ctx.CandidateCoins) > 0 {
+	if len(ctx.CandidateCoins) > 0 {
 		filtered := ctx.CandidateCoins[:0]
 		now := time.Now()
 		for _, c := range ctx.CandidateCoins {

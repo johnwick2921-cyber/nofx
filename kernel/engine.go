@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"vl/config"
 	"vl/logger"
 	"vl/market"
 	"vl/provider/databento"
@@ -423,8 +422,6 @@ func (e *StrategyEngine) filterExcludedCoins(candidates []CandidateCoin) []Candi
 	return filtered
 }
 
-
-
 // ============================================================================
 // External & Quant Data
 // ============================================================================
@@ -532,16 +529,13 @@ func detectLanguage(text string) Language {
 
 // ShouldSkipDecisionCycle reports whether the AI decision cycle should be
 // skipped because the CME futures market is currently closed. Returns true
-// only when TradingMode == "futures" AND IsCMEOpen(time.Now()) == false.
-// In crypto mode this is always false (24/7 markets).
+// ShouldSkipDecisionCycle reports whether the whole decision cycle should be
+// skipped because the CME futures market is closed (futures-only build, C2).
 //
 // Callers (e.g. GetFullDecisionWithStrategy in engine_analysis.go) should
 // invoke this at the top of each decision cycle BEFORE any expensive work
 // like fetching klines or building prompts.
 func ShouldSkipDecisionCycle() bool {
-	if config.Get().TradingMode != "futures" {
-		return false
-	}
 	if IsCMEOpen(time.Now()) {
 		return false
 	}
@@ -558,16 +552,10 @@ func ShouldSkipDecisionCycle() bool {
 // ShouldBlockEntryForExpiry reports whether new entries for the given CME
 // futures contract should be blocked because the contract is within 5 days
 // of its quarterly expiry. The second return value is the resolved days-
-// until-expiry (or -1 when not in futures mode).
-//
-// In crypto mode this is always (false, -1) — crypto has no expiry.
-// Unparseable symbols pass through (days=999) so they never trigger the
-// block — a deliberately permissive fallback that prefers false negatives
-// over false positives.
+// until-expiry. Unparseable symbols pass through (days=999) so they never
+// trigger the block — a deliberately permissive fallback that prefers false
+// negatives over false positives.
 func ShouldBlockEntryForExpiry(symbol string, now time.Time) (bool, int) {
-	if config.Get().TradingMode != "futures" {
-		return false, -1
-	}
 	days := databento.DaysUntilExpiry(symbol, now)
 	return days >= 0 && days <= 5, days
 }
