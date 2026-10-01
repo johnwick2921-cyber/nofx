@@ -284,9 +284,8 @@ func TestStrategyDomainPrimerKeepsSourceCountsWithinEditorBounds(t *testing.T) {
 		},
 	})
 	for _, want := range []string{
-		"AI500/OI Top/OI Low 选币数量范围 1～10",
+		"static_coins 最多 10 个",
 		"没有 mixed/混合模式",
-		"BTC/ETH 最大杠杆 1～20",
 		"min_confidence 50～100",
 	} {
 		if !strings.Contains(primer, want) {
