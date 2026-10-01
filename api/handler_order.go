@@ -310,7 +310,7 @@ func (s *Server) handleTrades(c *gin.Context) {
 		limit = l
 	}
 
-	// Normalize symbol to its canonical venue form
+	// Normalize symbol
 	if symbol != "" {
 		symbol = market.Normalize(symbol)
 	}
@@ -366,7 +366,7 @@ func (s *Server) handleOrders(c *gin.Context) {
 		limit = l
 	}
 
-	// Normalize symbol to its canonical venue form
+	// Normalize symbol
 	if symbol != "" {
 		symbol = market.Normalize(symbol)
 	}

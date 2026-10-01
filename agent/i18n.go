@@ -5,20 +5,16 @@ import "vl/branding"
 var i18nMessages = map[string]map[string]string{
 	"help": {
 		"zh": "🤖 *" + branding.PersonaName() + " — 你的 AI 交易 Agent*\n\n" +
-			"*交易:* 做多 MNQ 1 · 做空 MNQ 1 · 平多 MNQ · 平空 MNQ\n" +
-			"       也支持 /buy /sell /long /short + 交易对 数量 杠杆\n" +
 			"*查询:* /positions /balance /pnl /traders\n" +
-			"*分析:* /analyze MNQ\n" +
-			"*监控:* /watch MNQ · /unwatch MNQ\n" +
+			"*分析:* /analyze\n" +
+			"*监控:* /watch · /unwatch\n" +
 			"*策略:* /strategy\n" +
 			"*系统:* /status /clear /help\n\n" +
 			"直接跟我说话就行，中英文都可以 💬",
 		"en": "🤖 *" + branding.PersonaName() + " — Your AI Trading Agent*\n\n" +
-			"*Trade:* long MNQ 1 · short MNQ 1 · close long MNQ · close short MNQ\n" +
-			"         Also supports /buy /sell /long /short + symbol qty leverage\n" +
 			"*Query:* /positions /balance /pnl /traders\n" +
-			"*Analyze:* /analyze MNQ\n" +
-			"*Monitor:* /watch MNQ · /unwatch MNQ\n" +
+			"*Analyze:* /analyze\n" +
+			"*Monitor:* /watch · /unwatch\n" +
 			"*Strategy:* /strategy\n" +
 			"*System:* /status /clear /help\n\n" +
 			"Just talk to me in any language 💬",
@@ -56,8 +52,8 @@ var i18nMessages = map[string]map[string]string{
 		"en": "🤖 *Traders*\n\n",
 	},
 	"trade_usage": {
-		"zh": "手动下单示例：`做多 MNQ 1`、`做空 MNQ 1`、`平多 MNQ`、`平空 MNQ`。也支持 `/buy MNQ 1` 或 `/sell MNQ 1`。下单后需要确认；大额订单要用“确认大额 trade_xxx”。",
-		"en": "Manual trade examples: `long MNQ 1`, `short MNQ 1`, `close long MNQ`, `close short MNQ`. Also supports `/buy MNQ 1` or `/sell MNQ 1`. Orders require confirmation; large orders use `confirm large trade_xxx`.",
+		"zh": "下单后需要确认；大额订单要用“确认大额 trade_xxx”。",
+		"en": "Orders require confirmation; large orders use `confirm large trade_xxx`.",
 	},
 	"invalid_qty": {
 		"zh": "❓ 无效数量: %s",
