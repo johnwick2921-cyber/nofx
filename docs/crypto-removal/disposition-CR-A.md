@@ -226,5 +226,6 @@ KEEP trader/auto_trader_loop.go:1010 — NT8 account-snapshot shape — the tota
 KEEP trader/auto_trader_loop.go:1011 — NT8 account-snapshot shape — the totalWalletBalance key mirrors tcp_trader.go's CashValue snapshot the engine + account-state parity tests read (CTO ruling: renaming needs its own wave)
 KEEP trader/auto_trader_loop.go:1024 — NT8 account-snapshot shape — the totalWalletBalance key mirrors tcp_trader.go's CashValue snapshot the engine + account-state parity tests read (CTO ruling: renaming needs its own wave)
 KEEP trader/auto_trader_loop.go:1025 — NT8 account-snapshot shape — the totalWalletBalance key mirrors tcp_trader.go's CashValue snapshot the engine + account-state parity tests read (CTO ruling: renaming needs its own wave)
-## C7 KEEP (GO item 2 pending — base regex has no alpaca|twelvedata|sina)
-KEEP provider/alpaca, provider/twelvedata and their live branches (api/handler_klines.go alpaca/twelvedata arms, agent search_stock, agent/trade.go isAlpaca, config.go keys, handler_exchange venue rows) — untouched until the owner's GO item 2 ruling; an approved append is a re-run of this generator with |alpaca|twelvedata|sina.
+## C7 KEEP (settled — GO item 2 declined 2026-10-01)
+
+KEEP provider/alpaca, provider/twelvedata and their live branches (api/handler_klines.go alpaca/twelvedata arms, agent search_stock, agent/trade.go isAlpaca, config.go keys, handler_exchange venue rows) — out of scope, GO item 2 declined 2026-10-01. The sweep regex stays the BASE literal (no |alpaca|twelvedata|sina); these paths have ZERO hits under it (verified by the generator sweep), so no rows are emitted. If a stock-provider line ever matches a future regex, its disposition is KEEP with this same reason.
