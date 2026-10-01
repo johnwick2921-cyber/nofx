@@ -1,8 +1,8 @@
 # CR-A disposition table — brokers + payments + providers (crypto removal, part CR-A)
 
 base sha (branch point): db412e61c
-integrator tip generated against: 580f77361
-generated: 2026-10-01T11:21:58-05:00 (branch crypto-removal-integration @ 580f77361 — provenance: branch + sha only, never a filesystem path)
+integrator tip generated against: 9bb6caddf
+generated: 2026-10-01T17:35:45-05:00 (branch crypto-removal-integration @ 9bb6caddf — provenance: branch + sha only, never a filesystem path)
 sweep regex (exported programmatically from branding/no_crypto.go SweepRegexLiteral — the guard's amended literal, never hand-typed):
   `binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续|btc|ethusdt|\beth\b|altcoin|ethereum`
 
@@ -26,7 +26,6 @@ sweep regex (exported programmatically from branding/no_crypto.go SweepRegexLite
 | agent/tools.go | 2263 | `AI500` | CUT | CR-A | CUT — crypto line (unclassified: review) |
 | api/exchange_account_state.go | 200 | `Wallet` | KEEP | CR-A | NT8 account-snapshot shape — balance-key family in the account-state scan (CTO ruling, byte-identical) |
 | api/exchange_account_state.go | 250 | `Wallet` | KEEP | CR-A | NT8 account-snapshot shape — balance-key family in the account-state scan (CTO ruling, byte-identical) |
-| market/api_client.go | 15 | `binance` | CUT | CR-A | APIClient binance base URL — live call sites market/data.go:419,464 are DS-101's residue |
 | store/ai_charge.go | 152 | `USDC` | KEEP | CR-A | KEEP — EstimateRunway stays (daily-cost/runway estimate keeps calling it; usdcBalance naming byte-identical per CTO ruling) |
 | store/ai_charge.go | 153 | `usdc` | KEEP | CR-A | KEEP — EstimateRunway stays (daily-cost/runway estimate keeps calling it; usdcBalance naming byte-identical per CTO ruling) |
 | store/ai_charge.go | 160 | `usdc` | KEEP | CR-A | KEEP — EstimateRunway stays (daily-cost/runway estimate keeps calling it; usdcBalance naming byte-identical per CTO ruling) |
