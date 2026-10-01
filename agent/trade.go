@@ -378,10 +378,6 @@ func validateTradeAction(
 
 	maxLeverage := riskControl.AltcoinMaxLeverage
 	maxPositionValueRatio := riskControl.AltcoinMaxPositionValueRatio
-	if isBTCETHSymbol(trade.Symbol) {
-		maxLeverage = riskControl.BTCETHMaxLeverage
-		maxPositionValueRatio = riskControl.BTCETHMaxPositionValueRatio
-	}
 	if maxLeverage <= 0 {
 		maxLeverage = 5
 	}
@@ -401,11 +397,7 @@ func validateTradeAction(
 	}
 
 	if maxPositionValueRatio <= 0 {
-		if isBTCETHSymbol(trade.Symbol) {
-			maxPositionValueRatio = 5.0
-		} else {
-			maxPositionValueRatio = 1.0
-		}
+		maxPositionValueRatio = 1.0
 	}
 	maxPositionValue := equity * maxPositionValueRatio
 	if positionValue > maxPositionValue {
@@ -418,11 +410,6 @@ func validateTradeAction(
 		)
 	}
 	return nil
-}
-
-func isBTCETHSymbol(symbol string) bool {
-	symbol = strings.ToUpper(strings.TrimSpace(symbol))
-	return strings.HasPrefix(symbol, "BTC") || strings.HasPrefix(symbol, "ETH")
 }
 
 // handleTradeConfirmation processes a trade confirmation message.
