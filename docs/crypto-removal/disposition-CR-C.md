@@ -961,25 +961,25 @@
 | `web/src/components/strategy/GridConfigEditor.tsx` | 89 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/strategy/GridConfigEditor.tsx` | 90 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/strategy/IndicatorEditor.tsx` | 601 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 86 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 474 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 477 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 482 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 485 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 498 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 511 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 514 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 519 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 522 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 535 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 568 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 571 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 578 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 594 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 597 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 604 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 742 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 769 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 86 | `USDT` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 474 | `btc` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 477 | `btc` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 482 | `btc` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 485 | `btc` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 498 | `btc` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 511 | `altcoin` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 514 | `altcoin` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 519 | `altcoin` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 522 | `altcoin` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 535 | `altcoin` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 568 | `btc` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 571 | `btc` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 578 | `btc` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 594 | `altcoin` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 597 | `altcoin` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 604 | `altcoin` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 742 | `BTC` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 769 | `USDT` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
 | `web/src/components/strategy/StrategyTradingBadge.tsx` | 37 | `lighter` | KEEP | CR-C | existing vl-neo token — false positive of \blighter\b |
 | `web/src/components/strategy/TokenEstimateBar.tsx` | 129 | `lighter` | KEEP | CR-C | existing vl-neo token — false positive of \blighter\b |
 | `web/src/components/trader/DecisionCard.tsx` | 119 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
