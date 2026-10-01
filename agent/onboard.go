@@ -126,15 +126,15 @@ var setupMessages = map[string]map[string]string{
 	},
 	"ask_exchange": {
 		"zh": "🏦 *选择你的交易所*\n\n" +
-			"1️⃣ NinjaTrader\n\n" +
-			"发送 ninjatrader 或数字 1 选择：",
+			"1️⃣ NinjaTrader 8（CME 期货）\n\n" +
+			"发送数字或名称选择：",
 		"en": "🏦 *Choose your exchange*\n\n" +
-			"1️⃣ NinjaTrader\n\n" +
-			"Send ninjatrader or 1:",
+			"1️⃣ NinjaTrader 8 (CME futures)\n\n" +
+			"Send number or name:",
 	},
 	"invalid_exchange": {
-		"zh": "❓ 没有识别到交易所。请发送 1 或 ninjatrader。",
-		"en": "❓ Exchange not recognized. Send 1 or ninjatrader.",
+		"zh": "❓ 没有识别到交易所。请发送数字 1 或交易所名称。",
+		"en": "❓ Exchange not recognized. Send a number 1 or exchange name.",
 	},
 	"ask_secret": {
 		"zh": "🔑 收到 API Key。\n\n现在请发送你的 *API Secret*：",

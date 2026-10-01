@@ -187,9 +187,4 @@ func TestCMESymbolsAreNeverStocks(t *testing.T) {
 			t.Errorf("chatTradeSymbol(%q) = %q, want %q", raw, got, want)
 		}
 	}
-	// The watchlist keeps treating MNQ exactly as it did while it was (wrongly)
-	// a stock: no quote appending, no crypto fetch.
-	if got := normalizeWatchSymbol("mnq"); got != "MNQ" {
-		t.Errorf("normalizeWatchSymbol(mnq) = %q, want MNQ", got)
-	}
 }

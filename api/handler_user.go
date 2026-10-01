@@ -469,7 +469,7 @@ func (s *Server) handleResetAccount(c *gin.Context) {
 		return
 	}
 
-	logger.Infof("✓ User accounts cleared (credentials preserved) — system reset to uninitialized")
+	logger.Infof("✓ User accounts cleared (private keys preserved) — system reset to uninitialized")
 	c.JSON(http.StatusOK, gin.H{"message": "Account reset successful, you can now register a new account"})
 }
 

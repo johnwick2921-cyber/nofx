@@ -104,8 +104,7 @@ func (s *Server) handleGetTraderConfig(c *gin.Context) {
 		"trading_symbols":       traderConfig.TradingSymbols,
 		"custom_prompt":         traderConfig.CustomPrompt,
 		"override_base_prompt":  traderConfig.OverrideBasePrompt,
-		"is_cross_margin":       traderConfig.IsCrossMargin,
-		"is_running":            isRunning,
+		"is_cross_margin":       traderConfig.IsCrossMargin, "is_running": isRunning,
 	}
 
 	c.JSON(http.StatusOK, result)
@@ -310,7 +309,6 @@ func (s *Server) handleTrades(c *gin.Context) {
 		limit = l
 	}
 
-	// Normalize symbol to its canonical venue form
 	if symbol != "" {
 		symbol = market.Normalize(symbol)
 	}
@@ -366,7 +364,6 @@ func (s *Server) handleOrders(c *gin.Context) {
 		limit = l
 	}
 
-	// Normalize symbol to its canonical venue form
 	if symbol != "" {
 		symbol = market.Normalize(symbol)
 	}
