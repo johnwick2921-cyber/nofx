@@ -12,8 +12,8 @@ import (
 	storepkg "vl/store"
 
 	"github.com/gin-gonic/gin"
-	"vl/kernel"
 	"time"
+	"vl/kernel"
 )
 
 // handleTraderList Trader list
@@ -105,8 +105,6 @@ func (s *Server) handleGetTraderConfig(c *gin.Context) {
 		"custom_prompt":         traderConfig.CustomPrompt,
 		"override_base_prompt":  traderConfig.OverrideBasePrompt,
 		"is_cross_margin":       traderConfig.IsCrossMargin,
-		"use_ai500":             traderConfig.UseAI500,
-		"use_oi_top":            traderConfig.UseOITop,
 		"is_running":            isRunning,
 	}
 
@@ -312,7 +310,7 @@ func (s *Server) handleTrades(c *gin.Context) {
 		limit = l
 	}
 
-	// Normalize symbol (add USDT suffix if not present)
+	// Normalize symbol to its canonical venue form
 	if symbol != "" {
 		symbol = market.Normalize(symbol)
 	}
@@ -368,7 +366,7 @@ func (s *Server) handleOrders(c *gin.Context) {
 		limit = l
 	}
 
-	// Normalize symbol (add USDT suffix if not present)
+	// Normalize symbol to its canonical venue form
 	if symbol != "" {
 		symbol = market.Normalize(symbol)
 	}

@@ -6,12 +6,12 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
-	"vl/kernel"
-	"vl/safe"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"vl/kernel"
+	"vl/safe"
 )
 
 type SignalType string
@@ -113,9 +113,9 @@ func (s *Sentinel) FormatWatchlist(L string) string {
 	defer s.mu.RUnlock()
 	if len(s.symbols) == 0 {
 		if L == "zh" {
-			return "📭 监控列表为空。用 `/watch BTC` 添加。"
+			return "📭 监控列表为空。用 `/watch MNQ` 添加。"
 		}
-		return "📭 Watchlist empty. Use `/watch BTC` to add."
+		return "📭 Watchlist empty. Use `/watch MNQ` to add."
 	}
 	var sb strings.Builder
 	if L == "zh" {
