@@ -305,6 +305,37 @@ ownership: file-level per Finding 3
 	if strings.Contains(out, "ONLY ceded markers") {
 		t.Fatalf("satisfied cession must not report ONLY-ceded-markers:\n%s", out)
 	}
+
+	// a multi-MB single-line file must not crash the sweep — the pathological-
+	// line grep class that took DS-101's run down (2026-10-01). The gate must
+	// COMPLETE and report the hit, never die.
+	huge := strings.Repeat("x", 2<<20) + "bybit huge-line marker"
+	write(t, filepath.Join(tmp, "src/huge.json"), huge+"\n")
+	git("add", "-A")
+	git("commit", "-qm", "huge-line")
+	head = strings.TrimSpace(git("rev-parse", "HEAD"))
+	tableK := fmt.Sprintf(`branch-point: %s
+integrator-tip: %s
+paths: .
+regex: bybit
+| branding/no_crypto.go | %d | bybit | KEEP | CR-B | guard literal |
+| src/kept.go | %d | bybit | KEEP | CR-A | keep |
+| src/gen/report.tsv | - | count=1 | KEEP | CR-C | dated research export |
+| agent/tools.go | 2 | bybit | KEEP | CR-B | real row |
+| agent/tools.go | 3 | bybit | KEEP | CR-A | other line |
+`, head, head, guardLine, keptLine)
+	tableKPath := filepath.Join(tblDir, "tblK.md")
+	write(t, tableKPath, tableK)
+	out, rc = runGate(tableKPath)
+	if rc == 0 {
+		t.Fatalf("the huge-line file's hit has no row and must FAIL (UNLISTED), got exit 0:\n%s", out)
+	}
+	if !strings.Contains(out, "sweep complete") {
+		t.Fatalf("the gate must COMPLETE on a multi-MB line, not crash:\n%s", out)
+	}
+	if !strings.Contains(out, "src/huge.json") {
+		t.Fatalf("expected the huge-line hit to be reported:\n%s", out)
+	}
 }
 
 func write(t *testing.T, path, content string) {

@@ -61,6 +61,13 @@
 #       web/src/components/trader/TraderConfigModal.tsx source_type === 'mixed'  -> if present, the union must name it (CUT); absent = cut complete
 set -u
 
+# LC_ALL=C: bytewise regex for the whole sweep. The literal's CJK tokens are
+# UTF-8 byte sequences (matched literally, no case folding needed) and the
+# ASCII tokens fold under C-locale -i. A multibyte locale puts the glibc
+# regex engine on its pathological-line path — the known segfault class
+# (grep on a multi-MB line with an alternation) that took DS-101's run down.
+export LC_ALL=C
+
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$REPO_ROOT" || exit 3
 GUARD=branding/no_crypto.go
@@ -269,15 +276,24 @@ $f
   # blanket row for this file (Finding 4): count-verified, printed, never silent
   if [ -n "${blanket_rows[$f]:-}" ]; then
     want=${blanket_rows[$f]}
-    got=$(grep -a -c -i -E "$lit" -- "$f" 2>/dev/null || true)
+    got=$(grep -a -c -i -E "$lit" -- "$f" 2>/dev/null); grc=$?
+    if [ "$grc" -ge 128 ]; then
+      bad "blanket grep CRASHED (signal) on $f — count unverifiable, never a silent skip"
+      continue
+    fi
     if [ "$got" = "$want" ]; then
       excluded=$((excluded+1)); blanket_seen["$f"]=1
     else
-      bad "blanket row count mismatch: $f says count=$want, sweep finds $got — ${blanket_reason[$f]}"
+      bad "blanket row count mismatch: $f says count=$want, sweep finds ${got:-0} — ${blanket_reason[$f]}"
     fi
     continue
   fi
-  out=$(grep -n -I -i -E "$lit" -- "$f" 2>/dev/null) || continue
+  out=$(grep -n -I -i -E "$lit" -- "$f" 2>/dev/null); grc=$?
+  if [ "$grc" -ge 128 ]; then
+    bad "sweep grep CRASHED (signal) on $f — never a silent skip"
+    continue
+  fi
+  [ "$grc" -eq 0 ] || continue
   while IFS= read -r line; do
     ln=${line%%:*}
     hits=$((hits+1))
@@ -329,8 +345,14 @@ for k in "${!row_dispo[@]}"; do
   # the named-trap rows carry a descriptive token: `'mixed' (single-quoted)`
   # — the part that must be re-found is the quoted needle itself
   case "$t" in *" (single-quoted)") t=${t% (single-quoted)};; esac
-  if [ -f "$p" ] && grep -q -I -i -F -- "$t" "$p" 2>/dev/null; then can=$((can+1)); else
-    bad "canary: KEEP row token '${row_token[$k]}' not re-found in $p — sweep or table is wrong"; fi
+  if [ -f "$p" ]; then
+    grep -q -I -i -F -- "$t" "$p" 2>/dev/null; grc=$?
+    if [ "$grc" -eq 0 ]; then can=$((can+1))
+    elif [ "$grc" -ge 128 ]; then bad "canary grep CRASHED on $p — token '${row_token[$k]}' re-found is unverifiable"
+    else bad "canary: KEEP row token '${row_token[$k]}' not re-found in $p — sweep or table is wrong"; fi
+  else
+    bad "canary: KEEP row path $p missing — sweep or table is wrong"
+  fi
 done
 [ "$can" -gt 0 ] && ok "canary: all $can KEEP tokens re-found" || echo "NOTE canary n/a (no KEEP rows) — the guard test's sentinels are the canary"
 
@@ -338,18 +360,28 @@ done
 f_keep="web/src/components/plan/ExecutorVerdict.tsx";  n_keep="arm.state === 'mixed'"
 f_cut="web/src/components/trader/TraderConfigModal.tsx"; n_cut="source_type === 'mixed'"
 if [ -f "$f_keep" ]; then
-  if grep -qF -- "$n_keep" "$f_keep" 2>/dev/null; then
+  grep -qF -- "$n_keep" "$f_keep" 2>/dev/null; grc=$?
+  if [ "$grc" -eq 0 ]; then
     ok "content-assert: ExecutorVerdict 'mixed' present (KEEP — its CR-C table row is the requirement)"
+  elif [ "$grc" -ge 128 ]; then
+    bad "content-assert grep CRASHED on $f_keep — presence unverifiable"
   else bad "content-assert: ExecutorVerdict lost its plan-state 'mixed' line (KEEP site vanished)"; fi
 else bad "content-assert: $f_keep missing at HEAD"; fi
-if [ -f "$f_cut" ] && grep -qF -- "$n_cut" "$f_cut" 2>/dev/null; then
-  found=""
-  for key in "${!row_dispo[@]}"; do
-    case "${row_line[$key]}" in "$f_cut|"*) found=yes;; esac
-  done
-  if [ "$found" = "yes" ]; then
-    ok "content-assert: TraderConfigModal 'mixed' still present but the union names it (CUT pending)"
-  else bad "content-assert: TraderConfigModal 'mixed' present with NO row — a lane forgot the CUT"; fi
+if [ -f "$f_cut" ]; then
+  grep -qF -- "$n_cut" "$f_cut" 2>/dev/null; grc=$?
+  if [ "$grc" -eq 0 ]; then
+    found=""
+    for key in "${!row_dispo[@]}"; do
+      case "${row_line[$key]}" in "$f_cut|"*) found=yes;; esac
+    done
+    if [ "$found" = "yes" ]; then
+      ok "content-assert: TraderConfigModal 'mixed' still present but the union names it (CUT pending)"
+    else bad "content-assert: TraderConfigModal 'mixed' present with NO row — a lane forgot the CUT"; fi
+  elif [ "$grc" -ge 128 ]; then
+    bad "content-assert grep CRASHED on $f_cut — presence unverifiable"
+  else
+    ok "content-assert: TraderConfigModal 'mixed' gone (CUT complete)"
+  fi
 else
   ok "content-assert: TraderConfigModal 'mixed' gone (CUT complete)"
 fi
