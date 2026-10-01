@@ -25,7 +25,8 @@ func TestCryptoUnionGateCanonicalFormat(t *testing.T) {
 	// minimal guard: the script extracts the literal and the allowlist from here
 	write(t, filepath.Join(tmp, "branding/no_crypto.go"),
 		"package branding\n\nconst SweepRegexLiteral = `bybit`\n\n"+
-			"var LineLevelOwnershipPaths = []string{\n\t\"agent/agent.go\",\n\t\"agent/tools.go\",\n}\n")
+			"var LineLevelOwnershipPaths = []string{\n\t\"agent/agent.go\",\n\t\"agent/tools.go\",\n}\n\n"+
+			"var RiskCapAssertSites = []string{\n\t\"src/kept.go\", \"package\",\n}\n")
 
 	// the real gate script
 	scriptSrc, err := os.ReadFile(filepath.Join("..", "scripts", "crypto-union-gate.sh"))
@@ -335,6 +336,36 @@ regex: bybit
 	}
 	if !strings.Contains(out, "src/huge.json") {
 		t.Fatalf("expected the huge-line hit to be reported:\n%s", out)
+	}
+
+	// the gate's table inputs are never swept — a table living INSIDE the
+	// repo, whose rows carry tokens, must not self-hit
+	tableL := fmt.Sprintf(`branch-point: %s
+integrator-tip: %s
+paths: src
+regex: bybit
+| branding/no_crypto.go | %d | bybit | KEEP | CR-B | guard literal |
+| src/kept.go | %d | bybit | KEEP | CR-A | keep |
+| src/gen/report.tsv | - | count=1 | KEEP | CR-C | dated research export |
+| src/huge.json | 1 | bybit | KEEP | CR-A | huge-line fixture |
+| agent/tools.go | 2 | bybit | KEEP | CR-B | real row |
+| agent/tools.go | 3 | bybit | KEEP | CR-A | other line |
+`, head, head, guardLine, keptLine)
+	write(t, filepath.Join(tmp, "docs/crypto-removal/tblL.md"), tableL)
+	git("add", "-A")
+	git("commit", "-qm", "in-repo-table")
+	head = strings.TrimSpace(git("rev-parse", "HEAD"))
+	out, rc = runGate("docs/crypto-removal/tblL.md")
+	if rc != 0 {
+		t.Fatalf("an in-repo table with only covered rows must exit 0, got %d:\n%s", rc, out)
+	}
+	for _, bad := range []string{
+		"UNLISTED hit: docs/crypto-removal/tblL.md",
+		"hit not covered by a KEEP row", // only tblL.md rows exist in this run
+	} {
+		if strings.Contains(out, bad) {
+			t.Fatalf("the table input was swept (self-hit):\n%s", out)
+		}
 	}
 }
 

@@ -88,6 +88,13 @@ nallow=$(echo "$allowlist" | wc -w)
 if [ "$nallow" -ne 2 ]; then bad "line-level allowlist has $nallow paths (want exactly 2 — the ruling, never extended silently): $allowlist"; fi
 ok "line-level ownership allowlist (2 paths): $allowlist"
 
+# -- the P0 risk-cap KEEP canary, from the guard (CTO ruling 10:5x)
+cap_sites=$(awk '/var RiskCapAssertSites/{f=1;next} f&&/^}/{f=0} f{for(i=1;i<=NF;i++) if($i ~ /^"[^"]*",?$/) {gsub(/[" ,]/,"",$i); print $i}}' "$GUARD" | tr '\n' ' ')
+cap_sites=$(echo "$cap_sites" | xargs)
+cap_n=$(echo "$cap_sites" | wc -w)
+if [ "$cap_n" -eq 0 ]; then bad "risk-cap canary list EMPTY — the guard is the single source"; fi
+if [ $((cap_n % 2)) -ne 0 ]; then bad "risk-cap canary list malformed (odd $cap_n — file/needle pairs)"; fi
+
 # -- sweep the tracked tree (invariant 3 + the 2000 floor)
 LIST=$(mktemp) || { bad "mktemp failed"; echo "== $fail FAIL"; exit 1; }
 trap 'rm -f "$LIST"' EXIT
@@ -102,13 +109,6 @@ ntables=0
 for a in "$@"; do ntables=$((ntables+1)); done
 if [ "$ntables" -eq 0 ]; then bad "gate invoked with NO tables — a 0-KEEP-rows result is vacuous, never quote it"; fi
 ok "gate run over $ntables tables: $*"
-# normalize each table arg to its repo-relative path (./ stripped) for the sweep skip
-table_list=""
-for a in "$@"; do
-  a=${a#./}
-  table_list="$table_list
-$a"
-done
 
 # row index:  tbl|file|line -> disposition (owner/token kept for messages)
 declare -A row_dispo row_owner row_token row_line
@@ -267,9 +267,11 @@ hits=0; excluded=0
 while IFS= read -r -d '' f; do
   # the disposition tables themselves are gate INPUTS, never swept — they
   # carry the literal and token names by design (a self-hit proves nothing)
-  case "$table_list" in *"
-$f
-"*) continue;; esac
+  is_table=""
+  for a in "$@"; do
+    [ "$f" = "${a#./}" ] && is_table=yes && break
+  done
+  if [ -n "$is_table" ]; then continue; fi
   case "$f" in
     *_test.go) continue;;   # swept scope: Go *_test.go excluded
   esac
@@ -355,6 +357,26 @@ for k in "${!row_dispo[@]}"; do
   fi
 done
 [ "$can" -gt 0 ] && ok "canary: all $can KEEP tokens re-found" || echo "NOTE canary n/a (no KEEP rows) — the guard test's sentinels are the canary"
+
+# -- P0 risk-cap KEEP canary (CTO ruling 2026-10-01 10:5x): the four live
+# futures caps (crypto-named) must exist at the integrated head
+cap_f=""
+for tok in $cap_sites; do
+  if [ -z "$cap_f" ]; then cap_f=$tok; continue; fi
+  if [ -f "$cap_f" ]; then
+    grep -qF -- "$tok" "$cap_f" 2>/dev/null; grc=$?
+    if [ "$grc" -eq 0 ]; then
+      ok "risk-cap KEEP canary present: $cap_f :: $tok"
+    elif [ "$grc" -ge 128 ]; then
+      bad "risk-cap canary grep CRASHED on $cap_f — presence unverifiable"
+    else
+      bad "risk-cap KEEP canary LOST: $cap_f is missing '$tok' — P0 (C1: the owner's caps silently fall back to defaults)"
+    fi
+  else
+    bad "risk-cap KEEP canary LOST: $cap_f missing at HEAD"
+  fi
+  cap_f=""
+done
 
 # -- content asserts (CTO ruling 2026-10-01): single-quoted 'mixed' sites
 f_keep="web/src/components/plan/ExecutorVerdict.tsx";  n_keep="arm.state === 'mixed'"

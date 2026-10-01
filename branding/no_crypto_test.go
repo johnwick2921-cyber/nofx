@@ -131,6 +131,39 @@ func TestLineLevelOwnershipAllowlistExact(t *testing.T) {
 	}
 }
 
+// TestRiskCapAssertSitesExact pins the P0 risk-cap KEEP-canary list (CTO
+// ruling 2026-10-01 10:5x): exactly the four fields + tags + decision-path
+// args + chat-entry reads + knob rows. A site added or dropped without a new
+// ruling FAILS — the list is never extended silently.
+func TestRiskCapAssertSitesExact(t *testing.T) {
+	want := []string{
+		"store/strategy.go", "BTCETHMaxLeverage",
+		"store/strategy.go", "AltcoinMaxLeverage",
+		"store/strategy.go", "BTCETHMaxPositionValueRatio",
+		"store/strategy.go", "AltcoinMaxPositionValueRatio",
+		"store/strategy.go", "btc_eth_max_leverage",
+		"store/strategy.go", "altcoin_max_leverage",
+		"store/strategy.go", "btc_eth_max_position_value_ratio",
+		"store/strategy.go", "altcoin_max_position_value_ratio",
+		"kernel/engine_analysis.go", "riskConfig.BTCETHMaxLeverage",
+		"kernel/engine_analysis.go", "riskConfig.AltcoinMaxLeverage",
+		"kernel/engine_analysis.go", "riskConfig.BTCETHMaxPositionValueRatio",
+		"kernel/engine_analysis.go", "riskConfig.AltcoinMaxPositionValueRatio",
+		"agent/trade.go", "riskControl.AltcoinMaxLeverage",
+		"agent/trade.go", "riskControl.AltcoinMaxPositionValueRatio",
+		"store/knob_registry_table.go", "altcoin_max_leverage",
+		"store/knob_registry_table.go", "altcoin_max_position_value_ratio",
+	}
+	if len(RiskCapAssertSites) != len(want) {
+		t.Fatalf("RiskCapAssertSites has %d entries, want %d: %v", len(RiskCapAssertSites), len(want), RiskCapAssertSites)
+	}
+	for i := range want {
+		if RiskCapAssertSites[i] != want[i] {
+			t.Fatalf("RiskCapAssertSites[%d] = %q, want %q (the P0 cap list is a ruling, never extended silently)", i, RiskCapAssertSites[i], want[i])
+		}
+	}
+}
+
 func importTargetsCrypto(source []byte) (map[string]bool, error) {
 	f, err := parser.ParseFile(token.NewFileSet(), "source.go", source, parser.ImportsOnly)
 	if err != nil {
