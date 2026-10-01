@@ -723,10 +723,6 @@ export const translations = {
     faqNoTradesExecutingAnswer:
       'Common causes: 1) AI decided to wait (check decision logs for reasoning); 2) Insufficient balance in futures account; 3) Max positions limit reached (default: 3); 4) Exchange API issues (check error messages); 5) Strategy constraints too restrictive. Check Dashboard → Decision Logs for detailed AI reasoning each cycle.',
 
-    faqOnlyShortPositions: 'Why is the AI only opening short positions?',
-
-    faqLeverageSettings: 'How do leverage settings work?',
-
     faqStopLossTakeProfit:
       'Does ' + PERSONA_NAME + ' support stop-loss and take-profit?',
     faqStopLossTakeProfitAnswer:
@@ -762,8 +758,6 @@ export const translations = {
     faqAIAPITimeout: 'AI API timeout or connection refused',
     faqAIAPITimeoutAnswer:
       'Check: 1) API key is valid (test with curl); 2) Network can reach API endpoint (ping/curl); 3) API provider is not down (check status page); 4) VPN/firewall not blocking; 5) Rate limits not exceeded. Default timeout is 120 seconds.',
-
-    faqBalanceShowsZero: 'Account balance shows 0',
 
     faqDockerPullFailed: 'Docker image pull failed or slow',
     faqDockerPullFailedAnswer:
@@ -2024,10 +2018,6 @@ export const translations = {
     faqNoTradesExecutingAnswer:
       '常见原因：1）AI 决定等待（查看决策日志了解原因）；2）合约账户余额不足；3）达到最大持仓数限制（默认：3）；4）交易所 API 问题（检查错误信息）；5）策略约束太严格。查看仪表板 → 决策日志了解每个周期的 AI 推理详情。',
 
-    faqOnlyShortPositions: '为什么 AI 只开空单？',
-
-    faqLeverageSettings: '杠杆设置如何工作？',
-
     faqStopLossTakeProfit: PERSONA_NAME + ' 支持止损止盈吗？',
     faqStopLossTakeProfitAnswer:
       'AI 可以在决策中建议止损/止盈价位，但这是基于指导而非交易所硬编码订单。AI 每个周期监控持仓，可能根据盈亏决定平仓。如需保证止损，可以手动在交易所设置订单，或调整策略提示词使其更保守。',
@@ -2062,8 +2052,6 @@ export const translations = {
     faqAIAPITimeout: 'AI API 超时或连接被拒绝',
     faqAIAPITimeoutAnswer:
       '检查：1）API 密钥有效（用 curl 测试）；2）网络能访问 API 端点（ping/curl）；3）API 提供商未宕机（查看状态页）；4）VPN/防火墙未阻止；5）未超过速率限制。默认超时 120 秒。',
-
-    faqBalanceShowsZero: '账户余额显示 0',
 
     faqDockerPullFailed: 'Docker 镜像拉取失败或缓慢',
     faqDockerPullFailedAnswer:
@@ -3301,10 +3289,6 @@ export const translations = {
     faqNoTradesExecuting: 'Mengapa trader saya tidak mengeksekusi trading?',
     faqNoTradesExecutingAnswer:
       'Penyebab umum: 1) AI memutuskan menunggu; 2) Saldo tidak cukup; 3) Batas posisi maks tercapai; 4) Masalah API bursa; 5) Batasan strategi terlalu ketat.',
-    faqOnlyShortPositions: 'Mengapa AI hanya membuka posisi short?',
-
-    faqLeverageSettings: 'Bagaimana cara kerja pengaturan leverage?',
-
     faqStopLossTakeProfit:
       'Apakah ' + PERSONA_NAME + ' mendukung stop-loss dan take-profit?',
     faqStopLossTakeProfitAnswer:
@@ -3332,8 +3316,6 @@ export const translations = {
     faqAIAPITimeout: 'API AI timeout atau koneksi ditolak',
     faqAIAPITimeoutAnswer:
       'Periksa: 1) API key valid; 2) Jaringan bisa mengakses endpoint; 3) Penyedia tidak down; 4) VPN/firewall tidak memblokir.',
-
-    faqBalanceShowsZero: 'Saldo akun menunjukkan 0',
 
     faqDockerPullFailed: 'Penarikan image Docker gagal atau lambat',
     faqDockerPullFailedAnswer:
