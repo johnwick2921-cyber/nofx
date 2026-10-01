@@ -8,7 +8,7 @@ import (
 
 // ClosedPnLRecord represents a single closed position record from exchange
 type ClosedPnLRecord struct {
-	Symbol      string    // Trading symbol (e.g., "MNQ")
+	Symbol      string    // Trading pair
 	Side        string    // "long" or "short"
 	EntryPrice  float64   // Entry price
 	ExitPrice   float64   // Exit/close price
@@ -27,7 +27,7 @@ type ClosedPnLRecord struct {
 // Used for reconstructing position history with unified algorithm
 type TradeRecord struct {
 	TradeID      string    // Unique trade ID from exchange
-	Symbol       string    // Trading symbol (e.g., "MNQ")
+	Symbol       string    // Trading pair
 	Side         string    // "BUY" or "SELL"
 	PositionSide string    // "LONG", "SHORT", or "BOTH" (for one-way mode)
 	OrderAction  string    // "open_long", "open_short", "close_long", "close_short" (from exchange Dir field)
@@ -39,7 +39,7 @@ type TradeRecord struct {
 }
 
 // Trader Unified trader interface
-// Supports the NinjaTrader platform
+// Supports multiple trading platforms
 type Trader interface {
 	// GetBalance Get account balance
 	GetBalance() (map[string]interface{}, error)
