@@ -66,6 +66,13 @@ lit=$(sed -n 's/^const SweepRegexLiteral = `\(.*\)`$/\1/p' "$GUARD")
 if [ -z "$lit" ]; then bad "cannot extract SweepRegexLiteral from $GUARD"; echo "== $fail FAIL"; exit 1; fi
 ok "sweep literal extracted from the guard ($(printf %s "$lit" | wc -c) bytes)"
 
+# -- the two-path LINE-LEVEL ownership allowlist, from the guard (CTO ruling)
+allowlist=$(awk '/var LineLevelOwnershipPaths/{f=1;next} f&&/^}/{f=0} f{for(i=1;i<=NF;i++) if($i ~ /^"[^"]*",?$/) {gsub(/[" ,]/,"",$i); print $i}}' "$GUARD" | tr '\n' ' ')
+allowlist=$(echo "$allowlist" | xargs)
+nallow=$(echo "$allowlist" | wc -w)
+if [ "$nallow" -ne 2 ]; then bad "line-level allowlist has $nallow paths (want exactly 2 — the ruling, never extended silently): $allowlist"; fi
+ok "line-level ownership allowlist (2 paths): $allowlist"
+
 # -- sweep the tracked tree (invariant 3 + the 2000 floor)
 LIST=$(mktemp) || { bad "mktemp failed"; echo "== $fail FAIL"; exit 1; }
 trap 'rm -f "$LIST"' EXIT
@@ -82,8 +89,16 @@ declare -A blanket_seen
 allrows=0; keepcount=0
 for tbl in "$@"; do
   [ -f "$tbl" ] || { bad "table missing: $tbl"; continue; }
-  bp=$(sed -n -E 's/^-? *branch[- ]point: *([0-9a-f]{40}).*$/\1/p' "$tbl" | head -1)
-  tip=$(sed -n -E 's/^-? *integrator[- ]tip( at generation)?: *([0-9a-f]{40}).*$/\2/p' "$tbl" | head -1)
+  # three accepted header dialects (CTO, all three tables accepted):
+  #   CR-B: branch-point: / integrator-tip: / paths: / regex: <literal>
+  #   CR-C: - branch point: / - integrator tip at generation: / - regex: extracted programmatically...
+  #   CR-A: base sha (branch point): / integrator tip generated against: / sweep regex ...: + literal on the NEXT line
+  bp=$(sed -n -E 's/^branch-point: *([0-9a-f]{7,40}).*$/\1/p' "$tbl" | head -1)
+  [ -z "$bp" ] && bp=$(sed -n -E 's/^- *branch[- ]point: *([0-9a-f]{7,40}).*$/\1/p' "$tbl" | head -1)
+  [ -z "$bp" ] && bp=$(sed -n -E 's/^[- ]*base sha \(branch point\): *([0-9a-f]{7,40}).*$/\1/p' "$tbl" | head -1)
+  tip=$(sed -n -E 's/^integrator-tip: *([0-9a-f]{7,40}).*$/\1/p' "$tbl" | head -1)
+  [ -z "$tip" ] && tip=$(sed -n -E 's/^- *integrator[- ]tip( at generation)?: *([0-9a-f]{7,40}).*$/\2/p' "$tbl" | head -1)
+  [ -z "$tip" ] && tip=$(sed -n -E 's/^integrator tip generated against: *([0-9a-f]{7,40}).*$/\1/p' "$tbl" | head -1)
   paths=$(sed -n -E 's/^-? *paths: *//p' "$tbl" | head -1)
   treg=$(sed -n -E 's/^regex: *(.*)$/\1/p' "$tbl" | head -1)
   note=""
@@ -93,15 +108,22 @@ for tbl in "$@"; do
       *"extracted programmatically"*|*"programmatically"*) note="extraction-note";;
     esac
   fi
-  [ -n "$bp" ] || bad "$tbl: header branch-point missing/not 40-hex"
-  [ -n "$tip" ] || bad "$tbl: header integrator-tip missing/not 40-hex"
-  [ -n "$paths" ] || bad "$tbl: header paths missing"
+  if [ -z "$treg" ]; then
+    # CR-A two-line form: a header naming the sweep regex, literal on the NEXT line
+    treg=$(awk 'f{print; exit} /sweep regex.*:$/{f=1}' "$tbl" | sed 's/^[[:space:]]*//; s/^`//; s/`$//')
+    [ "$treg" = "$lit" ] && note=""
+  fi
+  [ -n "$bp" ] || bad "$tbl: header branch-point missing/not a sha"
+  [ -n "$tip" ] || bad "$tbl: header integrator-tip missing/not a sha"
+  if [ -z "$paths" ]; then
+    echo "NOTE $tbl: no paths header (accepted CTO dialect) — the scoped staleness diff is skipped; the two-sha ancestry check still applies"
+  fi
   if [ -n "$treg" ]; then
     if [ "$note" = "extraction-note" ]; then
       echo "NOTE $tbl: regex header states its programmatic source without the literal — byte check falls back to sweep coverage (zero unlisted hits proves it)"
     elif [ "$treg" = "$lit" ]; then ok "$tbl: regex header equals the guard literal byte-for-byte"; else
       bad "$tbl: regex header != guard literal (hand-typed copy?)"; fi
-  else bad "$tbl: header regex missing (either `regex: <literal>` or a bullet naming its programmatic source)"; fi
+  else bad "$tbl: header regex missing (regex: <literal>, a bullet naming its programmatic source, or a sweep-regex header with the literal next line)"; fi
   if [ -n "$bp" ] && ! git merge-base --is-ancestor "$bp" HEAD 2>/dev/null; then
     bad "$tbl: HEAD does not descend from branch-point $bp"; fi
   if [ -n "$tip" ] && [ -n "$paths" ]; then
@@ -111,17 +133,23 @@ for tbl in "$@"; do
   fi
   n=0
   while IFS= read -r line; do
+    # the CR-A next-line regex literal (indented, backticked) equals the guard literal
+    _t=$(printf '%s' "$line" | sed 's/^[[:space:]]*//; s/^`//; s/`$//')
+    [ "$_t" = "$lit" ] && continue
+    # skip: blanks, comments, headers in every accepted dialect, separator/header rows,
+    # explicit 0-hits lines, and CR-A prose headers
     case "$line" in
-      ""|"#"*|branch-point:*|integrator-tip:*|paths:*|regex:*|"0 hits"|"- "*|"| path |"*|"|---"*) continue;;
+      ""|"#"*|branch-point:*|integrator-tip:*|paths:*|regex:*|"0 hits"|"- "*|"| path |"*|"|---"*|"base sha"*|"integrator tip generated"*|"sweep regex"*|generated:*|ownership:*) continue;;
       "|"*)
         # | path | line | token | DISP | OWNER | reason |  (trailing pipe optional)
         body=${line#|}; body=${body%|}
-        IFS='|' read -r p ln tok disp owner reason <<EOF
-$body
-EOF
-        p=$(echo "$p" | xargs); ln=$(echo "$ln" | xargs); tok=$(echo "$tok" | xargs)
-        disp=$(echo "$disp" | xargs); owner=$(echo "$owner" | xargs)
-        reason=$(echo "$reason" | xargs)
+        IFS='|' read -r p ln tok disp owner reason < <(printf '%s\n' "$body")
+        p=$(printf '%s' "$p" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        ln=$(printf '%s' "$ln" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        tok=$(printf '%s' "$tok" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        disp=$(printf '%s' "$disp" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        owner=$(printf '%s' "$owner" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        reason=$(printf '%s' "$reason" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
         p=${p#\`}; p=${p%\`}; tok=${tok#\`}; tok=${tok%\`}
         if [ -z "$p" ] || [ -z "$ln" ] || [ -z "$tok" ] || [ -z "$disp" ] || [ -z "$owner" ]; then
           bad "$tbl: unparseable row (canonical: | path | line | token | DISP | OWNER | reason |): $line"
@@ -148,6 +176,8 @@ EOF
         fi
         case "$disp" in
           DELETE|CUT|KEEP) ;;
+          "-") disp="-" # ceded marker: owner column names the table that carries the row
+            ;;
           *) bad "$tbl: bad disposition '$disp' in row $p:$ln"; continue;;
         esac
         k="$tbl|$p|$ln"
@@ -160,7 +190,15 @@ EOF
         [ "$disp" = "KEEP" ] && keepcount=$((keepcount+1))
         ;;
       *)
-        bad "$tbl: unparseable line (not a canonical pipe row): $(echo "$line" | cut -c1-80)"
+        # a pipe-less line that is NOT a disposition directive is prose (the
+        # CR-A table's accepted out-of-scope note); a line that LOOKS like a
+        # row directive but has no pipes is refused — that is how prose ranges
+        # were smuggled in (CTO blocker 2)
+        case "$line" in
+          DELETE*|CUT*|KEEP*) bad "$tbl: unparseable line (looks like a disposition directive but is not a canonical pipe row): $(echo "$line" | cut -c1-80)";;
+          *"|"*) bad "$tbl: unparseable line (has a pipe but is not a canonical row): $(echo "$line" | cut -c1-80)";;
+          *) continue;; # accepted prose
+        esac
         ;;
     esac
   done < "$tbl"
@@ -181,7 +219,14 @@ for key in "${!row_dispo[@]}"; do
   case " $cur " in *" $o "*) ;; *) path_owners[$p]="$cur $o";; esac
 done
 for p in "${!path_owners[@]}"; do
-  owners=$(echo "${path_owners[$p]}" | xargs)
+  # the two-path ruling: LINE-level ownership here, FILE-level everywhere else
+  is_allow=""
+  for a in $allowlist; do [ "$p" = "$a" ] && is_allow=yes; done
+  if [ "$is_allow" = "yes" ]; then
+    ok "line-level ownership path (ruling): $p"
+    continue
+  fi
+  owners=$(printf '%s' "${path_owners[$p]}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
   if [ "$(echo "$owners" | wc -w)" -gt 1 ]; then
     bad "FILE DOUBLE-CLAIM: $p owned by [$owners] — ownership follows the FILE (one file, one owner)"
   fi
@@ -196,7 +241,7 @@ while IFS= read -r -d '' f; do
   # blanket row for this file (Finding 4): count-verified, printed, never silent
   if [ -n "${blanket_rows[$f]:-}" ]; then
     want=${blanket_rows[$f]}
-    got=$(grep -c -I -i -E "$lit" -- "$f" 2>/dev/null || true)
+    got=$(grep -a -c -i -E "$lit" -- "$f" 2>/dev/null || true)
     if [ "$got" = "$want" ]; then
       excluded=$((excluded+1)); blanket_seen["$f"]=1
     else
@@ -210,16 +255,21 @@ while IFS= read -r -d '' f; do
     hits=$((hits+1))
     k="$f|$ln"
     # collect this line's rows across ALL tables (ceded rows share one owner)
-    owners=""; disp=""; tok=""
+    owners=""; realdisp=""; tok=""
     for key in "${!row_dispo[@]}"; do
       [ "${row_line[$key]}" = "$k" ] || continue
       o=${row_owner[$key]}
       case " $owners " in *" $o "*) ;; *) owners="$owners $o";; esac
-      disp=${row_dispo[$key]}; tok=${row_token[$key]}
+      d=${row_dispo[$key]}
+      if [ "$d" != "-" ]; then realdisp=$d; tok=${row_token[$key]}; fi
     done
-    owners=$(echo "$owners" | xargs)
+    owners=$(printf '%s' "$owners" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
     if [ -z "$owners" ]; then
       bad "UNLISTED hit: $f:$ln: $(echo "$line" | cut -c1-90)"
+      continue
+    fi
+    if [ -z "$realdisp" ]; then
+      bad "hit has ONLY ceded markers (owner [$owners] names a part, but no table carries a real disposition — the reciprocal cession is incomplete): $f:$ln: $(echo "$line" | cut -c1-90)"
       continue
     fi
     nowners=$(echo "$owners" | wc -w)
@@ -227,13 +277,11 @@ while IFS= read -r -d '' f; do
       bad "DOUBLE-CLAIM hit: $f:$ln owned by [$owners] — exactly one owner per line"
       continue
     fi
-    if [ "$disp" = "KEEP" ] && printf '%s' "$line" | grep -qiF -- "$tok"; then
+    if [ "$realdisp" = "KEEP" ] && printf '%s' "$line" | grep -qiF -- "$tok"; then
       continue
     fi
-    bad "hit not covered by a KEEP row (owner $owners says $disp — the cut must have removed it): $f:$ln: $(echo "$line" | cut -c1-90)"
-  done <<EOF
-$out
-EOF
+    bad "hit not covered by a KEEP row (owner $owners says $realdisp — the cut must have removed it): $f:$ln: $(echo "$line" | cut -c1-90)"
+  done < <(printf '%s\n' "$out")
 done < "$LIST"
 ok "sweep complete: $hits hit lines, $excluded files under blanket rows, $keepcount KEEP rows in the union"
 for p in "${!blanket_rows[@]}"; do
@@ -249,7 +297,11 @@ can=0
 for k in "${!row_dispo[@]}"; do
   [ "${row_dispo[$k]}" = "KEEP" ] || continue
   p=${row_line[$k]%%|*}
-  if [ -f "$p" ] && grep -q -I -i -F -- "${row_token[$k]}" "$p" 2>/dev/null; then can=$((can+1)); else
+  t=${row_token[$k]}
+  # the named-trap rows carry a descriptive token: `'mixed' (single-quoted)`
+  # — the part that must be re-found is the quoted needle itself
+  case "$t" in *" (single-quoted)") t=${t% (single-quoted)};; esac
+  if [ -f "$p" ] && grep -q -I -i -F -- "$t" "$p" 2>/dev/null; then can=$((can+1)); else
     bad "canary: KEEP row token '${row_token[$k]}' not re-found in $p — sweep or table is wrong"; fi
 done
 [ "$can" -gt 0 ] && ok "canary: all $can KEEP tokens re-found" || echo "NOTE canary n/a (no KEEP rows) — the guard test's sentinels are the canary"

@@ -22,9 +22,10 @@ func TestCryptoUnionGateCanonicalFormat(t *testing.T) {
 	tmp := t.TempDir()
 	tblDir := t.TempDir() // tables live OUTSIDE the swept repo
 
-	// minimal guard: the script extracts the literal from this exact line
+	// minimal guard: the script extracts the literal and the allowlist from here
 	write(t, filepath.Join(tmp, "branding/no_crypto.go"),
-		"package branding\n\nconst SweepRegexLiteral = `bybit`\n")
+		"package branding\n\nconst SweepRegexLiteral = `bybit`\n\n"+
+			"var LineLevelOwnershipPaths = []string{\n\t\"agent/agent.go\",\n\t\"agent/tools.go\",\n}\n")
 
 	// the real gate script
 	scriptSrc, err := os.ReadFile(filepath.Join("..", "scripts", "crypto-union-gate.sh"))
@@ -198,6 +199,110 @@ regex: bybit
 	}
 	if !strings.Contains(out, "matches NO tracked file") {
 		t.Fatalf("expected the stale-blanket FAIL:\n%s", out)
+	}
+
+	// line-level ownership (HOLD-LIFTED ruling): on the three allowlisted paths
+	// a same-line double-claim still FAILS (line-level), while two tables owning
+	// DIFFERENT lines of an allowlisted path is legal (no FILE DOUBLE-CLAIM).
+	write(t, filepath.Join(tmp, "agent/tools.go"), "package agent\nvar A = \"bybit agent\"\nvar B = \"bybit helper\"\n")
+	git("add", "-A")
+	git("commit", "-qm", "agent-tools")
+	head = strings.TrimSpace(git("rev-parse", "HEAD"))
+	tableG := fmt.Sprintf(`branch-point: %s
+integrator-tip: %s
+paths: .
+regex: bybit
+| branding/no_crypto.go | %d | bybit | KEEP | CR-B | guard literal |
+| src/kept.go | %d | bybit | KEEP | CR-A | keep |
+| src/gen/report.tsv | - | count=1 | KEEP | CR-C | dated research export |
+| agent/tools.go | 2 | bybit | KEEP | CR-A | payment-branch line |
+| agent/tools.go | 3 | bybit | KEEP | CR-B | other line, CR-B owns |
+`, head, head, guardLine, keptLine)
+	tableGPath := filepath.Join(tblDir, "tblG.md")
+	write(t, tableGPath, tableG)
+	out, rc = runGate(tableGPath)
+	if rc != 0 {
+		t.Fatalf("allowlisted path, different lines, two owners must PASS (line-level ruling), got %d:\n%s", rc, out)
+	}
+	if strings.Contains(out, "FILE DOUBLE-CLAIM") {
+		t.Fatalf("allowlisted path must not trip the file-level check:\n%s", out)
+	}
+
+	// same LINE, two owners, allowlisted path -> line-level DOUBLE-CLAIM
+	tableH := fmt.Sprintf(`branch-point: %s
+integrator-tip: %s
+paths: .
+regex: bybit
+| agent/tools.go | 2 | bybit | KEEP | CR-B | conflicting claim on the same line |
+`, head, head)
+	tableHPath := filepath.Join(tblDir, "tblH.md")
+	write(t, tableHPath, tableH)
+	out, rc = runGate(tableGPath, tableHPath)
+	if rc == 0 {
+		t.Fatalf("same-line double-claim on an allowlisted path must FAIL, got exit 0:\n%s", out)
+	}
+	if !strings.Contains(out, "DOUBLE-CLAIM") {
+		t.Fatalf("expected the line-level DOUBLE-CLAIM:\n%s", out)
+	}
+
+	// CR-A header dialect (the third accepted form) + ceded '-' markers:
+	// base sha (branch point): / integrator tip generated against: / a sweep-regex
+	// header with the literal on the NEXT line / NO paths line (NOTE, not FAIL).
+	// A ceded row carries only ownership; the real disposition must come from the
+	// owner's table. Ceded-only = FAIL; paired with the real row = PASS.
+	// Abbreviated shas accepted (CR-A carries 9-hex).
+	write(t, filepath.Join(tmp, "web/src/components/plan/ExecutorVerdict.tsx"),
+		"const ok = arm.state === 'mixed'\n")
+	git("add", "-A")
+	git("commit", "-qm", "trap-file")
+	head = strings.TrimSpace(git("rev-parse", "HEAD"))
+	tableI := fmt.Sprintf(`base sha (branch point): %s
+integrator tip generated against: %s
+sweep regex (exported from plan v10 line 108, never hand-typed):
+  `+"`bybit`"+`
+ownership: file-level per Finding 3
+provider/alpaca and its live branches are out of scope (declined) — accepted prose, no pipes
+| path | line | token | disposition | owner | reason |
+|---|---|---|---|---|---|
+| agent/tools.go | 2 | bybit | - | CR-B | ceded to CR-B (union coverage) |
+`, head[:9], head[:9])
+	tableIPath := filepath.Join(tblDir, "tblI.md")
+	write(t, tableIPath, tableI)
+	out, rc = runGate(tableIPath)
+	if rc == 0 {
+		t.Fatalf("ceded-only line must FAIL (no table carries a real disposition), got exit 0:\n%s", out)
+	}
+	if !strings.Contains(out, "ONLY ceded markers") {
+		t.Fatalf("expected the ONLY-ceded-markers FAIL:\n%s", out)
+	}
+
+	// the owner's table carries the real row for the same line -> union PASS,
+	// no paths header -> NOTE not FAIL, literal taken from the next line
+	tableJ := fmt.Sprintf(`base sha (branch point): %s
+integrator tip generated against: %s
+sweep regex (exported from plan v10 line 108, never hand-typed):
+  `+"`bybit`"+`
+ownership: file-level per Finding 3
+| path | line | token | disposition | owner | reason |
+|---|---|---|---|---|---|
+| branding/no_crypto.go | %d | bybit | KEEP | CR-B | guard literal |
+| src/kept.go | %d | bybit | KEEP | CR-A | keep |
+| src/gen/report.tsv | - | count=1 | KEEP | CR-C | dated research export |
+| agent/tools.go | 2 | bybit | KEEP | CR-B | real row from the owning part |
+| agent/tools.go | 3 | bybit | KEEP | CR-A | other line |
+| web/src/components/plan/ExecutorVerdict.tsx | 1 | `+"`'mixed' (single-quoted)`"+` | KEEP | CR-C | named trap (not regex-visible) |
+`, head[:9], head[:9], guardLine, keptLine)
+	tableJPath := filepath.Join(tblDir, "tblJ.md")
+	write(t, tableJPath, tableJ)
+	out, rc = runGate(tableIPath, tableJPath)
+	if rc != 0 {
+		t.Fatalf("CR-A dialect union with a satisfied cession must exit 0, got %d:\n%s", rc, out)
+	}
+	if !strings.Contains(out, "no paths header") {
+		t.Fatalf("expected the no-paths-header NOTE:\n%s", out)
+	}
+	if strings.Contains(out, "ONLY ceded markers") {
+		t.Fatalf("satisfied cession must not report ONLY-ceded-markers:\n%s", out)
 	}
 }
 
