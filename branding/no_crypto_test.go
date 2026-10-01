@@ -206,6 +206,12 @@ func TestNoCryptoImportsSDKsHosts(t *testing.T) {
 	}
 
 	for _, f := range files {
+		// the guard file IS the literal's home — the census sweeps the tree
+		// for crypto venues, and without this skip its own HostCensusLiteral
+		// would be a permanent violation and 0 would be unreachable
+		if f == "branding/no_crypto.go" {
+			continue
+		}
 		b, rerr := os.ReadFile(filepath.Join(root, f))
 		if rerr != nil {
 			continue
