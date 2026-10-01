@@ -1,12 +1,11 @@
 # disposition-CR-C.md
 
 - branch point: b6648fcab9cf495e316ef5492ec6852cc3fcc2cf (integration head branched from)
-- integrator tip at generation: b092108455e439e1dbd8fe560cabd6f69edbbc43 (last web-touching commit; table excluded from the scoped diff)
+- integrator tip at generation: 6ac6c467856677fdb4789923d7175d806fdab5be (b14 rename-revert; table excluded from the scoped diff)
 - regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续|btc|ethusdt|\beth\b|altcoin|ethereum
-- generated: crypto-removal-cr-c2@19034fde521a0d046aced897279385c528f87368 2026-10-01T15:38:37.552458+00:00 by DS-105
+- generated: crypto-removal-cr-c2@6ac6c467856677fdb4789923d7175d806fdab5be 2026-10-01T16:00:53.004290+00:00 by DS-105
 - paths: web docs :(exclude)docs/crypto-removal
-- DS-106 text slice 7f83065c9 (CR-C TEXT, folded 2026-10-01 by DS-105): whole-section deletions — STRATEGY_MODULE §1.2-1.4, TROUBLESHOOTING Binance entries, roadmap §1.3, locale-README x402/CEX/Perp-DEX sections; API_REFERENCE.md replaced wholesale (crypto-only -> futures stub); historical NQ plan doc 127 token rewrites; deleted non-regex-visible i18n keys — whitelistIPDesc, faqOnlyShortPositions, faqLeverageSettings, faqBalanceShowsZero, promptDescNof1Content, fundStep1, fundStep2, allModelsUnified; false positive clean-machine.md:451 sqlite_master — no action; KEEP honored: PRIVACY POLICY + TERMS OF SERVICE legal locales
-- line rows: 1463 · blanket-KEEP paths: 209
+- line rows: 1522 · blanket-KEEP paths: 209
 
 | path | line | token | disposition | OWNER | reason |
 |---|---|---|---|---|---|
@@ -961,25 +960,25 @@
 | `web/src/components/strategy/GridConfigEditor.tsx` | 89 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/strategy/GridConfigEditor.tsx` | 90 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/strategy/IndicatorEditor.tsx` | 601 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 86 | `USDT` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 474 | `btc` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 477 | `btc` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 482 | `btc` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 485 | `btc` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 498 | `btc` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 511 | `altcoin` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 514 | `altcoin` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 519 | `altcoin` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 522 | `altcoin` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 535 | `altcoin` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 568 | `btc` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 571 | `btc` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 578 | `btc` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 594 | `altcoin` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 597 | `altcoin` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 604 | `altcoin` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 742 | `BTC` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
-| `web/src/components/strategy/RiskControlEditor.tsx` | 769 | `USDT` | KEEP | CR-C | web crypto surface — CR-C row — live futures risk caps (crypto-named) — editor fields KEEP byte-identical; CTO P0 ruling 10-01 —  |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 86 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 474 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 477 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 482 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 485 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 498 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 511 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 514 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 519 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 522 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 535 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 568 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 571 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 578 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 594 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 597 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 604 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 742 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/strategy/RiskControlEditor.tsx` | 769 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/strategy/StrategyTradingBadge.tsx` | 37 | `lighter` | KEEP | CR-C | existing vl-neo token — false positive of \blighter\b |
 | `web/src/components/strategy/TokenEstimateBar.tsx` | 129 | `lighter` | KEEP | CR-C | existing vl-neo token — false positive of \blighter\b |
 | `web/src/components/trader/DecisionCard.tsx` | 119 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
@@ -999,37 +998,39 @@
 | `web/src/components/trader/TraderConfigModal.tsx` | 60 | `lighter` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/TraderConfigModal.tsx` | 429 | `hyper_all` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/TraderConfigModal.tsx` | 432 | `hyper_main` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/trader/TradersList.tsx` | 54 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme token name, no crypto behaviour; removal-only ruling —  |
 | `web/src/components/trader/model-constants.ts` | 2 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/ui/alert-dialog.tsx` | 107 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/ui/alert-dialog.tsx` | 107 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme token name, no crypto behaviour; removal-only ruling —  |
+| `web/src/components/ui/input.tsx` | 15 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme token name, no crypto behaviour; removal-only ruling —  |
 | `web/src/contexts/AuthContext.tsx` | 9 | `WALLET` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/contexts/AuthContext.tsx` | 248 | `WALLET` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/data/faqData.ts` | 137 | `binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/data/faqData.ts` | 138 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/data/faqData.ts` | 139 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/data/faqData.ts` | 142 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/data/faqData.ts` | 143 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/data/faqData.ts` | 144 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/data/faqData.ts` | 240 | `binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/data/faqData.ts` | 241 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/data/faqData.ts` | 242 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
+| `web/src/data/faqData.ts` | 137 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/data/faqData.ts` | 138 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/data/faqData.ts` | 139 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/data/faqData.ts` | 142 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/data/faqData.ts` | 143 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/data/faqData.ts` | 144 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/data/faqData.ts` | 240 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/data/faqData.ts` | 241 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/data/faqData.ts` | 242 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/guide/GuidePage.test.tsx` | 26 | `hyper_all` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/guide/GuidePage.test.tsx` | 27 | `quant` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/guide/content/settings.ts` | 557 | `BTC` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) — done DS-106 7f83065c9  |
-| `web/src/guide/content/settings.ts` | 562 | `btc` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) — done DS-106 7f83065c9  |
-| `web/src/guide/content/settings.ts` | 563 | `BTC` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) — done DS-106 7f83065c9  |
-| `web/src/guide/content/settings.ts` | 726 | `BTC` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) — done DS-106 7f83065c9  |
-| `web/src/guide/content/settings.ts` | 730 | `BTC` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) — done DS-106 7f83065c9  |
-| `web/src/guide/content/settings.ts` | 926 | `hyper_all` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) — done DS-106 7f83065c9  |
-| `web/src/guide/content/settings.ts` | 930 | `hyper_all` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) — done DS-106 7f83065c9  |
-| `web/src/guide/content/settings.ts` | 931 | `hyper_all` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) — done DS-106 7f83065c9  |
-| `web/src/guide/content/settings.ts` | 954 | `hyper_all` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) — done DS-106 7f83065c9  |
-| `web/src/guide/content/settings.ts` | 1134 | `BTC` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) — done DS-106 7f83065c9  |
-| `web/src/guide/content/settings.ts` | 1158 | `USDT` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) — done DS-106 7f83065c9  |
-| `web/src/guide/content/settings.ts` | 1161 | `USDT` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) — done DS-106 7f83065c9  |
-| `web/src/guide/content/settings.ts` | 1727 | `claw402` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) — done DS-106 7f83065c9  |
-| `web/src/guide/content/status.ts` | 204 | `Binance` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) — done DS-106 7f83065c9  |
-| `web/src/guide/content/status.ts` | 208 | `BTC` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) — done DS-106 7f83065c9  |
-| `web/src/guide/content/status.ts` | 219 | `BINANCE` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) — done DS-106 7f83065c9  |
+| `web/src/guide/content/settings.ts` | 557 | `BTC` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) |
+| `web/src/guide/content/settings.ts` | 562 | `btc` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) |
+| `web/src/guide/content/settings.ts` | 563 | `BTC` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) |
+| `web/src/guide/content/settings.ts` | 726 | `BTC` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) |
+| `web/src/guide/content/settings.ts` | 730 | `BTC` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) |
+| `web/src/guide/content/settings.ts` | 926 | `hyper_all` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) |
+| `web/src/guide/content/settings.ts` | 930 | `hyper_all` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) |
+| `web/src/guide/content/settings.ts` | 931 | `hyper_all` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) |
+| `web/src/guide/content/settings.ts` | 954 | `hyper_all` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) |
+| `web/src/guide/content/settings.ts` | 1134 | `BTC` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) |
+| `web/src/guide/content/settings.ts` | 1158 | `USDT` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) |
+| `web/src/guide/content/settings.ts` | 1161 | `USDT` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) |
+| `web/src/guide/content/settings.ts` | 1727 | `claw402` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) |
+| `web/src/guide/content/status.ts` | 204 | `Binance` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) |
+| `web/src/guide/content/status.ts` | 208 | `BTC` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) |
+| `web/src/guide/content/status.ts` | 219 | `BINANCE` | CUT | CR-C | guide content — C9 rewrite (crypto wording out) |
 | `web/src/i18n/strategy-translations.labels.test.ts` | 30 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/i18n/strategy-translations.labels.test.ts` | 31 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/i18n/strategy-translations.labels.test.ts` | 32 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
@@ -1039,344 +1040,401 @@
 | `web/src/i18n/strategy-translations.labels.test.ts` | 124 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/i18n/strategy-translations.labels.test.ts` | 125 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/i18n/strategy-translations.labels.test.ts` | 126 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/i18n/strategy-translations.ts` | 17 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 18 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 19 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 22 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 23 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 24 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 38 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 39 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 40 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 43 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 44 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 45 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 49 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 70 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 71 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 72 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 80 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 81 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 82 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 85 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 86 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 87 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 128 | `USDT` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 129 | `USDT` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 130 | `USDT` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 364 | `btc` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 365 | `BTC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 366 | `BTC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 367 | `BTC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 369 | `btc` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 374 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 376 | `Altcoin` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 377 | `Altcoin` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 379 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 394 | `btc` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 395 | `BTC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 396 | `BTC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 397 | `BTC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 399 | `btc` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 404 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 406 | `Altcoin` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 407 | `Altcoin` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 409 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 450 | `USDT` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 451 | `USDT` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 452 | `USDT` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 454 | `USDT` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 746 | `Quant` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 749 | `Netflow` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 750 | `Netflow` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 843 | `netflow` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 844 | `netflow` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 849 | `netflow` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 856 | `Price Ranking` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/strategy-translations.ts` | 918 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 222 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 227 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 232 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 233 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 234 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 235 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 236 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 237 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 238 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 239 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 240 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 241 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 242 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 243 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 244 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 245 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 246 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 247 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 248 | `Aster` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 249 | `Aster` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 251 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 253 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 255 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 257 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 258 | `Usdt` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 259 | `Aster` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 260 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 261 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 262 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 263 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 264 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 265 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 267 | `LIGHTER` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 268 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 271 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 275 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 276 | `Ethereum` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 287 | `LIGHTER` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 290 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 291 | `Aster` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 340 | `btc` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 341 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 343 | `BTC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 346 | `BTC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 353 | `USDT` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 354 | `btc` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 355 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 356 | `USDT` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 371 | `BTC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 374 | `BTC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 380 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 459 | `binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 462 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 569 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 570 | `Aster` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 639 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 680 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 715 | `USDT` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 719 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 762 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 764 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 765 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 766 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 768 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 769 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 770 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 772 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 776 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 797 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 801 | `BTC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 839 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 840 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 843 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 847 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 881 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1301 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1303 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1304 | `USDC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1308 | `USDC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1310 | `USDC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1313 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1314 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1315 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1317 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1318 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1319 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1321 | `ETH` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1322 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1324 | `USDC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1326 | `USDC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1332 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1335 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1336 | `usdc` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1337 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1338 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1339 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1359 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1361 | `Lighter` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1362 | `Lighter` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1664 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1670 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1674 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1675 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1676 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1677 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1678 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1680 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1681 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1682 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1683 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1684 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1685 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1687 | `Aster` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1688 | `Aster` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1692 | `Aster` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1694 | `asterdex` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1696 | `asterdex` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1697 | `Usdt` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1698 | `Aster` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1706 | `LIGHTER` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1707 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1710 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1713 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1721 | `LIGHTER` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1724 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1725 | `Aster` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1768 | `btc` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1769 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1770 | `BTC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1773 | `BTC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1780 | `USDT` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1781 | `btc` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1782 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1783 | `USDT` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1798 | `BTC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1801 | `BTC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1806 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1869 | `binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1872 | `币安` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1974 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 1975 | `Aster` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2035 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2073 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2108 | `USDT` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2112 | `币安` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2154 | `币安` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2156 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2157 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2158 | `币安` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2160 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2161 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2162 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2164 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2168 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2189 | `币安` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2193 | `BTC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2230 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2231 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2234 | `币安` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2238 | `币安` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2272 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2675 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2677 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2678 | `USDC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2682 | `USDC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2684 | `USDC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2686 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2687 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2688 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2690 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2691 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2693 | `ETH` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2694 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2695 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2697 | `USDC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2703 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2706 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2707 | `usdc` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2708 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2709 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2710 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2729 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2731 | `Lighter` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 2732 | `Lighter` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3036 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3041 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3046 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3047 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3048 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3049 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3050 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3051 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3052 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3053 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3054 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3055 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3056 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3057 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3058 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3059 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3060 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3061 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3063 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3065 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3067 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3069 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3070 | `Usdt` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3071 | `Aster` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3072 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3073 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3074 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3075 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3076 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3077 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3078 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3081 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3085 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3086 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3097 | `LIGHTER` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3098 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3099 | `Aster` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3144 | `btc` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3145 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3147 | `BTC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3150 | `BTC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3157 | `USDT` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3158 | `btc` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3159 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3161 | `USDT` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3174 | `BTC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3177 | `BTC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3183 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3258 | `binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3261 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3365 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3366 | `Aster` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3426 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3460 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3491 | `USDT` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3494 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3527 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3528 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3529 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3530 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3531 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3532 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3552 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3555 | `BTC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3583 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3584 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3590 | `USDT` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3991 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3993 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3994 | `USDC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 3998 | `USDC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 4001 | `USDC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 4004 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 4005 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 4006 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 4007 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 4009 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 4010 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 4012 | `ETH` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 4013 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 4015 | `USDC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 4017 | `USDC` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 4023 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 4026 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 4027 | `usdc` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 4028 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 4029 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 4030 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 4049 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 4051 | `Lighter` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/i18n/translations.ts` | 4052 | `Lighter` | CUT | CR-C | web crypto surface — CR-C row — done DS-106 7f83065c9  |
-| `web/src/index.css` | 175 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/index.css` | 297 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/index.css` | 305 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/index.css` | 386 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/index.css` | 525 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/index.css` | 663 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/index.css` | 722 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/index.css` | 762 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 17 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 18 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 19 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 22 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 23 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 24 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 38 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 39 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 40 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 43 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 44 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 45 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 49 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 70 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 71 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 72 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 80 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 81 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 82 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 85 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 86 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 87 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 128 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 129 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 130 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 364 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 365 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 366 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 367 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 369 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 374 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 376 | `Altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 377 | `Altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 379 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 394 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 395 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 396 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 397 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 399 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 404 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 406 | `Altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 407 | `Altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 409 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 450 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 451 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 452 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 454 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 746 | `Quant` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 749 | `Netflow` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 750 | `Netflow` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 843 | `netflow` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 844 | `netflow` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 849 | `netflow` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 856 | `Price Ranking` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/strategy-translations.ts` | 918 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 222 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 227 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 232 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 233 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 234 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 235 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 236 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 237 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 238 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 239 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 240 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 241 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 242 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 243 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 244 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 245 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 246 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 247 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 248 | `Aster` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 249 | `Aster` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 251 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 253 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 255 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 257 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 258 | `Usdt` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 259 | `Aster` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 260 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 261 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 262 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 263 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 264 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 265 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 267 | `LIGHTER` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 268 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 271 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 275 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 276 | `Ethereum` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 287 | `LIGHTER` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 290 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 291 | `Aster` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 340 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 341 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 343 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 346 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 353 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 354 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 355 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 356 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 371 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 374 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 380 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 459 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 462 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 569 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 570 | `Aster` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 639 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 680 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 715 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 719 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 762 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 764 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 765 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 766 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 768 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 769 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 770 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 772 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 776 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 797 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 801 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 839 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 840 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 843 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 847 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 881 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1301 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1303 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1304 | `USDC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1308 | `USDC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1310 | `USDC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1313 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1314 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1315 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1317 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1318 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1319 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1321 | `ETH` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1322 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1324 | `USDC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1326 | `USDC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1332 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1335 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1336 | `usdc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1337 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1338 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1339 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1359 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1361 | `Lighter` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1362 | `Lighter` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1664 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1670 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1674 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1675 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1676 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1677 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1678 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1680 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1681 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1682 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1683 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1684 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1685 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1687 | `Aster` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1688 | `Aster` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1692 | `Aster` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1694 | `asterdex` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1696 | `asterdex` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1697 | `Usdt` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1698 | `Aster` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1706 | `LIGHTER` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1707 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1710 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1713 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1721 | `LIGHTER` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1724 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1725 | `Aster` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1768 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1769 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1770 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1773 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1780 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1781 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1782 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1783 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1798 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1801 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1806 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1869 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1872 | `币安` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1974 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 1975 | `Aster` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2035 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2073 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2108 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2112 | `币安` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2154 | `币安` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2156 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2157 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2158 | `币安` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2160 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2161 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2162 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2164 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2168 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2189 | `币安` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2193 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2230 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2231 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2234 | `币安` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2238 | `币安` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2272 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2675 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2677 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2678 | `USDC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2682 | `USDC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2684 | `USDC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2686 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2687 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2688 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2690 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2691 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2693 | `ETH` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2694 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2695 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2697 | `USDC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2703 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2706 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2707 | `usdc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2708 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2709 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2710 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2729 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2731 | `Lighter` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 2732 | `Lighter` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3036 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3041 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3046 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3047 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3048 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3049 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3050 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3051 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3052 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3053 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3054 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3055 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3056 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3057 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3058 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3059 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3060 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3061 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3063 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3065 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3067 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3069 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3070 | `Usdt` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3071 | `Aster` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3072 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3073 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3074 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3075 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3076 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3077 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3078 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3081 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3085 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3086 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3097 | `LIGHTER` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3098 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3099 | `Aster` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3144 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3145 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3147 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3150 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3157 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3158 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3159 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3161 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3174 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3177 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3183 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3258 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3261 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3365 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3366 | `Aster` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3426 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3460 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3491 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3494 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3527 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3528 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3529 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3530 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3531 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3532 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3552 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3555 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3583 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3584 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3590 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3991 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3993 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3994 | `USDC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 3998 | `USDC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 4001 | `USDC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 4004 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 4005 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 4006 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 4007 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 4009 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 4010 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 4012 | `ETH` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 4013 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 4015 | `USDC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 4017 | `USDC` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 4023 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 4026 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 4027 | `usdc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 4028 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 4029 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 4030 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 4049 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 4051 | `Lighter` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/i18n/translations.ts` | 4052 | `Lighter` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 49 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 50 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 51 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 52 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 53 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 54 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 55 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 175 | `Binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 297 | `Binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 305 | `Binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 330 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 331 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 336 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 341 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 342 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 347 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 353 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 354 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 361 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 386 | `Binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 483 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 518 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 525 | `Binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 526 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 616 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 649 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 656 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 663 | `Binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 664 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 667 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 668 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 672 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 681 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 682 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 687 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 692 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 697 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 698 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 699 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 703 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 704 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 705 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 722 | `Binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 723 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 724 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 735 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 736 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 741 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 742 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 748 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 749 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 759 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 762 | `Binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 810 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 814 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 815 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 816 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 820 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 821 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 822 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 827 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 831 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 888 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 916 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 944 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
 | `web/src/lib/instrument.ts` | 5 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/lib/registrationToggle.test.ts` | 157 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/lib/registrationToggle.test.ts` | 158 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
