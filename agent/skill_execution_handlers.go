@@ -2098,9 +2098,9 @@ func (a *Agent) executeStrategyConfigUpdate(storeUserID string, userID int64, la
 	setSkillDAGStep(&session, "collect_config_patch")
 	a.saveSkillSession(userID, session)
 	if lang == "zh" {
-		return "你可以直接说想怎么改策略配置，比如“选币来源改成固定合约 MNQ，最低置信度 80”。我会按当前策略类型的产品模板生成 config_patch 后再更新。"
+		return "你可以直接说想怎么改策略配置，比如“选币来源改成固定币种 MNQ，最低置信度 80”。我会按当前策略类型的产品模板生成 config_patch 后再更新。"
 	}
-	return "Tell me how you want to change the strategy config, for example: set the source to the static contract MNQ and minimum confidence to 80. I will turn it into a config_patch for the current strategy type before updating."
+	return "Tell me how you want to change the strategy config, for example: set coin source to static coins MNQ and minimum confidence to 80. I will turn it into a config_patch for the current strategy type before updating."
 }
 
 func (a *Agent) loadStrategyConfigForUpdate(storeUserID, strategyID string) (*store.Strategy, store.StrategyConfig, error) {

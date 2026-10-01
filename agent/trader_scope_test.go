@@ -1593,7 +1593,7 @@ func TestStrategyCreateOptionsQuestionExplainsCurrentMissingField(t *testing.T) 
 		SkillName:  "strategy_management",
 		ActionName: "create",
 		CollectedFields: map[string]any{
-			"name":          "AI500高频交易",
+			"name":          "MNQ高频交易",
 			"strategy_type": "ai_trading",
 		},
 	}
@@ -1601,7 +1601,7 @@ func TestStrategyCreateOptionsQuestionExplainsCurrentMissingField(t *testing.T) 
 	if !blocked {
 		t.Fatalf("expected options question to be handled")
 	}
-	for _, want := range []string{"static", "hyper_all", "hyper_main"} {
+	for _, want := range []string{"static"} {
 		if !strings.Contains(reply, want) {
 			t.Fatalf("expected source options to include %q, got: %s", want, reply)
 		}
@@ -1613,7 +1613,7 @@ func TestStrategyCreateOptionsQuestionExplainsCurrentMissingField(t *testing.T) 
 
 func TestStrategyCreateMissingFieldsIncludeInlineOptions(t *testing.T) {
 	reply := formatStrategyCreateConfigNeeded("zh", "source_type,primary_timeframe,btceth_max_leverage,min_confidence,trading_frequency")
-	for _, want := range []string{"static", "hyper_all", "hyper_main", "1m", "1h", "1～20", "50～100", "每天最多"} {
+	for _, want := range []string{"static", "1m", "1h", "1～20", "50～100", "每天最多"} {
 		if !strings.Contains(reply, want) {
 			t.Fatalf("expected missing-field prompt to include option/range %q, got: %s", want, reply)
 		}
