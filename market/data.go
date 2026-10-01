@@ -579,7 +579,7 @@ func IsXyzDexAsset(symbol string) bool {
 	base := strings.ToUpper(symbol)
 	// Remove any prefix/suffix
 	base = strings.TrimPrefix(base, "XYZ:")
-	for _, suffix := range []string{"USDT", "USD", "-USDC"} {
+	for _, suffix := range []string{"USD"} {
 		if strings.HasSuffix(base, suffix) {
 			base = strings.TrimSuffix(base, suffix)
 			break
@@ -612,7 +612,7 @@ func Normalize(symbol string) string {
 		if strings.HasPrefix(strings.ToLower(base), "xyz:") {
 			base = base[4:] // Remove first 4 characters ("xyz:")
 		}
-		for _, suffix := range []string{"USDT", "USD", "-USDC"} {
+		for _, suffix := range []string{"USD"} {
 			if strings.HasSuffix(base, suffix) {
 				base = strings.TrimSuffix(base, suffix)
 				break
@@ -626,11 +626,7 @@ func Normalize(symbol string) string {
 	symbol = strings.ReplaceAll(symbol, "-SWAP", "")
 	symbol = strings.ReplaceAll(symbol, "-", "")
 
-	// For regular crypto assets
-	if strings.HasSuffix(symbol, "USDT") {
-		return symbol
-	}
-	return symbol + "USDT"
+	return symbol
 }
 
 // parseFloat parses float value

@@ -478,28 +478,11 @@ func (e *StrategyEngine) formatPositionInfo(index int, pos PositionInfo, ctx *Co
 func (e *StrategyEngine) formatCoinSourceTag(sources []string) string {
 	if len(sources) > 1 {
 		// Multiple signal source combination
-		hasHyperAll := false
-		hasHyperMain := false
-		for _, s := range sources {
-			switch s {
-			case "hyper_all":
-				hasHyperAll = true
-			case "hyper_main":
-				hasHyperMain = true
-			}
-		}
-		if hasHyperAll || hasHyperMain {
-			return " (Hyperliquid)"
-		}
 		return " (Multiple sources)"
 	} else if len(sources) == 1 {
 		switch sources[0] {
 		case "static":
 			return " (Manual selection)"
-		case "hyper_all":
-			return " (Hyperliquid All)"
-		case "hyper_main":
-			return " (Hyperliquid Top20)"
 		}
 	}
 	return ""

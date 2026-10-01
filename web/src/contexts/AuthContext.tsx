@@ -4,10 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { getSystemConfig, invalidateSystemConfig } from '../lib/config'
 import { reset401Flag, httpClient } from '../lib/httpClient'
 import { ROUTES } from '../router/paths'
-import {
-  VL_BEGINNER_ONBOARDING_COMPLETED_KEY,
-  VL_BEGINNER_WALLET_ADDRESS_KEY,
-} from '../lib/storageMigration'
+import { VL_BEGINNER_ONBOARDING_COMPLETED_KEY } from '../lib/storageMigration'
 import { useLanguage } from './LanguageContext'
 
 // Returns true if a JWT is expired (or unparseable). Used so the app never trusts
@@ -245,7 +242,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (result.success && result.data) {
         // Clear stale onboarding state so new users always see the welcome flow
         localStorage.removeItem(VL_BEGINNER_ONBOARDING_COMPLETED_KEY)
-        localStorage.removeItem(VL_BEGINNER_WALLET_ADDRESS_KEY)
 
         const userInfo = { id: result.data.user_id, email: result.data.email }
         handlePostAuthSuccess(result.data.token, userInfo)

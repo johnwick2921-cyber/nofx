@@ -49,7 +49,7 @@ type AccountInfo struct {
 // CandidateCoin candidate coin (from coin pool)
 type CandidateCoin struct {
 	Symbol  string   `json:"symbol"`
-	Sources []string `json:"sources"` // Sources: "static", "hyper_all" and/or "hyper_main"
+	Sources []string `json:"sources"` // Sources: "static" (legacy pool types collapse to static on load)
 }
 
 // TradingStats trading statistics (for AI input)
@@ -325,10 +325,7 @@ func (e *StrategyEngine) SetPromptSnapshotMs(ms int64) { e.promptSnapshotMs = ms
 // route through (CTO F2).
 func (e *StrategyEngine) SetVenue(venue string) { e.venue = venue }
 
-func NewStrategyEngine(config *store.StrategyConfig, claw402WalletKey ...string) *StrategyEngine {
-	// claw402WalletKey retained for caller compatibility; the legacy data-provider
-	// routing went with that provider (D2-DEAD item 12).
-	_ = claw402WalletKey
+func NewStrategyEngine(config *store.StrategyConfig) *StrategyEngine {
 	return &StrategyEngine{
 		config: config,
 	}
@@ -423,7 +420,7 @@ func (e *StrategyEngine) filterExcludedCoins(candidates []CandidateCoin) []Candi
 }
 
 // ============================================================================
-// External & Quant Data
+// External Data
 // ============================================================================
 
 // FetchMarketData fetches market data based on strategy configuration

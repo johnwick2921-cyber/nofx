@@ -45,12 +45,17 @@ func importTargets(source []byte) (map[string]bool, error) {
 // A deleted .go file that is NOT on this list and NOT under a C4 prefix still
 // fails the pin — this is an explicit removal allowlist, never a loosened rule.
 var cryptoRemovalDeletedGoFileAllowlist = []string{
-	"agent/agent_model_selection_test.go", // CTO fix-list item 4 (07:43 mail): helper went with the wallet family
-	"agent/market_snapshot_test.go",       // deleted with the crypto market-snapshot surface (integration b7334aa51)
-	"agent/sentinel.go",                   // CTO written ruling 10:41: fapi.binance.com watcher, zero futures function
-	"api/handler_wallet.go",               // wallet-family handler, GO item 1 (C4 family)
-	"api/onboarding_owner_test.go",        // CTO fix-list item 3 (07:43 mail): same
-	"market/api_client.go",                // plan C4 whole-file DELETE (CTO 11:14: moves to DS-101)
+	"agent/agent_model_selection_test.go",  // CTO fix-list item 4 (07:43 mail): helper went with the wallet family
+	"agent/market_snapshot_test.go",        // deleted with the crypto market-snapshot surface (integration b7334aa51)
+	"agent/model_create_flow_test.go",      // claw402 model-create flow tests (provider gone with DS-108's catalog cut — CR-A 0425864b0)
+	"agent/model_provider_catalog_test.go", // claw402 provider-catalog tests (same catalog cut)
+	"agent/model_wallet_fastpath.go",       // wallet-family fastpath (wallet family C4)
+	"agent/sentinel.go",                    // CTO written ruling 10:41: fapi.binance.com watcher, zero futures function
+	"api/handler_wallet.go",                // wallet-family handler, GO item 1 (C4 family)
+	"api/onboarding_owner_test.go",         // CTO fix-list item 3 (07:43 mail): same
+	"market/api_client.go",                 // plan C4 whole-file DELETE (CTO 11:14: moves to DS-101)
+	"market/historical.go",                 // crypto historical klines surface (CR-A wave)
+	"trader/testutil/test_suite.go",        // crypto fixtures, zero importers (DS-101 step2, written CTO ruling)
 }
 
 // cryptoDeletedGoFile reports whether a deleted .go file is covered by the

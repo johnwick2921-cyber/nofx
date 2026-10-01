@@ -82,7 +82,7 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
   // Loading state - show skeleton
   if (isLoading) {
     return (
-      <div className={embedded ? 'p-6' : 'binance-card p-6'}>
+      <div className={embedded ? 'p-6' : 'brand-card p-6'}>
         {!embedded && (
           <h3
             className="text-lg font-semibold mb-6"
@@ -100,7 +100,7 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
 
   if (error) {
     return (
-      <div className={embedded ? 'p-6' : 'binance-card p-6'}>
+      <div className={embedded ? 'p-6' : 'brand-card p-6'}>
         <div
           className="flex items-center gap-3 p-4 rounded"
           style={{
@@ -135,7 +135,7 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
 
   if (!validHistory || validHistory.length === 0) {
     return (
-      <div className={embedded ? 'p-6' : 'binance-card p-6'}>
+      <div className={embedded ? 'p-6' : 'brand-card p-6'}>
         {!embedded && (
           <h3
             className="text-lg font-semibold mb-6"
@@ -223,7 +223,7 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
     }
   }
 
-  // 自定义Tooltip - Binance Style
+  // 自定义Tooltip - Brand Style
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload
@@ -256,7 +256,7 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
   return (
     <div
       className={
-        embedded ? 'p-3 sm:p-5' : 'binance-card p-3 sm:p-5 animate-fade-in'
+        embedded ? 'p-3 sm:p-5' : 'brand-card p-3 sm:p-5 animate-fade-in'
       }
     >
       {/* Header */}

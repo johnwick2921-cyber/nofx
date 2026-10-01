@@ -1,1055 +1,811 @@
-# Crypto-removal disposition table — CR-B (DS-107), plan v10 FINAL
-# The gate (scripts/crypto-union-gate.sh, DS-102) owns this format: headers below + plain pipe rows.
+# CR-B disposition table — engine + tests + config surface (crypto removal, part CR-B, regenerated at the integrated head)
+
 branch-point: dc630ad8fc06c49aebd5e59a8814744c2cbab5e7
-integrator-tip: 54e311cbd9ed2a20d66c939d39025467ac3c36bf
+integrator-tip: 4e4fef3af1213820a1d0db7677fb0665a733b600 (regenerated at the integrated head; provenance: branch + sha only)
 paths: manager kernel market config store agent branding internal ninjascript screenshots cmd scripts deploy docker nginx .github patches hook telegram provider/ninjatrader provider/databento trader/ninjatrader SECURITY.md Makefile .env.example docs/superpowers/AUDIT-CHECKLIST.md docs/superpowers/SYSTEM-MAP.md trader/auto_trader_decision.go api/handler_debug.go api/strategy_effective.go api/handler_competition.go api/handler_plan_order_truth.go api/handler_order.go api/handler_trader_config.go trader/protection_reconciler.go
-regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续
-# Generated: 2026-10-01T15:19:19.593230+00:00
-# Swept: 639 tracked non-test files under CR-B paths (git ls-files -z, grep -I semantics); hits in 87 files.
-# EXACTLY ONE OWNER PER HIT LINE (Finding 3 file-level ruling): CR-A-owned lines are ceded rows (owner CR-A, disposition mirrored from their canonical table); everything else here is CR-B. One file, one owner.
-# Dispositions are reconciled to the tree (CTO ruling 2026-10-01): KEEP =
-# futures-core text kept as-is; CUT = crypto content in a KEPT file, the cut is
-# owed; DELETE rows appear only with file-level evidence. Nothing defaults.
+regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续|btc|ethusdt|\beth\b|altcoin|ethereum
 
 | path | line | token | disposition | owner | reason |
 |---|---|---|---|---|---|
-| .github/ISSUE_TEMPLATE/bug_report.md | 105 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| .github/ISSUE_TEMPLATE/bug_report.md | 155 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| .github/SECURITY.md | 69 | Hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| .github/SECURITY.md | 72 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| .github/SECURITY.md | 73 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| .github/SECURITY.md | 74 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| .github/labeler.yml | 32 | binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| .github/labeler.yml | 33 | hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| .github/labeler.yml | 34 | aster | CUT | CR-B | crypto wording — rewrite futures-only |
-| .github/labeler.yml | 35 | okx | CUT | CR-B | crypto wording — rewrite futures-only |
-| .github/labeler.yml | 36 | bybit | CUT | CR-B | crypto wording — rewrite futures-only |
-| CHANGELOG.zh-CN.md | 45 | Binance | KEEP | CR-B | historical changelog entry — records what shipped, not what ships |
-| CHANGELOG.zh-CN.md | 90 | USDT | KEEP | CR-B | historical changelog entry — records what shipped, not what ships |
-| CHANGELOG.zh-CN.md | 91 | USDT | KEEP | CR-B | historical changelog entry — records what shipped, not what ships |
-| CHANGELOG.zh-CN.md | 92 | USDT | KEEP | CR-B | historical changelog entry — records what shipped, not what ships |
-| CHANGELOG.zh-CN.md | 103 | USDT | KEEP | CR-B | historical changelog entry — records what shipped, not what ships |
-| CHANGELOG.zh-CN.md | 110 | USDT | KEEP | CR-B | historical changelog entry — records what shipped, not what ships |
-| CHANGELOG.zh-CN.md | 119 | Aster | KEEP | CR-B | historical changelog entry — records what shipped, not what ships |
-| CHANGELOG.zh-CN.md | 121 | Aster | KEEP | CR-B | historical changelog entry — records what shipped, not what ships |
-| CHANGELOG.zh-CN.md | 151 | 币安 | KEEP | CR-B | historical changelog entry — records what shipped, not what ships |
-| CHANGELOG.zh-CN.md | 170 | 币安 | KEEP | CR-B | historical changelog entry — records what shipped, not what ships |
-| README.ja.md | 47 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 49 | Hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 60 | Hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 68 | hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 69 | hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 72 | hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 74 | Aster | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 76 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 79 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 86 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 92 | Aster | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 95 | aster | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 105 | binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 106 | bybit | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 107 | okx | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 108 | bitget | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 109 | kucoin | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 115 | hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 116 | aster | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 117 | lighter | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 160 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 170 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 180 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 186 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 219 | binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 234 | AI500 | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 251 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 259 | binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 271 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 273 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 275 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 279 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 283 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 465 | binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 466 | binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 480 | oi_top | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 488 | BINANCE | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 489 | BINANCE | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 494 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 496 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 500 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 501 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 509 | Hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 511 | Hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 513 | Hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 518 | Hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 520 | Hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 526 | hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 527 | Hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 530 | hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 531 | hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 532 | hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 533 | hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 544 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 545 | binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 546 | hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 547 | hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 553 | Aster | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 555 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 558 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 564 | Aster | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 566 | Aster | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 567 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| README.ja.md | 581 | Aster | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 584 | aster | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 605 | aster | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 615 | asterdex | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 630 | binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 631 | binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 642 | binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 643 | binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 653 | oi_top | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 659 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 661 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 672 | binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 673 | binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 674 | binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 675 | hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 676 | hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 677 | hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 688 | oi_top | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 700 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 711 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 713 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 768 | oi_top | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 775 | oi_top | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 782 | oi_top | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 821 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 930 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 934 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 964 | AI500 | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 998 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 999 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1018 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1038 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1039 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1047 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1067 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1068 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1069 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1070 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1071 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1074 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1075 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1080 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1161 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1190 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1218 | AI500 | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1220 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1221 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1235 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1237 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1239 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1240 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1242 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1253 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1254 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1263 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1297 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.ja.md | 1342 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 5 | USDC | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 14 | x402 | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 15 | claw402 | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 32 | USDC | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 34 | x402 | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 52 | x402 | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 56 | x402 | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 59 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| README.md | 62 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| README.md | 64 | x402 | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 67 | claw402 | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 75 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 88 | binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 89 | bybit | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 90 | okx | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 91 | bitget | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 92 | kucoin | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 98 | hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 99 | aster | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 100 | lighter | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 114 | x402 | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 116 | Claw402 | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 185 | x402 | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 221 | x402 | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 222 | Claw402 | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 227 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| README.md | 228 | Hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| SECURITY.md | 143 | BINANCE | CUT | CR-B | crypto wording — rewrite futures-only |
-| SECURITY.md | 144 | BINANCE | CUT | CR-B | crypto wording — rewrite futures-only |
-| SECURITY.md | 171 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| SECURITY.md | 177 | Hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| SECURITY.md | 178 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| SECURITY.md | 220 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| SECURITY.md | 378 | BINANCE | CUT | CR-B | crypto wording — rewrite futures-only |
-| SECURITY.md | 379 | BINANCE | CUT | CR-B | crypto wording — rewrite futures-only |
-| SECURITY.md | 406 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| SECURITY.md | 412 | Hyperliquid | CUT | CR-B | crypto wording — rewrite futures-only |
-| SECURITY.md | 413 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| agent/agent.go | 63 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/agent.go | 665 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/agent.go | 678 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/agent.go | 681 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/agent.go | 682 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/agent.go | 701 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/agent.go | 703 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/agent.go | 827 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/agent.go | 829 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/agent.go | 905 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/brain.go | 209 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/brain.go | 210 | binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/brain.go | 224 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/brain.go | 228 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/central_brain.go | 94 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/central_brain.go | 483 | AI500 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/central_brain.go | 856 | Binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/central_brain.go | 908 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/config_validation.go | 26 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/config_validation.go | 75 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/config_validation.go | 79 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/config_validation.go | 101 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/config_validation.go | 105 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/config_validation.go | 156 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/config_validation.go | 160 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/config_validation.go | 204 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/config_validation.go | 223 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/config_validation.go | 224 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/config_validation.go | 235 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/config_validation.go | 236 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/config_validation.go | 248 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/config_validation.go | 252 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/config_validation.go | 281 | okx | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/config_validation.go | 282 | OKX | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/config_validation.go | 283 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/config_validation.go | 284 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/config_validation.go | 285 | aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/config_validation.go | 286 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/config_validation.go | 287 | lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/config_validation.go | 288 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/config_validation.go | 333 | okx | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/config_validation.go | 334 | OKX | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/config_validation.go | 448 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/config_validation.go | 450 | lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/entity_field_catalog.go | 37 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/entity_field_catalog.go | 38 | aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/entity_field_catalog.go | 39 | aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/entity_field_catalog.go | 40 | aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/entity_field_catalog.go | 41 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/entity_field_catalog.go | 42 | lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/entity_field_catalog.go | 43 | lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/llm_flow_extractor.go | 224 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/llm_flow_extractor.go | 228 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/llm_flow_extractor.go | 249 | AI500 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/llm_flow_extractor.go | 251 | ai500 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/llm_flow_extractor.go | 426 | blockrun | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/llm_flow_extractor.go | 427 | blockrun | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/llm_flow_extractor.go | 428 | blockrun | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/llm_flow_extractor.go | 429 | blockrun | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/llm_flow_extractor.go | 430 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 16 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/model_provider_catalog.go | 32 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 33 | Claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 36 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/model_provider_catalog.go | 39 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/model_provider_catalog.go | 44 | blockrun | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 45 | BlockRun | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 48 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/model_provider_catalog.go | 51 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/model_provider_catalog.go | 54 | blockrun | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 55 | BlockRun | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 58 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/model_provider_catalog.go | 61 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/model_provider_catalog.go | 145 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 147 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 174 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 175 | USDC | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 176 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 198 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 199 | USDC | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 200 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 213 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 214 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 215 | blockrun | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 216 | blockrun | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 217 | blockrun | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 218 | blockrun | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 224 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 225 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 226 | blockrun | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 227 | blockrun | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 228 | blockrun | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_provider_catalog.go | 229 | blockrun | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_wallet_fastpath.go | 9 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/model_wallet_fastpath.go | 14 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/model_wallet_fastpath.go | 15 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/model_wallet_fastpath.go | 18 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/model_wallet_fastpath.go | 19 | usdc | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_wallet_fastpath.go | 20 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/model_wallet_fastpath.go | 26 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/model_wallet_fastpath.go | 27 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/model_wallet_fastpath.go | 33 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_wallet_fastpath.go | 35 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_wallet_fastpath.go | 40 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_wallet_fastpath.go | 47 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_wallet_fastpath.go | 49 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_wallet_fastpath.go | 53 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_wallet_fastpath.go | 56 | USDC | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_wallet_fastpath.go | 57 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/model_wallet_fastpath.go | 58 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/model_wallet_fastpath.go | 60 | USDC | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_wallet_fastpath.go | 62 | USDC | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_wallet_fastpath.go | 64 | USDC | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_wallet_fastpath.go | 68 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_wallet_fastpath.go | 72 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_wallet_fastpath.go | 75 | USDC | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_wallet_fastpath.go | 76 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/model_wallet_fastpath.go | 77 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/model_wallet_fastpath.go | 79 | USDC | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/model_wallet_fastpath.go | 80 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/model_wallet_fastpath.go | 83 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/onboard.go | 129 | Binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/onboard.go | 130 | OKX | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/onboard.go | 131 | Bybit | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/onboard.go | 132 | Bitget | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/onboard.go | 134 | KuCoin | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/onboard.go | 135 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/onboard.go | 138 | Binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/onboard.go | 139 | OKX | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/onboard.go | 140 | Bybit | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/onboard.go | 141 | Bitget | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/onboard.go | 143 | KuCoin | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/onboard.go | 144 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/planner_runtime.go | 157 | okx | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/planner_runtime.go | 2670 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/planner_runtime.go | 3767 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/planner_runtime.go | 3769 | binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/sentinel.go | 148 | binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_catalog.go | 32 | OKX | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_catalog.go | 34 | OKX | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_catalog.go | 51 | Binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_catalog.go | 56 | Binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_catalog.go | 88 | OKX | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_catalog.go | 91 | Binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_dispatcher.go | 760 | okx | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_dispatcher.go | 761 | OKX | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_dispatcher.go | 773 | OKX | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_domain_context.go | 30 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_domain_context.go | 31 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_domain_context.go | 34 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_domain_context.go | 35 | blockrun | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_domain_context.go | 44 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_domain_context.go | 45 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_domain_context.go | 46 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_domain_context.go | 48 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_domain_context.go | 49 | blockrun | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_domain_context.go | 114 | AI500 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_domain_context.go | 124 | AI500 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_domain_context.go | 148 | ai500 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_domain_context.go | 150 | AI500 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_domain_context.go | 158 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_domain_context.go | 172 | ai500 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_domain_context.go | 174 | AI500 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_domain_context.go | 182 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 21 | usdt | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 53 | lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 155 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 157 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 159 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 160 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 162 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 164 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 167 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 169 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 172 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 174 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 177 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 179 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 180 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_execution_handlers.go | 182 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 184 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 187 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 189 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 192 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 194 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 197 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 199 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 368 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 372 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_execution_handlers.go | 379 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 380 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_execution_handlers.go | 403 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 404 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 415 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_execution_handlers.go | 416 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_execution_handlers.go | 445 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 446 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 457 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_execution_handlers.go | 458 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_execution_handlers.go | 483 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 487 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_execution_handlers.go | 1544 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 1545 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 1556 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_execution_handlers.go | 1557 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_execution_handlers.go | 1592 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_execution_handlers.go | 1602 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 1606 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_execution_handlers.go | 2178 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 2180 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 2506 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 2510 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 2515 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 2577 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_execution_handlers.go | 2585 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 174 | okx | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 765 | hyper_all | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 767 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 783 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 787 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 805 | hyper_all | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 807 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 825 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 829 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 859 | hyper_all | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 869 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 885 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 889 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1080 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1115 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1133 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1273 | binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1278 | okx | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1284 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1287 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1289 | aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1291 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1292 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1293 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1295 | lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1297 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1298 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1301 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1320 | binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1325 | okx | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1331 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1334 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1336 | aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1338 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1339 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1340 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1342 | lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1344 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1345 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1348 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1735 | binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1738 | okx | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1742 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1744 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1745 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1746 | aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1748 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1749 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1750 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1753 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1754 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1755 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1757 | lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1759 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1760 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1761 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1764 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1765 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1766 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1821 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_management_handlers.go | 1822 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_management_handlers.go | 1824 | USDC | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1825 | USDC | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1837 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_management_handlers.go | 1838 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_management_handlers.go | 1840 | USDC | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1841 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_management_handlers.go | 1976 | okx | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1980 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1981 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1982 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 1991 | OKX | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 2003 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 2007 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skill_management_handlers.go | 2026 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 2255 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 2262 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 2291 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_management_handlers.go | 2298 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_semantic_gate.go | 103 | Binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_semantic_gate.go | 142 | binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_semantic_gate.go | 143 | Binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_semantic_gate.go | 144 | okx | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_semantic_gate.go | 145 | OKX | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_semantic_gate.go | 146 | bybit | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_semantic_gate.go | 147 | Bybit | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_semantic_gate.go | 150 | kucoin | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_semantic_gate.go | 151 | KuCoin | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_semantic_gate.go | 152 | bitget | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_semantic_gate.go | 153 | Bitget | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_semantic_gate.go | 154 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_semantic_gate.go | 155 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_semantic_gate.go | 156 | aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_semantic_gate.go | 157 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_semantic_gate.go | 158 | lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_semantic_gate.go | 159 | Lighter | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_semantic_gate.go | 160 | indodax | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skill_semantic_gate.go | 161 | Indodax | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/skills/exchange_diagnosis.json | 8 | OKX | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_diagnosis.json | 13 | OKX | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_diagnosis.json | 15 | Hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 10 | binance | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 11 | 币安 | CUT | CR-B | Chinese crypto token — reworded away, nothing stays |
-| agent/skills/exchange_management.json | 31 | okx | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 32 | OKX | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 44 | hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 46 | hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 47 | Hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 49 | hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 52 | hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 53 | Hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 57 | aster | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 58 | Aster | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 62 | aster | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 63 | Aster | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 67 | aster | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 68 | Aster | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 70 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/skills/exchange_management.json | 72 | lighter | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 73 | Lighter | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 77 | lighter | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 78 | Lighter | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 82 | lighter | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 83 | Lighter | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 89 | lighter | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 90 | Lighter | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 96 | OKX | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 97 | Bitget | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 98 | Hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 99 | Hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 100 | Hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 101 | Aster | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 102 | Lighter | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 107 | binance | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 108 | okx | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 109 | bybit | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 110 | bitget | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 112 | kucoin | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 113 | indodax | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 114 | hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 115 | aster | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 116 | lighter | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 122 | hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 126 | Binance | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 127 | OKX | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/exchange_management.json | 138 | hyperliquid | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_diagnosis.json | 5 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_diagnosis.json | 8 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_diagnosis.json | 13 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 10 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 20 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 25 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 38 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 43 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 44 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 45 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 58 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 59 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 60 | blockrun | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 76 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 89 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 130 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/model_management.json | 141 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/strategy_diagnosis.json | 13 | AI500 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/strategy_management.json | 40 | USDT | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/strategy_management.json | 41 | USDT | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/strategy_management.json | 45 | ai500 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/strategy_management.json | 46 | ai500 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/strategy_management.json | 51 | USDT | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/strategy_management.json | 121 | USDT | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trade_execution.json | 23 | USDT | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trade_execution.json | 24 | USDT | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trade_execution.json | 28 | USDT | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trader_diagnosis.json | 26 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trader_management.json | 65 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trader_management.json | 67 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trader_management.json | 69 | OKX | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trader_management.json | 81 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trader_management.json | 114 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trader_management.json | 146 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/skills/trader_management.json | 158 | claw402 | CUT | CR-B | agent skill content — reword to futures (ninjatrader), the skill file stays |
-| agent/tools.go | 31 | binance | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL/get_kline family + model-list USDC block go; ninjatrader arm stays |
-| agent/tools.go | 54 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/tools.go | 66 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/tools.go | 69 | usdt | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 274 | hyper_all | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 275 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 333 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 335 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 370 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 382 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 386 | claw402 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 403 | binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 415 | OKX | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 417 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 418 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 419 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 420 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 421 | Aster | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 422 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/tools.go | 423 | LIGHTER | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 424 | LIGHTER | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 425 | LIGHTER | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 524 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/tools.go | 540 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 541 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 545 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/tools.go | 685 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 734 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 751 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 776 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 811 | AI500 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 850 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 923 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 927 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/tools.go | 943 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/tools.go | 944 | USDC | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 1027 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 1031 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/tools.go | 1066 | Wallet | CUT | CR-A | ceded to CR-A — broker factory arms + binanceFuturesAPIBaseURL/get_kline family + model-list USDC block go; ninjatrader arm stays |
-| agent/tools.go | 1417 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 1418 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 1422 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/tools.go | 1450 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 1451 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 1463 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 1467 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/tools.go | 1485 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 1490 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/tools.go | 1544 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 1545 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 1546 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 1552 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/tools.go | 1553 | Hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 1554 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/tools.go | 1564 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/tools.go | 1565 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/tools.go | 1566 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/tools.go | 1598 | hyperliquid | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 1602 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/tools.go | 1617 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/tools.go | 1622 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| agent/tools.go | 2335 | AI500 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 2358 | AI500 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 2430 | AI500 | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 2958 | binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 2959 | binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 2995 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 2996 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3026 | binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3038 | binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3047 | binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3052 | binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3193 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3195 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3253 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3254 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3273 | binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3555 | hyper_all | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3556 | hyper_main | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3557 | hyper_main | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3588 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3590 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3672 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3679 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3680 | USDC | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3701 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3710 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3711 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3712 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3718 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/tools.go | 3736 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/trade.go | 21 | USDT | KEEP | CR-A | ceded to CR-A — futures-active chat-entry notional caps; USDT is legacy naming for the value currency |
-| agent/trade.go | 22 | USDT | KEEP | CR-A | ceded to CR-A — futures-active chat-entry notional caps; USDT is legacy naming for the value currency |
-| agent/trade.go | 327 | USDT | KEEP | CR-A | ceded to CR-A — futures-active chat-entry notional caps; USDT is legacy naming for the value currency |
-| agent/trade.go | 328 | USDT | KEEP | CR-A | ceded to CR-A — futures-active chat-entry notional caps; USDT is legacy naming for the value currency |
-| agent/trade.go | 346 | USDT | KEEP | CR-A | ceded to CR-A — futures-active chat-entry notional caps; USDT is legacy naming for the value currency |
-| agent/trade.go | 357 | USDT | KEEP | CR-A | ceded to CR-A — futures-active chat-entry notional caps; USDT is legacy naming for the value currency |
-| agent/trade.go | 400 | USDT | KEEP | CR-A | ceded to CR-A — futures-active chat-entry notional caps; USDT is legacy naming for the value currency |
-| agent/trade.go | 413 | USDT | KEEP | CR-A | ceded to CR-A — futures-active chat-entry notional caps; USDT is legacy naming for the value currency |
-| agent/web.go | 50 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/web.go | 56 | binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/web.go | 58 | binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/web.go | 208 | Binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/web.go | 212 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/web.go | 228 | Binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/web.go | 231 | Binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/web.go | 235 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/web.go | 243 | Binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/web.go | 246 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/web.go | 251 | USDT | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/web.go | 283 | binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/web.go | 288 | binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/web.go | 341 | Binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| agent/web.go | 347 | binance | CUT | CR-B | agent crypto text/branch — cut with the crypto exchange layer |
-| api/handler_competition.go | 154 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| api/handler_competition.go | 418 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| api/handler_competition.go | 419 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| api/handler_competition.go | 420 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| api/handler_competition.go | 432 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| api/handler_order.go | 108 | ai500 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| api/handler_order.go | 109 | oi_top | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| api/handler_order.go | 315 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| api/handler_order.go | 371 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| api/handler_plan_order_truth.go | 230 | "mixed" | KEEP | CR-B | plan-state string (plan C13) |
-| clock-seams.list | 35 | binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| clock-seams.list | 36 | BINANCE | CUT | CR-B | crypto wording — rewrite futures-only |
-| hook/README.md | 60 | BINANCE | CUT | CR-B | crypto wording — rewrite futures-only |
-| hook/README.md | 62 | binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| hook/README.md | 66 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| hook/README.md | 68 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| hook/README.md | 74 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| hook/README.md | 116 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| hook/README.md | 117 | BINANCE | CUT | CR-B | crypto wording — rewrite futures-only |
-| hook/README.md | 126 | Binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| hook/README.md | 211 | BINANCE | CUT | CR-B | crypto wording — rewrite futures-only |
-| hook/README.md | 270 | binance | CUT | CR-B | crypto wording — rewrite futures-only |
-| hook/trader_hook.go | 3 | Binance | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
-| kernel/engine.go | 53 | hyper_all | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine.go | 329 | claw402 | KEEP | CR-B | compat shim: the claw402WalletKey param is retained for caller compatibility (D2-DEAD item 12) |
-| kernel/engine.go | 330 | claw402 | KEEP | CR-B | compat shim: the claw402WalletKey param is retained for caller compatibility (D2-DEAD item 12) |
-| kernel/engine.go | 332 | claw402 | KEEP | CR-B | compat shim: the claw402WalletKey param is retained for caller compatibility (D2-DEAD item 12) |
-| kernel/engine.go | 429 | Quant | KEEP | CR-B | English word 'quant' (data section header), not the quant feed |
-| kernel/engine_analysis.go | 835 | Binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_analysis.go | 837 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
-| kernel/engine_position.go | 73 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_position.go | 94 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_position.go | 96 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_position.go | 100 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_position.go | 109 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_position.go | 110 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_position.go | 112 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_prompt.go | 81 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_prompt.go | 83 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_prompt.go | 86 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_prompt.go | 100 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_prompt.go | 156 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_prompt.go | 158 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_prompt.go | 262 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
-| kernel/engine_prompt.go | 288 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_prompt.go | 309 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_prompt.go | 320 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_prompt.go | 409 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_prompt.go | 471 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_prompt.go | 492 | hyper_all | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_prompt.go | 494 | hyper_main | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_prompt.go | 499 | Hyperliquid | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_prompt.go | 506 | hyper_all | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_prompt.go | 507 | Hyperliquid | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_prompt.go | 508 | hyper_main | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_prompt.go | 509 | Hyperliquid | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/engine_prompt.go | 645 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
-| kernel/engine_prompt.go | 655 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
-| kernel/engine_prompt_futures.go | 89 | USDT | KEEP | CR-B | documents why the USDT-perp framing stays excluded from the futures prompt |
-| kernel/formatter.go | 108 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/formatter.go | 109 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/formatter.go | 150 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/formatter.go | 151 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/formatter.go | 202 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/formatter.go | 233 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/formatter.go | 235 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/formatter.go | 238 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/formatter.go | 343 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/formatter.go | 344 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/formatter.go | 386 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/formatter.go | 387 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/formatter.go | 437 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/formatter.go | 467 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/formatter.go | 469 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/formatter.go | 472 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/grid_engine.go | 116 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/grid_engine.go | 150 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/grid_engine.go | 151 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/grid_engine.go | 168 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/grid_engine.go | 205 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/grid_engine.go | 206 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/prompt_builder.go | 85 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/prompt_builder.go | 108 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/prompt_builder.go | 158 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/prompt_builder.go | 164 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/prompt_builder.go | 171 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/prompt_builder.go | 220 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/prompt_builder.go | 243 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/prompt_builder.go | 293 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/prompt_builder.go | 299 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/prompt_builder.go | 306 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/prompt_builder.go | 319 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/risk_limits.go | 13 | binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/schema.go | 67 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/schema.go | 76 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/schema.go | 106 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/schema.go | 113 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/schema.go | 120 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/schema.go | 180 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/schema.go | 189 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/schema.go | 206 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/schema.go | 213 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| kernel/testdata/golden/user_prompt_crypto_change_na.txt | 8 | USDT | DELETE | CR-A | ceded to CR-A — whole-file delete (C4) |
-| kernel/testdata/golden/user_prompt_crypto_change_na.txt | 10 | USDT | DELETE | CR-A | ceded to CR-A — whole-file delete (C4) |
-| main.go | 246 | CoinAnk | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
-| main.go | 252 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
-| main.go | 371 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
-| manager/trader_manager.go | 569 | ai500 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 639 | ai500 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 645 | binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 647 | Binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 648 | Binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 649 | Hyperliquid | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 650 | Hyperliquid | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 680 | binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 681 | Binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 682 | Binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 683 | bybit | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 684 | Bybit | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 685 | Bybit | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 686 | okx | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 687 | OKX | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 688 | OKX | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 689 | OKX | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 690 | bitget | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 691 | Bitget | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 692 | Bitget | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 693 | Bitget | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 697 | kucoin | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 698 | KuCoin | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 699 | KuCoin | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 700 | KuCoin | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 701 | hyperliquid | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 702 | Hyperliquid | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 703 | Hyperliquid | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 704 | Hyperliquid | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 705 | aster | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 709 | lighter | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 711 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| manager/trader_manager.go | 715 | indodax | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 716 | Indodax | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 717 | Indodax | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 741 | Claw402 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 779 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| manager/trader_manager.go | 780 | claw402 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 781 | claw402 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 782 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| manager/trader_manager.go | 783 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| manager/trader_manager.go | 791 | claw402 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 792 | claw402 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 795 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| manager/trader_manager.go | 797 | claw402 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| manager/trader_manager.go | 800 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| market/api_client.go | 15 | binance | DELETE | CR-A | ceded to CR-A — whole-file delete (C4) |
-| market/data.go | 16 | Binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 28 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
-| market/data.go | 30 | Binance | KEEP | CR-B | documents why the futures path reports funding/OI absent |
-| market/data.go | 36 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
-| market/data.go | 40 | CoinAnk | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 47 | CoinAnk | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 88 | Binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 90 | binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 101 | CoinAnk | KEEP | CR-B | documents the BarCache-only futures read |
-| market/data.go | 103 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
-| market/data.go | 128 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 159 | Hyperliquid | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 165 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
-| market/data.go | 166 | Binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 239 | CoinAnk | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 292 | CoinAnk | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 380 | Binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 381 | Binance | KEEP | CR-B | documents why the futures path reports funding/OI absent |
-| market/data.go | 382 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
-| market/data.go | 417 | binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 462 | binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 662 | ASTER | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 685 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 706 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 716 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 717 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 718 | USDT | KEEP | CR-B | documents the CME Normalize invariant (early-return first) |
-| market/data.go | 721 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 733 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 739 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 748 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 754 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 757 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/data.go | 777 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/futures_data.go | 5 | CoinAnk | KEEP | CR-B | documents the futures bypass of the crypto market read |
-| market/futures_symbol.go | 5 | CoinAnk | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| market/futures_symbol.go | 38 | USDT | KEEP | CR-B | documents the CME Normalize invariant (early-return first) |
-| market/historical.go | 12 | binance | DELETE | CR-A | ceded to CR-A — whole-file delete (C4) |
-| market/historical.go | 13 | binance | DELETE | CR-A | ceded to CR-A — whole-file delete (C4) |
-| market/historical.go | 36 | binance | DELETE | CR-A | ceded to CR-A — whole-file delete (C4) |
-| market/historical.go | 44 | binance | DELETE | CR-A | ceded to CR-A — whole-file delete (C4) |
-| market/historical.go | 60 | binance | DELETE | CR-A | ceded to CR-A — whole-file delete (C4) |
-| market/historical.go | 98 | binance | DELETE | CR-A | ceded to CR-A — whole-file delete (C4) |
-| market/types.go | 38 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
-| market/types.go | 127 | Binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| ninjascript/VLContractResolver.cs | 66 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| ninjascript/VLContractResolver_VERIFY.md | 20 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| ninjascript/VLContractResolver_VERIFY.md | 123 | USDT | CUT | CR-B | crypto wording — rewrite futures-only |
-| patches/partner-2026-08-20/MANIFEST.md | 458 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| provider/ninjatrader/bar_source.go | 18 | "mixed" | KEEP | CR-B | BarSourceMixed = "mixed" — futures bar-source enum (plan C13) |
-| provider/ninjatrader/tcp_framing.go | 675 | "mixed" | KEEP | CR-B | comment describes BarSourceMixed (plan C13) |
-| scripts/replay_write_time_feasibility.py | 162 | "mixed" | KEEP | CR-B | replay-source rank key 'mixed', not a crypto source |
-| store/ai_charge.go | 152 | USDC | CUT | CR-A | ceded to CR-A — crypto lines cut per C4/C5; futures half stays |
-| store/ai_charge.go | 153 | usdc | CUT | CR-A | ceded to CR-A — crypto lines cut per C4/C5; futures half stays |
-| store/ai_charge.go | 160 | usdc | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
-| store/ai_charge.go | 161 | usdc | CUT | CR-A | ceded to CR-A — whole file is CR-A's per the Finding-3 file-level ruling |
-| store/ai_model.go | 64 | Claw402 | CUT | CR-A | ceded to CR-A — FindOrphanClaw402 + ResolveClaw402WalletKey go; ai_models columns STAY |
-| store/ai_model.go | 65 | wallet | CUT | CR-A | ceded to CR-A — FindOrphanClaw402 + ResolveClaw402WalletKey go; ai_models columns STAY |
-| store/ai_model.go | 66 | Claw402 | CUT | CR-A | ceded to CR-A — FindOrphanClaw402 + ResolveClaw402WalletKey go; ai_models columns STAY |
-| store/ai_model.go | 68 | claw402 | CUT | CR-A | ceded to CR-A — FindOrphanClaw402 + ResolveClaw402WalletKey go; ai_models columns STAY |
-| store/ai_model.go | 70 | claw402 | CUT | CR-A | ceded to CR-A — FindOrphanClaw402 + ResolveClaw402WalletKey go; ai_models columns STAY |
-| store/ai_model.go | 431 | Claw402 | CUT | CR-A | ceded to CR-A — FindOrphanClaw402 + ResolveClaw402WalletKey go; ai_models columns STAY |
-| store/ai_model.go | 432 | claw402 | CUT | CR-A | ceded to CR-A — FindOrphanClaw402 + ResolveClaw402WalletKey go; ai_models columns STAY |
-| store/ai_model.go | 433 | claw402 | CUT | CR-A | ceded to CR-A — FindOrphanClaw402 + ResolveClaw402WalletKey go; ai_models columns STAY |
-| store/ai_model.go | 434 | claw402 | CUT | CR-A | ceded to CR-A — FindOrphanClaw402 + ResolveClaw402WalletKey go; ai_models columns STAY |
-| store/ai_model.go | 436 | Claw402 | CUT | CR-A | ceded to CR-A — FindOrphanClaw402 + ResolveClaw402WalletKey go; ai_models columns STAY |
-| store/ai_model.go | 442 | claw402 | CUT | CR-A | ceded to CR-A — FindOrphanClaw402 + ResolveClaw402WalletKey go; ai_models columns STAY |
-| store/ai_model.go | 443 | wallet | CUT | CR-A | ceded to CR-A — FindOrphanClaw402 + ResolveClaw402WalletKey go; ai_models columns STAY |
-| store/ai_model.go | 444 | wallet | CUT | CR-A | ceded to CR-A — FindOrphanClaw402 + ResolveClaw402WalletKey go; ai_models columns STAY |
-| store/ai_model.go | 445 | claw402 | CUT | CR-A | ceded to CR-A — FindOrphanClaw402 + ResolveClaw402WalletKey go; ai_models columns STAY |
-| store/ai_model.go | 447 | wallet | CUT | CR-A | ceded to CR-A — FindOrphanClaw402 + ResolveClaw402WalletKey go; ai_models columns STAY |
-| store/ai_model.go | 456 | claw402 | CUT | CR-A | ceded to CR-A — FindOrphanClaw402 + ResolveClaw402WalletKey go; ai_models columns STAY |
-| store/ai_model.go | 461 | claw402 | CUT | CR-A | ceded to CR-A — FindOrphanClaw402 + ResolveClaw402WalletKey go; ai_models columns STAY |
-| store/ai_model.go | 471 | claw402 | CUT | CR-A | ceded to CR-A — FindOrphanClaw402 + ResolveClaw402WalletKey go; ai_models columns STAY |
-| store/bar_history.go | 151 | "mixed" | KEEP | CR-B | NT8 live+historical census value + boot-line mixed=%d (plan C13) |
-| store/bar_history_across_roll.go | 82 | "mixed" | KEEP | CR-B | comment describes the roll-straddling ("mixed") state (plan C13) |
-| store/exchange.go | 32 | Hyperliquid | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 33 | Hyperliquid | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 37 | Wallet | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 101 | Hyperliquid | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 105 | Wallet | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 131 | binance | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 145 | binance | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 155 | binance | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 210 | binance | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 211 | Binance | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 212 | bybit | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 213 | Bybit | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 214 | okx | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 215 | OKX | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 216 | bitget | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 217 | Bitget | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 218 | hyperliquid | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 219 | Hyperliquid | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 220 | aster | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 221 | Aster | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 222 | lighter | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 223 | LIGHTER | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 224 | indodax | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 225 | Indodax | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 238 | hyperliquid | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 240 | Wallet | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 245 | hyperliquid | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 246 | Wallet | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 274 | Hyperliquid | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 275 | Hyperliquid | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 279 | Wallet | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 298 | hyperliquid | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 299 | Wallet | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 307 | hyperliquid | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 308 | hyperliquid | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 311 | wallet | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 388 | hyperliquid | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 391 | binance | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 393 | hyperliquid | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/exchange.go | 409 | Hyperliquid | CUT | CR-A | ceded to CR-A — crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/indicator_fingerprint.go | 12 | quant | KEEP | CR-B | records the D2-DEAD removal — historical note, keep |
-| store/knob_registry_table.go | 73 | hyper_main | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/knob_registry_table.go | 169 | hyper_all | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/knob_registry_table.go | 170 | hyper_main | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/order.go | 33 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/order.go | 390 | Binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/position.go | 746 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/position.go | 747 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/position.go | 748 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/position.go | 795 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/position.go | 796 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/position.go | 797 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/position_builder.go | 146 | Lighter | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 25 | CoinAnk | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 218 | AI500 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 225 | ai500 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 261 | ai500 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 262 | ai500 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 264 | oi_top | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 266 | oi_low | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 514 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 1828 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 1832 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 1874 | hyper_all | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 1880 | Hyperliquid | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 1881 | hyper_all | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 1882 | Hyperliquid | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 1883 | hyper_main | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 1884 | Hyperliquid | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 1885 | hyper_main | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 1960 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 2083 | AI500 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 2138 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 2189 | Binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 2190 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
-| store/strategy.go | 2201 | Binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 2202 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
-| store/strategy.go | 2414 | ai500 | KEEP | CR-B | records the D2-DEAD removal — historical note, keep |
-| store/strategy.go | 2419 | ai500 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 2512 | claw402 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 2514 | claw402 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/strategy.go | 2676 | hyper_main | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/trader.go | 66 | AI500 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/trader.go | 67 | oi_top | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/trader.go | 163 | AI500 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/trader.go | 164 | oi_top | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| store/visibility.go | 5 | hyperliquid | CUT | CR-A | ceded to CR-A — crypto cases + DEX wallet fields go; PR #188 D1-D3 cleanup-skip ported |
-| store/visibility.go | 7 | binance | CUT | CR-A | ceded to CR-A — crypto cases + DEX wallet fields go; PR #188 D1-D3 cleanup-skip ported |
-| store/visibility.go | 12 | okx | CUT | CR-A | ceded to CR-A — crypto cases + DEX wallet fields go; PR #188 D1-D3 cleanup-skip ported |
-| store/visibility.go | 18 | hyperliquid | CUT | CR-A | ceded to CR-A — crypto cases + DEX wallet fields go; PR #188 D1-D3 cleanup-skip ported |
-| store/visibility.go | 21 | hyperliquid | CUT | CR-A | ceded to CR-A — crypto cases + DEX wallet fields go; PR #188 D1-D3 cleanup-skip ported |
-| store/visibility.go | 23 | aster | CUT | CR-A | ceded to CR-A — crypto cases + DEX wallet fields go; PR #188 D1-D3 cleanup-skip ported |
-| store/visibility.go | 29 | lighter | CUT | CR-A | ceded to CR-A — crypto cases + DEX wallet fields go; PR #188 D1-D3 cleanup-skip ported |
-| store/visibility.go | 31 | wallet | CUT | CR-A | ceded to CR-A — crypto cases + DEX wallet fields go; PR #188 D1-D3 cleanup-skip ported |
-| store/visibility.go | 80 | Hyperliquid | CUT | CR-A | ceded to CR-A — crypto cases + DEX wallet fields go; PR #188 D1-D3 cleanup-skip ported |
-| store/visibility.go | 84 | Wallet | CUT | CR-A | ceded to CR-A — crypto cases + DEX wallet fields go; PR #188 D1-D3 cleanup-skip ported |
-| telegram/agent/prompt.go | 79 | ai500 | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| trader/auto_trader_decision.go | 131 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| trader/auto_trader_decision.go | 136 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| trader/auto_trader_decision.go | 137 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| trader/auto_trader_decision.go | 150 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| trader/auto_trader_decision.go | 151 | Wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| trader/auto_trader_decision.go | 163 | Binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| trader/auto_trader_decision.go | 182 | Lighter | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| trader/auto_trader_decision.go | 184 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| trader/auto_trader_decision.go | 185 | Lighter | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| trader/auto_trader_decision.go | 222 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| trader/auto_trader_decision.go | 223 | wallet | CUT | CR-B | wallet wording — reworded to the futures meaning (what stays: the account/margin text) |
-| trader/auto_trader_decision.go | 255 | Binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| trader/auto_trader_decision.go | 363 | binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| trader/auto_trader_decision.go | 382 | Binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| trader/auto_trader_decision.go | 524 | binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| trader/auto_trader_decision.go | 660 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| trader/auto_trader_decision.go | 704 | USDT | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| trader/ninjatrader/bars_market_bridge.go | 14 | CoinAnk | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| trader/ninjatrader/reconcile_late_fill.go | 258 | USDT | KEEP | CR-B | CommissionAsset: "USDT" — NT8 SIM snapshot mirror, KEEP byte-identical (CTO ruling, plan C13) |
-| trader/ninjatrader/tcp_trader.go | 1258 | Wallet | KEEP | CR-B | "totalWalletBalance": acct.CashValue — account snapshot shape, KEEP byte-identical (CTO ruling, plan C13) |
-| trader/ninjatrader/tcp_trader.go | 1359 | Binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| trader/ninjatrader/tcp_trader.go | 1410 | Binance | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| trader/ninjatrader/transport.go | 68 | CoinAnk | CUT | CR-B | crypto wording/branch in a kept file — cut to futures-only text |
-| trader/protection_reconciler.go | 425 | "MIXED" | KEEP | CR-B | bracketOCO = "MIXED" — bracket-consistency state, not a coin source (plan C13) |
+| .github/ISSUE_TEMPLATE/bug_report.md | 118 | `btc` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| .github/ISSUE_TEMPLATE/bug_report.md | 119 | `altcoin` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| agent/agent_config_load_test.go | 15 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/backend_logs_test.go | 32 | `okx` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/central_brain.go | 1177 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/central_brain.go | 1178 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/central_brain.go | 1200 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/central_brain.go | 1201 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/clear_memory_test.go | 38 | `claw402` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/clear_memory_test.go | 42 | `claw402` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/clear_memory_test.go | 60 | `claw402` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/config_tools_test.go | 30 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/config_tools_test.go | 47 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/config_tools_test.go | 227 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/config_visibility_test.go | 177 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/config_visibility_test.go | 187 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/config_visibility_test.go | 200 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/config_visibility_test.go | 201 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/config_visibility_test.go | 263 | `Binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/config_visibility_test.go | 339 | `hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/config_visibility_test.go | 372 | `ETHUSDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/config_visibility_test.go | 434 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/config_visibility_test.go | 537 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/config_visibility_test.go | 618 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/config_visibility_test.go | 663 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/memory_test.go | 27 | `OKX` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/memory_test.go | 52 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/onboard_test.go | 19 | `okx` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/planner_runtime_state_test.go | 50 | `OKX` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/planner_runtime_state_test.go | 52 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/planner_runtime_state_test.go | 122 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/planner_runtime_state_test.go | 171 | `okx` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/planner_runtime_state_test.go | 197 | `okx` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/planner_runtime_state_test.go | 587 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/planner_tools_test.go | 27 | `okx` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/planner_tools_test.go | 57 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 31 | `okx` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 132 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 187 | `OKX` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 282 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 328 | `okx` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 429 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 446 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 482 | `Binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 484 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 485 | `Binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 488 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 491 | `Binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 492 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 494 | `OKX` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 496 | `okx` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 497 | `OKX` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 500 | `okx` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 503 | `OKX` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 504 | `okx` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 526 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 536 | `OKX` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 545 | `okx` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 601 | `okx` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 610 | `okx` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 619 | `okx` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_dispatcher_test.go | 659 | `okx` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/skill_domain_context.go | 41 | `wallet` | KEEP | CR-B | skill-handler surface — cut deferred until DS-107 consumer cuts land |
+| agent/skill_execution_handlers.go | 315 | `Hyperliquid` | KEEP | CR-B | skill-handler surface — cut deferred until DS-107 consumer cuts land |
+| agent/skill_execution_handlers.go | 319 | `Wallet` | KEEP | CR-B | skill-handler surface — cut deferred until DS-107 consumer cuts land |
+| agent/skill_execution_handlers.go | 326 | `Hyperliquid` | KEEP | CR-B | skill-handler surface — cut deferred until DS-107 consumer cuts land |
+| agent/skill_execution_handlers.go | 327 | `Wallet` | KEEP | CR-B | skill-handler surface — cut deferred until DS-107 consumer cuts land |
+| agent/skill_execution_handlers.go | 350 | `Hyperliquid` | KEEP | CR-B | skill-handler surface — cut deferred until DS-107 consumer cuts land |
+| agent/skill_execution_handlers.go | 351 | `hyperliquid` | KEEP | CR-B | skill-handler surface — cut deferred until DS-107 consumer cuts land |
+| agent/skill_execution_handlers.go | 362 | `Wallet` | KEEP | CR-B | skill-handler surface — cut deferred until DS-107 consumer cuts land |
+| agent/skill_execution_handlers.go | 363 | `wallet` | KEEP | CR-B | skill-handler surface — cut deferred until DS-107 consumer cuts land |
+| agent/skill_execution_handlers.go | 392 | `Hyperliquid` | KEEP | CR-B | skill-handler surface — cut deferred until DS-107 consumer cuts land |
+| agent/skill_execution_handlers.go | 393 | `Hyperliquid` | KEEP | CR-B | skill-handler surface — cut deferred until DS-107 consumer cuts land |
+| agent/skill_execution_handlers.go | 404 | `Wallet` | KEEP | CR-B | skill-handler surface — cut deferred until DS-107 consumer cuts land |
+| agent/skill_execution_handlers.go | 405 | `Wallet` | KEEP | CR-B | skill-handler surface — cut deferred until DS-107 consumer cuts land |
+| agent/skill_execution_handlers.go | 430 | `Hyperliquid` | KEEP | CR-B | skill-handler surface — cut deferred until DS-107 consumer cuts land |
+| agent/skill_execution_handlers.go | 434 | `Wallet` | KEEP | CR-B | skill-handler surface — cut deferred until DS-107 consumer cuts land |
+| agent/skill_execution_handlers.go | 561 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 563 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 565 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 566 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 570 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 571 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 573 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 575 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 576 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 580 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 812 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 813 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 814 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 817 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 819 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 820 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 825 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 826 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 828 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 1514 | `wallet` | KEEP | CR-B | skill-handler surface — cut deferred until DS-107 consumer cuts land |
+| agent/skill_execution_handlers.go | 1524 | `hyperliquid` | KEEP | CR-B | skill-handler surface — cut deferred until DS-107 consumer cuts land |
+| agent/skill_execution_handlers.go | 1528 | `wallet` | KEEP | CR-B | skill-handler surface — cut deferred until DS-107 consumer cuts land |
+| agent/skill_execution_handlers.go | 2396 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 2399 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 2401 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 2403 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 2437 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 2438 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_execution_handlers.go | 2500 | `USDT` | KEEP | CR-B | skill-handler surface — cut deferred until DS-107 consumer cuts land |
+| agent/skill_execution_handlers.go | 2508 | `USDT` | KEEP | CR-B | skill-handler surface — cut deferred until DS-107 consumer cuts land |
+| agent/skill_management_handlers.go | 513 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 514 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 515 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 602 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 603 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 684 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 685 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 686 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 687 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 771 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 811 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 812 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 813 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 868 | `BTC` | KEEP | CR-B | skill-handler surface — cut deferred until DS-107 consumer cuts land |
+| agent/skill_management_handlers.go | 873 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 959 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 960 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 961 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 1106 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 1107 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 1111 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 1112 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 1553 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 1554 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 1601 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 1602 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 2149 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skill_management_handlers.go | 2150 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/skills/exchange_management.json | 31 | `okx` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| agent/skills/strategy_diagnosis.json | 16 | `btc` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| agent/skills/strategy_management.json | 68 | `btc` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| agent/skills/strategy_management.json | 72 | `BTC` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| agent/skills/strategy_management.json | 74 | `altcoin` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| agent/skills/trader_diagnosis.json | 21 | `btc` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| agent/strategy_field_catalog.go | 43 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/strategy_field_catalog.go | 44 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/strategy_field_catalog.go | 102 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/strategy_field_catalog.go | 103 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/tools_test.go | 32 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/tools_test.go | 34 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trade.go | 21 | `USDT` | KEEP | CR-B | futures-active notional caps (CTO ruling, byte-identical) |
+| agent/trade.go | 22 | `USDT` | KEEP | CR-B | futures-active notional caps (CTO ruling, byte-identical) |
+| agent/trade.go | 327 | `USDT` | KEEP | CR-B | futures-active notional caps (CTO ruling, byte-identical) |
+| agent/trade.go | 328 | `USDT` | KEEP | CR-B | futures-active notional caps (CTO ruling, byte-identical) |
+| agent/trade.go | 346 | `USDT` | KEEP | CR-B | futures-active notional caps (CTO ruling, byte-identical) |
+| agent/trade.go | 357 | `USDT` | KEEP | CR-B | futures-active notional caps (CTO ruling, byte-identical) |
+| agent/trade.go | 379 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/trade.go | 380 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| agent/trade.go | 396 | `USDT` | KEEP | CR-B | futures-active notional caps (CTO ruling, byte-identical) |
+| agent/trade.go | 405 | `USDT` | KEEP | CR-B | futures-active notional caps (CTO ruling, byte-identical) |
+| agent/trade_admission_test.go | 167 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trade_admission_test.go | 175 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trade_cme_route_test.go | 100 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trade_cme_route_test.go | 105 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trade_cme_route_test.go | 110 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trade_cme_route_test.go | 137 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trade_cme_route_test.go | 184 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 102 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 112 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 194 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 243 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 304 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 306 | `hyper_all` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 510 | `okx` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 538 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 539 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 546 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 551 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 552 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 553 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 555 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 569 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 615 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 622 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 716 | `okx` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 738 | `OKX` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 749 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 751 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 785 | `Binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 787 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 803 | `Binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 805 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 829 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 830 | `oi_low` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 831 | `oi_low` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 835 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 836 | `altcoin` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 848 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 850 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 857 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 873 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 887 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 892 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 910 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 935 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 937 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 940 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 942 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 946 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1028 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1031 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1086 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1109 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1110 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1133 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1142 | `ETHUSDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1143 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1297 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1298 | `altcoin` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1313 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1325 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1331 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1362 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1363 | `altcoin` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1378 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1388 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1421 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1422 | `altcoin` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1436 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1469 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1474 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1572 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1609 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1615 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1633 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1640 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1645 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1666 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1678 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1685 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1691 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1699 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1712 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1724 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1729 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1773 | `ETHUSDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1818 | `ETHUSDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1917 | `ETHUSDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/trader_scope_test.go | 1986 | `okx` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/unified_turn_router_test.go | 18 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| agent/unified_turn_router_test.go | 195 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| api/handler_competition.go | 154 | `wallet` | KEEP | CR-B | NT8 account-snapshot shape — balance key family (CTO ruling, byte-identical) |
+| api/handler_competition.go | 418 | `wallet` | KEEP | CR-B | NT8 account-snapshot shape — balance key family (CTO ruling, byte-identical) |
+| api/handler_competition.go | 419 | `wallet` | KEEP | CR-B | NT8 account-snapshot shape — balance key family (CTO ruling, byte-identical) |
+| api/handler_competition.go | 420 | `wallet` | KEEP | CR-B | NT8 account-snapshot shape — balance key family (CTO ruling, byte-identical) |
+| api/handler_competition.go | 432 | `wallet` | KEEP | CR-B | NT8 account-snapshot shape — balance key family (CTO ruling, byte-identical) |
+| api/handler_order.go | 102 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| api/handler_order.go | 103 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| api/handler_plan_order_truth.go | 230 | `"mixed"` | KEEP | CR-B | plan-state string constant — same family as the ExecutorVerdict mixed content-assert (KEEP) |
+| branding/census_test.go | 319 | `lighter` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/census_test.go | 403 | `lighter` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 27 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 42 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 65 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 70 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 71 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 72 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 107 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 108 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 124 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 142 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 143 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 159 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 170 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 171 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 188 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 208 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 215 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 216 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 217 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 219 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 220 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 236 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 237 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 263 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 266 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 269 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 286 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 290 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 291 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 293 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 294 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 313 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 321 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 322 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 323 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 325 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 326 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 346 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 347 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 348 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 350 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 351 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 352 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto.go | 16 | `aster` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 17 | `quant` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 18 | `BTC` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 19 | `BTC` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 20 | `BTC` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 23 | `btc` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 24 | `BTC` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 25 | `btc` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 27 | `ethusdt` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 29 | `ETH` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 30 | `eth` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 31 | `altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 33 | `ethereum` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 37 | `binance` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 42 | `binance` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 49 | `aster` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 50 | `hyperliquid` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 51 | `lighter` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 52 | `coinank` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 53 | `wallet` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 60 | `binance` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 61 | `lighter` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 67 | `Altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 76 | `BTC` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 77 | `Altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 78 | `BTC` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 79 | `Altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 80 | `btc` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 81 | `altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 82 | `btc` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 83 | `altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 85 | `BTC` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 86 | `Altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 87 | `BTC` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 88 | `Altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 90 | `Altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 91 | `Altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 93 | `altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 94 | `altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 98 | `"mixed"` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 111 | `wallet` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto_test.go | 18 | `BTC` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 19 | `aster` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 20 | `"mixed"` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 22 | `btc` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 23 | `ethusdt` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 31 | `aster` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 32 | `"mixed"` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 33 | `oi_top` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 34 | `BTC` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 36 | `BTC` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 37 | `btc` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 38 | `BTC` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 40 | `ETHUSDT` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 41 | `BTC` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 42 | `Altcoin` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 43 | `ethereum` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 54 | `eth` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 72 | `binance` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 81 | `BTC` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 109 | `BTC` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 112 | `btc` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 114 | `BTC` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 140 | `BTC` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 141 | `Altcoin` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 142 | `BTC` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 143 | `Altcoin` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 144 | `btc` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 145 | `altcoin` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 146 | `btc` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 147 | `altcoin` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 148 | `BTC` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 149 | `Altcoin` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 150 | `BTC` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 151 | `Altcoin` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 152 | `Altcoin` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 153 | `Altcoin` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 154 | `altcoin` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/no_crypto_test.go | 155 | `altcoin` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/scope_test.go | 48 | `wallet` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/scope_test.go | 50 | `claw402` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/scope_test.go | 51 | `claw402` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/scope_test.go | 52 | `wallet` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/scope_test.go | 53 | `binance` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/scope_test.go | 54 | `wallet` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/scope_test.go | 242 | `wallet` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| cmd/picture_htf_replay/main.go | 21 | `ETH` | KEEP | CR-B | CME ETH session acronym (Electronic Trading Hours) — not the venue token |
+| cmd/picture_htf_replay/main.go | 109 | `ETH` | KEEP | CR-B | CME ETH session acronym (Electronic Trading Hours) — not the venue token |
+| cmd/picture_htf_replay/main.go | 112 | `ETH` | KEEP | CR-B | CME ETH session acronym (Electronic Trading Hours) — not the venue token |
+| cmd/picture_htf_replay/main.go | 355 | `ETH` | KEEP | CR-B | CME ETH session acronym (Electronic Trading Hours) — not the venue token |
+| cmd/picture_htf_replay/main.go | 356 | `ETH` | KEEP | CR-B | CME ETH session acronym (Electronic Trading Hours) — not the venue token |
+| cmd/picture_htf_replay/main.go | 360 | `ETH` | KEEP | CR-B | CME ETH session acronym (Electronic Trading Hours) — not the venue token |
+| docs/superpowers/AUDIT-CHECKLIST.md | 196 | `ethereum` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| docs/superpowers/AUDIT-CHECKLIST.md | 541 | `USDT` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| docs/superpowers/AUDIT-CHECKLIST.md | 545 | `USDT` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| docs/superpowers/AUDIT-CHECKLIST.md | 1297 | `binance` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| docs/superpowers/AUDIT-CHECKLIST.md | 6315 | `BINANCE` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| docs/superpowers/AUDIT-CHECKLIST.md | 6316 | `Binance` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| docs/superpowers/AUDIT-CHECKLIST.md | 6318 | `BINANCE` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| docs/superpowers/AUDIT-CHECKLIST.md | 6322 | `BINANCE` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| docs/superpowers/AUDIT-CHECKLIST.md | 6325 | `BINANCE` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| docs/superpowers/AUDIT-CHECKLIST.md | 6336 | `BINANCE` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| docs/superpowers/AUDIT-CHECKLIST.md | 6337 | `CoinAnk` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| docs/superpowers/AUDIT-CHECKLIST.md | 6339 | `BTC` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| docs/superpowers/AUDIT-CHECKLIST.md | 6814 | `USDT` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| docs/superpowers/AUDIT-CHECKLIST.md | 6817 | `USDT` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| docs/superpowers/AUDIT-CHECKLIST.md | 6900 | `USDT` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| docs/superpowers/AUDIT-CHECKLIST.md | 7197 | `wallet` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| hook/README.md | 60 | `BINANCE` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| hook/README.md | 62 | `binance` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| hook/README.md | 66 | `Binance` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| hook/README.md | 68 | `Binance` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| hook/README.md | 74 | `Binance` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| hook/README.md | 78 | `Aster` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| hook/README.md | 92 | `Aster` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| hook/README.md | 116 | `Binance` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| hook/README.md | 117 | `BINANCE` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| hook/README.md | 126 | `Binance` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| hook/README.md | 211 | `BINANCE` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| hook/README.md | 270 | `binance` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| internal/updateauth/census_mint_test.go | 65 | `okx` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| internal/updateauth/census_mint_test.go | 291 | `okx` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/engine.go | 136 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine.go | 137 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_analysis.go | 559 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_analysis.go | 560 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_analysis.go | 561 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_analysis.go | 562 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_analysis.go | 836 | `BINANCE` | KEEP | CR-B | wave-name comment (W-NO-BINANCE) — documents the OI-absent-on-MNQ behavior |
+| kernel/engine_analysis.go | 862 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_analysis.go | 877 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_position.go | 31 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_position.go | 33 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_position.go | 43 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_position.go | 58 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_position.go | 59 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_position.go | 73 | `BTC` | KEEP | CR-B | BTC/ETH major-pair classification — same-class vocabulary per the amendment |
+| kernel/engine_position.go | 74 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_position.go | 75 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_position.go | 92 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_position.go | 94 | `BTC` | KEEP | CR-B | BTC/ETH major-pair classification — same-class vocabulary per the amendment |
+| kernel/engine_position.go | 95 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_position.go | 96 | `USDT` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_position.go | 100 | `USDT` | KEEP | CR-B | legacy crypto-path min-position validation (unreachable in futures mode — futures uses enforceMinPositionSize) |
+| kernel/engine_position.go | 109 | `BTC` | KEEP | CR-B | BTC/ETH major-pair classification — same-class vocabulary per the amendment |
+| kernel/engine_position.go | 110 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_position.go | 112 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_position_futures_test.go | 6 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/engine_position_futures_test.go | 7 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/engine_position_futures_test.go | 15 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/engine_position_futures_test.go | 24 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/engine_position_futures_test.go | 33 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/engine_position_futures_test.go | 42 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/engine_position_futures_test.go | 51 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/engine_position_futures_test.go | 53 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/engine_position_futures_test.go | 60 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/engine_position_futures_test.go | 61 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/engine_position_futures_test.go | 68 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/engine_position_futures_test.go | 70 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/engine_prompt.go | 69 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_prompt.go | 70 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_prompt.go | 71 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_prompt.go | 73 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_prompt.go | 74 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_prompt.go | 75 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_prompt.go | 81 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_prompt.go | 82 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_prompt.go | 83 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_prompt.go | 84 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_prompt.go | 86 | `USDT` | KEEP | CR-B | legacy trade-history prompt formatter (unreachable in futures mode — NoCryptoVocab golden green) |
+| kernel/engine_prompt.go | 89 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_prompt.go | 90 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_prompt.go | 100 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_prompt.go | 101 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_prompt.go | 154 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_prompt.go | 155 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_prompt.go | 156 | `BTC` | KEEP | CR-B | legacy crypto-path prompt example — interlocked with riskControl.BTCETHMaxLeverage (unreachable in futures mode) |
+| kernel/engine_prompt.go | 157 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| kernel/engine_prompt.go | 158 | `ETHUSDT` | KEEP | CR-B | legacy trade-history prompt formatter (unreachable in futures mode — NoCryptoVocab golden green) |
+| kernel/engine_prompt.go | 262 | `BINANCE` | KEEP | CR-B | wave-name comment (W-NO-BINANCE) — documents the OI-absent-on-MNQ behavior |
+| kernel/engine_prompt.go | 302 | `USDT` | KEEP | CR-B | legacy trade-history prompt formatter (unreachable in futures mode — NoCryptoVocab golden green) |
+| kernel/engine_prompt.go | 313 | `USDT` | KEEP | CR-B | legacy trade-history prompt formatter (unreachable in futures mode — NoCryptoVocab golden green) |
+| kernel/engine_prompt.go | 402 | `ETH` | KEEP | CR-B | CME ETH session acronym (Electronic Trading Hours) — not the venue token |
+| kernel/engine_prompt.go | 464 | `USDT` | KEEP | CR-B | legacy trade-history prompt formatter (unreachable in futures mode — NoCryptoVocab golden green) |
+| kernel/engine_prompt.go | 621 | `BINANCE` | KEEP | CR-B | wave-name comment (W-NO-BINANCE) — documents the OI-absent-on-MNQ behavior |
+| kernel/engine_prompt.go | 631 | `BINANCE` | KEEP | CR-B | wave-name comment (W-NO-BINANCE) — documents the OI-absent-on-MNQ behavior |
+| kernel/engine_prompt_futures_test.go | 81 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/engine_prompt_futures_test.go | 83 | `usdt` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/engine_prompt_futures_test.go | 165 | `altcoin` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/funding_suppress_test.go | 32 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/funding_suppress_test.go | 33 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/funding_suppress_test.go | 35 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/funding_suppress_test.go | 44 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/funding_suppress_test.go | 45 | `OI_Top` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/funding_suppress_test.go | 48 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/funding_suppress_test.go | 57 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/funding_suppress_test.go | 58 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/funding_suppress_test.go | 62 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/funding_suppress_test.go | 63 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/funding_suppress_test.go | 64 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/live_network_guard_test.go | 5 | `CoinAnk` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/live_network_guard_test.go | 9 | `coinank` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/live_network_guard_test.go | 21 | `CoinAnk` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/live_network_guard_test.go | 22 | `coinank` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/live_network_guard_test.go | 24 | `coinank` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/live_network_guard_test.go | 25 | `coinank` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/live_network_guard_test.go | 45 | `Coinank` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/live_network_guard_test.go | 47 | `Coinank` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/live_network_guard_test.go | 123 | `Coinank` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/live_network_guard_test.go | 154 | `coinank` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/no_binance_prompt_test.go | 16 | `BINANCE` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/no_binance_prompt_test.go | 51 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/no_binance_prompt_test.go | 52 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/no_binance_prompt_test.go | 57 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/no_binance_prompt_test.go | 159 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/no_binance_prompt_test.go | 161 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/no_binance_prompt_test.go | 162 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/pnl_truth_pin_test.go | 15 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/prompt_builder_test.go | 148 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/prompt_builder_test.go | 200 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/prompt_builder_test.go | 215 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/prompt_builder_test.go | 230 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/prompt_builder_test.go | 249 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/prompt_builder_test.go | 270 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/prompt_builder_test.go | 291 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/prompt_builder_test.go | 293 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/prompt_builder_test.go | 296 | `ETHUSDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/prompt_builder_test.go | 300 | `ETH` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/prompt_builder_test.go | 316 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/prompt_builder_test.go | 453 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/prompt_builder_test.go | 454 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/prompt_builder_test.go | 457 | `ETHUSDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/prompt_builder_test.go | 458 | `oi_top` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/risk_config_truth_test.go | 41 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/risk_config_truth_test.go | 42 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/tz_test.go | 84 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/validate_test.go | 13 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/validate_test.go | 14 | `altcoin` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/validate_test.go | 19 | `Altcoin` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/validate_test.go | 21 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/validate_test.go | 29 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/validate_test.go | 30 | `altcoin` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/validate_test.go | 35 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/validate_test.go | 37 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/validate_test.go | 45 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/validate_test.go | 46 | `altcoin` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/validate_test.go | 53 | `ETHUSDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/validate_test.go | 61 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/validate_test.go | 62 | `altcoin` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/validate_test.go | 69 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/validate_test.go | 77 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/validate_test.go | 78 | `altcoin` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/validate_test.go | 86 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| kernel/validate_test.go | 87 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/data.go | 13 | `BINANCE` | KEEP | CR-B | wave-name comment (W-NO-BINANCE) — documents the OI-absent-on-MNQ behavior |
+| market/data.go | 21 | `BINANCE` | KEEP | CR-B | wave-name comment (W-NO-BINANCE) — documents the OI-absent-on-MNQ behavior |
+| market/data.go | 87 | `BINANCE` | KEEP | CR-B | wave-name comment (W-NO-BINANCE) — documents the OI-absent-on-MNQ behavior |
+| market/data.go | 148 | `BINANCE` | KEEP | CR-B | wave-name comment (W-NO-BINANCE) — documents the OI-absent-on-MNQ behavior |
+| market/data.go | 354 | `BINANCE` | KEEP | CR-B | wave-name comment (W-NO-BINANCE) — documents the OI-absent-on-MNQ behavior |
+| market/data_freshness.go | 18 | `ETH` | KEEP | CR-B | CME ETH session acronym (Electronic Trading Hours) — not the venue token |
+| market/data_freshness.go | 28 | `ETH` | KEEP | CR-B | CME ETH session acronym (Electronic Trading Hours) — not the venue token |
+| market/data_freshness.go | 144 | `ETH` | KEEP | CR-B | CME ETH session acronym (Electronic Trading Hours) — not the venue token |
+| market/data_freshness.go | 148 | `ETH` | KEEP | CR-B | CME ETH session acronym (Electronic Trading Hours) — not the venue token |
+| market/data_test.go | 361 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/data_test.go | 378 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/data_test.go | 410 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/data_test.go | 428 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/data_test.go | 442 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/data_test.go | 463 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/data_test.go | 485 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/data_test.go | 497 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/futures_symbol_test.go | 31 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/futures_symbol_test.go | 32 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/futures_symbol_test.go | 33 | `ETH` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/futures_symbol_test.go | 34 | `ETHUSDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/futures_symbol_test.go | 61 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/futures_symbol_test.go | 65 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/futures_symbol_test.go | 77 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/futures_symbol_test.go | 117 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 14 | `BINANCE` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 17 | `Binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 18 | `Binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 21 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 22 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 24 | `Binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 28 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 30 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 31 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 32 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 34 | `Binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 35 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 36 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 40 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 41 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 47 | `Binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 79 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 84 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 85 | `Binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 95 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 106 | `BINANCE` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 107 | `BINANCE` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/no_binance_source_guard_test.go | 108 | `BINANCE` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| market/types.go | 38 | `BINANCE` | KEEP | CR-B | wave-name comment (W-NO-BINANCE) — documents the OI-absent-on-MNQ behavior |
+| ninjascript/VLBarsSubscriptionManager.cs | 81 | `ETH` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| ninjascript/VLBarsSubscriptionManager.cs | 96 | `ETH` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| ninjascript/VLBarsSubscriptionManager.cs | 349 | `ETH` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| ninjascript/VLBarsSubscriptionManager.cs | 631 | `ETH` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| ninjascript/VLContractResolver.cs | 66 | `BTC` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| ninjascript/VLContractResolver_VERIFY.md | 20 | `BTC` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| ninjascript/VLContractResolver_VERIFY.md | 123 | `BTC` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| ninjascript/VLContractResolver_VERIFY.md | 124 | `ETH` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| ninjascript/VLHistoryPull.cs | 132 | `ETH` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| ninjascript/vltrader_tcp_PROTOCOL.md | 333 | `ETH` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| patches/partner-2026-08-20/MANIFEST.md | 458 | `wallet` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| provider/ninjatrader/bar_source.go | 18 | `"mixed"` | KEEP | CR-B | bar-source state constant — same family as the ExecutorVerdict mixed content-assert (KEEP) |
+| provider/ninjatrader/multisymbol_subscribe_test.go | 133 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| provider/ninjatrader/tcp_framing.go | 675 | `"mixed"` | KEEP | CR-B | bar-source state constant — same family as the ExecutorVerdict mixed content-assert (KEEP) |
+| scripts/replay_write_time_feasibility.py | 162 | `"mixed"` | KEEP | CR-B | config/doc/script file — not shipped code, KEEP byte-identical |
+| store/arm_state_source_guard_test.go | 105 | `bybit` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/arm_state_source_guard_test.go | 106 | `kucoin` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/armed_orders_test.go | 51 | `ETH` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/bar_history.go | 151 | `"mixed"` | KEEP | CR-B | bar-source state constant — same family as the ExecutorVerdict mixed content-assert (KEEP) |
+| store/bar_history_across_roll.go | 82 | `"mixed"` | KEEP | CR-B | bar-source state constant — same family as the ExecutorVerdict mixed content-assert (KEEP) |
+| store/knob_registry_table.go | 14 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/knob_registry_table.go | 15 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/knob_registry_table.go | 26 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/knob_registry_table.go | 27 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/legacy_crypto_rows_c1_test.go | 36 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 38 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 39 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 40 | `oi_top` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 41 | `oi_top` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 42 | `hyper_all` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 43 | `hyper_main` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 44 | `netflow` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 47 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 58 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 59 | `altcoin` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 95 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 97 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 103 | `Hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 104 | `Hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 105 | `aster` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 106 | `aster` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 107 | `aster` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 108 | `Wallet` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 109 | `lighter` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 110 | `lighter` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 119 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 122 | `Hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 123 | `aster` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 130 | `claw402` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 131 | `Claw402` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 138 | `claw402` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 233 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 236 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 237 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy.go | 49 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 153 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 154 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 156 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 157 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 159 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 160 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 162 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 163 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 167 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 168 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 170 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 171 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 173 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 174 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 176 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 177 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 217 | `AI500` | KEEP | CR-B | C1 legacy-row normalization — removed source types collapse to static (stored rows must load) |
+| store/strategy.go | 224 | `ai500` | KEEP | CR-B | C1 legacy-row normalization — removed source types collapse to static (stored rows must load) |
+| store/strategy.go | 260 | `ai500` | KEEP | CR-B | C1 legacy-row normalization — removed source types collapse to static (stored rows must load) |
+| store/strategy.go | 261 | `ai500` | KEEP | CR-B | C1 legacy-row normalization — removed source types collapse to static (stored rows must load) |
+| store/strategy.go | 263 | `oi_top` | KEEP | CR-B | C1 legacy-row normalization — removed source types collapse to static (stored rows must load) |
+| store/strategy.go | 265 | `oi_low` | KEEP | CR-B | C1 legacy-row normalization — removed source types collapse to static (stored rows must load) |
+| store/strategy.go | 627 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 628 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 629 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 630 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 1941 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 1942 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 1943 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 1944 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 1946 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 1947 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 1948 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 1949 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 2119 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 2120 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 2121 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 2122 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/strategy.go | 2174 | `BINANCE` | KEEP | CR-B | wave-name comment (W-NO-BINANCE) — documents the OI-absent-on-MNQ behavior |
+| store/strategy.go | 2186 | `BINANCE` | KEEP | CR-B | wave-name comment (W-NO-BINANCE) — documents the OI-absent-on-MNQ behavior |
+| store/strategy.go | 2390 | `ai500` | KEEP | CR-B | C1 legacy-row normalization — removed source types collapse to static (stored rows must load) |
+| store/strategy_dayplan_test.go | 162 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_futures_indicators_test.go | 7 | `Binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_futures_indicators_test.go | 22 | `Binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_futures_indicators_test.go | 23 | `BINANCE` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_futures_symbol_test.go | 2 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_futures_symbol_test.go | 23 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_futures_symbol_test.go | 24 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_futures_symbol_test.go | 33 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_futures_symbol_test.go | 34 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_legacy_hyper_test.go | 17 | `hyper_all` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_legacy_hyper_test.go | 18 | `hyper_main` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_legacy_hyper_test.go | 19 | `hyper_main` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_legacy_hyper_test.go | 33 | `hyper_all` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_schema_test.go | 13 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_schema_test.go | 47 | `ETHUSDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_schema_test.go | 51 | `ETH` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_schema_test.go | 58 | `ETHUSDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_schema_test.go | 87 | `AI500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_schema_test.go | 108 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_schema_test.go | 126 | `quant` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_schema_test.go | 127 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_schema_test.go | 135 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_schema_test.go | 141 | `netflow` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_schema_test.go | 145 | `netflow` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_schema_test.go | 146 | `netflow` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_schema_test.go | 147 | `netflow` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_schema_test.go | 152 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_schema_test.go | 181 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_token_test.go | 55 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_token_test.go | 100 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/trader.go | 63 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/trader.go | 64 | `Altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/trader.go | 66 | `AI500` | KEEP | CR-B | C1 legacy crypto columns — stored rows must load (column drop pending CTO ruling) |
+| store/trader.go | 67 | `oi_top` | KEEP | CR-B | C1 legacy crypto columns — stored rows must load (column drop pending CTO ruling) |
+| store/trader.go | 160 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/trader.go | 161 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
+| store/trader.go | 163 | `AI500` | KEEP | CR-B | C1 legacy crypto columns — stored rows must load (column drop pending CTO ruling) |
+| store/trader.go | 164 | `oi_top` | KEEP | CR-B | C1 legacy crypto columns — stored rows must load (column drop pending CTO ruling) |
+| telegram/agent/agent_test.go | 131 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 137 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 143 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 185 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 211 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 230 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 238 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 252 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 261 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 269 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 276 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 280 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 281 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 286 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 288 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 291 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 310 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 312 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 314 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 326 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 328 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 330 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 333 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 360 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 374 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/agent/agent_test.go | 382 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/bot_token_blacklist_test.go | 48 | `btC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/bot_token_blacklist_test.go | 59 | `btC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/bot_token_blacklist_test.go | 80 | `btC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/bot_token_same_second_test.go | 76 | `btC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/bot_token_same_second_test.go | 214 | `btC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/bot_token_same_second_test.go | 217 | `btC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/bot_token_test.go | 95 | `btC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/bot_token_test.go | 134 | `btC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/bot_token_test.go | 139 | `btC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/bot_token_test.go | 147 | `btC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/bot_token_test.go | 152 | `btC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/bot_token_test.go | 169 | `btC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/bot_token_test.go | 209 | `btC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/bot_token_test.go | 219 | `btC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/bot_token_test.go | 227 | `btC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/bot_token_test.go | 230 | `btC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| telegram/bot_token_test.go | 246 | `btC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| trader/auto_trader_decision.go | 131 | `Wallet` | KEEP | CR-B | NT8 account-snapshot shape — balance key family (CTO ruling, byte-identical) |
+| trader/auto_trader_decision.go | 136 | `wallet` | KEEP | CR-B | NT8 account-snapshot shape — balance key family (CTO ruling, byte-identical) |
+| trader/auto_trader_decision.go | 137 | `Wallet` | KEEP | CR-B | NT8 account-snapshot shape — balance key family (CTO ruling, byte-identical) |
+| trader/auto_trader_decision.go | 150 | `Wallet` | KEEP | CR-B | NT8 snapshot/comma-ok block — byte-identical (CTO F2 ruling family) |
+| trader/auto_trader_decision.go | 151 | `Wallet` | KEEP | CR-B | NT8 account-snapshot shape — balance key family (CTO ruling, byte-identical) |
+| trader/auto_trader_decision.go | 163 | `Binance` | KEEP | CR-B | NT8 snapshot/comma-ok block — byte-identical (CTO F2 ruling family) |
+| trader/auto_trader_decision.go | 182 | `Lighter` | KEEP | CR-B | NT8 snapshot/comma-ok block — byte-identical (CTO F2 ruling family) |
+| trader/auto_trader_decision.go | 184 | `USDT` | KEEP | CR-B | NT8 snapshot/comma-ok block — byte-identical (CTO F2 ruling family) |
+| trader/auto_trader_decision.go | 185 | `Lighter` | KEEP | CR-B | NT8 snapshot/comma-ok block — byte-identical (CTO F2 ruling family) |
+| trader/auto_trader_decision.go | 222 | `wallet` | KEEP | CR-B | NT8 snapshot/comma-ok block — byte-identical (CTO F2 ruling family) |
+| trader/auto_trader_decision.go | 223 | `wallet` | KEEP | CR-B | NT8 account-snapshot shape — balance key family (CTO ruling, byte-identical) |
+| trader/auto_trader_decision.go | 255 | `Binance` | KEEP | CR-B | NT8 snapshot/comma-ok block — byte-identical (CTO F2 ruling family) |
+| trader/auto_trader_decision.go | 363 | `binance` | KEEP | CR-B | NT8 snapshot/comma-ok block — byte-identical (CTO F2 ruling family) |
+| trader/auto_trader_decision.go | 382 | `Binance` | KEEP | CR-B | NT8 snapshot/comma-ok block — byte-identical (CTO F2 ruling family) |
+| trader/auto_trader_decision.go | 524 | `binance` | KEEP | CR-B | NT8 snapshot/comma-ok block — byte-identical (CTO F2 ruling family) |
+| trader/auto_trader_decision.go | 660 | `USDT` | KEEP | CR-B | NT8 snapshot/comma-ok block — byte-identical (CTO F2 ruling family) |
+| trader/auto_trader_decision.go | 704 | `USDT` | KEEP | CR-B | NT8 snapshot/comma-ok block — byte-identical (CTO F2 ruling family) |
+| trader/ninjatrader/reconcile_late_fill.go | 258 | `USDT` | KEEP | CR-B | NT8 fill commission-asset default — TCP wire schema lockstep (byte-identical) |
+| trader/ninjatrader/tcp_trader.go | 1258 | `Wallet` | KEEP | CR-B | NT8 account-snapshot shape — balance key family (CTO ruling, byte-identical) |
+| trader/ninjatrader/wire_tick_root_test.go | 35 | `USDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| trader/protection_reconciler.go | 425 | `"MIXED"` | KEEP | CR-B | bracket-state string constant — same family as the ExecutorVerdict mixed content-assert (KEEP) |

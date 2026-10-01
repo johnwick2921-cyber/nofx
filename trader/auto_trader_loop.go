@@ -1226,17 +1226,6 @@ func sortDecisionsByPriority(decisions []kernel.Decision) []kernel.Decision {
 	return sorted
 }
 
-func (at *AutoTrader) checkClaw402Balance() {
-	scanMinutes := int(at.config.ScanInterval.Minutes())
-	if scanMinutes <= 0 {
-		scanMinutes = 3
-	}
-	dailyCost, _ := store.EstimateRunway(1.0, at.config.CustomModelName, scanMinutes)
-	logger.Infof("💰 [%s] Estimated daily AI cost: ~$%.2f (model: %s, interval: %dm)",
-		at.name, dailyCost, at.config.CustomModelName, scanMinutes)
-
-}
-
 // attachTradeContext (P&L-TRUTH WAVE, 2026-09-01) fills the prompt-facing
 // trade context from the STRICT corrected-column aggregators: the session-day
 // guardrail inputs, the recent closed trades (UNRESOLVED rows carry no P&L

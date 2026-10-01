@@ -148,7 +148,7 @@ export function ChartTabs({
     setMarketType(newMarketType)
     // Reset the chart symbol to the new market's default (e.g. MNQ for
     // ninjatrader) so the chart doesn't keep requesting the previous market's
-    // symbol (default 'BTC') on the wrong exchange, which returns empty klines.
+    // symbol on the wrong exchange, which returns empty klines.
     // An externally-selected symbol still wins via the selectedSymbol effect.
     if (!selectedSymbol) {
       setChartSymbol(MARKET_CONFIG[newMarketType].defaultSymbol)

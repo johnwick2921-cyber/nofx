@@ -280,7 +280,7 @@ func (at *AutoTrader) enforcePositionValueRatio(positionSizeUSD float64, equity 
 
 	// Check if position size exceeds limit
 	if positionSizeUSD > maxPositionValue {
-		logger.Infof("  ⚠️ [RISK CONTROL] Position %.2f USDT exceeds limit (equity %.2f × %.1fx = %.2f USDT max for %s), capping",
+		logger.Infof("  ⚠️ [RISK CONTROL] Position %.2f USD exceeds limit (equity %.2f × %.1fx = %.2f USD max for %s), capping",
 			positionSizeUSD, equity, maxPositionValueRatio, maxPositionValue, symbol)
 		return maxPositionValue, true
 	}
@@ -296,11 +296,11 @@ func (at *AutoTrader) enforceMinPositionSize(positionSizeUSD float64) error {
 
 	minSize := at.config.StrategyConfig.RiskControl.MinPositionSize
 	if minSize <= 0 {
-		minSize = 12 // Default: 12 USDT
+		minSize = 12 // Default: 12 USD
 	}
 
 	if positionSizeUSD < minSize {
-		return fmt.Errorf("❌ [RISK CONTROL] Position %.2f USDT below minimum (%.2f USDT)", positionSizeUSD, minSize)
+		return fmt.Errorf("❌ [RISK CONTROL] Position %.2f USD below minimum (%.2f USD)", positionSizeUSD, minSize)
 	}
 	return nil
 }

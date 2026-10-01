@@ -200,11 +200,11 @@ export interface PublishStrategyConfig {
 
 // Grid trading specific configuration
 export interface GridStrategyConfig {
-  // Trading pair (e.g., "BTCUSDT")
+  // Trading pair (e.g., "MNQ")
   symbol: string
   // Number of grid levels (5-50)
   grid_count: number
-  // Total investment in USDT
+  // Total investment in the value currency
   total_investment: number
   // Leverage (1-20)
   leverage: number
@@ -236,9 +236,6 @@ export interface CoinSourceConfig {
   source_type: 'static'
   static_coins?: string[]
   excluded_coins?: string[] // 排除的币种列表
-  use_hyper_all: boolean
-  use_hyper_main: boolean
-  hyper_main_limit?: number
 }
 
 export interface IndicatorConfig {
@@ -297,7 +294,7 @@ export interface RiskControlConfig {
 
   // Risk Parameters
   max_margin_usage: number // Max margin utilization, e.g. 0.9 = 90% (CODE ENFORCED)
-  min_position_size: number // Min position size in USDT (CODE ENFORCED)
+  min_position_size: number // Min position size in the value currency (CODE ENFORCED)
   min_risk_reward_ratio: number // Min take_profit / stop_loss ratio (CODE ENFORCED, Chunk 1)
   min_confidence: number // Min AI confidence to open position (CODE ENFORCED, Chunk 1)
 

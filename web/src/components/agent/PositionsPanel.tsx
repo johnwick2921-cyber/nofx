@@ -2,7 +2,7 @@ import useSWR from 'swr'
 import { useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
-import { ArrowUpRight, ArrowDownRight, Wallet } from 'lucide-react'
+import { ArrowUpRight, ArrowDownRight, Activity } from 'lucide-react'
 import type { Position, TraderInfo } from '../../types'
 
 export function PositionsPanel() {
@@ -30,7 +30,8 @@ export function PositionsPanel() {
       void mutatePositions()
     }
     window.addEventListener('agent-config-refresh', handleRefresh)
-    return () => window.removeEventListener('agent-config-refresh', handleRefresh)
+    return () =>
+      window.removeEventListener('agent-config-refresh', handleRefresh)
   }, [mutatePositions, mutateTraders])
 
   if (!user || !token) {
@@ -43,7 +44,7 @@ export function PositionsPanel() {
           fontSize: 12,
         }}
       >
-        <Wallet size={20} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
+        <Activity size={20} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
         <div>Login to view positions</div>
       </div>
     )
@@ -72,11 +73,13 @@ export function PositionsPanel() {
         const pnl = pos.unrealized_pnl
         const isProfit = pnl >= 0
         const color = isProfit ? '#00e5a0' : '#F6465D'
-        const side = pos.side?.toUpperCase() || (pos.quantity > 0 ? 'LONG' : 'SHORT')
+        const side =
+          pos.side?.toUpperCase() || (pos.quantity > 0 ? 'LONG' : 'SHORT')
         const rawSymbol = pos.symbol || ''
-        // Stock symbols are pure letters (1-5 chars), crypto has USDT suffix
-        const isStock = /^[A-Z]{1,5}$/.test(rawSymbol) && !rawSymbol.endsWith('USDT')
-        const symbol = isStock ? rawSymbol : rawSymbol.replace('USDT', '')
+        // Stock symbols are pure letters (1-5 chars), futures are roots
+        const isStock =
+          /^[A-Z]{1,5}$/.test(rawSymbol) && !rawSymbol.endsWith('USD')
+        const symbol = isStock ? rawSymbol : rawSymbol.replace('USD', '')
         const currencyPrefix = isStock ? '$' : ''
 
         return (
@@ -142,7 +145,8 @@ export function PositionsPanel() {
                   <ArrowDownRight size={12} />
                 )}
                 {isProfit ? '+' : ''}
-                {currencyPrefix}{pnl.toFixed(2)}
+                {currencyPrefix}
+                {pnl.toFixed(2)}
               </div>
             </div>
             <div
@@ -153,8 +157,13 @@ export function PositionsPanel() {
                 color: '#5c5c72',
               }}
             >
-              <span>{isStock ? 'Shares' : 'Qty'}: {pos.quantity}</span>
-              <span>Entry: {currencyPrefix}{pos.entry_price.toFixed(2)}</span>
+              <span>
+                {isStock ? 'Shares' : 'Qty'}: {pos.quantity}
+              </span>
+              <span>
+                Entry: {currencyPrefix}
+                {pos.entry_price.toFixed(2)}
+              </span>
             </div>
           </div>
         )

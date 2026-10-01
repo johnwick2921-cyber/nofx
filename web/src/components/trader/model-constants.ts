@@ -1,5 +1,5 @@
 // Constants for AI model and provider configuration
-// CR-C: the claw402/blockrun payment-provider constants left with the payment
+// CR-C: the legacy payment-provider constants left with the payment
 // family (C4/C5); only the display helpers remain. crypto-era sections removed.
 
 // Get friendly AI model display name

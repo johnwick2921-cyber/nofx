@@ -831,7 +831,7 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 			continue
 		}
 
-		// Liquidity filter (skip for xyz dex assets - they don't have OI data from Binance).
+		// Liquidity filter (skip for xyz dex assets - they don't have OI data on futures).
 		// CME futures (NT8 path) likewise have no crypto open-interest feed (OI is
 		// absent — nil — since W-NO-BINANCE A), so the OI gate must not judge
 		// them — exempt them too.

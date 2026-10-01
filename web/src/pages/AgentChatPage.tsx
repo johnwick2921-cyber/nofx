@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   PanelRightClose,
   PanelRightOpen,
-  Wallet,
   Bot,
   Bookmark,
   ChevronDown,
@@ -192,7 +191,7 @@ export function AgentChatPage() {
   const sidebarSections = [
     {
       key: 'positions' as const,
-      icon: <Wallet size={14} />,
+      icon: <Bot size={14} />,
       title: language === 'zh' ? '持仓' : 'Positions',
       component: <PositionsPanel />,
     },

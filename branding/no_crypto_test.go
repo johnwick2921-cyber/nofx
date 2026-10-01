@@ -275,7 +275,11 @@ func TestNoCryptoImportsSDKsHosts(t *testing.T) {
 		}
 	}
 	if len(problems) > 0 {
-		for _, p := range problems[:12] {
+		n := len(problems)
+		if n > 12 {
+			n = 12
+		}
+		for _, p := range problems[:n] {
 			t.Errorf("%s", p)
 		}
 		t.Fatalf("%d crypto census violations (0 expected at the integrated head)", len(problems))

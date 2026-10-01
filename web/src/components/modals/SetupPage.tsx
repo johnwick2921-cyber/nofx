@@ -2,10 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { invalidateSystemConfig } from '../../lib/config'
-import {
-  VL_BEGINNER_ONBOARDING_COMPLETED_KEY,
-  VL_BEGINNER_WALLET_ADDRESS_KEY,
-} from '../../lib/storageMigration'
+import { VL_BEGINNER_ONBOARDING_COMPLETED_KEY } from '../../lib/storageMigration'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { LanguageSwitcher } from '../common/LanguageSwitcher'
 
@@ -66,7 +63,6 @@ export function SetupPage() {
     localStorage.removeItem('auth_user')
     localStorage.removeItem('user_id')
     localStorage.removeItem(VL_BEGINNER_ONBOARDING_COMPLETED_KEY)
-    localStorage.removeItem(VL_BEGINNER_WALLET_ADDRESS_KEY)
   }, [])
 
   const l = labels[language as keyof typeof labels] || labels.en

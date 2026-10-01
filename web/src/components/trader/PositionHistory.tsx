@@ -1014,7 +1014,7 @@ export function PositionHistory({ traderId }: PositionHistoryProps) {
                 },
                 ...uniqueSymbols.map((s) => ({
                   value: s,
-                  label: (s || '').replace('USDT', ''),
+                  label: (s || '').replace('USD', ''),
                 })),
               ]}
               className="rounded px-3 py-1.5 text-sm"

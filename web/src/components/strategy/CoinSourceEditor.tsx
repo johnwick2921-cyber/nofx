@@ -31,7 +31,7 @@ export function CoinSourceEditor({
     : sourceTypes
   const effectiveSourceType = isFutures ? 'static' : config.source_type
 
-  // xyz dex assets (stocks, forex, commodities) - should NOT get USDT suffix
+  // xyz dex assets (stocks, forex, commodities) - should NOT get a USD suffix
   const xyzDexAssets = new Set([
     // Stocks
     'TSLA',
@@ -68,10 +68,7 @@ export function CoinSourceEditor({
   ])
 
   const isXyzDexAsset = (symbol: string): boolean => {
-    const base = symbol
-      .toUpperCase()
-      .replace(/^XYZ:/, '')
-      .replace(/USDT$|USD$|-USDC$/, '')
+    const base = symbol.toUpperCase().replace(/^XYZ:/, '').replace(/USD$/, '')
     return xyzDexAssets.has(base)
   }
 
@@ -105,17 +102,15 @@ export function CoinSourceEditor({
 
     const symbol = newCoin.toUpperCase().trim()
 
-    // For xyz dex assets (stocks, forex, commodities), use xyz: prefix without USDT
+    // For xyz dex assets (stocks, forex, commodities), use xyz: prefix without a USD suffix
     let formattedSymbol: string
     if (isXyzDexAsset(symbol)) {
       // Remove xyz: prefix (case-insensitive) and any USD suffixes
-      const base = symbol
-        .replace(/^xyz:/i, '')
-        .replace(/USDT$|USD$|-USDC$/i, '')
+      const base = symbol.replace(/^xyz:/i, '').replace(/USD$/i, '')
       formattedSymbol = `xyz:${base}`
     } else if (isCMEFutures(symbol)) {
       // CME futures root (ES, MNQ, NG, …) — recognized as a futures symbol, NOT
-      // crypto; keep the bare root (no USDT suffix).
+      // keep the bare root (no USD suffix).
       formattedSymbol = symbol
     } else {
       formattedSymbol = symbol
@@ -141,16 +136,14 @@ export function CoinSourceEditor({
     if (!newExcludedCoin.trim()) return
     const symbol = newExcludedCoin.toUpperCase().trim()
 
-    // For xyz dex assets, use xyz: prefix without USDT
+    // For xyz dex assets, use xyz: prefix without a USD suffix
     let formattedSymbol: string
     if (isXyzDexAsset(symbol)) {
-      const base = symbol
-        .replace(/^xyz:/i, '')
-        .replace(/USDT$|USD$|-USDC$/i, '')
+      const base = symbol.replace(/^xyz:/i, '').replace(/USD$/i, '')
       formattedSymbol = `xyz:${base}`
     } else if (isCMEFutures(symbol)) {
       // CME futures root (ES, MNQ, NG, …) — recognized as a futures symbol, NOT
-      // crypto; keep the bare root (no USDT suffix).
+      // keep the bare root (no USD suffix).
       formattedSymbol = symbol
     } else {
       formattedSymbol = symbol
@@ -258,7 +251,7 @@ export function CoinSourceEditor({
                 value={newCoin}
                 onChange={(e) => setNewCoin(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddCoin()}
-                placeholder="e.g. MNQ, ES, BTC, ETH"
+                placeholder="e.g. MNQ, ES"
                 className="flex-1 px-4 py-2 rounded-lg bg-vl-neo-bg border border-vl-neo-gold/20 text-vl-neo-text"
               />
               <button
@@ -314,7 +307,7 @@ export function CoinSourceEditor({
               value={newExcludedCoin}
               onChange={(e) => setNewExcludedCoin(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAddExcludedCoin()}
-              placeholder="e.g. MNQ, ES, BTC, ETH"
+              placeholder="e.g. MNQ, ES"
               className="flex-1 px-4 py-2 rounded-lg text-sm bg-vl-neo-bg border border-vl-neo-gold/20 text-vl-neo-text"
             />
             <button
