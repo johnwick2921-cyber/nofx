@@ -6,6 +6,14 @@
 #
 # Usage:  scripts/crypto-union-gate.sh <table-A> <table-B> <table-C>
 #
+# CANONICAL INVOCATION (CTO, 2026-10-01 — the ONLY valid one; run inside the
+# repo root; a run with no tables passed prints a 0-KEEP-rows lie and its
+# numbers must never be quoted):
+#   bash scripts/crypto-union-gate.sh \\
+#       docs/crypto-removal/disposition-CR-A.md \\
+#       docs/crypto-removal/disposition-cr-b.md \\
+#       docs/crypto-removal/disposition-CR-C.md
+#
 # CANONICAL TABLE FORMAT (CTO ruling, C13 table review 2026-10-01 — CR-B's
 # markdown pipe row is canonical; one row per hit LINE):
 #   branch-point: <40-hex sha>          # the part's branch point
@@ -80,6 +88,20 @@ git ls-files -z > "$LIST" || { bad "git ls-files failed (never skip)"; echo "== 
 nfiles=$(tr -cd '\0' < "$LIST" | wc -c)
 if [ "$nfiles" -lt 2000 ]; then bad "enumeration floor: $nfiles tracked files < 2000"; fi
 ok "enumerated $nfiles tracked files (floor 2000)"
+
+# -- the gate's own inputs are never swept: the disposition tables carry the
+# literal BY DESIGN (CR-A embeds it; every row names tokens)
+ntables=0
+for a in "$@"; do ntables=$((ntables+1)); done
+if [ "$ntables" -eq 0 ]; then bad "gate invoked with NO tables — a 0-KEEP-rows result is vacuous, never quote it"; fi
+ok "gate run over $ntables tables: $*"
+# normalize each table arg to its repo-relative path (./ stripped) for the sweep skip
+table_list=""
+for a in "$@"; do
+  a=${a#./}
+  table_list="$table_list
+$a"
+done
 
 # row index:  tbl|file|line -> disposition (owner/token kept for messages)
 declare -A row_dispo row_owner row_token row_line
@@ -236,6 +258,11 @@ done
 # -- the sweep: every hit line has rows, ONE owner, and a KEEP row covers it
 hits=0; excluded=0
 while IFS= read -r -d '' f; do
+  # the disposition tables themselves are gate INPUTS, never swept — they
+  # carry the literal and token names by design (a self-hit proves nothing)
+  case "$table_list" in *"
+$f
+"*) continue;; esac
   case "$f" in
     *_test.go) continue;;   # swept scope: Go *_test.go excluded
   esac
