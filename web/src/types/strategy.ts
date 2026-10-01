@@ -233,7 +233,7 @@ export interface GridStrategyConfig {
 }
 
 export interface CoinSourceConfig {
-  source_type: 'static' | 'hyper_all' | 'hyper_main' | 'mixed'
+  source_type: 'static'
   static_coins?: string[]
   excluded_coins?: string[] // 排除的币种列表
   use_hyper_all: boolean

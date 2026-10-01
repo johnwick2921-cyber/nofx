@@ -196,13 +196,11 @@ export function SettingsPage() {
       // when adding via the catalog (not editing a specific row) for a provider that
       // ALREADY has a configured entry, CREATE a new named row instead of sending a
       // bare-provider key that the backend's legacy-match would use to overwrite the
-      // existing entry. Wallet providers (claw402/blockrun) keep their reconfigure flow.
+      // existing entry.
       const provider = modelToUpdate.provider || ''
-      const isWalletProvider =
-        provider === 'claw402' || provider.startsWith('blockrun')
       const providerAlreadyConfigured =
         !existingModel && configuredModels.some((m) => m.provider === provider)
-      if (providerAlreadyConfigured && !isWalletProvider) {
+      if (providerAlreadyConfigured) {
         const sameProviderCount = configuredModels.filter(
           (m) => m.provider === provider
         ).length

@@ -60,7 +60,7 @@ interface AdvancedChartProps {
   interval?: string
   traderID?: string
   height?: number
-  exchange?: string // Exchange type: binance, bybit, okx, bitget, hyperliquid, aster, lighter
+  exchange?: string // Exchange type: ninjatrader only in the vl productet, hyperliquid, aster, lighter
   onSymbolChange?: (symbol: string) => void // Symbol change callback
   selectedAccount?: string // Dashboard-selected account; open orders stay trader-bound (F31)
 }
@@ -115,7 +115,7 @@ export function AdvancedChart({
   interval = '5m',
   traderID,
   height = 550,
-  exchange = 'binance', // Default to binance
+  exchange = 'ninjatrader', // Default to ninjatrader (the only venue)
   onSymbolChange: _onSymbolChange, // Available for future use
   selectedAccount,
 }: AdvancedChartProps) {
