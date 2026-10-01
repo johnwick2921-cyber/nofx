@@ -37,7 +37,7 @@ func resolveKlinesLimit(exchange, limitStr string) int {
 	return limit
 }
 
-// handleKlines K-line data (supports multiple exchanges via coinank)
+// handleKlines K-line data (multiple providers: ninjatrader, alpaca, twelvedata)
 func (s *Server) handleKlines(c *gin.Context) {
 	// Get query parameters
 	symbol := c.Query("symbol")
