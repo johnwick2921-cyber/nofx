@@ -110,7 +110,7 @@ func (at *AutoTrader) InitializeGrid() error {
 
 ```bash
 go build ./trader/
-go test -v -run "TestLighter.*Leverage" ./trader/ -timeout 60s
+go test -v -run "TestDex.*Leverage" ./trader/ -timeout 60s
 ```
 
 ### Step 1.4: 提交
@@ -571,7 +571,7 @@ func (at *AutoTrader) checkMaxDrawdown() (bool, float64) {
 	currentEquity := 0.0
 	if equity, ok := balance["total_equity"].(float64); ok {
 		currentEquity = equity
-	} else if total, ok := balance["totalWalletBalance"].(float64); ok {
+	} else if total, ok := balance["totalAccountBalance"].(float64); ok {
 		if unrealized, ok := balance["totalUnrealizedProfit"].(float64); ok {
 			currentEquity = total + unrealized
 		}
