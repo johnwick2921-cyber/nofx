@@ -9,9 +9,9 @@ If you only have five minutes, read this section and the data-flow diagram in §
 
 ## 1. Welcome
 
-`vl` is an AI-driven trading bot. The repo started life as a crypto perpetuals bot (Binance / Bybit / Hyperliquid) and was repurposed for **CME NQ/MNQ index futures** using Databento for market data and NinjaTrader 8 (NT8) as the execution venue via a CSV file bridge.
+`vl` is an AI-driven trading bot. The repo started life as a crypto perpetuals bot and was repurposed for **CME NQ/MNQ index futures** — NinjaTrader 8 (NT8) is the single data source and execution venue via the TCP bridge (the CSV bridge is deprecated).
 
-The crypto path still compiles and the code is still there — it remains in `trader/binance`, `trader/bybit`, etc. — but **the active target is NQ futures**. The Go binary boots into "futures mode" when `TRADING_MODE=futures` is set in `.env`.
+**The active target is NQ futures** — the crypto path was removed in the crypto removal wave (2026-10). The Go binary boots into "futures mode" when `TRADING_MODE=futures` is set in `.env`.
 
 The user (the operator) runs the bot on a WSL2 (Linux) host that shares files with a Windows host running NT8. The bot writes signals to a CSV file that NT8 polls; NT8 writes fill records that the bot tails. End to end.
 
