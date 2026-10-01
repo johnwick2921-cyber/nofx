@@ -2,10 +2,10 @@ package store
 
 import (
 	"fmt"
-	"vl/crypto"
-	"vl/logger"
 	"strings"
 	"time"
+	"vl/crypto"
+	"vl/logger"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -87,6 +87,19 @@ func (s *ExchangeStore) initTables() error {
 	return nil
 }
 
+// missingContainsexchangeType reports whether the missing-fields list names the
+// unsupported-type marker (the visibility default arm returns ["exchange_type"]
+// for any type this build no longer supports). C1 P0 (PR #188 D1 port): such a
+// row is a legacy crypto row and is KEPT, never deleted.
+func missingContainsexchangeType(missing []string) bool {
+	for _, m := range missing {
+		if m == "exchange_type" {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *ExchangeStore) cleanupIncompleteExchangeConfigs() error {
 	var exchanges []Exchange
 	if err := s.db.Find(&exchanges).Error; err != nil {
@@ -106,6 +119,10 @@ func (s *ExchangeStore) cleanupIncompleteExchangeConfigs() error {
 			string(exchange.LighterAPIKeyPrivateKey),
 			exchange.NTDataDir,
 		)
+		if missingContainsexchangeType(missing) {
+			logger.Infof("exchange row %s type=%s unsupported in this build — kept, never deleted", exchange.ID, exchange.ExchangeType)
+			continue
+		}
 		if len(missing) > 0 {
 			if err := s.db.Delete(&Exchange{}, "id = ? AND user_id = ?", exchange.ID, exchange.UserID).Error; err != nil {
 				return err

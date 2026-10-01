@@ -15,9 +15,8 @@ import (
 // Synthetic fixture only (never data.db or a copy of it; the real-copy check is
 // the CTO's).
 //
-// Boot-cleanup survival is NOT asserted for the exchange row here: the C1 P0
-// fix (cleanupIncompleteExchangeConfigs skips unsupported types, PR #188 D1–D3)
-// is not yet ported at this head — do not pin the pre-fix deletion.
+// The C1 P0 cleanup-skip (PR #188 D1 port) makes the exchange row survive the
+// boot-cleanup pass too; the reopen assertion below pins it.
 func TestLegacyCryptoRowsLoadWithFuturesSettingsIntact(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "c1-legacy.db")
 	st, err := New(dbPath)
@@ -155,5 +154,14 @@ func TestLegacyCryptoRowsLoadWithFuturesSettingsIntact(t *testing.T) {
 	}
 	if _, err := st2.AIModel().Get(userID, "m-legacy"); err != nil {
 		t.Fatalf("ai_model row did not survive the reopen: %v", err)
+	}
+	// C1 P0 — the unsupported-type exchange row survives the boot-cleanup pass
+	// (cleanupIncompleteExchangeConfigs skips it, never deletes it).
+	ex2, err := st2.Exchange().GetByID(userID, "e-legacy")
+	if err != nil {
+		t.Fatalf("legacy exchange row did not survive the boot-cleanup pass: %v", err)
+	}
+	if ex2.ExchangeType != "binance" || ex2.HyperliquidWalletAddr != "0xhyper" {
+		t.Fatalf("legacy exchange row changed across the reopen: %+v", ex2)
 	}
 }
