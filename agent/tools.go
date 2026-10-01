@@ -1458,19 +1458,12 @@ func (a *Agent) toolManageExchangeConfig(storeUserID, argsJSON string) string {
 			lighterIndex = *args.LighterAPIKeyIndex
 		}
 		if err := (exchangeConfigValidator{
-			exchangeType:            exchangeType,
-			enabled:                 enabled,
-			apiKey:                  strings.TrimSpace(args.APIKey),
-			secretKey:               strings.TrimSpace(args.SecretKey),
-			passphrase:              strings.TrimSpace(args.Passphrase),
-			hyperliquidWalletAddr:   strings.TrimSpace(args.HyperliquidWalletAddr),
-			asterUser:               strings.TrimSpace(args.AsterUser),
-			asterSigner:             strings.TrimSpace(args.AsterSigner),
-			asterPrivateKey:         strings.TrimSpace(args.AsterPrivateKey),
-			lighterWalletAddr:       strings.TrimSpace(args.LighterWalletAddr),
-			lighterPrivateKey:       strings.TrimSpace(args.LighterPrivateKey),
-			lighterAPIKeyPrivateKey: strings.TrimSpace(args.LighterAPIKeyPrivateKey),
-			ntDataDir:               strings.TrimSpace(args.NTDataDir),
+			exchangeType: exchangeType,
+			enabled:      enabled,
+			apiKey:       strings.TrimSpace(args.APIKey),
+			secretKey:    strings.TrimSpace(args.SecretKey),
+			passphrase:   strings.TrimSpace(args.Passphrase),
+			ntDataDir:    strings.TrimSpace(args.NTDataDir),
 		}).Validate(); err != nil {
 			return fmt.Sprintf(`{"error":"%s"}`, err)
 		}
@@ -1583,18 +1576,6 @@ func (a *Agent) toolManageExchangeConfig(storeUserID, argsJSON string) string {
 		if trimmed := strings.TrimSpace(args.Passphrase); trimmed != "" {
 			effectivePassphrase = trimmed
 		}
-		effectiveAsterPrivateKey := strings.TrimSpace(string(existing.AsterPrivateKey))
-		if trimmed := strings.TrimSpace(args.AsterPrivateKey); trimmed != "" {
-			effectiveAsterPrivateKey = trimmed
-		}
-		effectiveLighterPrivateKey := strings.TrimSpace(string(existing.LighterPrivateKey))
-		if trimmed := strings.TrimSpace(args.LighterPrivateKey); trimmed != "" {
-			effectiveLighterPrivateKey = trimmed
-		}
-		effectiveLighterAPIKeyPrivateKey := strings.TrimSpace(string(existing.LighterAPIKeyPrivateKey))
-		if trimmed := strings.TrimSpace(args.LighterAPIKeyPrivateKey); trimmed != "" {
-			effectiveLighterAPIKeyPrivateKey = trimmed
-		}
 		ntDataDir := existing.NTDataDir
 		if trimmed := strings.TrimSpace(args.NTDataDir); trimmed != "" {
 			ntDataDir = trimmed
@@ -1608,19 +1589,12 @@ func (a *Agent) toolManageExchangeConfig(storeUserID, argsJSON string) string {
 			ntQty = args.NTDefaultContractQty
 		}
 		validator := exchangeConfigValidator{
-			exchangeType:            existing.ExchangeType,
-			enabled:                 true,
-			apiKey:                  effectiveAPIKey,
-			secretKey:               effectiveSecretKey,
-			passphrase:              effectivePassphrase,
-			hyperliquidWalletAddr:   hyperWallet,
-			asterUser:               asterUser,
-			asterSigner:             asterSigner,
-			asterPrivateKey:         effectiveAsterPrivateKey,
-			lighterWalletAddr:       lighterWallet,
-			lighterPrivateKey:       effectiveLighterPrivateKey,
-			lighterAPIKeyPrivateKey: effectiveLighterAPIKeyPrivateKey,
-			ntDataDir:               ntDataDir,
+			exchangeType: existing.ExchangeType,
+			enabled:      true,
+			apiKey:       effectiveAPIKey,
+			secretKey:    effectiveSecretKey,
+			passphrase:   effectivePassphrase,
+			ntDataDir:    ntDataDir,
 		}
 		if err := validator.Validate(); err != nil {
 			return fmt.Sprintf(`{"error":"%s"}`, err)
