@@ -654,25 +654,6 @@ var censusTable = map[string][]censusEntry{
 // Ceiling = sum of allowed counts at the R1b merge (1160).
 const censusCeiling = 1160
 
-// censusExemptDispositionTable — DS-102 ruling proposal 2026-10-01 (crypto-
-// removal wave): the three disposition tables are GENERATED gate-input
-// artifacts, and their `generated:` provenance line may name the generator's
-// worktree path (a lane checkout dir like ~/<module>-104-cra). That is
-// provenance metadata, not a code
-// reference — the tables are the gate's input, removed when the wave closes.
-// The exemption set is EXACTLY these three files; any other tracked file
-// carrying the token still fails the census. The Ceiling is untouched (no
-// allowed counts were added — nothing else may ride this exemption).
-func censusExemptDispositionTable(f string) bool {
-	switch f {
-	case "docs/crypto-removal/disposition-CR-A.md",
-		"docs/crypto-removal/disposition-cr-b.md",
-		"docs/crypto-removal/disposition-CR-C.md":
-		return true
-	}
-	return false
-}
-
 func TestCensusGuard(t *testing.T) {
 	tok := "no" + "fx" // runtime assembly — never the literal
 	// expand() the table keys once: table keys hold the {OLD}
@@ -687,14 +668,9 @@ func TestCensusGuard(t *testing.T) {
 	}
 	files := strings.Split(strings.TrimSuffix(string(out), "\x00"), "\x00")
 	scanned := 0
-	exempted := 0
 	var mismatches []string
 	for _, f := range files {
 		if f == "" {
-			continue
-		}
-		if censusExemptDispositionTable(f) {
-			exempted++
 			continue
 		}
 		scanned++
@@ -714,8 +690,8 @@ func TestCensusGuard(t *testing.T) {
 			mismatches = append(mismatches, fmt.Sprintf("%s: actual %d, allowed %d — context: %s", f, actual, allowed, context(b, tok)))
 		}
 	}
-	if scanned+exempted != len(files) || scanned == 0 {
-		t.Fatalf("scanned %d + exempted %d of %d files (must cover all files and scan > 0)", scanned, exempted, len(files))
+	if scanned != len(files) || scanned == 0 {
+		t.Fatalf("scanned %d of %d files (must be equal and > 0)", scanned, len(files))
 	}
 	if len(mismatches) > 0 {
 		t.Fatalf("census mismatches (%d):\n%s", len(mismatches), strings.Join(mismatches, "\n"))
