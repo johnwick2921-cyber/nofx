@@ -1876,12 +1876,6 @@ type CoinSourceConfig struct {
 	StaticCoins []string `json:"static_coins,omitempty"`
 	// excluded coins list (filtered out from all sources)
 	ExcludedCoins []string `json:"excluded_coins,omitempty"`
-	// whether to use Hyperliquid All coins (all available perp pairs)
-	UseHyperAll bool `json:"use_hyper_all"`
-	// whether to use Hyperliquid Main coins (top N by 24h volume)
-	UseHyperMain bool `json:"use_hyper_main"`
-	// Hyperliquid Main maximum count (default 20)
-	HyperMainLimit int `json:"hyper_main_limit,omitempty"`
 }
 
 // IndicatorConfig indicator configuration
@@ -2389,14 +2383,9 @@ func (c *StrategyConfig) applyMissingDefaults() {
 	// agree — rather than a legacy pool default, which would be wrong for a
 	// futures trader. An empty static list then degrades to the upstream
 	// "no candidates" path instead of the unknown-type hard error.
-	if c.CoinSource.SourceType == "" && len(c.CoinSource.StaticCoins) == 0 &&
-		!c.CoinSource.UseHyperAll && !c.CoinSource.UseHyperMain {
+	if c.CoinSource.SourceType == "" && len(c.CoinSource.StaticCoins) == 0 {
 		c.CoinSource.SourceType = "static"
 	}
-	// D2-DEAD (item 12): the ai500/oi_top/oi_low coin sources were backed by the
-	// deleted legacy provider. Stored rows still carry those values (the owner's
-	// saved strategies are read, never migrated), so the loader degrades them to
-	// the static coin list here instead of leaving an unknown source_type live.
 	switch c.CoinSource.SourceType {
 	case "ai500", "oi_top", "oi_low":
 		c.CoinSource.SourceType = "static"
@@ -2655,8 +2644,6 @@ func (c *StrategyConfig) getEffectiveCoinCount() int {
 	switch c.CoinSource.SourceType {
 	case "static":
 		count = len(c.CoinSource.StaticCoins)
-	case "hyper_main":
-		count = c.CoinSource.HyperMainLimit
 	default:
 		count = len(c.CoinSource.StaticCoins)
 	}
