@@ -1111,25 +1111,25 @@
 | `web/src/components/trader/AITradersPage.tsx` | 553 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
 | `web/src/components/trader/AITradersPage.tsx` | 572 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
 | `web/src/components/trader/AITradersPage.tsx` | 576 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
-| `web/src/components/trader/BeginnerGuideCards.tsx` | 5 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/BeginnerGuideCards.tsx` | 10 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/BeginnerGuideCards.tsx` | 11 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/BeginnerGuideCards.tsx` | 24 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/BeginnerGuideCards.tsx` | 29 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/BeginnerGuideCards.tsx` | 30 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/BeginnerGuideCards.tsx` | 43 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/BeginnerGuideCards.tsx` | 44 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/BeginnerGuideCards.tsx` | 45 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/BeginnerGuideCards.tsx` | 47 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/BeginnerGuideCards.tsx` | 48 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/BeginnerGuideCards.tsx` | 50 | `USDC` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/BeginnerGuideCards.tsx` | 51 | `USDC` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/BeginnerGuideCards.tsx` | 52 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/BeginnerGuideCards.tsx` | 53 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/BeginnerGuideCards.tsx` | 60 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/BeginnerGuideCards.tsx` | 61 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/BeginnerGuideCards.tsx` | 75 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/BeginnerGuideCards.tsx` | 76 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/trader/BeginnerGuideCards.tsx` | 5 | `claw402` | DELETE | CR-C | web crypto surface — CR-C row — done b8: component 100% crypto, no renderer after b1 —  |
+| `web/src/components/trader/BeginnerGuideCards.tsx` | 10 | `wallet` | DELETE | CR-C | web crypto surface — CR-C row — done b8: component 100% crypto, no renderer after b1 —  |
+| `web/src/components/trader/BeginnerGuideCards.tsx` | 11 | `Claw402` | DELETE | CR-C | web crypto surface — CR-C row — done b8: component 100% crypto, no renderer after b1 —  |
+| `web/src/components/trader/BeginnerGuideCards.tsx` | 24 | `claw402` | DELETE | CR-C | web crypto surface — CR-C row — done b8: component 100% crypto, no renderer after b1 —  |
+| `web/src/components/trader/BeginnerGuideCards.tsx` | 29 | `wallet` | DELETE | CR-C | web crypto surface — CR-C row — done b8: component 100% crypto, no renderer after b1 —  |
+| `web/src/components/trader/BeginnerGuideCards.tsx` | 30 | `Claw402` | DELETE | CR-C | web crypto surface — CR-C row — done b8: component 100% crypto, no renderer after b1 —  |
+| `web/src/components/trader/BeginnerGuideCards.tsx` | 43 | `Claw402` | DELETE | CR-C | web crypto surface — CR-C row — done b8: component 100% crypto, no renderer after b1 —  |
+| `web/src/components/trader/BeginnerGuideCards.tsx` | 44 | `Claw402` | DELETE | CR-C | web crypto surface — CR-C row — done b8: component 100% crypto, no renderer after b1 —  |
+| `web/src/components/trader/BeginnerGuideCards.tsx` | 45 | `wallet` | DELETE | CR-C | web crypto surface — CR-C row — done b8: component 100% crypto, no renderer after b1 —  |
+| `web/src/components/trader/BeginnerGuideCards.tsx` | 47 | `wallet` | DELETE | CR-C | web crypto surface — CR-C row — done b8: component 100% crypto, no renderer after b1 —  |
+| `web/src/components/trader/BeginnerGuideCards.tsx` | 48 | `Wallet` | DELETE | CR-C | web crypto surface — CR-C row — done b8: component 100% crypto, no renderer after b1 —  |
+| `web/src/components/trader/BeginnerGuideCards.tsx` | 50 | `USDC` | DELETE | CR-C | web crypto surface — CR-C row — done b8: component 100% crypto, no renderer after b1 —  |
+| `web/src/components/trader/BeginnerGuideCards.tsx` | 51 | `USDC` | DELETE | CR-C | web crypto surface — CR-C row — done b8: component 100% crypto, no renderer after b1 —  |
+| `web/src/components/trader/BeginnerGuideCards.tsx` | 52 | `claw402` | DELETE | CR-C | web crypto surface — CR-C row — done b8: component 100% crypto, no renderer after b1 —  |
+| `web/src/components/trader/BeginnerGuideCards.tsx` | 53 | `claw402` | DELETE | CR-C | web crypto surface — CR-C row — done b8: component 100% crypto, no renderer after b1 —  |
+| `web/src/components/trader/BeginnerGuideCards.tsx` | 60 | `Claw402` | DELETE | CR-C | web crypto surface — CR-C row — done b8: component 100% crypto, no renderer after b1 —  |
+| `web/src/components/trader/BeginnerGuideCards.tsx` | 61 | `claw402` | DELETE | CR-C | web crypto surface — CR-C row — done b8: component 100% crypto, no renderer after b1 —  |
+| `web/src/components/trader/BeginnerGuideCards.tsx` | 75 | `Binance` | DELETE | CR-C | web crypto surface — CR-C row — done b8: component 100% crypto, no renderer after b1 —  |
+| `web/src/components/trader/BeginnerGuideCards.tsx` | 76 | `Binance` | DELETE | CR-C | web crypto surface — CR-C row — done b8: component 100% crypto, no renderer after b1 —  |
 | `web/src/components/trader/ConfigStatusGrid.tsx` | 147 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
 | `web/src/components/trader/ConfigStatusGrid.tsx` | 148 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
 | `web/src/components/trader/ConfigStatusGrid.tsx` | 150 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
