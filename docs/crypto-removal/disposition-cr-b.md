@@ -1,9 +1,9 @@
 # Crypto-removal disposition table — CR-B (DS-107)
 
 - Branch point: `dc630ad8f` (origin/dev tip the branch was cut from)
-- Integrator tip: `037b067f0d145596b3351ddce3ba88d810ccf2b9` (claim head the sweep ran against)
-- Generated: 2026-10-01T05:26:34.145132+00:00
-- Sweep regex: exported from `branding/no_crypto_test.go` `CryptoSweepRegex` (case-insensitive Go regexp, never re-typed).
+- Integrator tip: `12e0f0fe8e71f7c1822330b5bad3f26023edae51` (claim head the sweep ran against)
+- Generated: 2026-10-01T05:27:36.240536+00:00
+- Sweep regex: extracted PROGRAMMATICALLY from plan v10 line 108 (the C13 "THE assembled regex" bullet; GO item 2 = NO, so the BASE literal without alpaca/twelvedata/sina). Never hand-typed; when DS-102's guard lands, the gate asserts this table's regex byte-for-byte against it.
 - Swept: 639 tracked non-test files under CR-B paths (git ls-files -z, grep -I semantics); hits in 90 files.
 - Dispositions are the first-pass proposal; the CTO + checkers review BEFORE any DELETE/CUT code. KEEP rows are one per file+token; DELETE/CUT rows are per line.
 - Overlap note: `telegram/` and residual `api/` files are carried here pending CR-A's table; the union gate reconciles.
