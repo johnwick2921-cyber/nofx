@@ -129,8 +129,6 @@ func (s *Server) setupRoutes() {
 		s.route(api, "GET", "/config", "Get system configuration", s.handleGetSystemConfig)
 
 		// Wallet validation (no authentication required — used by frontend config form)
-		api.POST("/wallet/validate", s.handleWalletValidate)
-		api.POST("/wallet/generate", s.handleWalletGenerate)
 
 		// Crypto related endpoints (no authentication required, not exposed to bot)
 		api.GET("/crypto/config", s.cryptoHandler.HandleGetCryptoConfig)
@@ -193,8 +191,6 @@ func (s *Server) setupRoutes() {
 			s.route(protected, "POST", "/logout", "Logout (blacklist token)", s.handleLogout)
 			// Mint a short-lived single-use SSE ticket for the live bar stream (Stage 4).
 			s.route(protected, "POST", "/v1/bars/stream-ticket", "Mint a short-lived SSE stream ticket", s.handleBarsStreamTicket)
-			s.route(protected, "POST", "/onboarding/beginner", "Prepare beginner claw402 wallet and default model", s.handleBeginnerOnboarding)
-			s.route(protected, "GET", "/onboarding/beginner/current", "Get current beginner claw402 wallet", s.handleCurrentBeginnerWallet)
 			// P2-12 (audit 0926-system): owner-only one-time code the Telegram
 			// chat must send back before its first /start may bind.
 			s.routeWithSchema(protected, "POST", "/telegram/bind-code", "Issue a one-time Telegram bind code (owner-only)",
