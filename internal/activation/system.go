@@ -25,10 +25,10 @@ type system struct {
 	// does NOT relaunch, so the process would simply stay down.
 	Kill func(pid int) error
 	// MainPID reads systemd's notion of the unit's main process. NEVER pgrep:
-	// `pgrep -f nofx-bin` also matches `go version -m nofx-bin`, and a pattern
+	// `pgrep -f vl-bin` also matches `go version -m vl-bin`, and a pattern
 	// can match the very shell that runs it (CLASS 242). The unit is vl,
-	// falling back to nofx while the rename is in flight (R5 removes the
-	// nofx unit and the fallback).
+	// falling back to vl while the rename is in flight (R5 removes the
+	// vl unit and the fallback).
 	MainPID func() (int, error)
 	Now     func() time.Time
 	Sleep   func(time.Duration)
@@ -49,7 +49,7 @@ func mainPIDOf(unit string) (int, error) {
 }
 
 // readMainPID walks the unit list through the reader: vl first (R5 removes
-// the nofx fallback); a unit that is absent or stopped reports 0 or errors,
+// the vl fallback); a unit that is absent or stopped reports 0 or errors,
 // and then the next unit answers.
 func readMainPID(mainPIDOf func(string) (int, error)) (int, error) {
 	for _, unit := range []string{"vl", "nofx"} {
@@ -131,15 +131,15 @@ func IdentityOf(pid int) (Identity, error) {
 // NewestLogPath returns the log the running process is actually writing.
 //
 // LOGS ARE NAMED BY BOOT DATE, NOT CALENDAR DATE. On the live box at 08:04 on
-// 2026-09-24 the active file was data/nofx_2026-09-23.log, because the process
+// 2026-09-24 the active file was data/vl_2026-09-23.log, because the process
 // booted the previous evening. Anything that builds the path as
-// nofx_$(date +%F).log — as the v6 script did — points at a file that may not
+// vl_$(date +%F).log — as the v6 script did — points at a file that may not
 // exist, and then a Watch fails for a reason that has nothing to do with the
 // activation.
 func NewestLogPath(dir string) (string, error) {
 	// Both prefixes: a vl-boot names its log vl_, a nofx-boot nofx_; the
 	// newest of either is what the running process is writing. // R5 removes
-	// the nofx glob.
+	// the vl glob.
 	var hits []string
 	for _, pat := range []string{"vl_*.log", "nofx_*.log"} {
 		h, err := filepath.Glob(filepath.Join(dir, pat))

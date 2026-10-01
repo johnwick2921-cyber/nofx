@@ -9,7 +9,7 @@ import (
 
 // R1a: the pruner treats vl_ and nofx_ logs alike — today's file of EITHER
 // prefix survives, and old files of both prefixes are removed. // R5 removes
-// the nofx half.
+// the vl half.
 func TestPruneOldLogsCoversBothPrefixes(t *testing.T) {
 	dir := t.TempDir()
 	now := time.Date(2026, 9, 26, 12, 0, 0, 0, time.Local)
@@ -19,9 +19,9 @@ func TestPruneOldLogsCoversBothPrefixes(t *testing.T) {
 		}
 	}
 	write("vl_2026-09-26.log")   // today's vl file — never deleted
-	write("nofx_2026-09-26.log") // today's nofx file — never deleted
+	write("nofx_2026-09-26.log") // today's vl file — never deleted
 	write("vl_2026-09-20.log")   // old vl file — removed
-	write("nofx_2026-09-19.log") // old nofx file — removed
+	write("nofx_2026-09-19.log") // old vl file — removed
 	write("other.txt")           // not ours — untouched
 
 	removed, err := pruneOldLogs(dir, now, 3, "vl_2026-09-26.log")

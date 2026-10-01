@@ -1,8 +1,9 @@
+names rewritten to vl on 2026-09-30 (VL rename)
 # ARM RULES — research-conformance re-check at BOOT 8
 
-**Binary under audit:** rev `70af663dcb6f` (boot 2026-09-04 08:30:11 CT, PID 878451). Source read at `/home/hoang/nofx-conform` (dev tip `492d2067` + claim commit `fb50903f`). `70af663d` **is** the merge of `fix/arms-follow-bias` — every D1–D6 rule below is IN the running binary, verified by `git merge-base --is-ancestor 70af663d HEAD` = YES and by the boot line quoted in §3.1.
+**Binary under audit:** rev `70af663dcb6f` (boot 2026-09-04 08:30:11 CT, PID 878451). Source read at `/home/hoang/vl-conform` (dev tip `492d2067` + claim commit `fb50903f`). `70af663d` **is** the merge of `fix/arms-follow-bias` — every D1–D6 rule below is IN the running binary, verified by `git merge-base --is-ancestor 70af663d HEAD` = YES and by the boot line quoted in §3.1.
 
-**Measurement window:** 2026-09-04 08:45–08:52 CT. DB read-only via `sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro"`. Live journal: `/home/hoang/nofx/data/nofx_2026-09-04.log` (last write 08:44:46; process still up).
+**Measurement window:** 2026-09-04 08:45–08:52 CT. DB read-only via `sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro"`. Live journal: `/home/hoang/vl/data/vl_2026-09-04.log` (last write 08:44:46; process still up).
 
 **`git log -1` for every report cited** (SPEC-FRESHNESS LAW):
 
@@ -77,7 +78,7 @@ Legend: effect ∈ REJECT / gate / cancel / WARN-only / advisory / prompt / labe
 ### 3.1 The boot line, READ from the live journal (A11)
 
 ```
-09-04 08:30:11 [INFO] nofx/main.go:430 🎯 arms: bias-coherent=warn · stop-entry=on(reclaim) · far-arm counter=on(3.0×ATR5m) · ledger append-only=on
+09-04 08:30:11 [INFO] vl/main.go:430 🎯 arms: bias-coherent=warn · stop-entry=on(reclaim) · far-arm counter=on(3.0×ATR5m) · ledger append-only=on
 09-04 08:30:11 [INFO] trader/auto_trader.go:43 ⚔️ armed_orders=on place_band=100t stale_working=15m test_seam=off arm_rr=2.0 (gate-at-arm only; market-entry floor 2.0 unchanged) (resting limits fill at the authorized price; stale_reeval NOT applied)
 ```
 
@@ -263,18 +264,18 @@ Not dead but **never fired in production** (distinct from dead — wired, reacha
 ## 9. COMMANDS THAT PRODUCED THE NUMBERS
 
 ```bash
-sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" "
+sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro" "
 SELECT trade_date, lower(trim(json_extract(s.value,'\$.direction'))) dir,
        COUNT(*) n, SUM(CASE WHEN json_extract(s.value,'\$.arm.enabled') IN (1,'true') THEN 1 ELSE 0 END) armed
 FROM plans p, json_each(json_extract(p.doc,'\$.scenarios')) s
 WHERE trade_date IN ('2026-09-02','2026-09-03','2026-09-04') GROUP BY trade_date, dir;"
 
-sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" "SELECT key,value FROM system_config
+sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro" "SELECT key,value FROM system_config
   WHERE key LIKE '%arm%' OR key LIKE '%nochase%';"
 
-sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" "SELECT kind,COUNT(*) FROM armed_orders GROUP BY kind;"
+sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro" "SELECT kind,COUNT(*) FROM armed_orders GROUP BY kind;"
 
-grep -h "🎯 arms:\|⚔️ arm\|📏 arm far\|🛑 arm stop\|🚫 no-chase" /home/hoang/nofx/data/nofx_2026-09-04.log
+grep -h "🎯 arms:\|⚔️ arm\|📏 arm far\|🛑 arm stop\|🚫 no-chase" /home/hoang/vl/data/vl_2026-09-04.log
 
 # the rendered D1 prompt line (probe test written into the worktree, run, then removed):
 go test ./kernel/ -run TestPrintArmableLine -v

@@ -3,7 +3,7 @@
 // non-empty, else NOFX_<name> when non-empty, else "". One WARN per name is
 // emitted when only the NOFX_ form is set; before a sink is installed the
 // warnings queue and the first sink drains them (main.go registers the
-// logger's sink right after logger.Init; cmd/nofx-updater registers a stderr
+// logger's sink right after logger.Init; cmd/vl-updater registers a stderr
 // sink, since it never inits the logger). R5 removes this package and every
 // fallback (each caller carries an `// R5 removes` comment).
 package envcompat

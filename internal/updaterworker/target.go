@@ -8,7 +8,7 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"nofx/internal/installpath"
+	"vl/internal/installpath"
 )
 
 // Target is the installation one worker acts on. It is resolved exactly as
@@ -21,7 +21,7 @@ type Target struct {
 	InstallDir string // the bot's WorkingDirectory (absolute)
 	DBFile     string // the bot's database
 	DataDir    string // its directory: <data>/updater/{jobs,worker.sock,...}
-	LogDir     string // <install>/data — the bot's logger writes nofx_<boot date>.log relative to its cwd
+	LogDir     string // <install>/data — the bot's logger writes vl_<boot date>.log relative to its cwd
 	Port       int    // the bot's API port (API_SERVER_PORT in <install>/.env, else 8080)
 	Source     string // where DB_PATH came from (operator text)
 }
@@ -104,7 +104,7 @@ func (t Target) InstallRelease(sha string) Release {
 
 // InstallBinaryPath is the install's binary: vl-bin when present, else
 // nofx-bin — on the INSTALL side vl wins when both exist (a rename in
-// flight may leave both). // R5 removes the nofx branch.
+// flight may leave both). // R5 removes the vl branch.
 func (t Target) InstallBinaryPath() string {
 	if st, err := os.Stat(filepath.Join(t.InstallDir, "vl-bin")); err == nil && st.Mode().IsRegular() {
 		return filepath.Join(t.InstallDir, "vl-bin")

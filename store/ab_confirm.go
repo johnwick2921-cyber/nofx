@@ -11,7 +11,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"nofx/internal/envcompat"
+	"vl/internal/envcompat"
 )
 
 // AB-CONFIRM SHADOW (E8, entry-mechanics 2026-08-30) — the Sep-9 courtroom

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"nofx/internal/envcompat"
+	"vl/internal/envcompat"
 )
 
 // Bar sources, mirrored from store so the ring can stamp without importing it.

@@ -115,7 +115,7 @@ const ProtocolVersion = 3
 // HelloPayload identifies the peer + its protocol generation.
 type HelloPayload struct {
 	ProtocolVersion int    `json:"protocol_version"`
-	Source          string `json:"source"` // "vltrader-addon" | "nofx-go"
+	Source          string `json:"source"` // "vltrader-addon" | "vl-go"
 	// BuildID (F12) is the AddOn's VL_BUILD_ID, carried on the handshake so the
 	// running DLL is identifiable from the FIRST received frame rather than
 	// only after a snapshot arrives. omitempty keeps the wire byte-identical

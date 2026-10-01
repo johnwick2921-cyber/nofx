@@ -2,13 +2,13 @@ package ninjatrader
 
 import (
 	"fmt"
-	"nofx/kernel"
+	"vl/kernel"
 	"sort"
 	"strings"
 	"time"
 
-	ntwire "nofx/provider/ninjatrader"
-	"nofx/store"
+	ntwire "vl/provider/ninjatrader"
+	"vl/store"
 )
 
 // ContractBootLine is the ROLL WAVE's boot line (D6). Every field is READ

@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"nofx/internal/updaterjob"
-	"nofx/internal/updaterwire"
-	"nofx/store"
+	"vl/internal/updaterjob"
+	"vl/internal/updaterwire"
+	"vl/store"
 )
 
 // ── the U4 test box ─────────────────────────────────────────────────────────
@@ -145,7 +145,7 @@ type rig struct {
 
 type rigOpt func(*box)
 
-// withBinary renames the box's install and release binaries from nofx-bin to
+// withBinary renames the box's install and release binaries from vl-bin to
 // binName (the R1a dual-binary predictor tests; R5 removes this option).
 func withBinary(binName string) rigOpt {
 	return func(b *box) {
@@ -182,7 +182,7 @@ func withCSChanged() rigOpt {
 func newRig(t *testing.T, opts ...rigOpt) *rig {
 	t.Helper()
 	t.Setenv(CutoverTokenEnv, boxToken)
-	// a SHORT root: <root>/nofx/data/updater/<socket> must fit sun_path (107)
+	// a SHORT root: <root>/vl/data/updater/<socket> must fit sun_path (107)
 	root, err := os.MkdirTemp("", "u4-")
 	if err != nil {
 		t.Fatal(err)
@@ -473,7 +473,7 @@ func (b *box) kill(id Identity) (Identity, error) {
 }
 
 // instBinary is the install's binary: vl-bin when present, else nofx-bin
-// (R5 removes the nofx branch) — the same rule target.InstallBinaryPath uses.
+// (R5 removes the vl branch) — the same rule target.InstallBinaryPath uses.
 func (b *box) instBinary() string {
 	if _, err := os.Stat(filepath.Join(b.inst, "vl-bin")); err == nil {
 		return filepath.Join(b.inst, "vl-bin")

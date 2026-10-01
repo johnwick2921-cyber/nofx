@@ -448,7 +448,7 @@ func TestCutoverInstallsTheNewBinaryItWasGiven(t *testing.T) {
 	}
 	// MOVED WITH THE CHANGE (CLASS 239). These used to assert that cutover.sh
 	// ITSELF greps `vcs.revision=$NEW_SHA` out of `go version -m` and stages a
-	// `nofx-bin.new`. v7 delegates both to cmd/nofx-activate, so the shell no
+	// `vl-bin.new`. v7 delegates both to cmd/vl-activate, so the shell no
 	// longer contains those strings — and asserting them would now be pinning
 	// the OLD implementation rather than the guarantee.
 	//
@@ -462,11 +462,11 @@ func TestCutoverInstallsTheNewBinaryItWasGiven(t *testing.T) {
 	//
 	// What this test can still guarantee is that the shell DELEGATES rather
 	// than growing a second implementation, which is the drift v7 exists to end.
-	if !strings.Contains(sh, "nofx-activate") {
-		t.Fatalf("cutover.sh must delegate the proof to cmd/nofx-activate, not reimplement it")
+	if !strings.Contains(sh, "vl-activate") {
+		t.Fatalf("cutover.sh must delegate the proof to cmd/vl-activate, not reimplement it")
 	}
 	if !strings.Contains(sh, "verify -release") {
-		t.Fatalf("cutover.sh must PROVE the new binary (nofx-activate verify) before anything is touched")
+		t.Fatalf("cutover.sh must PROVE the new binary (vl-activate verify) before anything is touched")
 	}
 }
 
@@ -560,13 +560,13 @@ func TestCutoverNeverInstructsRollbackForAPreInstallFailure(t *testing.T) {
 	// plan must split the failure space: before anything moved, REFUSE with
 	// no restart and NO rollback; only after the install began may the
 	// rollback command be named.
-	if strings.Contains(sh, "on ANY failure: nofx-activate rollback") {
+	if strings.Contains(sh, "on ANY failure: vl-activate rollback") {
 		t.Fatalf("a pre-install failure must NOT route to rollback — nothing was touched, the healthy bot must not be restarted (finding [24])")
 	}
 	if !strings.Contains(sh, "NO rollback runs") {
 		t.Fatalf("the plan must say a pre-install failure REFUSES with NO rollback")
 	}
-	if !strings.Contains(sh, "failure AFTER nofx-activate began installing") {
+	if !strings.Contains(sh, "failure AFTER vl-activate began installing") {
 		t.Fatalf("rollback must be named only for a failure AFTER the install began")
 	}
 }
@@ -641,7 +641,7 @@ func TestCutoverDistinguishesAnUnstampedBinaryFromAWrongOne(t *testing.T) {
 	sh := repoFile(t, "deploy/cutover.sh")
 	// MOVED WITH THE CHANGE (CLASS 239). Both refusals now live in
 	// internal/activation.Stage, which cutover.sh reaches through
-	// `nofx-activate verify`. The DISTINCTION is the guarantee — an unstamped
+	// `vl-activate verify`. The DISTINCTION is the guarantee — an unstamped
 	// binary and a wrong-revision binary send the operator to different
 	// places, and a refusal that names the wrong cause sends them to fix
 	// something that is not broken — so it is pinned where it now lives:
@@ -661,7 +661,7 @@ func TestCutoverDistinguishesAnUnstampedBinaryFromAWrongOne(t *testing.T) {
 	if !strings.Contains(lib, "is stamped, but with revision") {
 		t.Fatalf("a stamped-but-wrong binary must get a DIFFERENT message than an unstamped one")
 	}
-	if !strings.Contains(sh, "nofx-activate") {
+	if !strings.Contains(sh, "vl-activate") {
 		t.Fatalf("cutover.sh must reach those refusals by delegating, not by reimplementing them")
 	}
 }

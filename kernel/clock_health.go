@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"nofx/internal/envcompat"
-	"nofx/logger"
-	"nofx/market"
+	"vl/internal/envcompat"
+	"vl/logger"
+	"vl/market"
 )
 
 // PHASE 3.5 (timegate audit 2026-08-18) — CLOCK HEALTH, log-only.
@@ -119,7 +119,7 @@ func LogClockHealth(tag, symbol string) {
 	}
 }
 
-// clockGuardState mirrors the JSON written by deploy/nofx-clock-guard.sh.
+// clockGuardState mirrors the JSON written by deploy/vl-clock-guard.sh.
 type clockGuardState struct {
 	LastRunUTC  string `json:"last_run_utc"`
 	LastRunUnix int64  `json:"last_run_unix"`

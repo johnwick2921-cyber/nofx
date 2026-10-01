@@ -14,7 +14,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"nofx/internal/envcompat"
+	"vl/internal/envcompat"
 )
 
 // ── W-BARS-CONTRACT-KEY (2026-09-18) — THE CONTRACT JOINS THE PRIMARY KEY ────
@@ -40,7 +40,7 @@ import (
 // THE MIGRATION is a guarded DB write and runs at boot, once, idempotently:
 //   (a) detect the old key from pragma_table_info;
 //   (b) BACKUP the whole database (VACUUM INTO — SQLite's online, consistent
-//       copy) to ~/nofx-backups/pre-bars-key-<stamp>.db, verified by row
+//       copy) to ~/vl-backups/pre-bars-key-<stamp>.db, verified by row
 //       count; a backup that cannot be written REFUSES the migration;
 //   (c) CREATE bars_v2 with the new key and INSERT … SELECT every row (no
 //       dedupe: the old key guaranteed uniqueness on a subset of the new one);

@@ -1,4 +1,4 @@
-// Package activation performs the steps of a nofx update: resolve a release,
+// Package activation performs the steps of a vl update: resolve a release,
 // prove the binary it contains, back up the database, swap it in, watch the new
 // process prove itself, and roll back if it does not.
 //
@@ -25,7 +25,7 @@ import (
 )
 
 // Release is one versioned runtime on disk: NOFX_RELEASE_DIR/<sha>/.
-// It is a DIRECTORY, never a set of sibling files — the `nofx-bin.old.<sha>.<ts>`
+// It is a DIRECTORY, never a set of sibling files — the `vl-bin.old.<sha>.<ts>`
 // naming the v6 script used could collide and could not carry the dist or the
 // RELEASE marker alongside the binary it belonged to.
 type Release struct {
@@ -37,7 +37,7 @@ type Release struct {
 	ManifestPath string
 }
 
-// Identity is the ONLY identity of a running nofx process: its pid together
+// Identity is the ONLY identity of a running vl process: its pid together
 // with the start time from /proc/<pid>/stat field 22. A pid alone answers
 // "does some process exist"; the question is always "is this the SAME process
 // I measured". A recycled pid must be refused, never signalled.
@@ -122,8 +122,8 @@ func Resolve(dir string) (Release, error) {
 }
 
 // releaseBinaryName returns the release dir's ONE binary name: vl-bin when
-// present, else nofx-bin; BOTH present is refused (the dir must hold EXACTLY
-// ONE — R5 removes the nofx branch when the rename lands). Neither present is
+// present, else vl-bin; BOTH present is refused (the dir must hold EXACTLY
+// ONE — R5 removes the vl branch when the rename lands). Neither present is
 // refused too: a release without a binary would only fail later, after a kill.
 func releaseBinaryName(dir string) (string, error) {
 	vl, vlErr := os.Stat(filepath.Join(dir, "vl-bin"))
@@ -136,7 +136,7 @@ func releaseBinaryName(dir string) (string, error) {
 	case vlOK:
 		return "vl-bin", nil
 	default:
-		// Neither present keeps the old reading (nofx-bin); the activate
+		// Neither present keeps the old reading (vl-bin); the activate
 		// step fails on the missing binary, as it always did.
 		return "nofx-bin", nil
 	}

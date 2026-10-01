@@ -29,7 +29,7 @@ func logRetentionDays() int {
 // process file (a running boot's file is never deleted). Returns the removed
 // names (basenames) and the first error. Pure in (dir, now, days, current) so
 // the pin drives the production path — Init calls it once after opening the
-// day's file. // R5 removes the nofx prefix.
+// day's file. // R5 removes the vl prefix.
 func pruneOldLogs(dir string, now time.Time, days int, current string) ([]string, error) {
 	if days <= 0 {
 		return nil, nil // OFF: keep everything

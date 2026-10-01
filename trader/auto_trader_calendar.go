@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"nofx/calendar"
-	"nofx/internal/envcompat"
-	"nofx/kernel"
-	"nofx/store"
+	"vl/calendar"
+	"vl/internal/envcompat"
+	"vl/kernel"
+	"vl/store"
 )
 
 // W3 — the calendar PRODUCER (the audit's dead wire): fetch the ForexFactory

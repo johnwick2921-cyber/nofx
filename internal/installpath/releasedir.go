@@ -5,12 +5,12 @@ import (
 	"strings"
 	"sync"
 
-	"nofx/internal/envcompat"
+	"vl/internal/envcompat"
 )
 
 // NOFX_RELEASE_DIR turns the install into VERSIONED runtimes:
 //
-//	NOFX_RELEASE_DIR/<sha>/{nofx-bin,web/dist,RELEASE,manifest.json}
+//	NOFX_RELEASE_DIR/<sha>/{vl-bin,web/dist,RELEASE,manifest.json}
 //	NOFX_RELEASE_DIR/current -> <sha>
 //
 // with `current` a symlink, so an activation or a rollback moves all three

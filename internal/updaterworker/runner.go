@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"nofx/internal/updaterjob"
+	"vl/internal/updaterjob"
 )
 
 // ── the runner ──────────────────────────────────────────────────────────────
@@ -326,7 +326,7 @@ func (w *Worker) installIntent(j updaterjob.Job) func(k *updaterjob.Job) {
 }
 
 // backupIntent: the DB backup file and the job-scoped snapshot of the install
-// halves (103's Snapshot layout: <dest>/{nofx-bin,web/dist,RELEASE}), both
+// halves (103's Snapshot layout: <dest>/{vl-bin,web/dist,RELEASE}), both
 // under <BackupRoot>/<job>/, persisted BEFORE backup_done's effect.
 func (w *Worker) backupIntent(j updaterjob.Job) func(k *updaterjob.Job) {
 	return func(k *updaterjob.Job) {
@@ -397,7 +397,7 @@ func (w *Worker) currentIdentityRetry(ctx context.Context) (Identity, bool) {
 
 // logPrefixForBinary is the log prefix of the binary that will run: vl_ when
 // it is vl-bin, else nofx_ — the prefix comes from the BINARY, never from
-// which file happens to exist (R5 removes the nofx branch).
+// which file happens to exist (R5 removes the vl branch).
 func logPrefixForBinary(binPath string) string {
 	if filepath.Base(binPath) == "vl-bin" {
 		return "vl_"
@@ -451,7 +451,7 @@ func (w *Worker) resumeFromPark(ctx context.Context, j updaterjob.Job) (updaterj
 			return err
 		}
 		if err != nil {
-			k.Blocker = clipText("resume refused: " + err.Error() + " — fix it, then nofx-updater resume " + k.JobID)
+			k.Blocker = clipText("resume refused: " + err.Error() + " — fix it, then vl-updater resume " + k.JobID)
 			return nil
 		}
 		k.ResumedAt = &now

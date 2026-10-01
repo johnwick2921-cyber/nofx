@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	ntwire "nofx/provider/ninjatrader"
-	"nofx/store"
-	ntTrader "nofx/trader/ninjatrader"
+	ntwire "vl/provider/ninjatrader"
+	"vl/store"
+	ntTrader "vl/trader/ninjatrader"
 )
 
 // ── W-ONE-BUTTON M2 — THE INSTALLATION-WIDE GATE ───────────────────────────

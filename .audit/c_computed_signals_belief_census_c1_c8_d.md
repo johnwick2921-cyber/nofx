@@ -1,12 +1,13 @@
+names rewritten to vl on 2026-09-30 (VL rename)
 ## SUBSYSTEM C — COMPUTED SIGNALS · research-conformance re-check
 
-Source tree `/home/hoang/nofx-conform`. DB read-only `file:/home/hoang/nofx/data/data.db?mode=ro`.
-Logs `/home/hoang/nofx/data/nofx_2026-*.log`. Clock CT = UTC-5.
+Source tree `/home/hoang/vl-conform`. DB read-only `file:/home/hoang/vl/data/data.db?mode=ro`.
+Logs `/home/hoang/vl/data/vl_2026-*.log`. Clock CT = UTC-5.
 `/api/config/resolved` and `/api/risk/gate-blocks` both return **`{"error":"Missing Authorization header"}`** from this session — no API-resolved values are quoted below; every RESOLVED value comes from a boot line I read in the live log, or from the resolver code path plus the live `.env`.
 
-**Live env, C-subsystem** (`/home/hoang/nofx/.env`, key names only): the ONLY C-relevant knob set is `HTF_VETO_MODE=cross` (line 34). `HTF_VETO_TF`, `STRUCTURE_SWING_K`, `STRUCTURE_MIN_SWING_ATR`, `STRUCTURE_MSS_BODY_ATR`, `STALE_REEVAL_DRIFT_ATR`, `STALE_BAR_GRACE_S`, `STALE_DODGE`, `FAST_MARKET_ATR`, `TOUCH_BAND_TICKS`, `TOUCH_EPISODE_MAX_BARS`, `TOUCH_VOL_LOOKBACK`, `TOUCH_APPROACH_BARS`, `DETECTOR_K` are all **unset** → every one of them resolves to its code default. [A]
+**Live env, C-subsystem** (`/home/hoang/vl/.env`, key names only): the ONLY C-relevant knob set is `HTF_VETO_MODE=cross` (line 34). `HTF_VETO_TF`, `STRUCTURE_SWING_K`, `STRUCTURE_MIN_SWING_ATR`, `STRUCTURE_MSS_BODY_ATR`, `STALE_REEVAL_DRIFT_ATR`, `STALE_BAR_GRACE_S`, `STALE_DODGE`, `FAST_MARKET_ATR`, `TOUCH_BAND_TICKS`, `TOUCH_EPISODE_MAX_BARS`, `TOUCH_VOL_LOOKBACK`, `TOUCH_APPROACH_BARS`, `DETECTOR_K` are all **unset** → every one of them resolves to its code default. [A]
 
-**Boot-8 lines read verbatim from `data/nofx_2026-09-04.log`** (both present, 2 boots today):
+**Boot-8 lines read verbatim from `data/vl_2026-09-04.log`** (both present, 2 boots today):
 ```
 🛡️ regime ledger: htf_veto=ON (Studio regime.htf_veto, default ON) · htf_veto_tf=1h (env HTF_VETO_TF)
 🛡️ htf veto: mode=cross tf=1h (1h|cross|4h via HTF_VETO_MODE; cross = 1h AND 4h agree)
@@ -126,7 +127,7 @@ That −$381.50 is, to the cent and to the MFE, the loss the **no-chase wave** w
 
 `ComputeRegime` has **one** production call site, `trader/auto_trader_planner.go:2208-2211`, and its `RegimeInputs` literal sets `Price, DailyBars, Hour1Bars, Min5Bars, RVBaseline20d, PriorClose, SessionOpen`. **`VIX` is never set** — the comment on `:2203` says so out loud ("VIX stays honest n/a (no feed)"). `kernel/regime.go:94` guards `vixBucket` behind `if in.VIX > 0`, so **`vixBucket` has zero reachable production evaluations**. [A]
 
-Live corroboration: the dark-regime alert body (`kernel/regime_dark.go:80-90`) fires only when something is dark, and across `nofx_2026-09-03.log` + `nofx_2026-09-04.log` **16 of 16 alert lines read `1/7 regime fields unavailable (vix_level)`** — `vix_level` is the only dark field, every time. [A]
+Live corroboration: the dark-regime alert body (`kernel/regime_dark.go:80-90`) fires only when something is dark, and across `vl_2026-09-03.log` + `vl_2026-09-04.log` **16 of 16 alert lines read `1/7 regime fields unavailable (vix_level)`** — `vix_level` is the only dark field, every time. [A]
 
 C3's `atrBucket` is live and reaches the planner prompt as `BiasRegime = "<trend_daily>/<atr_regime>"` (`auto_trader_planner.go:2443`, field declared `store/planner_read_facts.go:40`). Advisory, no gate. Conforms.
 
@@ -139,7 +140,7 @@ All three knobs resolve to their defaults (env unset): **k=2, min-swing 0.25×AT
 Two notes for the owner, neither a conformance failure:
 
 - `2026-08-30-knob-census.md:65` labels the whole trio **[C]** (speculation) while `belief-census.md:59` gives swing-k **[T]**. The [T] rests on `weekend-audit-p2.md:48` ("KEEP 2, best 7/9 days"); `grand-audit-bcde-verdict.md:70` measured the opposite direction — *"k=2→3 cuts swing count 72→46 (5m) and 29→18 (15m) with missed-turns ~93% unchanged → k=3 halves churn for free"*. The two live side by side, unreconciled.
-- The **other** consumer of these knobs, the transition stand-down gate (`kernel/engine_position.go:275`), has fired **0 times in every `data/nofx_2026-*.log` file** (`TRANSITION STAND-DOWN`, all-time count = 0), while the boot ledger reports `transition_standdown=ON cap=45min`. Not in my C-list; flagging it because it shares C4's inputs and looks like a second never-fires gate.
+- The **other** consumer of these knobs, the transition stand-down gate (`kernel/engine_position.go:275`), has fired **0 times in every `data/vl_2026-*.log` file** (`TRANSITION STAND-DOWN`, all-time count = 0), while the boot ledger reports `transition_standdown=ON cap=45min`. Not in my C-list; flagging it because it shares C4's inputs and looks like a second never-fires gate.
 
 ---
 
@@ -204,19 +205,19 @@ I enumerated **every production consumer** of touch telemetry (`TouchUpdate`, `A
 
 ```bash
 # resolved env (names only, no values printed except the C-knob)
-grep -oE '^[A-Z_0-9]+=' /home/hoang/nofx/.env | tr -d '='
-grep -nE '^HTF_VETO' /home/hoang/nofx/.env
+grep -oE '^[A-Z_0-9]+=' /home/hoang/vl/.env | tr -d '='
+grep -nE '^HTF_VETO' /home/hoang/vl/.env
 
 # boot lines actually read
-grep -h "htf veto: mode=\|regime ledger: htf_veto" /home/hoang/nofx/data/nofx_2026-09-04.log
+grep -h "htf veto: mode=\|regime ledger: htf_veto" /home/hoang/vl/data/vl_2026-09-04.log
 
 # 4h absence across every persisted snapshot
-sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" "
+sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro" "
 SELECT COUNT(*), SUM(structure_json LIKE '%\"4h\"%'), SUM(structure_json LIKE '%\"1h\"%')
 FROM decision_records WHERE structure_json NOT IN ('','null');"
 
 # counter-1h-trend entries since the cross cutover
-sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" "
+sqlite3 "file:/home/hoang/vl/data/data.db?mode=ro" "
 WITH e AS (SELECT d.id, datetime(d.timestamp,'-5 hours') ct,
                   json_extract(d.structure_json,'\$.\"1h\".trend') t1h,
                   json_extract(j.value,'\$.action') act, d.risk_check_passed rp, d.risk_check_error re
@@ -228,8 +229,8 @@ WHERE (t1h='TRENDING_UP' AND act='open_short') OR (t1h='TRENDING_DOWN' AND act='
 GROUP BY 1,2,3;"
 
 # live fire counts
-for f in /home/hoang/nofx/data/nofx_2026-0*.log; do grep -c 'HTF VETO' $f; done
-grep -ho "stale_reeval outcome=[a-z]*" /home/hoang/nofx/data/nofx_2026-0*.log | sort | uniq -c
-grep -h "planner mode: fast-market" /home/hoang/nofx/data/nofx_2026-0*.log | wc -l
-grep -ho "regime fields unavailable ([^)]*)" /home/hoang/nofx/data/nofx_2026-09-0[34].log | sort | uniq -c
+for f in /home/hoang/vl/data/vl_2026-0*.log; do grep -c 'HTF VETO' $f; done
+grep -ho "stale_reeval outcome=[a-z]*" /home/hoang/vl/data/vl_2026-0*.log | sort | uniq -c
+grep -h "planner mode: fast-market" /home/hoang/vl/data/vl_2026-0*.log | wc -l
+grep -ho "regime fields unavailable ([^)]*)" /home/hoang/vl/data/vl_2026-09-0[34].log | sort | uniq -c
 ```
