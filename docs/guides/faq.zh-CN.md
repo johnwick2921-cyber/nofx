@@ -8,12 +8,10 @@ names rewritten to vl on 2026-09-30 (VL rename)
 ## 基础问题
 
 ### VL 是什么？
-VL 是一个 AI 驱动的加密货币交易机器人，使用大语言模型（LLM）在期货市场进行交易决策。
+VL 是一个 AI 驱动的交易机器人，使用大语言模型（LLM）通过 NinjaTrader 8 进行 CME 期货（MNQ）交易决策。
 
 ### 支持哪些交易所？
-- ✅ 币安合约（Binance Futures）
-- ✅ Hyperliquid
-- 🚧 更多交易所开发中
+- ✅ NinjaTrader 8（CME 期货，模拟盘执行）
 
 ### VL 能盈利吗？
 AI 交易是**实验性**的，**不保证盈利**。请始终用小额资金测试，不要投入超过您承受能力的资金。
@@ -35,11 +33,10 @@ AI 交易是**实验性**的，**不保证盈利**。请始终用小额资金测
 不需要！VL 有 Web 界面进行所有配置。但基础的命令行知识有助于安装和故障排查。
 
 ### 如何获取 API 密钥？
-1. **币安**：账户 → API 管理 → 创建 API → 启用合约
-2. **Hyperliquid**：访问 [Hyperliquid App](https://app.hyperliquid.xyz/) → API 设置
+无需交易所 API 密钥。NinjaTrader 8 是唯一券商 — NT8 AddOn 通过 TCP 桥接连接（行情与模拟盘执行）。AI 模型 API 密钥在 设置 → AI 模型 中配置。
 
-### 应该使用子账户吗？
-**推荐**：是的，使用专门的子账户运行 VL 可以更好地隔离风险。但请注意，某些子账户有限制（例如币安子账户最高 5 倍杠杆）。
+### VL 使用哪个账户交易？
+VL 只在 NinjaTrader **模拟盘（SIM）** 账户上交易 — 绝不实盘。建议将 SIM 账户专用于机器人。
 
 ---
 
@@ -58,7 +55,7 @@ AI 交易是**实验性**的，**不保证盈利**。请始终用小额资金测
 ### 可以自定义交易策略吗？
 可以！您可以：
 - 调整杠杆设置
-- 修改币种选择池
+- 修改品种选择
 - 更改决策间隔
 - 自定义系统提示词（高级）
 
@@ -68,22 +65,6 @@ AI 交易是**实验性**的，**不保证盈利**。请始终用小额资金测
 ---
 
 ## 技术问题
-
-### 币安持仓模式错误 (code=-4061)
-
-**错误信息**：`Order's position side does not match user's setting`
-
-**解决方法**：切换为**双向持仓**模式
-1. 登录[币安合约](https://www.binance.com/zh-CN/futures/BTCUSDT)
-2. 点击右上角 **⚙️ 偏好设置**
-3. 选择 **持仓模式** → **双向持仓**
-4. ⚠️ 先平掉所有持仓
-
-**原因**：VL 使用 `PositionSide(LONG/SHORT)`，需要双向持仓模式。
-
-参见 [Issue #202](upstream github link (removed in the VL rename)) 和[故障排查指南](TROUBLESHOOTING.zh-CN.md#-只开空单-issue-202)。
-
----
 
 ### 后端无法启动 / 端口被占用
 
