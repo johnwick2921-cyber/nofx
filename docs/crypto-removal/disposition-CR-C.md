@@ -1,7 +1,7 @@
 # CR-C disposition table — web + docs (crypto removal, part CR-C, regenerated at the integrated head)
 
 - branch point: b6648fcab9cf495e316ef5492ec6852cc3fcc2cf (integration head branched from)
-- integrator tip at generation: 4e4fef3af1213820a1d0db7677fb0665a733b600 (regenerated at the integrated head; provenance: branch + sha only)
+- integrator tip at generation: 628b0a168444a8fbac9627735e8bfd067d2583e5 (regenerated at the integrated head; provenance: branch + sha only)
 - paths: web docs :(exclude)docs/crypto-removal
 - regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续|btc|ethusdt|\beth\b|altcoin|ethereum
 - line rows: 160 · blanket-KEEP paths: 207
@@ -82,7 +82,7 @@
 | web/src/components/common/HeaderBar.tsx | 181 | `lighter` | KEEP | CR-C | incidental color-token name — not the venue |
 | web/src/components/common/HeaderBar.tsx | 193 | `lighter` | KEEP | CR-C | incidental color-token name — not the venue |
 | web/src/components/common/HeaderBar.tsx | 256 | `lighter` | KEEP | CR-C | incidental color-token name — not the venue |
-| web/src/components/strategy/CoinSourceEditor.tsx | 240 | `lighter` | KEEP | CR-C | incidental color-token name — not the venue |
+| web/src/components/strategy/CoinSourceEditor.tsx | 233 | `lighter` | KEEP | CR-C | incidental color-token name — not the venue |
 | web/src/components/strategy/RiskControlEditor.tsx | 474 | `btc` | KEEP | CR-C | risk-cap knob family (union-gate risk-cap canary) |
 | web/src/components/strategy/RiskControlEditor.tsx | 477 | `btc` | KEEP | CR-C | risk-cap knob family (union-gate risk-cap canary) |
 | web/src/components/strategy/RiskControlEditor.tsx | 482 | `btc` | KEEP | CR-C | risk-cap knob family (union-gate risk-cap canary) |

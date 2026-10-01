@@ -1,7 +1,7 @@
 # CR-B disposition table — engine + tests + config surface (crypto removal, part CR-B, regenerated at the integrated head)
 
 branch-point: dc630ad8fc06c49aebd5e59a8814744c2cbab5e7
-integrator-tip: 4e4fef3af1213820a1d0db7677fb0665a733b600 (regenerated at the integrated head; provenance: branch + sha only)
+integrator-tip: 628b0a168444a8fbac9627735e8bfd067d2583e5 (regenerated at the integrated head; provenance: branch + sha only)
 paths: manager kernel market config store agent branding internal ninjascript screenshots cmd scripts deploy docker nginx .github patches hook telegram provider/ninjatrader provider/databento trader/ninjatrader SECURITY.md Makefile .env.example docs/superpowers/AUDIT-CHECKLIST.md docs/superpowers/SYSTEM-MAP.md trader/auto_trader_decision.go api/handler_debug.go api/strategy_effective.go api/handler_competition.go api/handler_plan_order_truth.go api/handler_order.go api/handler_trader_config.go trader/protection_reconciler.go
 regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续|btc|ethusdt|\beth\b|altcoin|ethereum
 
@@ -263,6 +263,8 @@ regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\bast
 | api/handler_order.go | 102 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
 | api/handler_order.go | 103 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
 | api/handler_plan_order_truth.go | 230 | `"mixed"` | KEEP | CR-B | plan-state string constant — same family as the ExecutorVerdict mixed content-assert (KEEP) |
+| branding/census_test.go | 47 | `wallet` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/census_test.go | 197 | `wallet` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
 | branding/census_test.go | 319 | `lighter` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
 | branding/census_test.go | 403 | `lighter` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
 | branding/gate_format_test.go | 27 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
