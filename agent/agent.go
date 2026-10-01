@@ -21,7 +21,6 @@ import (
 	"vl/kernel"
 
 	"vl/manager"
-	"vl/market"
 	"vl/mcp"
 	"vl/store"
 )
@@ -60,7 +59,7 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Language:            "zh",
-		WatchSymbols:        []string{"BTCUSDT", "ETHUSDT", "SOLUSDT"},
+		WatchSymbols:        []string{"MNQ"},
 		EnableBriefs:        true,
 		EnableNews:          true,
 		EnableSentinel:      true,
@@ -483,7 +482,7 @@ func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 		return fmt.Sprintf(`你是 `+branding.PersonaName()+`，一个专业的 AI 交易 Agent。你不是一个简单的聊天机器人——你是用户的交易伙伴。
 
 ## 你的核心能力
-1. **市场分析** — 加密货币（BTC/ETH/SOL等）有实时数据，A股/港股/美股/外汇你可以基于知识分析
+1. **市场分析** — CME 期货（MNQ 等）与美股有实时数据，A股/港股/外汇你可以基于知识分析
 2. **交易管理** — 查看持仓、余额、交易历史、Trader 状态
 3. **策略建议** — 根据用户需求制定交易策略
 4. **策略模板管理** — 创建、查看、修改、删除、激活策略模板
@@ -495,7 +494,7 @@ func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 %s
 
 ## 数据说明（极其重要，违反即失职！）
-- 加密货币（BTC/ETH等）：交易所实时数据，标注 [Real-time]
+- CME 期货（MNQ）：NinjaTrader 实时数据，标注 [Real-time]
 - A股/港股/美股：**必须调用 search_stock 工具**获取实时行情。不调工具就没有数据。
 - 美股盘前盘后：search_stock 返回的 quote 中 ext_price/ext_change_pct/ext_time
 - 外汇/指数期货：当前没有数据源，如实告知
@@ -512,16 +511,15 @@ func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 ## 工具使用
 你可以调用以下工具来执行操作：
 - **search_stock** — 搜索股票（支持中文名、英文名、代码）。当用户提到你不认识的股票时，先用这个工具搜索。
-- **execute_trade** — 下单交易（加密货币或美股）。常见写法："做多 BTC 0.01 x10"、"做空 ETH 0.1"、"平多 BTC"、"平空 ETH"；英文也支持 "long BTC 0.01 x10"、"short ETH 0.1"、"close long BTC"、"close short ETH"。美股：open_long=买入，close_long=卖出。调用后先创建待确认订单，不会立刻成交。若触发大额风控，用户必须回复"确认大额 trade_xxx"；待确认订单 5 分钟后自动失效。
-- **get_positions** — 查看当前所有持仓（加密货币 + 股票）
+- **execute_trade** — 下单交易（期货或美股）。常见写法："做多 MNQ 1"、"做空 MNQ 1"、"平多 MNQ"、"平空 MNQ"；英文也支持 "long MNQ 1"、"short MNQ 1"、"close long MNQ"、"close short MNQ"。美股：open_long=买入，close_long=卖出。调用后先创建待确认订单，不会立刻成交。若触发大额风控，用户必须回复"确认大额 trade_xxx"；待确认订单 5 分钟后自动失效。
+- **get_positions** — 查看当前所有持仓（期货 + 股票）
 - **get_balance** — 查看账户余额
-- **get_market_price** — 获取实时价格（加密货币或股票代码）
-- **get_kline** — 获取最近 K 线 / 蜡烛图数据（适合“看 15 分钟 K 线”“最近 50 根 1 小时 K 线”）
+- **get_market_price** — 获取实时价格（期货或股票代码）
 - **get_exchange_configs / manage_exchange_config** — 查看、新增、修改、删除交易所绑定配置
 - **get_model_configs / manage_model_config** — 查看、新增、修改、删除 AI 模型配置
 - **get_strategies / manage_strategy** — 查看、新增、修改、删除、激活、复制策略模板
 - **manage_trader** — 查看、新增、修改、删除、启动、停止交易员
-- **get_watchlist / manage_watchlist** — 查看、添加、移除运行时监控币对，适合“把 BTC 加入监控”“别再监控 SOL”这类请求
+- **get_watchlist / manage_watchlist** — 查看、添加、移除运行时监控标的，适合“把 MNQ 加入监控”这类请求
 
 ### 配置、策略与交易员管理规则
 - 当用户要求创建、修改、删除、激活、复制策略模板时，优先使用 get_strategies / manage_strategy
@@ -583,7 +581,7 @@ func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 %s
 
 ## Data Notice (CRITICAL — violating this is unacceptable!)
-- Crypto (BTC/ETH): Exchange real-time data, marked [Real-time]
+- CME futures (MNQ): NinjaTrader real-time data, marked [Real-time]
 - Stocks: You MUST call search_stock tool to get real-time quotes. No tool call = no data.
 - US stocks pre/after-hours: ext_price/ext_change_pct/ext_time in search_stock results
 - Forex/Index futures: No data source currently — tell user honestly
@@ -600,11 +598,10 @@ func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 ## Tools
 You can call these tools to take action:
 - **search_stock** — Search for stocks by name, ticker, or code. Covers A-share, HK, and US markets. Use when the user mentions an unknown stock.
-- **execute_trade** — Place a trade order (crypto or US stocks). Common phrasings include "long BTC 0.01 x10", "short ETH 0.1", "close long BTC", and "close short ETH". For stocks: open_long=buy, close_long=sell. This creates a pending trade first; it does not execute immediately. Large orders require "confirm large trade_xxx", and pending trades expire after 5 minutes.
-- **get_positions** — View all current open positions (crypto + stocks)
+- **execute_trade** — Place a trade order (futures or US stocks). Common phrasings include "long MNQ 1", "short MNQ 1", "close long MNQ", and "close short MNQ". For stocks: open_long=buy, close_long=sell. This creates a pending trade first; it does not execute immediately. Large orders require "confirm large trade_xxx", and pending trades expire after 5 minutes.
+- **get_positions** — View all current open positions (futures + stocks)
 - **get_balance** — View account balance and equity
-- **get_market_price** — Get real-time price from the exchange (crypto or stock symbol)
-- **get_kline** — Get recent candlestick / kline data for a crypto symbol
+- **get_market_price** — Get real-time price from the exchange (futures or stock symbol)
 - **get_exchange_configs / manage_exchange_config** — View, create, update, and delete exchange bindings
 - **get_model_configs / manage_model_config** — View, create, update, and delete AI model bindings
 - **get_strategies / manage_strategy** — View, create, update, delete, activate, and duplicate strategy templates
@@ -620,7 +617,7 @@ You can call these tools to take action:
 - When the user wants to bind or edit an exchange account, prefer manage_exchange_config
 - When the user wants to bind or edit an AI model, prefer manage_model_config
 - When the user wants to create, edit, delete, start, or stop a trader, prefer manage_trader
-- When the user wants to add, remove, or inspect monitored coins, prefer get_watchlist / manage_watchlist
+- When the user wants to add, remove, or inspect monitored symbols, prefer get_watchlist / manage_watchlist
 - If required fields are missing, ask a focused follow-up question first, then call the tool
 - **Do not claim the system lacks these capabilities when the tools exist**
 - For secrets such as API keys, secrets, and private keys: store them, but never echo them back in full
@@ -658,56 +655,9 @@ Current time: %s`, traderInfo, watchlist, skillCatalog, kernel.FormatCT(time.Now
 // gatherContext collects real-time market data relevant to the user's message.
 func (a *Agent) gatherContext(storeUserID, text string) string {
 	var parts []string
-	upper := strings.ToUpper(text)
-
-	// Crypto — detect symbols dynamically
-	// 1. Check known popular symbols (fast path)
-	// 2. Extract any "XXXUSDT" pattern from text (catches arbitrary pairs)
-	knownSymbols := []string{
-		"BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "ADA", "AVAX", "DOT", "LINK",
-		"PEPE", "SHIB", "ARB", "OP", "SUI", "APT", "SEI", "TIA", "JUP", "WIF",
-		"NEAR", "ATOM", "FTM", "MATIC", "INJ", "RENDER", "FET", "TAO", "WLD",
-		"AAVE", "UNI", "LDO", "MKR", "CRV", "PENDLE", "ENA", "ONDO", "TRUMP",
-	}
-	matched := make(map[string]bool)
-	for _, sym := range knownSymbols {
-		if strings.Contains(upper, sym) {
-			matched[sym] = true
-		}
-	}
-	// Also extract "XXXUSDT" patterns for coins not in the known list
-	for _, word := range strings.Fields(upper) {
-		word = strings.Trim(word, ".,!?;:()[]{}\"'")
-		if strings.HasSuffix(word, "USDT") && len(word) > 4 && len(word) <= 15 {
-			sym := strings.TrimSuffix(word, "USDT")
-			if len(sym) >= 2 && len(sym) <= 10 {
-				matched[sym] = true
-			}
-		}
-	}
-	// Collect and sort matched symbols for deterministic selection
-	sortedSymbols := make([]string, 0, len(matched))
-	for sym := range matched {
-		sortedSymbols = append(sortedSymbols, sym)
-	}
-	sort.Strings(sortedSymbols)
-
-	// Cap at 5 symbols to avoid slow context gathering
-	count := 0
-	for _, sym := range sortedSymbols {
-		if count >= 5 {
-			break
-		}
-		md, err := market.Get(sym + "USDT")
-		if err == nil && md.CurrentPrice > 0 {
-			parts = append(parts, fmt.Sprintf("[%s/USDT Real-time]\nPrice: $%.4f | 1h: %s | 4h: %s | RSI7: %.1f | EMA20: %.4f | MACD: %.6f | Funding: %.4f%%",
-				sym, md.CurrentPrice, market.PctOrNA(md.PriceChange1h, true), market.PctOrNA(md.PriceChange4h, true), md.CurrentRSI7, md.CurrentEMA20, md.CurrentMACD, md.FundingRate*100))
-			count++
-		}
-	}
 
 	// A-share / stocks — only call Sina API when text likely references stocks.
-	// Skip for purely crypto conversations to avoid unnecessary external API calls.
+	// Skip when text does not reference stocks, to avoid unnecessary external API calls.
 	if looksLikeStockQuery(text) {
 		stockCode, stockName := resolveStockCodeDynamic(text)
 		if stockCode != "" {
@@ -821,16 +771,6 @@ func (a *Agent) handleStatus(L string) string {
 func (a *Agent) noAIFallback(storeUserID, lang, text string) (string, error) {
 	upper := strings.ToUpper(text)
 
-	// Try to provide market data directly
-	for _, sym := range []string{"BTC", "ETH", "SOL", "BNB", "XRP", "DOGE"} {
-		if strings.Contains(upper, sym) {
-			md, err := market.Get(sym + "USDT")
-			if err == nil {
-				return fmt.Sprintf("📊 *%s/USDT*\n\n%s\n\n💡 配置 AI 模型后我能给你更深度的分析。发送 *开始配置* 开始。", sym, market.Format(md)), nil
-			}
-		}
-	}
-
 	// Check if asking about positions/balance
 	if strings.Contains(text, "持仓") || strings.Contains(upper, "POSITION") {
 		return a.queryPositionsDirect(storeUserID, lang)
@@ -840,9 +780,9 @@ func (a *Agent) noAIFallback(storeUserID, lang, text string) (string, error) {
 	}
 
 	if lang == "zh" {
-		return "🤖 我是 " + branding.PersonaName() + "。配置 AI 模型后我就能理解你的任何问题——分析股票、制定策略、管理交易。\n\n现在可用：\n• 加密货币实时行情（试试「BTC」）\n• `/status` 查看系统状态\n• `/clear` 清空当前对话记忆\n\n发送 *开始配置* 配置 AI 模型。", nil
+		return "🤖 我是 " + branding.PersonaName() + "。配置 AI 模型后我就能理解你的任何问题——分析股票、制定策略、管理交易。\n\n现在可用：\n• 期货实时行情（试试「MNQ」）\n• `/status` 查看系统状态\n• `/clear` 清空当前对话记忆\n\n发送 *开始配置* 配置 AI 模型。", nil
 	}
-	return "🤖 I'm " + branding.PersonaName() + ". Configure an AI model and I can understand anything — analyze stocks, build strategies, manage trades.\n\nAvailable now:\n• Crypto real-time data (try 'BTC')\n• `/status` to check system status\n• `/clear` to clear the current conversation memory\n\nSend *setup* to configure AI.", nil
+	return "🤖 I'm " + branding.PersonaName() + ". Configure an AI model and I can understand anything — analyze stocks, build strategies, manage trades.\n\nAvailable now:\n• Futures real-time data (try 'MNQ')\n• `/status` to check system status\n• `/clear` to clear the current conversation memory\n\nSend *setup* to configure AI.", nil
 }
 
 func (a *Agent) aiServiceFailure(lang string, err error) (string, error) {
@@ -902,7 +842,7 @@ func aiServiceFailureGuidance(lang, reason string) string {
 		return "This is not a missing-model issue. The active model reached the upstream provider, but login was rejected because the account is banned (USER_IS_BANNED). Check the active model account/API key, replace it with a usable credential, or switch to another enabled model."
 	}
 	if looksLikeAuthFailure {
-		return "This is not a missing-model issue. The active model reached the upstream provider, but authentication failed. Check the active model API key, wallet credential, provider account status, and custom_api_url, or switch to another enabled model."
+		return "This is not a missing-model issue. The active model reached the upstream provider, but authentication failed. Check the active model API key, provider credential, provider account status, and custom_api_url, or switch to another enabled model."
 	}
 	if looksLikeUpstreamEmptyOutput {
 		return "This is not a missing-model issue. The upstream model appears to have returned no usable output, and the provider wrapped it as a 429 / rate_limit_error. The more likely causes are temporary throttling, upstream congestion, an empty model response, or a gateway that did not receive a valid result. Do not treat this as an insufficient-balance issue first. Retry once, then check the active provider status, rate limits, gateway logs, or switch to another model."

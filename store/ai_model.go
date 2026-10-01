@@ -61,21 +61,6 @@ func (s *AIModelStore) initDefaultData() error {
 	return nil
 }
 
-// FindOrphanClaw402 finds a claw402 model whose user_id no longer exists in the users table.
-// Used to recover wallets after account reset.
-func (s *AIModelStore) FindOrphanClaw402() (*AIModel, error) {
-	var model AIModel
-	// Deterministic pick when several orphan claw402 rows exist (multi-entry safe):
-	// most-recently-updated first, stable id tie-break.
-	err := s.db.Where("provider = ? AND api_key != '' AND user_id NOT IN (SELECT id FROM users)", "claw402").
-		Order("updated_at DESC, id ASC").
-		First(&model).Error
-	if err != nil {
-		return nil, err
-	}
-	return &model, nil
-}
-
 // AdoptModel re-assigns an existing model to a new user.
 func (s *AIModelStore) AdoptModel(modelID, newUserID string) error {
 	return s.db.Model(&AIModel{}).Where("id = ?", modelID).
