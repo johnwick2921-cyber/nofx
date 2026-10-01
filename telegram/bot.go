@@ -1,20 +1,19 @@
 package telegram
 
 import (
+	"os"
+	"strings"
+	"sync"
+	"time"
 	"vl/api"
 	"vl/branding"
 	"vl/config"
 	"vl/logger"
 	"vl/mcp"
-	_ "vl/mcp/payment"
 	_ "vl/mcp/provider"
 	"vl/safe"
 	"vl/store"
 	"vl/telegram/agent"
-	"os"
-	"strings"
-	"sync"
-	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -424,11 +423,7 @@ func newLLMClient(st *store.Store, userID string) mcp.AIClient {
 			if apiKey != "" {
 				client := clientForProvider(model.Provider)
 				client.SetAPIKey(apiKey, model.CustomAPIURL, model.CustomModelName)
-				if isUSDCProvider(model.Provider) {
-					logger.Infof("Telegram agent: provider=%s (USDC payment) user=%s", model.Provider, userID)
-				} else {
-					logger.Infof("Telegram agent: provider=%s user=%s", model.Provider, userID)
-				}
+				logger.Infof("Telegram agent: provider=%s user=%s", model.Provider, userID)
 				return client
 			}
 		}
@@ -440,11 +435,7 @@ func newLLMClient(st *store.Store, userID string) mcp.AIClient {
 		if apiKey != "" {
 			client := clientForProvider(model.Provider)
 			client.SetAPIKey(apiKey, model.CustomAPIURL, model.CustomModelName)
-			if isUSDCProvider(model.Provider) {
-				logger.Infof("Telegram agent: provider=%s (USDC payment) user=%s", model.Provider, userID)
-			} else {
-				logger.Infof("Telegram agent: provider=%s user=%s", model.Provider, userID)
-			}
+			logger.Infof("Telegram agent: provider=%s user=%s", model.Provider, userID)
 			return client
 		}
 	}
@@ -462,11 +453,6 @@ func newLLMClient(st *store.Store, userID string) mcp.AIClient {
 		}
 	}
 	return nil
-}
-
-// isUSDCProvider returns true for providers that pay per call with USDC (x402 protocol).
-func isUSDCProvider(provider string) bool {
-	return provider == "claw402"
 }
 
 func clientForProvider(provider string) mcp.AIClient {
