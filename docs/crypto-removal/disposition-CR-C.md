@@ -1092,25 +1092,25 @@
 | `web/src/components/strategy/RiskControlEditor.tsx` | 769 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/strategy/StrategyTradingBadge.tsx` | 37 | `lighter` | KEEP | CR-C | existing vl-neo token — false positive of \blighter\b |
 | `web/src/components/strategy/TokenEstimateBar.tsx` | 129 | `lighter` | KEEP | CR-C | existing vl-neo token — false positive of \blighter\b |
-| `web/src/components/trader/AITradersPage.tsx` | 73 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
-| `web/src/components/trader/AITradersPage.tsx` | 86 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
-| `web/src/components/trader/AITradersPage.tsx` | 99 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/AITradersPage.tsx` | 142 | `aster` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/AITradersPage.tsx` | 145 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/AITradersPage.tsx` | 146 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/AITradersPage.tsx` | 155 | `aster` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/AITradersPage.tsx` | 163 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/AITradersPage.tsx` | 164 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/AITradersPage.tsx` | 402 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/AITradersPage.tsx` | 404 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/AITradersPage.tsx` | 405 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/AITradersPage.tsx` | 408 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/AITradersPage.tsx` | 521 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/AITradersPage.tsx` | 525 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/AITradersPage.tsx` | 549 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/AITradersPage.tsx` | 553 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/AITradersPage.tsx` | 572 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/AITradersPage.tsx` | 576 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/trader/AITradersPage.tsx` | 73 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  — done b7  |
+| `web/src/components/trader/AITradersPage.tsx` | 86 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  — done b7  |
+| `web/src/components/trader/AITradersPage.tsx` | 99 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/AITradersPage.tsx` | 142 | `aster` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/AITradersPage.tsx` | 145 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/AITradersPage.tsx` | 146 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/AITradersPage.tsx` | 155 | `aster` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/AITradersPage.tsx` | 163 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/AITradersPage.tsx` | 164 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/AITradersPage.tsx` | 402 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/AITradersPage.tsx` | 404 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/AITradersPage.tsx` | 405 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/AITradersPage.tsx` | 408 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/AITradersPage.tsx` | 521 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/AITradersPage.tsx` | 525 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/AITradersPage.tsx` | 549 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/AITradersPage.tsx` | 553 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/AITradersPage.tsx` | 572 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/AITradersPage.tsx` | 576 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
 | `web/src/components/trader/BeginnerGuideCards.tsx` | 5 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/BeginnerGuideCards.tsx` | 10 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/BeginnerGuideCards.tsx` | 11 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
@@ -1144,106 +1144,106 @@
 | `web/src/components/trader/ConfigStatusGrid.tsx` | 280 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
 | `web/src/components/trader/ConfigStatusGrid.tsx` | 294 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
 | `web/src/components/trader/DecisionCard.tsx` | 119 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 33 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 34 | `bybit` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 35 | `okx` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 36 | `bitget` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 37 | `Gate.io` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 38 | `kucoin` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 39 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 40 | `aster` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 41 | `lighter` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 42 | `indodax` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 61 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 65 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 211 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 213 | `Aster` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 218 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 219 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 221 | `Lighter` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 222 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 233 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 258 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 259 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 262 | `okx` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 263 | `bybit` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 264 | `bitget` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 265 | `bitget` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 269 | `kucoin` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 270 | `kucoin` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 273 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 274 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 277 | `aster` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 278 | `asterdex` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 281 | `lighter` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 282 | `lighter` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 285 | `indodax` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 299 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 300 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 306 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 308 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 344 | `aster` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 346 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 347 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 352 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 353 | `aster` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 354 | `lighter` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 402 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 403 | `bybit` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 404 | `indodax` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 417 | `okx` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 418 | `bitget` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 419 | `kucoin` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 431 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 432 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 441 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 443 | `aster` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 459 | `lighter` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 460 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 473 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 562 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 813 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 814 | `bybit` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 815 | `okx` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 816 | `bitget` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 818 | `kucoin` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 819 | `indodax` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 821 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 828 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 837 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 841 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 844 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 853 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 882 | `okx` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 883 | `bitget` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 884 | `kucoin` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 947 | `okx` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 948 | `bitget` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 949 | `kucoin` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 978 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1034 | `Aster` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1035 | `aster` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1143 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1144 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1160 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1163 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1173 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1181 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1193 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1208 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1212 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1213 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1215 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1334 | `Lighter` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1335 | `lighter` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1364 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1368 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1369 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1370 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1388 | `lighter` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1486 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1503 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ExchangeConfigModal.tsx` | 1516 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 33 | `binance` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 34 | `bybit` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 35 | `okx` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 36 | `bitget` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 37 | `Gate.io` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 38 | `kucoin` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 39 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 40 | `aster` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 41 | `lighter` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 42 | `indodax` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 61 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 65 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 211 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 213 | `Aster` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 218 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 219 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 221 | `Lighter` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 222 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 233 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 258 | `binance` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 259 | `binance` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 262 | `okx` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 263 | `bybit` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 264 | `bitget` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 265 | `bitget` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 269 | `kucoin` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 270 | `kucoin` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 273 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 274 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 277 | `aster` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 278 | `asterdex` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 281 | `lighter` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 282 | `lighter` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 285 | `indodax` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 299 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 300 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 306 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 308 | `binance` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 344 | `aster` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 346 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 347 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 352 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 353 | `aster` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 354 | `lighter` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 402 | `binance` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 403 | `bybit` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 404 | `indodax` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 417 | `okx` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 418 | `bitget` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 419 | `kucoin` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 431 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 432 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 441 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 443 | `aster` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 459 | `lighter` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 460 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 473 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 562 | `binance` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 813 | `binance` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 814 | `bybit` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 815 | `okx` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 816 | `bitget` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 818 | `kucoin` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 819 | `indodax` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 821 | `binance` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 828 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 837 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 841 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 844 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 853 | `binance` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 882 | `okx` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 883 | `bitget` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 884 | `kucoin` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 947 | `okx` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 948 | `bitget` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 949 | `kucoin` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 978 | `binance` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1034 | `Aster` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1035 | `aster` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1143 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1144 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1160 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1163 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1173 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1181 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1193 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1208 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1212 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1213 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1215 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1334 | `Lighter` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1335 | `lighter` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1364 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1368 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1369 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1370 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1388 | `lighter` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1486 | `Binance` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1503 | `binance` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/components/trader/ExchangeConfigModal.tsx` | 1516 | `binance` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
 | `web/src/components/trader/LedgerDayPnl.test.tsx` | 12 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/ModelConfigModal.tsx` | 11 | `BLOCKRUN` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
 | `web/src/components/trader/ModelConfigModal.tsx` | 12 | `CLAW402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
@@ -1821,20 +1821,20 @@
 | `web/src/pages/BeginnerOnboardingPage.tsx` | 190 | `Wallet` | DELETE | CR-C | whole-file DELETE: crypto-era file (CR-C delete list) |
 | `web/src/pages/BeginnerOnboardingPage.tsx` | 191 | `Wallet` | DELETE | CR-C | whole-file DELETE: crypto-era file (CR-C delete list) |
 | `web/src/pages/BeginnerOnboardingPage.tsx` | 283 | `Wallet` | DELETE | CR-C | whole-file DELETE: crypto-era file (CR-C delete list) |
-| `web/src/pages/SettingsPage.tsx` | 199 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/SettingsPage.tsx` | 201 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/SettingsPage.tsx` | 202 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/SettingsPage.tsx` | 205 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/SettingsPage.tsx` | 361 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/SettingsPage.tsx` | 365 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/SettingsPage.tsx` | 383 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/SettingsPage.tsx` | 387 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/SettingsPage.tsx` | 408 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/SettingsPage.tsx` | 412 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/SettingsPage.tsx` | 784 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/SettingsPage.tsx` | 785 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/SettingsPage.tsx` | 788 | `Aster` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/SettingsPage.tsx` | 792 | `Lighter` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/pages/SettingsPage.tsx` | 199 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/pages/SettingsPage.tsx` | 201 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/pages/SettingsPage.tsx` | 202 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/pages/SettingsPage.tsx` | 205 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/pages/SettingsPage.tsx` | 361 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/pages/SettingsPage.tsx` | 365 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/pages/SettingsPage.tsx` | 383 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/pages/SettingsPage.tsx` | 387 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/pages/SettingsPage.tsx` | 408 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/pages/SettingsPage.tsx` | 412 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/pages/SettingsPage.tsx` | 784 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/pages/SettingsPage.tsx` | 785 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/pages/SettingsPage.tsx` | 788 | `Aster` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
+| `web/src/pages/SettingsPage.tsx` | 792 | `Lighter` | CUT | CR-C | web crypto surface — CR-C row — done b7  |
 | `web/src/pages/StrategyStudioPage.tsx` | 845 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/pages/StrategyStudioPage.tsx` | 1091 | `lighter` | KEEP | CR-C | existing vl-neo token — false positive of \blighter\b |
 | `web/src/pages/StrategyStudioPage.tsx` | 1237 | `lighter` | KEEP | CR-C | existing vl-neo token — false positive of \blighter\b |
