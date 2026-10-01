@@ -2,9 +2,10 @@
 
 base sha (branch point): db412e61c
 integrator tip generated against: db412e61c
-generated: 2026-10-01T00:42:09-05:00 (worktree /home/hoang/nofx-104-cra, branch crypto-removal-cr-a)
+generated: 2026-10-01T00:46:09-05:00 (worktree /home/hoang/nofx-104-cra, branch crypto-removal-cr-a)
 sweep regex (exported from plan v10 line 108, never hand-typed):
   `binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续`
+ownership: file-level per Finding 3 — CR-A owns store/exchange.go, store/visibility.go, store/ai_charge.go, store/ai_model.go, hook/trader_hook.go, market/historical.go, telegram/bot.go; CR-B owns manager/trader_manager.go, api/handler_competition.go, store/trader.go (ceded rows here).
 
 | path | line | token | disposition | owner | reason |
 |---|---|---|---|---|---|
@@ -226,11 +227,11 @@ sweep regex (exported from plan v10 line 108, never hand-typed):
 | api/handler_ai_model.go | 277 | `blockrun` | CUT | CR-A | wallet import, wallet-address/balance columns, blockrun/claw402 list entries go |
 | api/handler_ai_model.go | 278 | `blockrun` | CUT | CR-A | wallet import, wallet-address/balance columns, blockrun/claw402 list entries go |
 | api/handler_ai_model.go | 279 | `claw402` | CUT | CR-A | wallet import, wallet-address/balance columns, blockrun/claw402 list entries go |
-| api/handler_competition.go | 154 | `wallet` | DELETE | CR-A | whole-file delete (C4) |
-| api/handler_competition.go | 418 | `wallet` | DELETE | CR-A | whole-file delete (C4) |
-| api/handler_competition.go | 419 | `wallet` | DELETE | CR-A | whole-file delete (C4) |
-| api/handler_competition.go | 420 | `wallet` | DELETE | CR-A | whole-file delete (C4) |
-| api/handler_competition.go | 432 | `wallet` | DELETE | CR-A | whole-file delete (C4) |
+| api/handler_competition.go | 154 | `wallet` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| api/handler_competition.go | 418 | `wallet` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| api/handler_competition.go | 419 | `wallet` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| api/handler_competition.go | 420 | `wallet` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| api/handler_competition.go | 432 | `wallet` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
 | api/handler_exchange.go | 31 | `binance` | CUT | CR-A | crypto credential fields/merge/venue rows/create-update arms go |
 | api/handler_exchange.go | 40 | `Hyperliquid` | CUT | CR-A | crypto credential fields/merge/venue rows/create-update arms go |
 | api/handler_exchange.go | 42 | `Aster` | CUT | CR-A | crypto credential fields/merge/venue rows/create-update arms go |
@@ -566,52 +567,52 @@ sweep regex (exported from plan v10 line 108, never hand-typed):
 | main.go | 247 | `CoinAnk` | CUT | CR-A | CoinAnk comment rewords (host census must read 0) |
 | main.go | 253 | `BINANCE` | CUT | CR-A | CoinAnk comment rewords (host census must read 0) |
 | main.go | 372 | `BINANCE` | CUT | CR-A | CoinAnk comment rewords (host census must read 0) |
-| manager/trader_manager.go | 569 | `ai500` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 639 | `ai500` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 645 | `binance` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 647 | `Binance` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 648 | `Binance` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 649 | `Hyperliquid` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 650 | `Hyperliquid` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 680 | `binance` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 681 | `Binance` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 682 | `Binance` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 683 | `bybit` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 684 | `Bybit` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 685 | `Bybit` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 686 | `okx` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 687 | `OKX` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 688 | `OKX` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 689 | `OKX` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 690 | `bitget` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 691 | `Bitget` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 692 | `Bitget` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 693 | `Bitget` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 697 | `kucoin` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 698 | `KuCoin` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 699 | `KuCoin` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 700 | `KuCoin` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 701 | `hyperliquid` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 702 | `Hyperliquid` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 703 | `Hyperliquid` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 704 | `Hyperliquid` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 705 | `aster` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 709 | `lighter` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 711 | `Wallet` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 715 | `indodax` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 716 | `Indodax` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 717 | `Indodax` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 741 | `Claw402` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 779 | `Wallet` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 780 | `claw402` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 781 | `claw402` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 782 | `wallet` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 783 | `wallet` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 791 | `claw402` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 792 | `claw402` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 795 | `wallet` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 797 | `claw402` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
-| manager/trader_manager.go | 800 | `wallet` | CUT | CR-A | crypto credential map + Claw402WalletKey family go; NT arm stays |
+| manager/trader_manager.go | 569 | `ai500` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 639 | `ai500` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 645 | `binance` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 647 | `Binance` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 648 | `Binance` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 649 | `Hyperliquid` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 650 | `Hyperliquid` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 680 | `binance` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 681 | `Binance` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 682 | `Binance` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 683 | `bybit` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 684 | `Bybit` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 685 | `Bybit` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 686 | `okx` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 687 | `OKX` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 688 | `OKX` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 689 | `OKX` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 690 | `bitget` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 691 | `Bitget` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 692 | `Bitget` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 693 | `Bitget` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 697 | `kucoin` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 698 | `KuCoin` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 699 | `KuCoin` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 700 | `KuCoin` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 701 | `hyperliquid` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 702 | `Hyperliquid` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 703 | `Hyperliquid` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 704 | `Hyperliquid` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 705 | `aster` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 709 | `lighter` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 711 | `Wallet` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 715 | `indodax` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 716 | `Indodax` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 717 | `Indodax` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 741 | `Claw402` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 779 | `Wallet` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 780 | `claw402` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 781 | `claw402` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 782 | `wallet` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 783 | `wallet` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 791 | `claw402` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 792 | `claw402` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 795 | `wallet` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 797 | `claw402` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| manager/trader_manager.go | 800 | `wallet` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
 | market/api_client.go | 15 | `binance` | DELETE | CR-A | whole-file delete (C4) |
 | market/historical.go | 12 | `binance` | DELETE | CR-A | whole-file delete (C4) |
 | market/historical.go | 13 | `binance` | DELETE | CR-A | whole-file delete (C4) |
@@ -972,10 +973,10 @@ sweep regex (exported from plan v10 line 108, never hand-typed):
 | store/exchange.go | 391 | `binance` | CUT | CR-A | crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
 | store/exchange.go | 393 | `hyperliquid` | CUT | CR-A | crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
 | store/exchange.go | 409 | `Hyperliquid` | CUT | CR-A | crypto credential fields go (columns STAY); migrateToMultiAccount deleted |
-| store/trader.go | 66 | `AI500` | CUT | CR-A | UseAI500/UseOITop fields go; columns STAY (C1) |
-| store/trader.go | 67 | `oi_top` | CUT | CR-A | UseAI500/UseOITop fields go; columns STAY (C1) |
-| store/trader.go | 163 | `AI500` | CUT | CR-A | UseAI500/UseOITop fields go; columns STAY (C1) |
-| store/trader.go | 164 | `oi_top` | CUT | CR-A | UseAI500/UseOITop fields go; columns STAY (C1) |
+| store/trader.go | 66 | `AI500` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| store/trader.go | 67 | `oi_top` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| store/trader.go | 163 | `AI500` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
+| store/trader.go | 164 | `oi_top` | - | CR-B | ceded to CR-B (Finding 3 file-level ownership: CR-B owns this file) |
 | store/visibility.go | 5 | `hyperliquid` | CUT | CR-A | crypto cases + DEX wallet fields go; PR #188 D1-D3 cleanup-skip ported |
 | store/visibility.go | 7 | `binance` | CUT | CR-A | crypto cases + DEX wallet fields go; PR #188 D1-D3 cleanup-skip ported |
 | store/visibility.go | 12 | `okx` | CUT | CR-A | crypto cases + DEX wallet fields go; PR #188 D1-D3 cleanup-skip ported |
