@@ -1,7 +1,11 @@
 package store
 
 import (
+	"io"
+	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"testing"
 
 	"vl/crypto"
@@ -155,5 +159,128 @@ func TestLegacyCryptoRowsLoadWithFuturesSettingsIntact(t *testing.T) {
 	}
 	if _, err := st2.AIModel().Get(userID, "m-legacy"); err != nil {
 		t.Fatalf("ai_model row did not survive the reopen: %v", err)
+	}
+}
+
+// TestC1RealCopyLoadEveryRow is the CTO's opt-in real-copy mode (the CTO runs
+// it at the base and at the final integrated head against a copy of the latest
+// backup and diffs the two outputs line-for-line; this lane NEVER runs it
+// against owner data). NORMAL CI NEVER SEES OWNER DATA: VL_C1_REAL_DB unset →
+// the test SKIPS.
+//
+// Command line (exact):
+//
+//	VL_C1_REAL_DB=/path/to/backup.db go test -count=1 -run '^TestC1RealCopyLoadEveryRow$' -v ./store
+//
+// When set, the test (a) copies the file to t.TempDir() — the given path is
+// only ever opened READ-ONLY and data/ is never touched — (b) opens the COPY
+// through production store.New (initTables + boot cleanup run on the copy),
+// (c) loads EVERY strategy / exchange / ai_model / trader row, (d) prints one
+// deterministic line per row (sorted by id within each type, types in fixed
+// order), and (e) FAILS if any row errors on load.
+func TestC1RealCopyLoadEveryRow(t *testing.T) {
+	src := os.Getenv("VL_C1_REAL_DB")
+	if src == "" {
+		t.Skip("VL_C1_REAL_DB unset — the real-copy mode is opt-in and never runs in normal CI")
+	}
+
+	// (a) copy — the source path is opened read-only, never written.
+	in, err := os.Open(src)
+	if err != nil {
+		t.Fatalf("open VL_C1_REAL_DB source (read-only): %v", err)
+	}
+	copyPath := filepath.Join(t.TempDir(), "c1-real-copy.db")
+	out, err := os.Create(copyPath)
+	if err != nil {
+		in.Close()
+		t.Fatalf("create copy: %v", err)
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		in.Close()
+		t.Fatalf("copy db: %v", err)
+	}
+	out.Close()
+	in.Close()
+
+	// (b) open the COPY through the production store (cleanup runs on the copy).
+	st, err := New(copyPath)
+	if err != nil {
+		t.Fatalf("open store on copy: %v", err)
+	}
+	defer st.Close()
+
+	failures := 0
+
+	// (c)(d)(e) STRATEGY rows — production Get + ParseConfig.
+	var strategies []Strategy
+	if err := st.gdb.Order("id").Find(&strategies).Error; err != nil {
+		t.Fatalf("list strategies: %v", err)
+	}
+	for _, s := range strategies {
+		loaded, err := st.Strategy().Get(s.UserID, s.ID)
+		if err != nil {
+			failures++
+			t.Errorf("STRATEGY %s failed to load: %v", s.ID, err)
+			continue
+		}
+		cfg, err := loaded.ParseConfig()
+		if err != nil {
+			failures++
+			t.Errorf("STRATEGY %s failed to parse: %v", s.ID, err)
+			continue
+		}
+		t.Logf("STRATEGY %s source=%s coins=%s klines_tf=%s klines_count=%d caps_btc_lev=%d caps_alt_lev=%d caps_btc_ratio=%v caps_alt_ratio=%v min_conf=%d max_pos=%d",
+			s.ID, cfg.CoinSource.SourceType, strings.Join(cfg.CoinSource.StaticCoins, ","),
+			strings.Join(cfg.Indicators.Klines.SelectedTimeframes, ","), cfg.Indicators.Klines.PrimaryCount,
+			cfg.RiskControl.BTCETHMaxLeverage, cfg.RiskControl.AltcoinMaxLeverage,
+			cfg.RiskControl.BTCETHMaxPositionValueRatio, cfg.RiskControl.AltcoinMaxPositionValueRatio,
+			cfg.RiskControl.MinConfidence, cfg.RiskControl.MaxPositions)
+	}
+
+	// (c)(d)(e) EXCHANGE rows — production GetByID (decrypts credentials).
+	var exchanges []Exchange
+	if err := st.gdb.Order("id").Find(&exchanges).Error; err != nil {
+		t.Fatalf("list exchanges: %v", err)
+	}
+	for _, e := range exchanges {
+		loaded, err := st.Exchange().GetByID(e.UserID, e.ID)
+		if err != nil {
+			failures++
+			t.Errorf("EXCHANGE %s failed to load: %v", e.ID, err)
+			continue
+		}
+		t.Logf("EXCHANGE %s type=%s enabled=%v nt_dir=%v nt_instr=%v nt_qty=%d",
+			loaded.ID, loaded.ExchangeType, loaded.Enabled,
+			loaded.NTDataDir != "", loaded.NTInstrumentName != "", loaded.NTDefaultContractQty)
+	}
+
+	// (c)(d)(e) AI MODEL rows — production Get.
+	var models []AIModel
+	if err := st.gdb.Order("id").Find(&models).Error; err != nil {
+		t.Fatalf("list ai_models: %v", err)
+	}
+	for _, m := range models {
+		loaded, err := st.AIModel().Get(m.UserID, m.ID)
+		if err != nil {
+			failures++
+			t.Errorf("AI_MODEL %s failed to load: %v", m.ID, err)
+			continue
+		}
+		t.Logf("AI_MODEL %s provider=%s enabled=%v", loaded.ID, loaded.Provider, loaded.Enabled)
+	}
+
+	// (c)(d)(e) TRADER rows — production ListAll.
+	traders, err := st.Trader().ListAll()
+	if err != nil {
+		t.Fatalf("list traders: %v", err)
+	}
+	sort.Slice(traders, func(i, j int) bool { return traders[i].ID < traders[j].ID })
+	for _, tr := range traders {
+		t.Logf("TRADER %s exchange_id=%s strategy_id=%s is_running=%v", tr.ID, tr.ExchangeID, tr.StrategyID, tr.IsRunning)
+	}
+
+	if failures > 0 {
+		t.Fatalf("%d row(s) failed to load", failures)
 	}
 }
