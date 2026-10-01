@@ -82,7 +82,7 @@ const getQuoteUnit = (exchange: string): string => {
   if (['forex', 'metals'].includes(exchange)) {
     return '' // Forex/metals have no real volume
   }
-  return 'USDT' // Crypto defaults to USDT
+  return 'USD'
 }
 
 // Get base volume unit

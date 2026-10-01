@@ -118,7 +118,7 @@ export function CoinSourceEditor({
       // crypto; keep the bare root (no USDT suffix).
       formattedSymbol = symbol
     } else {
-      formattedSymbol = symbol.endsWith('USDT') ? symbol : `${symbol}USDT`
+      formattedSymbol = symbol
     }
 
     if (!currentCoins.includes(formattedSymbol)) {
@@ -153,7 +153,7 @@ export function CoinSourceEditor({
       // crypto; keep the bare root (no USDT suffix).
       formattedSymbol = symbol
     } else {
-      formattedSymbol = symbol.endsWith('USDT') ? symbol : `${symbol}USDT`
+      formattedSymbol = symbol
     }
 
     const currentExcluded = config.excluded_coins || []

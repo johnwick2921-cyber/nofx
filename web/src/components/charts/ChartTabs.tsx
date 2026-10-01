@@ -14,7 +14,6 @@ interface ChartTabsProps {
   selectedSymbol?: string // Externally selected symbol
   updateKey?: number // Force update key
   exchangeId?: string // Exchange ID
-  isFutures?: boolean // NT futures: USD instead of USDT (Plan 4.3.1)
   selectedAccount?: string // F31 — dashboard account scope for the order snapshot
 }
 
@@ -125,7 +124,6 @@ export function ChartTabs({
   selectedSymbol,
   updateKey,
   exchangeId,
-  isFutures = false,
   selectedAccount,
 }: ChartTabsProps) {
   const { language } = useLanguage()
@@ -473,7 +471,7 @@ export function ChartTabs({
               transition={{ duration: 0.2 }}
               className="h-full w-full absolute inset-0"
             >
-              <EquityChart traderId={traderId} embedded isFutures={isFutures} />
+              <EquityChart traderId={traderId} embedded />
             </motion.div>
           ) : (
             <motion.div

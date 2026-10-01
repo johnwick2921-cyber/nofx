@@ -1,11 +1,12 @@
 # disposition-CR-C.md
 
 - branch point: b6648fcab9cf495e316ef5492ec6852cc3fcc2cf (integration head branched from)
-- integrator tip at generation: 6ac6c467856677fdb4789923d7175d806fdab5be (b14 rename-revert; table excluded from the scoped diff)
+- integrator tip at generation: f92191395da8b106b1312bff6ae4c5fe2b83d8c1 (last web-touching commit; table excluded from the scoped diff)
 - regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续|btc|ethusdt|\beth\b|altcoin|ethereum
-- generated: crypto-removal-cr-c2@6ac6c467856677fdb4789923d7175d806fdab5be 2026-10-01T16:00:53.004290+00:00 by DS-105
+- generated: crypto-removal-cr-c2@f92191395da8b106b1312bff6ae4c5fe2b83d8c1 2026-10-01T16:06:45.078453+00:00 by DS-105
 - paths: web docs :(exclude)docs/crypto-removal
-- line rows: 1522 · blanket-KEEP paths: 209
+- whole-file DELETE ruling (written CTO ruling 2026-10-01): web/src/components/charts/TradingViewChart.tsx — zero renderers in web/src, content 100% crypto widget wrapper, removal-only
+- line rows: 1447 · blanket-KEEP paths: 209
 
 | path | line | token | disposition | OWNER | reason |
 |---|---|---|---|---|---|
@@ -906,32 +907,6 @@
 | `web/src/components/charts/EquityChart.tsx` | 143 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/charts/EquityChart.tsx` | 231 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/charts/EquityChart.tsx` | 264 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 8 | `BINANCE` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 9 | `BYBIT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 10 | `OKX` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 11 | `BITGET` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 13 | `GATEIO` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 18 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 19 | `ETHUSDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 20 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 21 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 22 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 23 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 24 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 25 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 26 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 27 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 28 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 29 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 53 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 54 | `BINANCE` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 88 | `BINANCE` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 91 | `BINANCE` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 160 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 161 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 162 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 172 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/charts/TradingViewChart.tsx` | 334 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/common/DeepVoidBackground.tsx` | 20 | `lighter` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/common/HeaderBar.tsx` | 181 | `lighter` | KEEP | CR-C | existing vl-neo token — false positive of \blighter\b |
 | `web/src/components/common/HeaderBar.tsx` | 193 | `lighter` | KEEP | CR-C | existing vl-neo token — false positive of \blighter\b |
@@ -998,10 +973,10 @@
 | `web/src/components/trader/TraderConfigModal.tsx` | 60 | `lighter` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/TraderConfigModal.tsx` | 429 | `hyper_all` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/TraderConfigModal.tsx` | 432 | `hyper_main` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/TradersList.tsx` | 54 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme token name, no crypto behaviour; removal-only ruling —  |
+| `web/src/components/trader/TradersList.tsx` | 54 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/model-constants.ts` | 2 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/ui/alert-dialog.tsx` | 107 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme token name, no crypto behaviour; removal-only ruling —  |
-| `web/src/components/ui/input.tsx` | 15 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme token name, no crypto behaviour; removal-only ruling —  |
+| `web/src/components/ui/alert-dialog.tsx` | 107 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/ui/input.tsx` | 15 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/contexts/AuthContext.tsx` | 9 | `WALLET` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/contexts/AuthContext.tsx` | 248 | `WALLET` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/data/faqData.ts` | 137 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
@@ -1370,71 +1345,71 @@
 | `web/src/i18n/translations.ts` | 4049 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/i18n/translations.ts` | 4051 | `Lighter` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/i18n/translations.ts` | 4052 | `Lighter` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/index.css` | 49 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 50 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 51 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 52 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 53 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 54 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 55 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 175 | `Binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 297 | `Binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 305 | `Binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 330 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 331 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 336 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 341 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 342 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 347 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 353 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 354 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 361 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 386 | `Binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 483 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 518 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 525 | `Binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 526 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 616 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 649 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 656 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 663 | `Binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 664 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 667 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 668 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 672 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 681 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 682 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 687 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 692 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 697 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 698 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 699 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 703 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 704 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 705 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 722 | `Binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 723 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 724 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 735 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 736 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 741 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 742 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 748 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 749 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 759 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 762 | `Binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 810 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 814 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 815 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 816 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 820 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 821 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 822 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 827 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 831 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 888 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 916 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
-| `web/src/index.css` | 944 | `binance` | KEEP | CR-C | web crypto surface — CR-C row — CSS theme tokens — names only, no crypto behaviour; removal-only ruling —  |
+| `web/src/index.css` | 49 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 50 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 51 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 52 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 53 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 54 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 55 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 175 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 297 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 305 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 330 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 331 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 336 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 341 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 342 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 347 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 353 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 354 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 361 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 386 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 483 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 518 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 525 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 526 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 616 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 649 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 656 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 663 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 664 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 667 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 668 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 672 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 681 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 682 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 687 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 692 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 697 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 698 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 699 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 703 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 704 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 705 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 722 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 723 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 724 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 735 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 736 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 741 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 742 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 748 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 749 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 759 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 762 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 810 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 814 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 815 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 816 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 820 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 821 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 822 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 827 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 831 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 888 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 916 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/index.css` | 944 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/lib/instrument.ts` | 5 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/lib/registrationToggle.test.ts` | 157 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/lib/registrationToggle.test.ts` | 158 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
@@ -1450,10 +1425,6 @@
 | `web/src/lib/storageMigration.ts` | 40 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/pages/AgentChatPage.tsx` | 6 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/pages/AgentChatPage.tsx` | 195 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/SettingsPage.tsx` | 758 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/SettingsPage.tsx` | 759 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/SettingsPage.tsx` | 762 | `Aster` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/SettingsPage.tsx` | 766 | `Lighter` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/pages/StrategyStudioPage.tsx` | 845 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/pages/StrategyStudioPage.tsx` | 1091 | `lighter` | KEEP | CR-C | existing vl-neo token — false positive of \blighter\b |
 | `web/src/pages/StrategyStudioPage.tsx` | 1237 | `lighter` | KEEP | CR-C | existing vl-neo token — false positive of \blighter\b |
@@ -1463,55 +1434,10 @@
 | `web/src/pages/StrategyStudioPage.tsx` | 1497 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/pages/StrategyStudioPage.tsx` | 1521 | `lighter` | KEEP | CR-C | existing vl-neo token — false positive of \blighter\b |
 | `web/src/pages/TraderDashboardPage.test.tsx` | 86 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 80 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 83 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 87 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 88 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 92 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 93 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 94 | `lighter` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 95 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 96 | `aster` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 103 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 205 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 237 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 241 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 243 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 246 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 248 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 250 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 252 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 515 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 518 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 521 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 522 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 523 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 527 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 530 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/pages/TraderDashboardPage.tsx` | 535 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 12 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 13 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 25 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 35 | `OKX` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 37 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 38 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 39 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 40 | `Aster` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 45 | `LIGHTER` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 46 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 79 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 86 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 90 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 111 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 112 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 117 | `ai500` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 118 | `oi_top` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 143 | `Hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 144 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 145 | `Aster` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 149 | `LIGHTER` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 150 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/types/config.ts` | 170 | `usdc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/types/config.ts` | 81 | `btc` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/types/config.ts` | 82 | `altcoin` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/types/config.ts` | 87 | `ai500` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/types/config.ts` | 88 | `oi_top` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/types/strategy.ts` | 203 | `BTC` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/types/strategy.ts` | 207 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/types/strategy.ts` | 239 | `hyper_all` | CUT | CR-C | web crypto surface — CR-C row |
