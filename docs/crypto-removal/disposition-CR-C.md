@@ -5,6 +5,7 @@
 - regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续|btc|ethusdt|\beth\b|altcoin|ethereum
 - generated: crypto-removal-cr-c2@f92191395da8b106b1312bff6ae4c5fe2b83d8c1 2026-10-01T16:06:45.078453+00:00 by DS-105
 - paths: web docs :(exclude)docs/crypto-removal
+- whole-file DELETE ruling (written CTO ruling 2026-10-01): web/src/components/charts/TradingViewChart.tsx — zero renderers in web/src, content 100% crypto widget wrapper, removal-only
 - line rows: 1447 · blanket-KEEP paths: 209
 
 | path | line | token | disposition | OWNER | reason |
