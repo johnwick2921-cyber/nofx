@@ -91,7 +91,7 @@ VLは現在、以下の実証済み機能で**暗号通貨市場において完�
 
 
 ### 🎯 統一リスク管理システム
-- **ポジション制限**: 資産ごとの制限（アルトコイン≤1.5x エクイティ、BTC/ETH≤10x エクイティ）
+
 - **設定可能なレバレッジ**: 資産クラスとアカウントタイプに基づいて1xから50xまでの動的レバレッジ
 - **証拠金管理**: 総使用量≤90%、AI制御配分
 - **リスクリワード強制**: 必須≥1:2 ストップロス対テイクプロフィット比率
@@ -367,7 +367,7 @@ cp config.json.example config.json
   },
   "use_default_coins": true,
   "coin_pool_api_url": "",
-  "oi_top_api_url": "",
+
   "api_server_port": 8080
 }
 ```
@@ -420,7 +420,7 @@ cp config.json.example config.json
   ],
   "use_default_coins": true,
   "coin_pool_api_url": "",
-  "oi_top_api_url": "",
+
   "api_server_port": 8080
 }
 ```
@@ -447,11 +447,11 @@ cp config.json.example config.json
 | `altcoin_leverage` | アルトコインの最大レバレッジ<br>⚠️ サブアカウント：≤5x | `5`（デフォルト、安全）<br>`20`（メインアカウント最大） | ✅ はい |
 | `use_default_coins` | 組み込みコインリストを使用<br>**✨ スマートデフォルト：`true`**（v2.0.2+）<br>API URLが提供されていない場合自動有効化 | `true`または省略 | ❌ いいえ<br>（オプション、自動デフォルト） |
 | `coin_pool_api_url` | カスタムコインプールAPI<br>*`use_default_coins: false`の場合のみ必要* | `""`（空） | ❌ いいえ |
-| `oi_top_api_url` | 建玉API<br>*オプション補足データ* | `""`（空） | ❌ いいえ |
+
 | `api_server_port` | Webダッシュボードポート | `8080` | ✅ はい |
 
 **デフォルト取引コイン**（`use_default_coins: true`の場合）：
-- BTC、ETH、SOL、BNB、XRP、DOGE、ADA、HYPE
+
 
 ---
 
@@ -473,12 +473,12 @@ cp config.json.example config.json
 
 
 
-- **メインアカウント**: 最大20x（アルトコイン）または50x（BTC/ETH）を使用可能
+
 - サブアカウントを使用していてレバレッジを>5xに設定すると、取引は**失敗**し、エラーが表示されます：`Subaccounts are restricted from using leverage greater than 5x`
 
 **推奨設定：**
 
-| アカウントタイプ | BTC/ETHレバレッジ | アルトコインレバレッジ | リスクレベル |
+
 | **サブアカウント** | `5` | `5` | ✅ 安全（デフォルト） |
 | **メイン（保守的）** | `10` | `10` | 🟡 中程度 |
 | **メイン（積極的）** | `20` | `15` | 🔴 高 |
@@ -527,21 +527,21 @@ cp config.json.example config.json
 ```json
 "use_default_coins": true,
 "coin_pool_api_url": "",
-"oi_top_api_url": ""
+
 ```
 
 ✅ **オプション2：フィールドを省略（デフォルトコインを自動使用）**
 ```json
 // "use_default_coins"を含めないだけ
 "coin_pool_api_url": "",
-"oi_top_api_url": ""
+
 ```
 
 ⚙️ **高度：外部APIを使用**
 ```json
 "use_default_coins": false,
 "coin_pool_api_url": "http://your-api.com/coins",
-"oi_top_api_url": "http://your-api.com/oi"
+
 ```
 
 ---
@@ -719,7 +719,7 @@ curl http://localhost:8080/health
 │ 4. 🎯 新しい機会を評価（候補コイン）                       │
 ├──────────────────────────────────────────────────────────┤
 │  • コインプールを取得（2モード）：                        │
-│    🌟 デフォルトモード：BTC、ETH、SOL、BNB、XRPなど       │
+
 
 │  • 候補コインをマージして重複削除                         │
 │  • フィルター：低流動性を削除（<1500万USD OI値）          │
@@ -751,7 +751,7 @@ curl http://localhost:8080/health
 ├──────────────────────────────────────────────────────────┤
 │  • 優先順位：既存をクローズ → その後新規をオープン       │
 │  • 実行前のリスクチェック：                               │
-│    - ポジションサイズ制限（アルトコイン1.5x、BTC 10x）    │
+
 │    - 重複ポジションなし（同じコイン + 方向）              │
 │    - 証拠金使用量が90%制限内                              │
 
@@ -826,7 +826,7 @@ curl http://localhost:8080/health
 
 ### AIのフィードバック使用方法
 
-2. **成功戦略を強化**: BTCブレイクアウトロングが75%の勝率で、AIはこのパターンを継続
+
 3. **動的スタイル調整**: 勝率<40% → 保守的；損益比>2 → 積極的を維持
 4. **市場状況の特定**: 連続損失は荒れた市場を示す可能性があり、取引頻度を減らす
 
@@ -953,7 +953,7 @@ sudo apt-get install libta-lib0-dev
 
 **解決策**:
 - コインプールAPIはオプションです
-- APIが失敗した場合、システムはデフォルトのメインストリームコイン（BTC、ETHなど）を使用
+
 - config.jsonのAPI URLと認証パラメータを確認
 
 ---
