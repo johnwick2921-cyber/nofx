@@ -577,7 +577,7 @@ export const translations = {
       'git clone https://github.com/johnwick2921-cyber/nofx and switch to dev branch to test new features.',
     step2Title: 'Configure Environment',
     step2Desc:
-      'Frontend setup for exchange APIs (like NinjaTrader), AI models and custom prompts.',
+      'Frontend setup for exchange APIs, AI models and custom prompts.',
     step3Title: 'Deploy & Run',
     step3Desc:
       'One-click Docker deployment, start AI agents. Note: High-risk market, only test with money you can afford to lose.',
@@ -617,8 +617,7 @@ export const translations = {
     setCustomCoinsInConfig: 'Set custom coin list in trader configuration',
     orConfigureCorrectApiUrl: 'Or configure correct data provider API address',
     signalSourceNotConfigured: 'Signal Source Not Configured',
-    signalSourceWarningMessage:
-      'You have traders whose coin source needs a signal source API address that is not configured yet. This will cause the candidate symbol count to be 0, and traders cannot work properly.',
+
     configureSignalSourceNow: 'Configure Signal Source Now',
 
     // FAQ Page
@@ -654,10 +653,6 @@ export const translations = {
       'AI trading is experimental and NOT guaranteed to be profitable. Cryptocurrency futures are highly volatile and risky. ' +
       PERSONA_NAME +
       ' is designed for educational and research purposes. We strongly recommend: starting with small amounts (10-50 USDT), never investing more than you can afford to lose, thoroughly testing before live trading, and understanding that past performance does not guarantee future results.',
-
-    faqSupportedExchanges: 'Which exchanges are supported?',
-    faqSupportedExchangesAnswer:
-      'Supported broker: NinjaTrader 8 — CME futures (MNQ), SIM execution. The bot trades one instrument through one venue.',
 
     faqSupportedAIModels: 'Which AI models are supported?',
     faqSupportedAIModelsAnswer:
@@ -697,10 +692,6 @@ export const translations = {
     faqConfigureAIModels: 'How do I configure AI models?',
     faqConfigureAIModelsAnswer:
       'Go to Config page → AI Models section. For each model: 1) Get API key from the provider (links provided in UI); 2) Enter API key; 3) Optionally customize base URL and model name; 4) Save. API keys are encrypted before storage. Test the connection after saving to verify it works.',
-
-    faqConfigureExchanges: 'How do I configure exchange connections?',
-    faqConfigureExchangesAnswer:
-      "Go to Config page → Exchanges section. Click 'Add Exchange', choose NinjaTrader, and enter the credential fields. Save, then assign the exchange to a trader.",
 
     faqCreateStrategy: 'How do I create a trading strategy?',
     faqCreateStrategyAnswer:
@@ -1876,7 +1867,7 @@ export const translations = {
     step1Desc:
       'git clone https://github.com/johnwick2921-cyber/nofx 并切换到 dev 分支测试新功能。',
     step2Title: '配置环境',
-    step2Desc: '前端设置交易所 API（如 NinjaTrader）、AI 模型和自定义提示词。',
+    step2Desc: '前端设置交易所 API、AI 模型和自定义提示词。',
     step3Title: '部署与运行',
     step3Desc:
       '一键 Docker 部署，启动 AI 代理。注意：高风险市场，仅用闲钱测试。',
@@ -1913,8 +1904,7 @@ export const translations = {
     setCustomCoinsInConfig: '在交易员配置中设置自定义币种列表',
     orConfigureCorrectApiUrl: '或者配置正确的数据源 API 地址',
     signalSourceNotConfigured: '信号源未配置',
-    signalSourceWarningMessage:
-      '您有交易员的币种来源需要信号源 API 地址，但尚未配置。这将导致候选品种数量为 0，交易员无法正常工作。',
+
     configureSignalSourceNow: '立即配置信号源',
 
     // FAQ Page
@@ -1950,10 +1940,6 @@ export const translations = {
       'AI 交易是实验性的，不保证盈利。加密货币期货波动性大、风险高。' +
       PERSONA_NAME +
       ' 仅用于教育和研究目的。我们强烈建议：从小额开始（10-50 USDT），不要投入超过承受能力的资金，在实盘交易前充分回测，并理解过去的表现不代表未来的结果。',
-
-    faqSupportedExchanges: '支持哪些交易所？',
-    faqSupportedExchangesAnswer:
-      '支持的券商：NinjaTrader 8 — CME 期货（MNQ），模拟盘执行。机器人通过单一券商交易单一品种。',
 
     faqSupportedAIModels: '支持哪些 AI 模型？',
     faqSupportedAIModelsAnswer:
@@ -1992,10 +1978,6 @@ export const translations = {
     faqConfigureAIModels: '如何配置 AI 模型？',
     faqConfigureAIModelsAnswer:
       '进入配置页面 → AI 模型部分。对于每个模型：1）从提供商获取 API 密钥（界面提供链接）；2）输入 API 密钥；3）可选自定义基础 URL 和模型名称；4）保存。API 密钥在存储前会加密。保存后测试连接以验证。',
-
-    faqConfigureExchanges: '如何配置交易所连接？',
-    faqConfigureExchangesAnswer:
-      '进入配置页面 → 交易所部分。点击“添加交易所”，选择 NinjaTrader 并填写凭证字段。保存后分配给交易员。',
 
     faqCreateStrategy: '如何创建交易策略？',
     faqCreateStrategyAnswer:
@@ -3170,8 +3152,7 @@ export const translations = {
     step1Desc:
       'git clone https://github.com/johnwick2921-cyber/nofx dan beralih ke branch dev untuk menguji fitur baru.',
     step2Title: 'Konfigurasi Lingkungan',
-    step2Desc:
-      'Setup frontend untuk API bursa (seperti NinjaTrader), model AI dan prompt kustom.',
+    step2Desc: 'Setup frontend untuk API bursa, model AI dan prompt kustom.',
     step3Title: 'Deploy & Jalankan',
     step3Desc:
       'Deployment Docker satu klik, mulai agen AI. Catatan: Pasar berisiko tinggi, hanya uji dengan uang yang bisa Anda rugi.',
@@ -3204,8 +3185,7 @@ export const translations = {
     orConfigureCorrectApiUrl:
       'Atau konfigurasi alamat API penyedia data yang benar',
     signalSourceNotConfigured: 'Sumber Sinyal Belum Dikonfigurasi',
-    signalSourceWarningMessage:
-      'Anda memiliki trader yang sumber koinnya memerlukan alamat API sumber sinyal yang belum dikonfigurasi. Ini akan menyebabkan jumlah simbol kandidat menjadi 0, dan trader tidak dapat bekerja dengan baik.',
+
     configureSignalSourceNow: 'Konfigurasi Sumber Sinyal Sekarang',
 
     // FAQ Page
@@ -3237,9 +3217,6 @@ export const translations = {
       'Trading AI bersifat eksperimental dan TIDAK dijamin menguntungkan. Futures kripto sangat volatil dan berisiko. ' +
       PERSONA_NAME +
       ' dirancang untuk tujuan edukasi dan riset. Kami sangat menyarankan: mulai dengan jumlah kecil (10-50 USDT), jangan investasi melebihi yang sanggup Anda rugi, uji sebelum trading nyata.',
-    faqSupportedExchanges: 'Bursa mana yang didukung?',
-    faqSupportedExchangesAnswer:
-      'Broker yang didukung: NinjaTrader 8 — futures CME (MNQ), eksekusi SIM. Bot memperdagangkan satu instrumen melalui satu venue.',
 
     faqSupportedAIModels: 'Model AI mana yang didukung?',
     faqSupportedAIModelsAnswer:
@@ -3270,9 +3247,6 @@ export const translations = {
     faqConfigureAIModels: 'Bagaimana cara mengonfigurasi model AI?',
     faqConfigureAIModelsAnswer:
       'Buka halaman Konfigurasi → bagian Model AI. Untuk setiap model: 1) Dapatkan API key dari penyedia; 2) Masukkan API key; 3) Opsional kustomisasi base URL dan nama model; 4) Simpan.',
-    faqConfigureExchanges: 'Bagaimana cara mengonfigurasi koneksi bursa?',
-    faqConfigureExchangesAnswer:
-      "Buka halaman Konfigurasi → bagian Bursa. Klik 'Tambah Bursa', pilih NinjaTrader, dan isi kolom kredensial. Simpan lalu tetapkan ke trader.",
 
     faqCreateStrategy: 'Bagaimana cara membuat strategi trading?',
     faqCreateStrategyAnswer:

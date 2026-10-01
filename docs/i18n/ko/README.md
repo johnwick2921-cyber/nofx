@@ -3,7 +3,7 @@ names rewritten to vl on 2026-09-30 (VL rename)
 
 <p align="center">
   <strong>당신만의 AI 트레이딩 어시스턴트.</strong><br/>
-  <strong>모든 시장. 모든 모델. NinjaTrader 8 CME 선물 (MNQ) 자동 거래.</strong>
+
 </p>
 
 <p align="center">
@@ -28,9 +28,9 @@ names rewritten to vl on 2026-09-30 (VL rename)
 
 VL Intelligent는 오픈소스 **자율형** AI 트레이딩 어시스턴트입니다. 수동으로 모델을 설정하고, API 키를 관리하고, 데이터 소스를 연결해야 하는 기존 AI 도구와 달리 — VL Intelligent의 AI는 **시장을 스스로 인식하고, 모델을 스스로 선택하고, 데이터를 스스로 가져옵니다**. 인간 개입 제로. 전략만 설정하면 나머지는 AI가 처리합니다.
 
-**완전 자율**: AI가 어떤 모델을 사용할지, 어떤 시장 데이터를 가져올지, 언제 거래할지를 스스로 결정합니다. 수동 모델 설정 불필요. 여러 서비스의 API 키 관리 불필요. NinjaTrader 8을 연결하고 실행하기만 하면 됩니다.
 
-차별점: **NinjaTrader 8 CME 선물 (MNQ) 단일 경로** — 실시간 시세와 SIM 주문 실행이 동일한 TCP 브리지로 연결됩니다.
+
+
 
 **http://127.0.0.1:3000** 을 열면 완료.
 
@@ -54,8 +54,8 @@ VL Intelligent는 오픈소스 **자율형** AI 트레이딩 어시스턴트입�
 
 | 기능 | 설명 |
 | **멀티 AI** | DeepSeek, Qwen, GPT, Claude, Gemini, Grok, Kimi, MiniMax — 언제든 전환 |
-| **NinjaTrader 8** | CME 선물 (MNQ) — 실시간 시세 + SIM 실행 |
-| **전략 스튜디오** | 비주얼 빌더 — 심볼 소스, 지표, 리스크 관리 |
+
+| **전략 스튜디오** | 비주얼 빌더 — 코인 소스, 지표, 리스크 관리 |
 | **AI 토론 아레나** | 여러 AI가 거래 토론 (강세 vs 약세 vs 분석가), 투표, 실행 |
 | **AI 경쟁** | AI가 실시간 경쟁, 리더보드 순위 |
 | **Telegram 에이전트** | 트레이딩 어시스턴트와 채팅 — 스트리밍, 도구 호출, 메모리 |
@@ -64,12 +64,8 @@ VL Intelligent는 오픈소스 **자율형** AI 트레이딩 어시스턴트입�
 
 ### 시장
 
-CME 선물 (MNQ)
+암호화폐 · 미국 주식 · 외환 · 귀금속
 
-### 거래소 (CME 선물)
-
-| 거래소 | 상태 |
-| **NinjaTrader 8** | ✅ — SIM 실행; 시세와 주문이 동일 TCP 브리지 |
 ### AI 모델 (API 키 모드)
 
 | AI 모델 | 상태 | API 키 받기 |

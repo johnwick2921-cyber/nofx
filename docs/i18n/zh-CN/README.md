@@ -3,7 +3,7 @@ names rewritten to vl on 2026-09-30 (VL rename)
 
 <p align="center">
   <strong>你的个人 AI 交易助手。</strong><br/>
-  <strong>任何市场。任何模型。通过 NinjaTrader 8 自动交易 CME 期货 (MNQ)。</strong>
+
 </p>
 
 <p align="center">
@@ -30,9 +30,9 @@ names rewritten to vl on 2026-09-30 (VL rename)
 
 VL Intelligent 是一个开源的**自主式** AI 交易助手。与需要手动配置模型、管理 API Key、接入数据源的传统 AI 工具不同 —— VL Intelligent 的 AI **自主感知市场、自选模型、自动获取数据**。零人工干预。你只需设定策略，AI 负责一切。
 
-**完全自主**：AI 自行决定使用哪个模型、获取什么市场数据、何时交易。无需手动配置模型，无需管理各种服务的 API Key。只需连接 NinjaTrader 8，一键启动。
 
-核心差异：**NinjaTrader 8 CME 期货 (MNQ) 单一链路** — 实时行情与模拟盘下单走同一条 TCP 桥接。
+
+
 
 打开 **http://127.0.0.1:3000**，完成。
 
@@ -56,8 +56,8 @@ VL Intelligent 是一个开源的**自主式** AI 交易助手。与需要手动
 
 | 功能 | 描述 |
 | **多 AI** | DeepSeek、Qwen、GPT、Claude、Gemini、Grok、Kimi、MiniMax — 随时切换 |
-| **NinjaTrader 8** | CME 期货 (MNQ) — 实时行情 + 模拟盘执行 |
-| **策略工作室** | 可视化构建器 — 品种来源、指标、风控 |
+
+| **策略工作室** | 可视化构建器 — 币种来源、指标、风控 |
 | **AI 竞赛** | AI 实时竞争，排行榜排名 |
 | **Telegram Agent** | 与交易助手对话 — 流式输出、工具调用、记忆 |
 | **回测实验室** | 历史模拟，权益曲线和性能指标 |
@@ -65,12 +65,8 @@ VL Intelligent 是一个开源的**自主式** AI 交易助手。与需要手动
 
 ### 市场
 
-CME 期货 (MNQ)
+加密货币 · 美股 · 外汇 · 贵金属
 
-### 交易所 (CME 期货)
-
-| 交易所 | 状态 |
-| **NinjaTrader 8** | ✅ — 模拟盘执行；行情与下单走同一 TCP 桥接 |
 ### AI 模型 (API Key 模式)
 
 | AI 模型 | 状态 | 获取 API Key |
@@ -110,7 +106,7 @@ cd web && npm install && npm run dev  # 前端 (新终端)
 
 **进阶模式**：
 
-1. **AI** — 添加 API Key
+
 2. **交易所** — 连接交易所 API 凭证
 3. **策略** — 在策略工作室构建
 4. **交易员** — 组合 AI + 交易所 + 策略
@@ -123,7 +119,7 @@ cd web && npm install && npm run dev  # 前端 (新终端)
 ## 文档
 
 | [架构概览](../../architecture/README.md) | 系统设计和模块索引 |
-| [策略模块](../../architecture/STRATEGY_MODULE.md) | 品种选择、AI 提示词、执行 |
+| [策略模块](../../architecture/STRATEGY_MODULE.md) | 币种选择、AI 提示词、执行 |
 | [常见问题](../../faq/README.md) | FAQ |
 | [快速开始](../../getting-started/README.md) | 部署指南 |
 

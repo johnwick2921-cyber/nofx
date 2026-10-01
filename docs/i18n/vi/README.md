@@ -3,7 +3,7 @@ names rewritten to vl on 2026-09-30 (VL rename)
 
 <p align="center">
   <strong>Trợ lý giao dịch AI cá nhân của bạn.</strong><br/>
-  <strong>Mọi thị trường. Mọi mô hình. Giao dịch tự động hợp đồng tương lai CME (MNQ) qua NinjaTrader 8.</strong>
+
 </p>
 
 <p align="center">
@@ -28,9 +28,9 @@ names rewritten to vl on 2026-09-30 (VL rename)
 
 VL Intelligent là trợ lý giao dịch AI **tự chủ** mã nguồn mở. Không giống các công cụ AI truyền thống yêu cầu bạn cấu hình mô hình thủ công, quản lý API key và kết nối nguồn dữ liệu — AI của VL Intelligent **tự nhận diện thị trường, tự chọn mô hình và tự lấy dữ liệu**. Không cần con người can thiệp. Bạn chỉ cần đặt chiến lược, AI xử lý mọi thứ còn lại.
 
-**Hoàn toàn tự chủ**: AI tự quyết định sử dụng mô hình nào, lấy dữ liệu thị trường gì, khi nào giao dịch. Không cần cấu hình mô hình thủ công. Không cần quản lý API key của nhiều dịch vụ. Chỉ cần kết nối NinjaTrader 8 và chạy.
 
-Điểm khác biệt: **đường dẫn duy nhất CME (MNQ) qua NinjaTrader 8** — giá realtime và lệnh SIM đi qua cùng một cầu TCP.
+
+
 
 Mở **http://127.0.0.1:3000**. Xong.
 
@@ -54,20 +54,16 @@ Mở **http://127.0.0.1:3000**. Xong.
 
 | Tính năng | Mô tả |
 | **Đa AI** | DeepSeek, Qwen, GPT, Claude, Gemini, Grok, Kimi, MiniMax — chuyển đổi bất cứ lúc nào |
-| **NinjaTrader 8** | Hợp đồng tương lai CME (MNQ) — giá realtime + lệnh SIM |
-| **Strategy Studio** | Trình xây dựng trực quan — nguồn symbol, chỉ báo, kiểm soát rủi ro |
+
+| **Strategy Studio** | Trình xây dựng trực quan — nguồn coin, chỉ báo, kiểm soát rủi ro |
 | **AI Competition** | AI cạnh tranh thời gian thực, bảng xếp hạng hiệu suất |
 | **Telegram Agent** | Chat với trợ lý giao dịch — streaming, gọi công cụ, bộ nhớ |
 | **Dashboard** | Vị thế trực tiếp, P/L, nhật ký quyết định AI với Chain of Thought |
 
 ### Thị trường
 
-Hợp đồng tương lai CME (MNQ)
+Crypto · Cổ phiếu Mỹ · Forex · Kim loại
 
-### Sàn giao dịch (CME)
-
-| Sàn | Trạng thái |
-| **NinjaTrader 8** | ✅ — lệnh SIM; giá và lệnh qua cùng một cầu TCP |
 ### Mô hình AI (Chế độ API Key)
 
 | Mô hình AI | Trạng thái | Lấy API Key |

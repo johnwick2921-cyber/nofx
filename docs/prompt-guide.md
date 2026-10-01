@@ -148,7 +148,7 @@ BTC broke support, MACD death cross, volume increased...
 ```json
 [
   {
-    "symbol": "MNQ",
+
     "action": "open_short",
     "leverage": 10,
     "position_size_usd": 5000,
@@ -210,8 +210,8 @@ Time: 2025-01-15 10:30:00 UTC | Cycle: #142 | Runtime: 426 minutes
 
 | Field Name | Description | Unit | Example |
 |---------|------|------|------|
-| **Equity** | Total account assets | USD | 1250.50 |
-| **Balance** | Available balance | USD | 850.30 |
+
+
 | **Balance %** | Available/Equity | % | 68.0% |
 | **P&L** | Total P&L percentage | % | +15.2% |
 | **Margin** | Margin usage rate | % | 32.0% |
@@ -234,26 +234,26 @@ Consider reducing positions when Margin usage exceeds 80%
 
 | Field Name | Description | Unit | Calculation | Example |
 |---------|------|------|----------|------|
-| **Symbol** | Trading pair | - | - | MNQ |
+
 | **Side** | Long/Short | - | - | LONG |
-| **Entry** | Opening price | USD | - | 20500.00 |
-| **Current** | Mark price | USD | - | 20600.00 |
+
+
 | **P&L %** | Unrealized P&L % | % | w/ leverage | +2.38% |
-| **P&L Amount** | Unrealized P&L | USD | Actual USD | +50.00 |
+
 | **Peak %** | Historical peak P&L% | % | w/ leverage | +5.00% |
 | **Leverage** | Leverage multiple | x | - | 5 |
-| **Margin** | Used margin | USD | - | 500.00 |
-| **Liquidation** | Liquidation price | USD | - | 20380.00 |
+
+
 | **Duration** | Holding time | min/hour | Calculated | 2h 35min |
 
 ⚠️ **Important Distinctions**:
 - **P&L %** = Return with leverage (5x leverage, 1% price change = 5% P&L)
-- **P&L Amount** = Actual dollars gained/lost (e.g., +50.00 USD)
+
 - **Peak %** = Highest P&L % achieved during holding (for drawdown calculation)
 
 **Actual Output Example**:
 ```
-1. MNQ LONG | Entry 20500.0000 Current 20600.0000 | P&L +0.24% | P&L Amount +50.00 USD | Peak % 5.00% | Leverage 1x | Margin 500 | Liquidation 20380.0000 | Duration 2h 35min
+
 ```
 
 **Prompt Reference Examples (✅ Correct)**:
@@ -296,7 +296,7 @@ If Drawdown exceeds 50%, significant profit giveback, consider reducing position
 
 | Field Name | Description | Unit | Example |
 |---------|------|------|------|
-| **MNQ Price** | Current price | USD | 20600.00 |
+
 | **1h Change** | 1-hour change | % | +1.25% |
 | **4h Change** | 4-hour change | % | -2.15% |
 | **MACD** | MACD indicator | - | 0.0024 |
@@ -404,10 +404,10 @@ The following constraints are enforced by the system. **Methods 1 & 2** automati
 - Altcoins: 0.8~1.5x account equity
 - BTC/ETH: 5~10x account equity
 
-**Example** (Account equity 1000 USD):
+
 ```
-✅ Small position: 800~1500 USD
-✅ Large position: 5000~10000 USD
+
+
 ```
 
 #### 4. Leverage Limits
@@ -424,8 +424,8 @@ The following constraints are enforced by the system. **Methods 1 & 2** automati
 
 #### 6. Minimum Opening Amount
 **Requirement**:
-- General: ≥ 12 USD
-- Large: ≥ 60 USD
+
+
 
 **Reason**: Exchange minimum notional value + safety margin
 
@@ -455,7 +455,7 @@ Your analysis...
 ```json
 [
   {
-    "symbol": "MNQ",
+
     "action": "open_short",
     "leverage": 10,
     "position_size_usd": 5000,
@@ -497,14 +497,14 @@ Your analysis...
 ```json
 // Wrong
 {
-  "symbol": "MNQ",
+
   "action": "open_long",  // Open long
   "confidence": 80  // Only necessary fields
 }
 
 // Correct
 {
-  "symbol": "MNQ",
+
   "action": "open_long",
   "confidence": 85
 }
@@ -734,6 +734,7 @@ Complete data available:
 - Raw sequences: 3-min price sequence (MidPrices array) + 4-hour candle sequence
 - Technical sequences: EMA20 sequence, MACD sequence, RSI7 sequence, RSI14 sequence
 - Capital sequences: Volume sequence, Open Interest (OI) sequence, funding rate
+
 
 Analysis methods (fully autonomous):
 - Freely use sequence data, you can but not limited to trend analysis, pattern recognition, support/resistance, Fibonacci, volatility bands
@@ -1252,13 +1253,13 @@ docker logs vl-trader | grep "User Prompt"
 **Step 2: Confirm Field Exists**
 Check if fields you want to reference exist in actual output:
 ```
-✅ Exists: "P&L Amount +50.00 USD" → Can reference "P&L Amount"
+
 ❌ Doesn't exist: Don't see "KDJ" → Cannot reference KDJ indicator
 ```
 
 **Step 3: Match Natural Language Labels**
 ```
-Output: "P&L +0.24% | P&L Amount +50.00 USD | Peak % 5.00%"
+
 
 ✅ Correct reference: "P&L %", "P&L Amount", "Peak %"
 ❌ Wrong reference: "pnl_pct", "unrealized_pnl", "peak_pnl"
@@ -1284,7 +1285,7 @@ unrealized_pnl, peak_pnl_pct, margin_used, leverage, holding_duration
 
 **Code Output** (engine.go:387-390):
 ```
-P&L +0.24% | P&L Amount +50.00 USD | Peak % 5.00%
+
 ```
 
 **Prompt Reference**:
@@ -1424,7 +1425,7 @@ Chain of thought analysis
 - Risk-reward ratio < 1:3
 - Leverage exceeds limits (Altcoin >5x, BTC/ETH >20x)
 - Position size out of range
-- Opening amount too small (<12 USD or large <60 USD)
+
 
 **Solution**:
 - Emphasize hard constraint requirements in Prompt

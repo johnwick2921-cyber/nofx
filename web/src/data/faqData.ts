@@ -61,11 +61,6 @@ export const faqCategories: FAQCategory[] = [
         answerKey: 'faqIsProfitableAnswer',
       },
       {
-        id: 'supported-exchanges',
-        questionKey: 'faqSupportedExchanges',
-        answerKey: 'faqSupportedExchangesAnswer',
-      },
-      {
         id: 'supported-ai-models',
         questionKey: 'faqSupportedAIModels',
         answerKey: 'faqSupportedAIModelsAnswer',
@@ -127,11 +122,6 @@ export const faqCategories: FAQCategory[] = [
         id: 'configure-ai-models',
         questionKey: 'faqConfigureAIModels',
         answerKey: 'faqConfigureAIModelsAnswer',
-      },
-      {
-        id: 'configure-exchanges',
-        questionKey: 'faqConfigureExchanges',
-        answerKey: 'faqConfigureExchangesAnswer',
       },
       {
         id: 'create-strategy',

@@ -923,11 +923,11 @@ const coinSource: KnobSpec[] = [
   {
     label: 'Source type',
     where: 'Strategy → Coin source → Source Type',
-    what: 'Which symbol universe the engine trades from. After the crypto removal wave, only the static list remains — the list below. Any non-static value is ignored and falls back to static. An empty stored value reads "static".',
+    what: 'Which symbol universe the engine trades from: static (the list below). Any non-static value falls back to static. An empty stored value reads "static".',
     trader:
       'The engine fetches candidates ONLY from the chosen source; static is the fallback list inside every branch.',
     consumer:
-      'kernel/engine.go — the SourceType switch over the strategyConfigSchema enum; "static" is the only live branch after the crypto removal wave; default "static" when empty.',
+      'kernel/engine.go — the SourceType switch over the strategyConfigSchema enum; default "static" when empty.',
     range: 'static',
     systemDefault: 'static (empty string reads static)',
     recommended: 'static for CME futures (MNQ) — the only live source.',
