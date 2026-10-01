@@ -45,10 +45,6 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
   const [allModels, setAllModels] = useState<AIModel[]>([])
   const [allExchanges, setAllExchanges] = useState<Exchange[]>([])
   const [supportedModels, setSupportedModels] = useState<AIModel[]>([])
-  const [visibleExchangeAddresses, setVisibleExchangeAddresses] = useState<
-    Set<string>
-  >(new Set())
-  const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const loadConfigs = async () => {
     if (!user || !token) {
@@ -65,30 +61,6 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
     setAllModels(modelConfigs)
     setAllExchanges(exchangeConfigs)
     setSupportedModels(models)
-  }
-
-  // Toggle wallet address visibility for an exchange
-  const toggleExchangeAddressVisibility = (exchangeId: string) => {
-    setVisibleExchangeAddresses((prev) => {
-      const next = new Set(prev)
-      if (next.has(exchangeId)) {
-        next.delete(exchangeId)
-      } else {
-        next.add(exchangeId)
-      }
-      return next
-    })
-  }
-
-  // Copy wallet address to clipboard
-  const handleCopyAddress = async (id: string, address: string) => {
-    try {
-      await navigator.clipboard.writeText(address)
-      setCopiedId(id)
-      setTimeout(() => setCopiedId(null), 2000)
-    } catch (err) {
-      console.error('Failed to copy address:', err)
-    }
   }
 
   const {
@@ -669,8 +641,6 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
         <ConfigStatusGrid
           configuredModels={configuredModels}
           configuredExchanges={configuredExchanges}
-          visibleExchangeAddresses={visibleExchangeAddresses}
-          copiedId={copiedId}
           language={language}
           isModelInUse={isModelInUse}
           getModelUsageInfo={getModelUsageInfo}
@@ -678,8 +648,6 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
           getExchangeUsageInfo={getExchangeUsageInfo}
           onModelClick={handleModelClick}
           onExchangeClick={handleExchangeClick}
-          onToggleExchangeAddress={toggleExchangeAddressVisibility}
-          onCopyAddress={handleCopyAddress}
         />
 
         {/* Traders List */}

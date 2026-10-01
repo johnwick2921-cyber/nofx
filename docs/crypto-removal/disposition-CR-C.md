@@ -1091,8 +1091,8 @@
 | `web/src/components/strategy/RiskControlEditor.tsx` | 769 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/strategy/StrategyTradingBadge.tsx` | 37 | `lighter` | KEEP | CR-C | existing vl-neo token — false positive of \blighter\b |
 | `web/src/components/strategy/TokenEstimateBar.tsx` | 129 | `lighter` | KEEP | CR-C | existing vl-neo token — false positive of \blighter\b |
-| `web/src/components/trader/AITradersPage.tsx` | 73 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/AITradersPage.tsx` | 86 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/trader/AITradersPage.tsx` | 73 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/AITradersPage.tsx` | 86 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
 | `web/src/components/trader/AITradersPage.tsx` | 99 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/AITradersPage.tsx` | 142 | `aster` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/AITradersPage.tsx` | 145 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
@@ -1129,19 +1129,19 @@
 | `web/src/components/trader/BeginnerGuideCards.tsx` | 61 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/BeginnerGuideCards.tsx` | 75 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/BeginnerGuideCards.tsx` | 76 | `Binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ConfigStatusGrid.tsx` | 147 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ConfigStatusGrid.tsx` | 148 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ConfigStatusGrid.tsx` | 150 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ConfigStatusGrid.tsx` | 152 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ConfigStatusGrid.tsx` | 155 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ConfigStatusGrid.tsx` | 157 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ConfigStatusGrid.tsx` | 264 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ConfigStatusGrid.tsx` | 266 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ConfigStatusGrid.tsx` | 267 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ConfigStatusGrid.tsx` | 269 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ConfigStatusGrid.tsx` | 270 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ConfigStatusGrid.tsx` | 280 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ConfigStatusGrid.tsx` | 294 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/trader/ConfigStatusGrid.tsx` | 147 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ConfigStatusGrid.tsx` | 148 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ConfigStatusGrid.tsx` | 150 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ConfigStatusGrid.tsx` | 152 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ConfigStatusGrid.tsx` | 155 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ConfigStatusGrid.tsx` | 157 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ConfigStatusGrid.tsx` | 264 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ConfigStatusGrid.tsx` | 266 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ConfigStatusGrid.tsx` | 267 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ConfigStatusGrid.tsx` | 269 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ConfigStatusGrid.tsx` | 270 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ConfigStatusGrid.tsx` | 280 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ConfigStatusGrid.tsx` | 294 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
 | `web/src/components/trader/DecisionCard.tsx` | 119 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/ExchangeConfigModal.tsx` | 33 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/ExchangeConfigModal.tsx` | 34 | `bybit` | CUT | CR-C | web crypto surface — CR-C row |
@@ -1244,111 +1244,111 @@
 | `web/src/components/trader/ExchangeConfigModal.tsx` | 1503 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/ExchangeConfigModal.tsx` | 1516 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/LedgerDayPnl.test.tsx` | 12 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 11 | `BLOCKRUN` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 12 | `CLAW402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 14 | `CLAW402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 195 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 198 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 199 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 200 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 212 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 215 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 216 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 285 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 286 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 290 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 304 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 305 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 315 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 317 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 327 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 337 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 374 | `blockrun` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 386 | `blockrun` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 394 | `Blockrun` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 400 | `blockrun` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 420 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 439 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 442 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 443 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 444 | `usdc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 447 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 475 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 476 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 477 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 491 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 498 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 499 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 500 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 519 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 526 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 527 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 528 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 529 | `usdc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 531 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 533 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 534 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 535 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 543 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 550 | `usdc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 554 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 564 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 567 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 573 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 612 | `CLAW402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 613 | `CLAW402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 673 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 693 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 704 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 713 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 720 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 733 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 745 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 751 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 752 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 766 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 771 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 772 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 792 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 799 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 804 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 854 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 880 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 891 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 896 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 915 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 924 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 927 | `usdc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 933 | `usdc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 970 | `USDC` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 971 | `USDC` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 978 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 993 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 998 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1045 | `USDC` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1046 | `USDC` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1051 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1055 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1058 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1059 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1060 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1061 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1103 | `USDC` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1115 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1246 | `blockrun` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1272 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1331 | `blockrun` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1332 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1342 | `blockrun` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1344 | `blockrun` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1358 | `BlockRun` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1359 | `blockrun` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1399 | `BlockRun` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1400 | `blockrun` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1491 | `BlockRun` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1492 | `blockrun` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1515 | `BLOCKRUN` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/ModelConfigModal.tsx` | 1516 | `BLOCKRUN` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/trader/ModelConfigModal.tsx` | 11 | `BLOCKRUN` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 12 | `CLAW402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 14 | `CLAW402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 195 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 198 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 199 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 200 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 212 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 215 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 216 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 285 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 286 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 290 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 304 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 305 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 315 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 317 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 327 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 337 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 374 | `blockrun` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 386 | `blockrun` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 394 | `Blockrun` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 400 | `blockrun` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 420 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 439 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 442 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 443 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 444 | `usdc` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 447 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 475 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 476 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 477 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 491 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 498 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 499 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 500 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 519 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 526 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 527 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 528 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 529 | `usdc` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 531 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 533 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 534 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 535 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 543 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 550 | `usdc` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 554 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 564 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 567 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 573 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 612 | `CLAW402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 613 | `CLAW402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 673 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 693 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 704 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 713 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 720 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 733 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 745 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 751 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 752 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 766 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 771 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 772 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 792 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 799 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 804 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 854 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 880 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 891 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 896 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 915 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 924 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 927 | `usdc` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 933 | `usdc` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 970 | `USDC` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 971 | `USDC` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 978 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 993 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 998 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1045 | `USDC` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1046 | `USDC` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1051 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1055 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1058 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1059 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1060 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1061 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1103 | `USDC` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1115 | `Usdc` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1246 | `blockrun` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1272 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1331 | `blockrun` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1332 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1342 | `blockrun` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1344 | `blockrun` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1358 | `BlockRun` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1359 | `blockrun` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1399 | `BlockRun` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1400 | `blockrun` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1491 | `BlockRun` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1492 | `blockrun` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1515 | `BLOCKRUN` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/ModelConfigModal.tsx` | 1516 | `BLOCKRUN` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
 | `web/src/components/trader/PositionHistory.tsx` | 225 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/PositionHistory.tsx` | 407 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/PositionHistory.tsx` | 1017 | `USDT` | CUT | CR-C | web crypto surface — CR-C row |
@@ -1364,39 +1364,39 @@
 | `web/src/components/trader/TraderConfigModal.tsx` | 60 | `lighter` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/TraderConfigModal.tsx` | 429 | `hyper_all` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/trader/TraderConfigModal.tsx` | 432 | `hyper_main` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/TradersList.tsx` | 20 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/TradersList.tsx` | 70 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/TradersList.tsx` | 215 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/TradersList.tsx` | 290 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/TradersList.tsx` | 291 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/TradersList.tsx` | 300 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/TradersList.tsx` | 329 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 3 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 19 | `Blockrun` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 45 | `CLAW402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 47 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 48 | `CLAW402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 181 | `BLOCKRUN` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 185 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 190 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 195 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 200 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 246 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 247 | `CLAW402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 248 | `claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 249 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 272 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 275 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 279 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 280 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 284 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 285 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 293 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 294 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 295 | `lighter` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 296 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 297 | `aster` | CUT | CR-C | web crypto surface — CR-C row |
-| `web/src/components/trader/model-constants.ts` | 304 | `wallet` | CUT | CR-C | web crypto surface — CR-C row |
+| `web/src/components/trader/TradersList.tsx` | 20 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/TradersList.tsx` | 70 | `binance` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/TradersList.tsx` | 215 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/TradersList.tsx` | 290 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/TradersList.tsx` | 291 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/TradersList.tsx` | 300 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/TradersList.tsx` | 329 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 3 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 19 | `Blockrun` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 45 | `CLAW402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 47 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 48 | `CLAW402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 181 | `BLOCKRUN` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 185 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 190 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 195 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 200 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 246 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 247 | `CLAW402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 248 | `claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 249 | `Claw402` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 272 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 275 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 279 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 280 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 284 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 285 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 293 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 294 | `hyperliquid` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 295 | `lighter` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 296 | `Wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 297 | `aster` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
+| `web/src/components/trader/model-constants.ts` | 304 | `wallet` | CUT | CR-C | web crypto surface — CR-C row — done b6  |
 | `web/src/components/ui/alert-dialog.tsx` | 107 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/components/ui/input.tsx` | 15 | `binance` | CUT | CR-C | web crypto surface — CR-C row |
 | `web/src/contexts/AuthContext.tsx` | 10 | `WALLET` | CUT | CR-C | web crypto surface — CR-C row |
