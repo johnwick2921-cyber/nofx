@@ -15,10 +15,13 @@ import (
 )
 
 // TestSweepRegexPinsSentinels proves the exported literal does what plan v10
-// line 108 says: BOTH-boundary aster/lighter kill master/disaster/faster/
-// easter/highlighter; quant\b kills "quantity"; "mixed" is DOUBLE-quoted
-// only (the single-quoted 'mixed' sites are ContentAssertSites, asserted by
-// content in the gate, never by the regex).
+// line 108 PLUS the CTO BTC/ETH amendment 2026-10-01 says: BOTH-boundary
+// aster/lighter kill master/disaster/faster/easter/highlighter; quant\b
+// kills "quantity"; "mixed" is DOUBLE-quoted only (the single-quoted
+// 'mixed' sites are ContentAssertSites, asserted by content in the gate,
+// never by the regex); btc catches the identifier forms a boundary cannot;
+// ethusdt catches ETHUSDT; \beth\b catches standalone ETH without flooding
+// on method/together/ethernet/whether/threshold.
 func TestSweepRegexPinsSentinels(t *testing.T) {
 	re, err := regexp.Compile("(?i)" + SweepRegexLiteral)
 	if err != nil {
@@ -28,6 +31,16 @@ func TestSweepRegexPinsSentinels(t *testing.T) {
 		"aster exchange", "**/aster*.go", "bg-vl-neo-bg-lighter",
 		`case "mixed":`, `bracketOCO = "MIXED"`, "币安",
 		"use_oi_top", "netflow ranking", "a quant run", "price ranking 5",
+		// CTO BTC/ETH amendment 2026-10-01 — identifier forms (no boundary
+		// inside an identifier, so a \b form cannot see these):
+		"isBTCETHSymbol(sym)", "isBTCETH()", "BTCETHMaxLeverage",
+		"btcEthPosValueRatio", "BTCETHMaxPositionValueRatio",
+		"symbol == \"BTCUSDT\"", "BTCIDR -> btc_idr",
+		// standalone / pair forms:
+		"symbol == \"ETHUSDT\"", "\"ETH\" and \"ETHUSDT\" formats",
+		"BTC/ETH max", "- Trading Leverage: Altcoins max",
+		"AltcoinMaxLeverage", "go-ethereum/accounts/abi",
+		"ethereum.org",
 	}
 	for _, s := range mustMatch {
 		if !re.MatchString(s) {
@@ -38,6 +51,13 @@ func TestSweepRegexPinsSentinels(t *testing.T) {
 		"master branch", "disaster recovery", "faster code", "easter egg",
 		"highlighter pen", "a quantity of 3",
 		`arm.state === 'mixed'`, `source_type === 'mixed'`,
+		// the flood the CTO named: a bare eth must NOT pull these in —
+		// \beth\b keeps them out (no word boundary inside them)
+		"method", "together", "ethernet", "whether", "something",
+		"threshold", "failureThreshold", "gather", "further", "rather",
+		"either", "neither", "other", "ether", "the", "tether",
+		// and the amendment's own non-crypto neighbours stay out
+		"backtest", "bitwise", "topic",
 	}
 	for _, s := range mustNot {
 		if re.MatchString(s) {
@@ -57,7 +77,8 @@ func TestHostCensusLiteralByteExact(t *testing.T) {
 
 // TestSweepRegexMatchesThePlanLiteral re-derives the plan literal from the
 // local plan checkout the same way DS-104's extraction does and asserts the
-// guard's export is byte-identical — the guard cannot drift from the plan.
+// guard's export is byte-identical to the plan literal PLUS the recorded
+// CTO BTC/ETH amendment 2026-10-01 — the guard cannot drift from either.
 func TestSweepRegexMatchesThePlanLiteral(t *testing.T) {
 	planPath := "/home/hoang/crypto-removal-plan/2026-09-30-crypto-removal-plan-v10.md"
 	if _, err := os.Stat(planPath); err != nil {
@@ -85,8 +106,28 @@ func TestSweepRegexMatchesThePlanLiteral(t *testing.T) {
 	if lit == "" {
 		t.Fatal("plan literal not found in the v10 line")
 	}
-	if SweepRegexLiteral != lit {
-		t.Fatalf("SweepRegexLiteral != plan v10 literal\n guard: %s\n plan:  %s", SweepRegexLiteral, lit)
+	// the CTO BTC/ETH amendment 2026-10-01 (P1 finding, CTO 06:03 mail) —
+	// appended to the plan literal; recorded HERE so the amendment is pinned
+	// exactly as hard as the plan line (an amended guard can still not drift)
+	want := lit + "|btc|ethusdt|\\beth\\b|altcoin|ethereum"
+	if SweepRegexLiteral != want {
+		t.Fatalf("SweepRegexLiteral != plan v10 literal + CTO BTC/ETH amendment\n guard: %s\n want:  %s", SweepRegexLiteral, want)
+	}
+}
+
+// TestLineLevelOwnershipAllowlistExact pins the two-path line-level
+// ownership allowlist (CTO ruling 2026-10-01, 06:01 — ruling 2 removed
+// agent/trade.go): exactly agent/agent.go and agent/tools.go. A third path
+// is a FAIL.
+func TestLineLevelOwnershipAllowlistExact(t *testing.T) {
+	want := []string{"agent/agent.go", "agent/tools.go"}
+	if len(LineLevelOwnershipPaths) != len(want) {
+		t.Fatalf("line-level allowlist has %d paths, want %d: %v", len(LineLevelOwnershipPaths), len(want), LineLevelOwnershipPaths)
+	}
+	for i, p := range want {
+		if LineLevelOwnershipPaths[i] != p {
+			t.Fatalf("line-level allowlist[%d] = %q, want %q (the list is a ruling, never extended silently)", i, LineLevelOwnershipPaths[i], p)
+		}
 	}
 }
 

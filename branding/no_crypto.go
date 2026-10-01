@@ -15,9 +15,26 @@ package branding
 // SweepRegexLiteral is THE assembled C13 sweep regex, byte-for-byte the
 // literal in plan v10 line 108 (the `aster\b`/`lighter\b` bounds carry BOTH
 // word boundaries; `quant\b` keeps its trailing boundary; `"mixed"` matches
-// only the DOUBLE-quoted literal). Run case-insensitive with Go regexp or
-// GNU grep -E (`\b` is not POSIX ERE).
-const SweepRegexLiteral = `binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续`
+// only the DOUBLE-quoted literal) PLUS the CTO BTC/ETH amendment
+// 2026-10-01 (P1 finding: 119 non-test Go lines invisible — isBTCETH(),
+// isBTCETHSymbol, ETHUSDT, the BTC/ETH prompt vocabulary).
+//
+// Amendment tokens, engineered the way \baster\b was:
+//   btc        — no English word contains it; catches BTC, BTCUSDT and the
+//                identifier forms isBTCETHSymbol / BTCETHMaxLeverage /
+//                btcEthPosValueRatio (a boundary form cannot — there is no
+//                boundary inside an identifier)
+//   ethusdt    — `\beth\b` does NOT match ETHUSDT (U is a word char); the
+//                bare pair-token catches it with zero flood
+//   \beth\b    — standalone ETH ("BTC/ETH max", quoted "ETH"), while a bare
+//                eth floods on method/together/ethernet/whether/threshold
+//   altcoin    — same-class vocabulary (AltcoinMaxLeverage, "Altcoins max") —
+//                included with the amendment, zero flood
+//   ethereum   — same class (go-ethereum imports, docs) — zero flood
+// bitcoin is ABSENT on purpose: zero non-test occurrences at dc630ad8
+// (surveyed 2026-10-01).
+// Run case-insensitive with Go regexp or GNU grep -E (`\b` is not POSIX ERE).
+const SweepRegexLiteral = `binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续|btc|ethusdt|\beth\b|altcoin|ethereum`
 
 // HostCensusLiteral is the C8 host census list (plan v10 C8), byte-for-byte:
 // non-test Go files and web/src hold ZERO of these. GO item 2 declined, so
@@ -52,4 +69,20 @@ var DeletedSDKModules = []string{
 var ContentAssertSites = []struct{ File, Needle, Disposition string }{
 	{"web/src/components/plan/ExecutorVerdict.tsx", `arm.state === 'mixed'`, "KEEP"},
 	{"web/src/components/trader/TraderConfigModal.tsx", `source_type === 'mixed'`, "CUT"},
+}
+
+// LineLevelOwnershipPaths is the EXACT two-path allowlist (CTO ruling
+// 2026-10-01, 06:01 "FOUR RULINGS", ruling 2 — SUPERSEDES the 05:52
+// three-path form): ownership follows the FILE everywhere EXCEPT these two
+// files, where it follows the LINE (CR-A owns the
+// payment/wallet/broker-factory/provider-branch lines; CR-B owns everything
+// else). agent/trade.go was REMOVED from the exception by ruling 2 — it is
+// WHOLLY CR-A (the six futures-active chat-entry notional caps must never
+// meet a CR-B DELETE). The gate asserts FILE-level exclusivity everywhere
+// else and LINE-level ownership on exactly these two. A third path here is
+// a FAIL — this list is pinned by TestLineLevelOwnershipAllowlistExact,
+// never extended without a new ruling.
+var LineLevelOwnershipPaths = []string{
+	"agent/agent.go",
+	"agent/tools.go",
 }
