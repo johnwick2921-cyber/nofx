@@ -2,8 +2,8 @@ package agent
 
 import (
 	"fmt"
-	"vl/branding"
 	"strings"
+	"vl/branding"
 
 	"vl/store"
 
@@ -145,8 +145,8 @@ var setupMessages = map[string]map[string]string{
 			"Send number or name:",
 	},
 	"invalid_exchange": {
-		"zh": "❓ 没有识别到交易所。请发送数字 1-7 或交易所名称。",
-		"en": "❓ Exchange not recognized. Send a number 1-7 or exchange name.",
+		"zh": "❓ 没有识别到交易所。请发送数字 1 或交易所名称。",
+		"en": "❓ Exchange not recognized. Send a number 1 or exchange name.",
 	},
 	"ask_secret": {
 		"zh": "🔑 收到 API Key。\n\n现在请发送你的 *API Secret*：",
