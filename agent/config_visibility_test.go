@@ -331,7 +331,7 @@ func TestSkillVisibleFieldSummaryForExchangeUsesReadableNames(t *testing.T) {
 	a := New(nil, st, DefaultConfig(), slog.Default())
 
 	summary := a.skillVisibleFieldSummary("default", "zh", "exchange_management", "update")
-	for _, expected := range []string{"交易所类型", "账户名", "API Key", "Secret", "Passphrase", "Hyperliquid 钱包地址", "Aster User", "Lighter API Key 私钥", "Lighter API Key Index"} {
+	for _, expected := range []string{"交易所类型", "账户名", "API Key", "Secret", "Passphrase", "测试网"} {
 		if !strings.Contains(summary, expected) {
 			t.Fatalf("expected field label %q in summary, got: %s", expected, summary)
 		}

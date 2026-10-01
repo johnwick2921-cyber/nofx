@@ -151,51 +151,6 @@ func displayCatalogFieldName(field, lang string) string {
 			return "测试网"
 		}
 		return "testnet"
-	case "hyperliquid_wallet_addr":
-		if lang == "zh" {
-			return "Hyperliquid 钱包地址"
-		}
-		return "Hyperliquid wallet address"
-	case "hyperliquid_unified_account":
-		if lang == "zh" {
-			return "Hyperliquid Unified Account"
-		}
-		return "Hyperliquid unified account"
-	case "aster_user":
-		if lang == "zh" {
-			return "Aster User"
-		}
-		return "Aster user"
-	case "aster_signer":
-		if lang == "zh" {
-			return "Aster Signer"
-		}
-		return "Aster signer"
-	case "aster_private_key":
-		if lang == "zh" {
-			return "Aster 私钥"
-		}
-		return "Aster private key"
-	case "lighter_wallet_addr":
-		if lang == "zh" {
-			return "Lighter 钱包地址"
-		}
-		return "Lighter wallet address"
-	case "lighter_private_key":
-		if lang == "zh" {
-			return "Lighter 私钥"
-		}
-		return "Lighter private key"
-	case "lighter_api_key_private_key":
-		if lang == "zh" {
-			return "Lighter API Key 私钥"
-		}
-		return "Lighter API key private key"
-	case "lighter_api_key_index":
-		if lang == "zh" {
-			return "Lighter API Key Index"
-		}
-		return "Lighter API key index"
 	default:
 		if lang == "zh" {
 			return field
