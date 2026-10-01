@@ -71,10 +71,10 @@ function getExchangeTypeFromList(
   exchangeId: string | undefined,
   exchanges: Exchange[] | undefined
 ): string {
-  if (!exchangeId) return 'binance'
+  if (!exchangeId) return 'ninjatrader'
   const exchange = exchanges?.find((e) => e.id === exchangeId)
-  if (!exchange) return 'binance' // Default to binance for charts
-  return exchange.exchange_type?.toLowerCase() || 'binance'
+  if (!exchange) return 'ninjatrader' // Default to ninjatrader for charts
+  return exchange.exchange_type?.toLowerCase() || 'ninjatrader'
 }
 
 // Helper function to check if exchange is a perp-dex type (wallet-based)

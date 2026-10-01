@@ -34,13 +34,7 @@ type Interval =
   | '1d'
   | '3d'
   | '1w'
-type MarketType =
-  | 'hyperliquid'
-  | 'crypto'
-  | 'stocks'
-  | 'forex'
-  | 'metals'
-  | 'ninjatrader'
+type MarketType = 'stocks' | 'forex' | 'metals' | 'ninjatrader'
 
 interface SymbolInfo {
   symbol: string
@@ -50,22 +44,6 @@ interface SymbolInfo {
 
 // Market type configuration
 const MARKET_CONFIG = {
-  hyperliquid: {
-    exchange: 'hyperliquid',
-    defaultSymbol: 'BTC',
-    icon: '🔷',
-    labelKey: 'hyperliquid' as const,
-    color: 'cyan',
-    hasDropdown: true,
-  },
-  crypto: {
-    exchange: 'binance',
-    defaultSymbol: 'BTCUSDT',
-    icon: '₿',
-    labelKey: 'crypto' as const,
-    color: 'yellow',
-    hasDropdown: false,
-  },
   stocks: {
     exchange: 'alpaca',
     defaultSymbol: 'AAPL',
@@ -132,12 +110,13 @@ const NINJATRADER_INTERVALS: { value: Interval; label: string }[] = [
 
 // Infer market type from exchange ID
 function getMarketTypeFromExchange(exchangeId: string | undefined): MarketType {
-  if (!exchangeId) return 'hyperliquid'
+  if (!exchangeId) return 'ninjatrader'
   const lower = exchangeId.toLowerCase()
-  if (lower.includes('hyperliquid')) return 'hyperliquid'
   if (lower.includes('ninjatrader')) return 'ninjatrader'
-  // Other exchanges default to crypto type
-  return 'crypto'
+  // crypto venues are gone from the product; anything else keeps its own
+  // market type (stocks/forex/metals remain out of scope, GO item 2 declined).
+  if (lower.includes('alpaca')) return 'stocks'
+  return 'ninjatrader'
 }
 
 export function ChartTabs({
@@ -180,11 +159,7 @@ export function ChartTabs({
 
   // Determine exchange from market type
   const marketConfig = MARKET_CONFIG[marketType]
-  // Prefer passed-in exchangeId (when not hyperliquid)
-  const currentExchange =
-    marketType === 'hyperliquid'
-      ? 'hyperliquid'
-      : exchangeId || marketConfig.exchange
+  const currentExchange = exchangeId || marketConfig.exchange
 
   // Fetch available symbol list
   useEffect(() => {
@@ -254,11 +229,7 @@ export function ChartTabs({
   const handleSymbolSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (symbolInput.trim()) {
-      let symbol = symbolInput.trim().toUpperCase()
-      // Auto-append USDT suffix for crypto
-      if (marketType === 'crypto' && !symbol.endsWith('USDT')) {
-        symbol = symbol + 'USDT'
-      }
+      const symbol = symbolInput.trim().toUpperCase()
       setChartSymbol(symbol)
       setSymbolInput('')
     }
