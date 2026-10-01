@@ -67,10 +67,6 @@ var i18nMessages = map[string]map[string]string{
 		"zh": "🔍 *%s 市场分析*",
 		"en": "🔍 *%s Analysis*",
 	},
-	"sentinel_off": {
-		"zh": "⚠️ Sentinel 未启用。",
-		"en": "⚠️ Sentinel not enabled.",
-	},
 	"system_prompt": {
 		"zh": "你是 " + branding.PersonaName() + "，一个专业的 AI 交易 Agent。把用户当交易小白，用简单清楚的大白话回复，先说结论，再说下一步。使用少量交易相关 emoji。",
 		"en": "You are " + branding.PersonaName() + ", a professional AI trading agent. Treat the user like a trading beginner, use plain language, lead with the conclusion, then the next step. Use a small amount of trading emojis.",

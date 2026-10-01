@@ -35,7 +35,6 @@ type Agent struct {
 	store         *store.Store
 	aiClient      mcp.AIClient
 	config        *Config
-	sentinel      *Sentinel
 	brain         *Brain
 	scheduler     *Scheduler
 	logger        *slog.Logger
@@ -48,22 +47,18 @@ type Agent struct {
 }
 
 type Config struct {
-	Language            string   `json:"language"`
-	WatchSymbols        []string `json:"watch_symbols"`
-	EnableBriefs        bool     `json:"enable_briefs"`
-	EnableNews          bool     `json:"enable_news"`
-	EnableSentinel      bool     `json:"enable_sentinel"`
-	AllowTradeExecution bool     `json:"allow_trade_execution"`
-	BriefTimes          []int    `json:"brief_times"`
+	Language            string `json:"language"`
+	EnableBriefs        bool   `json:"enable_briefs"`
+	EnableNews          bool   `json:"enable_news"`
+	AllowTradeExecution bool   `json:"allow_trade_execution"`
+	BriefTimes          []int  `json:"brief_times"`
 }
 
 func DefaultConfig() *Config {
 	return &Config{
 		Language:            "zh",
-		WatchSymbols:        []string{"BTCUSDT", "ETHUSDT", "SOLUSDT"},
 		EnableBriefs:        true,
 		EnableNews:          true,
-		EnableSentinel:      true,
 		AllowTradeExecution: true,
 		BriefTimes:          []int{8, 20},
 	}
@@ -312,10 +307,6 @@ func (a *Agent) Start() {
 	a.logger.Info("starting " + branding.PersonaName() + " agent...")
 	a.EnsureAIClient()
 
-	if a.config.EnableSentinel {
-		a.sentinel = NewSentinel(a.config.WatchSymbols, a.handleSignal, a.logger)
-		a.sentinel.Start()
-	}
 	a.brain = NewBrain(a, a.logger)
 	if a.config.EnableNews {
 		a.brain.StartNewsScan(5 * time.Minute)
@@ -336,9 +327,6 @@ func (a *Agent) Stop() {
 		// Already closed
 	default:
 		close(a.stopCh)
-	}
-	if a.sentinel != nil {
-		a.sentinel.Stop()
 	}
 	if a.brain != nil {
 		a.brain.Stop()
@@ -473,10 +461,6 @@ func (a *Agent) buildSystemPrompt(lang string) string {
 func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 	// Gather live system state
 	traderInfo := a.getTradersSummaryForStoreUser(storeUserID)
-	watchlist := ""
-	if a.sentinel != nil {
-		watchlist = a.sentinel.FormatWatchlist(lang)
-	}
 	skillCatalog := skillCatalogPrompt(lang)
 
 	if lang == "zh" {
@@ -521,7 +505,6 @@ func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 - **get_model_configs / manage_model_config** — 查看、新增、修改、删除 AI 模型配置
 - **get_strategies / manage_strategy** — 查看、新增、修改、删除、激活、复制策略模板
 - **manage_trader** — 查看、新增、修改、删除、启动、停止交易员
-- **get_watchlist / manage_watchlist** — 查看、添加、移除运行时监控币对，适合“把 BTC 加入监控”“别再监控 SOL”这类请求
 
 ### 配置、策略与交易员管理规则
 - 当用户要求创建、修改、删除、激活、复制策略模板时，优先使用 get_strategies / manage_strategy
@@ -565,7 +548,7 @@ func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 - **诚实是第一原则** — 不确定就说不确定，没数据就说没数据。绝不编造。
 - 用中文回复。
 
-当前时间: %s`, traderInfo, watchlist, skillCatalog, kernel.FormatCT(time.Now()))
+当前时间: %s`, traderInfo, skillCatalog, kernel.FormatCT(time.Now()))
 	}
 
 	return fmt.Sprintf(`You are `+branding.PersonaName()+`, a professional AI trading agent. Not a chatbot — a trading partner.
@@ -620,7 +603,6 @@ You can call these tools to take action:
 - When the user wants to bind or edit an exchange account, prefer manage_exchange_config
 - When the user wants to bind or edit an AI model, prefer manage_model_config
 - When the user wants to create, edit, delete, start, or stop a trader, prefer manage_trader
-- When the user wants to add, remove, or inspect monitored coins, prefer get_watchlist / manage_watchlist
 - If required fields are missing, ask a focused follow-up question first, then call the tool
 - **Do not claim the system lacks these capabilities when the tools exist**
 - For secrets such as API keys, secrets, and private keys: store them, but never echo them back in full
@@ -652,7 +634,7 @@ You can call these tools to take action:
 - Lead with the conclusion, then the reason.
 - **Honesty is rule #1** — uncertain = say uncertain, no data = say no data.
 
-Current time: %s`, traderInfo, watchlist, skillCatalog, kernel.FormatCT(time.Now()))
+Current time: %s`, traderInfo, skillCatalog, kernel.FormatCT(time.Now()))
 }
 
 // gatherContext collects real-time market data relevant to the user's message.
@@ -807,9 +789,6 @@ func (a *Agent) handleStatus(L string) string {
 		}
 	}
 	wc := 0
-	if a.sentinel != nil {
-		wc = a.sentinel.SymbolCount()
-	}
 	ai := "❌"
 	if a.aiClient != nil {
 		ai = "✅"
@@ -995,12 +974,6 @@ func (a *Agent) queryBalancesDirect(storeUserID, L string) (string, error) {
 		sb.WriteString(fmt.Sprintf("*%s* (%s): $%.2f\n", t.GetName(), tid, toFloat(info["total_equity"])))
 	}
 	return sb.String(), nil
-}
-
-func (a *Agent) handleSignal(sig Signal) {
-	if a.brain != nil {
-		a.brain.HandleSignal(sig)
-	}
 }
 
 func (a *Agent) notifyAll(text string) {

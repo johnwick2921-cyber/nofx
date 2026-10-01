@@ -407,10 +407,10 @@ func exchangeConfigFieldsSchema() map[string]any {
 			"type":        "boolean",
 			"description": "Whether this exchange binding should be enabled.",
 		},
-		"api_key":                     map[string]any{"type": "string", "description": "API key for CEX-style exchanges."},
-		"secret_key":                  map[string]any{"type": "string", "description": "Secret key for CEX-style exchanges."},
-		"passphrase":                  map[string]any{"type": "string", "description": "Optional passphrase."},
-		"testnet":                     map[string]any{"type": "boolean", "description": "Whether to use the exchange testnet/sandbox."},
+		"api_key":    map[string]any{"type": "string", "description": "API key for CEX-style exchanges."},
+		"secret_key": map[string]any{"type": "string", "description": "Secret key for CEX-style exchanges."},
+		"passphrase": map[string]any{"type": "string", "description": "Optional passphrase."},
+		"testnet":    map[string]any{"type": "boolean", "description": "Whether to use the exchange testnet/sandbox."},
 	}
 }
 
@@ -517,7 +517,7 @@ func buildAgentTools() []mcp.Tool {
 							"type": "string",
 							"enum": []string{"create", "update", "delete"},
 						},
-						"exchange_id": exchangeConfigFieldsSchema()["exchange_id"],
+						"exchange_id":   exchangeConfigFieldsSchema()["exchange_id"],
 						"exchange_type": exchangeConfigFieldsSchema()["exchange_type"],
 						"account_name":  exchangeConfigFieldsSchema()["account_name"],
 						"enabled":       exchangeConfigFieldsSchema()["enabled"],
@@ -753,36 +753,6 @@ func buildAgentTools() []mcp.Tool {
 				},
 			},
 		},
-		{
-			Type: "function",
-			Function: mcp.FunctionDef{
-				Name:        "get_watchlist",
-				Description: "Get the current Sentinel watchlist of monitored symbols. Use this when the user asks which symbols are being watched or monitored right now.",
-				Parameters:  map[string]any{"type": "object", "properties": map[string]any{}},
-			},
-		},
-		{
-			Type: "function",
-			Function: mcp.FunctionDef{
-				Name:        "manage_watchlist",
-				Description: "Add or remove a monitored symbol from the Sentinel watchlist at runtime. Use this when the user asks to watch, monitor, unwatch, or stop monitoring a symbol.",
-				Parameters: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"action": map[string]any{
-							"type":        "string",
-							"enum":        []string{"add", "remove"},
-							"description": "Whether to add or remove the symbol from the watchlist.",
-						},
-						"symbol": map[string]any{
-							"type":        "string",
-							"description": "Symbol to watch, such as MNQ.",
-						},
-					},
-					"required": []string{"action", "symbol"},
-				},
-			},
-		},
 	}
 }
 
@@ -825,10 +795,6 @@ func (a *Agent) handleToolCall(ctx context.Context, storeUserID string, userID i
 		return a.toolGetTradeHistory(tc.Function.Arguments)
 	case "get_candidate_coins":
 		return a.toolGetCandidateCoins(storeUserID, userID, tc.Function.Arguments)
-	case "get_watchlist":
-		return a.toolGetWatchlist(lang)
-	case "manage_watchlist":
-		return a.toolManageWatchlist(lang, tc.Function.Arguments)
 	default:
 		return fmt.Sprintf(`{"error": "unknown tool: %s"}`, tc.Function.Name)
 	}
@@ -3131,93 +3097,6 @@ func candidateCoinDetails(coins []kernel.CandidateCoin) []map[string]any {
 	return out
 }
 
-func normalizeWatchSymbol(raw string) string {
-	symbol := strings.ToUpper(strings.TrimSpace(raw))
-	symbol = strings.ReplaceAll(symbol, " ", "")
-	if symbol == "" {
-		return ""
-	}
-	return symbol
-}
-
-func (a *Agent) toolGetWatchlist(lang string) string {
-	if a.sentinel == nil {
-		return fmt.Sprintf(`{"error":"%s"}`, a.msg(lang, "sentinel_off"))
-	}
-	symbols := a.sentinel.Symbols()
-	payload := map[string]any{
-		"enabled": true,
-		"count":   len(symbols),
-		"symbols": symbols,
-		"text":    a.sentinel.FormatWatchlist(lang),
-	}
-	raw, _ := json.Marshal(payload)
-	return string(raw)
-}
-
-func (a *Agent) toolManageWatchlist(lang, argsJSON string) string {
-	if a.sentinel == nil {
-		return fmt.Sprintf(`{"error":"%s"}`, a.msg(lang, "sentinel_off"))
-	}
-
-	var args struct {
-		Action string `json:"action"`
-		Symbol string `json:"symbol"`
-	}
-	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
-		return fmt.Sprintf(`{"error":"invalid arguments: %s"}`, err)
-	}
-
-	action := strings.ToLower(strings.TrimSpace(args.Action))
-	symbol := normalizeWatchSymbol(args.Symbol)
-	if symbol == "" {
-		return `{"error":"symbol is required"}`
-	}
-
-	switch action {
-	case "add":
-		a.sentinel.AddSymbol(symbol)
-	case "remove":
-		a.sentinel.RemoveSymbol(symbol)
-	default:
-		return `{"error":"unsupported action"}`
-	}
-
-	symbols := a.sentinel.Symbols()
-	if a.config != nil {
-		a.config.WatchSymbols = symbols
-	}
-
-	message := ""
-	if lang == "zh" {
-		if action == "add" {
-			message = fmt.Sprintf("已把 %s 加入监控。", symbol)
-		} else {
-			message = fmt.Sprintf("已把 %s 移出监控。", symbol)
-		}
-	} else {
-		if action == "add" {
-			message = fmt.Sprintf("Added %s to the watchlist.", symbol)
-		} else {
-			message = fmt.Sprintf("Removed %s from the watchlist.", symbol)
-		}
-	}
-
-	payload := map[string]any{
-		"ok":      true,
-		"action":  action,
-		"symbol":  symbol,
-		"count":   len(symbols),
-		"symbols": symbols,
-		"message": message,
-	}
-	raw, _ := json.Marshal(payload)
-	return string(raw)
-}
-
-// isCMEFuturesChatSymbol reports whether a chat symbol is a CME futures
-// symbol (W1b FOLD-5): market.IsCMEFuturesSymbol, or a known CME root in any
-// form (market.FuturesRoot: "mnq", "MNQU6", "MNQ.c.0", "MNQ 06-26").
 func isCMEFuturesChatSymbol(sym string) bool {
 	return market.IsCMEFuturesSymbol(sym) || market.FuturesRoot(sym) != ""
 }

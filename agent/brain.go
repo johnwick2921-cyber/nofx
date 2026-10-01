@@ -5,21 +5,20 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"vl/kernel"
-	"vl/safe"
 	"strings"
 	"sync"
 	"time"
+	"vl/kernel"
+	"vl/safe"
 )
 
 // Brain handles proactive intelligence: signals, news, market briefs.
 type Brain struct {
-	agent         *Agent
-	logger        *slog.Logger
-	http          *http.Client
-	stopCh        chan struct{}
-	stopOnce      sync.Once
-	recentSignals sync.Map // debounce
+	agent    *Agent
+	logger   *slog.Logger
+	http     *http.Client
+	stopCh   chan struct{}
+	stopOnce sync.Once
 }
 
 func NewBrain(agent *Agent, logger *slog.Logger) *Brain {
@@ -37,35 +36,6 @@ func (b *Brain) Stop() {
 	})
 }
 
-// cleanStaleSignals removes debounce entries older than 30 minutes.
-func (b *Brain) cleanStaleSignals() {
-	cutoff := time.Now().Add(-30 * time.Minute)
-	b.recentSignals.Range(func(key, value any) bool {
-		if t, ok := value.(time.Time); ok && t.Before(cutoff) {
-			b.recentSignals.Delete(key)
-		}
-		return true
-	})
-}
-
-func (b *Brain) HandleSignal(sig Signal) {
-	key := fmt.Sprintf("%s:%s", sig.Type, sig.Symbol)
-	if v, ok := b.recentSignals.Load(key); ok {
-		if time.Since(v.(time.Time)) < 10*time.Minute {
-			return
-		}
-	}
-	b.recentSignals.Store(key, time.Now())
-
-	emoji := map[string]string{"info": "ℹ️", "warning": "⚠️", "critical": "🚨"}
-	e := emoji[sig.Severity]
-	if e == "" {
-		e = "📊"
-	}
-
-	b.agent.notifyAll(fmt.Sprintf("%s *%s*\n\n%s", e, sig.Title, sig.Detail))
-}
-
 func (b *Brain) StartNewsScan(interval time.Duration) {
 	seen := make(map[string]bool)
 	seenOrder := make([]string, 0, 1024)
@@ -80,9 +50,6 @@ func (b *Brain) StartNewsScan(interval time.Duration) {
 			case <-ticker.C:
 				b.scanNews(seen, &seenOrder)
 				cleanTick++
-				if cleanTick%6 == 0 { // every ~30 min
-					b.cleanStaleSignals()
-				}
 			}
 		}
 	})
