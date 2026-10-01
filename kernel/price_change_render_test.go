@@ -11,9 +11,10 @@ import (
 
 // W1 (presence-aware values) — the 1h/4h price change reaches the prompts as
 // a measured value or as n/a, never a fabricated 0 and never a shorter window
-// under the longer window's name. Every test drives the production chain: the
-// real market read for CME futures (the NT8 bar provider, wired below), then
-// the real renderer.
+// under the longer window's name. The fixtures drive the production renderers
+// directly: market.Get now refuses non-CME symbols (crypto removal), so the
+// tapes are gone and the data is built from fixed series via the exported
+// indicator helpers.
 
 // fixedBars: n contiguous bars of `step` ending at a FIXED instant (goldens
 // must not move with the clock); closes rise by 1.5 per bar from base.
@@ -30,20 +31,29 @@ func fixedBars(step time.Duration, n int, base float64) []market.Kline {
 }
 
 // The grid prompt (en and zh): the grid's real read (5m primary) over a
-// 150-minute NT8 tape → 1h measured, 4h n/a.
+// 150-minute series → 1h measured, 4h n/a. The fixture builds market.Data
+// directly from a fixed MNQ series (the crypto tape is gone; market.Get
+// refuses non-CME symbols), using the exported indicator helpers so the
+// golden stays byte-identical.
 func TestGridPromptRendersAnUnmeasurableWindowAsNA(t *testing.T) {
-	prev := market.FuturesBarsProvider
-	market.FuturesBarsProvider = func(symbol, tf string, count int) []market.Kline {
-		if symbol != "MNQ" || tf != "5m" {
-			return nil
-		}
-		return fixedBars(5*time.Minute, 30, 60000)
-	}
-	t.Cleanup(func() { market.FuturesBarsProvider = prev })
-
-	d, err := market.GetWithTimeframes("MNQ", []string{"5m", "4h"}, "5m", 50)
-	if err != nil {
-		t.Fatalf("fixture: the grid read failed: %v", err)
+	m5 := fixedBars(5*time.Minute, 30, 60000)
+	up, mid, lo := market.ExportCalculateBOLL(m5, 20, 2)
+	d := &market.Data{
+		Symbol:        "MNQ",
+		CurrentPrice:  m5[len(m5)-1].Close,
+		PriceChange1h: market.ChangeOverWindow(m5, time.Hour),
+		PriceChange4h: market.ChangeOverWindow(m5, 4*time.Hour), // 150 min < 4h → nil → n/a
+		CurrentEMA20:  market.ExportCalculateEMA(m5, 20),
+		CurrentMACD:   market.ExportCalculateMACD(m5),
+		TimeframeData: map[string]*market.TimeframeSeriesData{
+			"5m": {
+				BOLLUpper:   []float64{up},
+				BOLLMiddle:  []float64{mid},
+				BOLLLower:   []float64{lo},
+				ATR14:       market.ExportCalculateATR(m5, 14),
+				RSI14Values: []float64{market.ExportCalculateRSI(m5, 14)},
+			},
+		},
 	}
 	gctx := BuildGridContextFromMarketData(d, &store.GridStrategyConfig{Symbol: "MNQ", GridCount: 10, TotalInvestment: 1000, Leverage: 1})
 	gctx.CurrentTime = "2026-09-23 09:00:00"
