@@ -38,17 +38,17 @@
     "symbol": {
       "type": "enum",
       "values": ["MNQ"],
-      "description": "网格策略页面合约下拉选项，当前构建只支持 MNQ（CME 微型纳指期货）。用户问“合约有哪些选项”时，直接说明只有 MNQ。"
+      "description": "网格策略页面交易对下拉选项，只能从 MNQ 中选择。用户问“交易对有哪些选项”时，直接列出这些选项。"
     },
     "source_type": {
       "type": "enum",
       "values": ["static"],
-      "description": "选币来源类型。static=用户指定静态合约列表；当前构建的行情只来自 NinjaTrader 8 桥接。"
+      "description": "选币来源类型。static=用户指定静态币池。"
     },
     "static_coins": {
       "type": "string_array",
       "max_items": 10,
-      "description": "静态合约池，例如 [\"MNQ\"]，source_type=static 时使用，手动页面最多 10 个。当前构建支持 CME 期货合约。"
+      "description": "静态币池，source_type=static 时使用，手动页面最多 10 个。页面支持常规合约币种，也支持 xyz: 前缀资产（如 xyz:TSLA、xyz:GOLD、xyz:XYZ100）。"
     },
     "excluded_coins": {
       "type": "string_array",

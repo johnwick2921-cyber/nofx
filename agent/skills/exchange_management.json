@@ -8,8 +8,8 @@
       "type": "enum",
       "required": true,
       "values": ["ninjatrader"],
-      "aliases": {"nt8": "ninjatrader", "ninja": "ninjatrader", "ninjatrader 8": "ninjatrader"},
-      "description": "交易所类型，必填。当前构建只支持 ninjatrader（NinjaTrader 8 SIM，本地 AddOn TCP 桥接）。"
+      "aliases": {},
+      "description": "交易所类型，必填，决定后续需要哪些凭证字段。"
     },
     "account_name": {
       "type": "string",
@@ -28,8 +28,8 @@
     },
     "passphrase": {
       "type": "credential",
-      "required_for": [],
-      "description": "NinjaTrader 本地桥接不需要 Passphrase；该字段仅作兼容保留，留空即可。"
+      "required_for": ["okx", "bitget", "kucoin"],
+      "description": ""
     },
     "testnet": {
       "type": "bool",
@@ -58,8 +58,6 @@
       "optional_slots": ["account_name", "enabled"],
       "goal": "创建一个可供 trader 绑定使用的交易所配置。",
       "dynamic_rules": [
-        "确认 exchange_type 后，根据 per_exchange_required_fields 决定需要追问哪些凭证字段。",
-        "ninjatrader 不需要任何 API 凭证；创建时确认 AddOn 已部署、TCP 桥接可连接即可。",
         "凭证字段格式不符时，用人话告知用户正确格式，不要静默丢弃。",
         "若当前父任务只是缺一个可用交易所，本动作完成后应允许父任务恢复并消费新的 exchange_id。",
         "若请求只是在启用已有交易所，不应误走 create，应改走 update_status。"
