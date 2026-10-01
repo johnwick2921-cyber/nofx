@@ -61,6 +61,39 @@ var DeletedSDKModules = []string{
 	"lighter-go", "poseidon", "go-hyperliquid", "go-ethereum",
 }
 
+// RiskCapAssertSites — P0 ruling 2026-10-01 10:5x: the four LIVE futures risk
+// caps are crypto-NAMED but futures-ACTIVE (kernel/engine_analysis.go passes
+// them into parseFullDecisionResponse on the futures path; for MNQ the
+// Altcoin pair is the binding cap; agent/trade.go reads them as the chat-entry
+// caps). The owner's stored strategies carry real values — deleting a field
+// makes the loader ignore the key and the cap silently falls back to defaults
+// (C1 class). File+needle pairs, each MUST be present at the integrated head:
+// the gate extracts this list programmatically and FAILS on any missing pair.
+// KEEP byte-identical this wave; renaming to futures names with JSON aliases
+// is a separate owner-gated wave. Extend this list only with a new ruling.
+var RiskCapAssertSites = []string{
+	// the four Go fields and their JSON tags
+	"store/strategy.go", "BTCETHMaxLeverage",
+	"store/strategy.go", "AltcoinMaxLeverage",
+	"store/strategy.go", "BTCETHMaxPositionValueRatio",
+	"store/strategy.go", "AltcoinMaxPositionValueRatio",
+	"store/strategy.go", "btc_eth_max_leverage",
+	"store/strategy.go", "altcoin_max_leverage",
+	"store/strategy.go", "btc_eth_max_position_value_ratio",
+	"store/strategy.go", "altcoin_max_position_value_ratio",
+	// the futures decision-path arguments
+	"kernel/engine_analysis.go", "riskConfig.BTCETHMaxLeverage",
+	"kernel/engine_analysis.go", "riskConfig.AltcoinMaxLeverage",
+	"kernel/engine_analysis.go", "riskConfig.BTCETHMaxPositionValueRatio",
+	"kernel/engine_analysis.go", "riskConfig.AltcoinMaxPositionValueRatio",
+	// the chat-entry cap reads
+	"agent/trade.go", "riskControl.AltcoinMaxLeverage",
+	"agent/trade.go", "riskControl.AltcoinMaxPositionValueRatio",
+	// the knob registry rows (KnobLive)
+	"store/knob_registry_table.go", "altcoin_max_leverage",
+	"store/knob_registry_table.go", "altcoin_max_position_value_ratio",
+}
+
 // ContentAssertSites are the single-quoted sites the sweep regex CANNOT see
 // (a trailing-boundary regex with a double-quoted "mixed" never matches
 // 'mixed'). CTO ruling 2026-10-01: assert them by CONTENT in the gate,

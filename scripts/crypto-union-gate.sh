@@ -6,6 +6,14 @@
 #
 # Usage:  scripts/crypto-union-gate.sh <table-A> <table-B> <table-C>
 #
+# CANONICAL INVOCATION (CTO, 2026-10-01 — the ONLY valid one; run inside the
+# repo root; a run with no tables passed prints a 0-KEEP-rows lie and its
+# numbers must never be quoted):
+#   bash scripts/crypto-union-gate.sh \\
+#       docs/crypto-removal/disposition-CR-A.md \\
+#       docs/crypto-removal/disposition-cr-b.md \\
+#       docs/crypto-removal/disposition-CR-C.md
+#
 # CANONICAL TABLE FORMAT (CTO ruling, C13 table review 2026-10-01 — CR-B's
 # markdown pipe row is canonical; one row per hit LINE):
 #   branch-point: <40-hex sha>          # the part's branch point
@@ -53,6 +61,13 @@
 #       web/src/components/trader/TraderConfigModal.tsx source_type === 'mixed'  -> if present, the union must name it (CUT); absent = cut complete
 set -u
 
+# LC_ALL=C: bytewise regex for the whole sweep. The literal's CJK tokens are
+# UTF-8 byte sequences (matched literally, no case folding needed) and the
+# ASCII tokens fold under C-locale -i. A multibyte locale puts the glibc
+# regex engine on its pathological-line path — the known segfault class
+# (grep on a multi-MB line with an alternation) that took DS-101's run down.
+export LC_ALL=C
+
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$REPO_ROOT" || exit 3
 GUARD=branding/no_crypto.go
@@ -73,6 +88,13 @@ nallow=$(echo "$allowlist" | wc -w)
 if [ "$nallow" -ne 2 ]; then bad "line-level allowlist has $nallow paths (want exactly 2 — the ruling, never extended silently): $allowlist"; fi
 ok "line-level ownership allowlist (2 paths): $allowlist"
 
+# -- the P0 risk-cap KEEP canary, from the guard (CTO ruling 10:5x)
+cap_sites=$(awk '/var RiskCapAssertSites/{f=1;next} f&&/^}/{f=0} f{for(i=1;i<=NF;i++) if($i ~ /^"[^"]*",?$/) {gsub(/[" ,]/,"",$i); print $i}}' "$GUARD" | tr '\n' ' ')
+cap_sites=$(echo "$cap_sites" | xargs)
+cap_n=$(echo "$cap_sites" | wc -w)
+if [ "$cap_n" -eq 0 ]; then bad "risk-cap canary list EMPTY — the guard is the single source"; fi
+if [ $((cap_n % 2)) -ne 0 ]; then bad "risk-cap canary list malformed (odd $cap_n — file/needle pairs)"; fi
+
 # -- sweep the tracked tree (invariant 3 + the 2000 floor)
 LIST=$(mktemp) || { bad "mktemp failed"; echo "== $fail FAIL"; exit 1; }
 trap 'rm -f "$LIST"' EXIT
@@ -80,6 +102,13 @@ git ls-files -z > "$LIST" || { bad "git ls-files failed (never skip)"; echo "== 
 nfiles=$(tr -cd '\0' < "$LIST" | wc -c)
 if [ "$nfiles" -lt 2000 ]; then bad "enumeration floor: $nfiles tracked files < 2000"; fi
 ok "enumerated $nfiles tracked files (floor 2000)"
+
+# -- the gate's own inputs are never swept: the disposition tables carry the
+# literal BY DESIGN (CR-A embeds it; every row names tokens)
+ntables=0
+for a in "$@"; do ntables=$((ntables+1)); done
+if [ "$ntables" -eq 0 ]; then bad "gate invoked with NO tables — a 0-KEEP-rows result is vacuous, never quote it"; fi
+ok "gate run over $ntables tables: $*"
 
 # row index:  tbl|file|line -> disposition (owner/token kept for messages)
 declare -A row_dispo row_owner row_token row_line
@@ -236,21 +265,37 @@ done
 # -- the sweep: every hit line has rows, ONE owner, and a KEEP row covers it
 hits=0; excluded=0
 while IFS= read -r -d '' f; do
+  # the disposition tables themselves are gate INPUTS, never swept — they
+  # carry the literal and token names by design (a self-hit proves nothing)
+  is_table=""
+  for a in "$@"; do
+    [ "$f" = "${a#./}" ] && is_table=yes && break
+  done
+  if [ -n "$is_table" ]; then continue; fi
   case "$f" in
     *_test.go) continue;;   # swept scope: Go *_test.go excluded
   esac
   # blanket row for this file (Finding 4): count-verified, printed, never silent
   if [ -n "${blanket_rows[$f]:-}" ]; then
     want=${blanket_rows[$f]}
-    got=$(grep -a -c -i -E "$lit" -- "$f" 2>/dev/null || true)
+    got=$(grep -a -c -i -E "$lit" -- "$f" 2>/dev/null); grc=$?
+    if [ "$grc" -ge 128 ]; then
+      bad "blanket grep CRASHED (signal) on $f — count unverifiable, never a silent skip"
+      continue
+    fi
     if [ "$got" = "$want" ]; then
       excluded=$((excluded+1)); blanket_seen["$f"]=1
     else
-      bad "blanket row count mismatch: $f says count=$want, sweep finds $got — ${blanket_reason[$f]}"
+      bad "blanket row count mismatch: $f says count=$want, sweep finds ${got:-0} — ${blanket_reason[$f]}"
     fi
     continue
   fi
-  out=$(grep -n -I -i -E "$lit" -- "$f" 2>/dev/null) || continue
+  out=$(grep -n -I -i -E "$lit" -- "$f" 2>/dev/null); grc=$?
+  if [ "$grc" -ge 128 ]; then
+    bad "sweep grep CRASHED (signal) on $f — never a silent skip"
+    continue
+  fi
+  [ "$grc" -eq 0 ] || continue
   while IFS= read -r line; do
     ln=${line%%:*}
     hits=$((hits+1))
@@ -302,27 +347,63 @@ for k in "${!row_dispo[@]}"; do
   # the named-trap rows carry a descriptive token: `'mixed' (single-quoted)`
   # — the part that must be re-found is the quoted needle itself
   case "$t" in *" (single-quoted)") t=${t% (single-quoted)};; esac
-  if [ -f "$p" ] && grep -q -I -i -F -- "$t" "$p" 2>/dev/null; then can=$((can+1)); else
-    bad "canary: KEEP row token '${row_token[$k]}' not re-found in $p — sweep or table is wrong"; fi
+  if [ -f "$p" ]; then
+    grep -q -I -i -F -- "$t" "$p" 2>/dev/null; grc=$?
+    if [ "$grc" -eq 0 ]; then can=$((can+1))
+    elif [ "$grc" -ge 128 ]; then bad "canary grep CRASHED on $p — token '${row_token[$k]}' re-found is unverifiable"
+    else bad "canary: KEEP row token '${row_token[$k]}' not re-found in $p — sweep or table is wrong"; fi
+  else
+    bad "canary: KEEP row path $p missing — sweep or table is wrong"
+  fi
 done
 [ "$can" -gt 0 ] && ok "canary: all $can KEEP tokens re-found" || echo "NOTE canary n/a (no KEEP rows) — the guard test's sentinels are the canary"
+
+# -- P0 risk-cap KEEP canary (CTO ruling 2026-10-01 10:5x): the four live
+# futures caps (crypto-named) must exist at the integrated head
+cap_f=""
+for tok in $cap_sites; do
+  if [ -z "$cap_f" ]; then cap_f=$tok; continue; fi
+  if [ -f "$cap_f" ]; then
+    grep -qF -- "$tok" "$cap_f" 2>/dev/null; grc=$?
+    if [ "$grc" -eq 0 ]; then
+      ok "risk-cap KEEP canary present: $cap_f :: $tok"
+    elif [ "$grc" -ge 128 ]; then
+      bad "risk-cap canary grep CRASHED on $cap_f — presence unverifiable"
+    else
+      bad "risk-cap KEEP canary LOST: $cap_f is missing '$tok' — P0 (C1: the owner's caps silently fall back to defaults)"
+    fi
+  else
+    bad "risk-cap KEEP canary LOST: $cap_f missing at HEAD"
+  fi
+  cap_f=""
+done
 
 # -- content asserts (CTO ruling 2026-10-01): single-quoted 'mixed' sites
 f_keep="web/src/components/plan/ExecutorVerdict.tsx";  n_keep="arm.state === 'mixed'"
 f_cut="web/src/components/trader/TraderConfigModal.tsx"; n_cut="source_type === 'mixed'"
 if [ -f "$f_keep" ]; then
-  if grep -qF -- "$n_keep" "$f_keep" 2>/dev/null; then
+  grep -qF -- "$n_keep" "$f_keep" 2>/dev/null; grc=$?
+  if [ "$grc" -eq 0 ]; then
     ok "content-assert: ExecutorVerdict 'mixed' present (KEEP — its CR-C table row is the requirement)"
+  elif [ "$grc" -ge 128 ]; then
+    bad "content-assert grep CRASHED on $f_keep — presence unverifiable"
   else bad "content-assert: ExecutorVerdict lost its plan-state 'mixed' line (KEEP site vanished)"; fi
 else bad "content-assert: $f_keep missing at HEAD"; fi
-if [ -f "$f_cut" ] && grep -qF -- "$n_cut" "$f_cut" 2>/dev/null; then
-  found=""
-  for key in "${!row_dispo[@]}"; do
-    case "${row_line[$key]}" in "$f_cut|"*) found=yes;; esac
-  done
-  if [ "$found" = "yes" ]; then
-    ok "content-assert: TraderConfigModal 'mixed' still present but the union names it (CUT pending)"
-  else bad "content-assert: TraderConfigModal 'mixed' present with NO row — a lane forgot the CUT"; fi
+if [ -f "$f_cut" ]; then
+  grep -qF -- "$n_cut" "$f_cut" 2>/dev/null; grc=$?
+  if [ "$grc" -eq 0 ]; then
+    found=""
+    for key in "${!row_dispo[@]}"; do
+      case "${row_line[$key]}" in "$f_cut|"*) found=yes;; esac
+    done
+    if [ "$found" = "yes" ]; then
+      ok "content-assert: TraderConfigModal 'mixed' still present but the union names it (CUT pending)"
+    else bad "content-assert: TraderConfigModal 'mixed' present with NO row — a lane forgot the CUT"; fi
+  elif [ "$grc" -ge 128 ]; then
+    bad "content-assert grep CRASHED on $f_cut — presence unverifiable"
+  else
+    ok "content-assert: TraderConfigModal 'mixed' gone (CUT complete)"
+  fi
 else
   ok "content-assert: TraderConfigModal 'mixed' gone (CUT complete)"
 fi
