@@ -717,8 +717,7 @@ export function SettingsPage() {
                 <div className="space-y-2">
                   {exchanges.map((exchange) => {
                     const isNinjaTrader =
-                      (exchange.exchange_type || exchange.type) ===
-                      'ninjatrader'
+                      exchange.exchange_type === 'ninjatrader'
                     return (
                       <button
                         key={exchange.id}
@@ -738,7 +737,7 @@ export function SettingsPage() {
                             </p>
                             <div className="flex flex-wrap items-center gap-1.5 mt-1">
                               <p className="text-xs text-zinc-500 capitalize">
-                                {exchange.exchange_type || exchange.type}
+                                {exchange.exchange_type}
                               </p>
                               {isNinjaTrader ? (
                                 configBadge('TCP Bridge', true)
@@ -754,16 +753,6 @@ export function SettingsPage() {
                                   )}
                                   {exchange.has_passphrase
                                     ? configBadge('Passphrase', true)
-                                    : null}
-                                  {exchange.hyperliquidWalletAddr
-                                    ? configBadge('Wallet', true)
-                                    : null}
-                                  {exchange.has_aster_private_key
-                                    ? configBadge('Aster Key', true)
-                                    : null}
-                                  {exchange.has_lighter_private_key ||
-                                  exchange.has_lighter_api_key_private_key
-                                    ? configBadge('Lighter Key', true)
                                     : null}
                                 </>
                               )}

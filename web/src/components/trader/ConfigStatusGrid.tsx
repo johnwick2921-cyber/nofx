@@ -209,9 +209,6 @@ export function ConfigStatusGrid({
                         {exchange.account_name || 'DEFAULT'}
                       </span>
                     </div>
-                    <div className="text-[10px] text-zinc-500 font-mono flex items-center gap-2">
-                      {exchange.type?.toUpperCase() || 'CEX'}
-                    </div>
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] font-mono">
                       <span
                         className={`rounded border px-1.5 py-0.5 ${stateMeta.className}`}
