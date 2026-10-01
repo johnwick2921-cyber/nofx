@@ -50,6 +50,7 @@ var cryptoRemovalDeletedGoFileAllowlist = []string{
 	"agent/sentinel.go",                   // CTO written ruling 10:41: fapi.binance.com watcher, zero futures function
 	"api/handler_wallet.go",               // wallet-family handler, GO item 1 (C4 family)
 	"api/onboarding_owner_test.go",        // CTO fix-list item 3 (07:43 mail): same
+	"market/api_client.go",                // plan C4 whole-file DELETE (CTO 11:14: moves to DS-101)
 }
 
 // cryptoDeletedGoFile reports whether a deleted .go file is covered by the
