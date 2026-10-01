@@ -1099,17 +1099,6 @@ func safeModelForTool(model *store.AIModel) safeModelToolConfig {
 		CustomAPIURL:    model.CustomAPIURL,
 		CustomModelName: model.CustomModelName,
 	}
-	if agentProviderSupportsUSDCBalance(model.Provider) {
-		privateKey := strings.TrimSpace(string(model.APIKey))
-		if privateKey != "" {
-			if walletAddress, err := agentWalletAddressFromPrivateKey(privateKey); err == nil && strings.TrimSpace(walletAddress) != "" {
-				safeModel.WalletAddress = walletAddress
-				if balance, balanceErr := agentQueryUSDCBalanceCached(walletAddress); balanceErr == nil {
-					safeModel.BalanceUSDC = fmt.Sprintf("%.6f", balance)
-				}
-			}
-		}
-	}
 	return safeModel
 }
 

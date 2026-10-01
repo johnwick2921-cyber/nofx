@@ -20,13 +20,10 @@ import (
 	"vl/branding"
 	"vl/kernel"
 
-	gethcrypto "github.com/ethereum/go-ethereum/crypto"
-
 	"vl/manager"
 	"vl/market"
 	"vl/mcp"
 	"vl/store"
-	"vl/wallet"
 )
 
 type Agent struct {
@@ -59,11 +56,6 @@ type Config struct {
 	AllowTradeExecution bool     `json:"allow_trade_execution"`
 	BriefTimes          []int    `json:"brief_times"`
 }
-
-var (
-	agentWalletAddressFromPrivateKey = walletAddressFromPrivateKey
-	agentQueryUSDCBalanceCached      = wallet.QueryUSDCBalanceCached
-)
 
 func DefaultConfig() *Config {
 	return &Config{
@@ -258,34 +250,6 @@ func rankAgentModelCandidates(models []*store.AIModel) []agentModelCandidate {
 	return candidates
 }
 
-func agentModelUSDCBalance(model *store.AIModel) (float64, bool) {
-	if model == nil || !agentProviderSupportsUSDCBalance(model.Provider) {
-		return 0, false
-	}
-	privateKey := strings.TrimSpace(string(model.APIKey))
-	if privateKey == "" {
-		return 0, false
-	}
-	walletAddress, err := agentWalletAddressFromPrivateKey(privateKey)
-	if err != nil || strings.TrimSpace(walletAddress) == "" {
-		return 0, false
-	}
-	balance, err := agentQueryUSDCBalanceCached(walletAddress)
-	if err != nil || balance <= 0 {
-		return 0, false
-	}
-	return balance, true
-}
-
-func agentProviderSupportsUSDCBalance(provider string) bool {
-	switch strings.ToLower(strings.TrimSpace(provider)) {
-	case "claw402", "blockrun-base":
-		return true
-	default:
-		return false
-	}
-}
-
 func agentModelHasUsableAPIKey(model *store.AIModel) bool {
 	if model == nil {
 		return false
@@ -305,23 +269,6 @@ func agentModelHasUsableAPIKey(model *store.AIModel) bool {
 	}
 	envKey := envKeyByProvider[strings.ToLower(strings.TrimSpace(model.Provider))]
 	return envKey != "" && strings.TrimSpace(os.Getenv(envKey)) != ""
-}
-
-func walletAddressFromPrivateKey(privateKey string) (string, error) {
-	key := strings.TrimSpace(privateKey)
-	if !strings.HasPrefix(key, "0x") {
-		return "", fmt.Errorf("private key must start with 0x")
-	}
-	if len(key) != 66 {
-		return "", fmt.Errorf("private key must be 66 characters")
-	}
-
-	privateKeyObj, err := gethcrypto.HexToECDSA(strings.TrimPrefix(key, "0x"))
-	if err != nil {
-		return "", err
-	}
-
-	return gethcrypto.PubkeyToAddress(privateKeyObj.PublicKey).Hex(), nil
 }
 
 func resolveModelRuntimeConfig(provider, customAPIURL, customModelName, fallbackModelID string) (string, string) {

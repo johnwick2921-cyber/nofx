@@ -71,7 +71,7 @@ type TokenUsage struct {
 }
 
 // Channel returns the telemetry channel category (native providers only — the
-// claw402 payment channel was removed with the payment family).
+// the payment channel was removed with the payment family.
 func (u TokenUsage) Channel() string {
 	return "native"
 }

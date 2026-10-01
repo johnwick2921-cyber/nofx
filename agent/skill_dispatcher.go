@@ -253,9 +253,7 @@ func parseSkillError(raw string) string {
 }
 
 func modelWalletBalanceHint(model *store.AIModel) string {
-	if model == nil || !agentProviderSupportsUSDCBalance(model.Provider) {
-		return ""
-	}
+
 	privateKey := strings.TrimSpace(string(model.APIKey))
 	if privateKey == "" {
 		return "钱包未配置"
