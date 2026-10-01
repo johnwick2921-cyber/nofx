@@ -205,7 +205,7 @@ export const status: GuideSection = {
     },
     {
       kind: 'p',
-      text: "A '1h' or '4h' price change means that much wall time. It is measured on bar close times: the latest close against the close of the bar that closed at least 1 hour (or 4 hours) earlier, on the finest bars the read has. When the bars do not reach back that far, or the chart's timeframe is too coarse to measure the window (fewer than 4 bars fit in it — a 1h chart cannot give a 1h change, only 'the previous close'), the change reads n/a, never 0. It appears on the crypto paths only: the BTC line in the AI prompt, the grid prompt and the assistant's market context; the MNQ decision prompt does not print it. Before this (W1, 2026-09-23) the futures '1h' was 100 minutes of 5m bars, the '4h' was the previous bar's close, and a short series read 0.",
+      text: "A '1h' or '4h' price change means that much wall time. It is measured on bar close times: the latest close against the close of the bar that closed at least 1 hour (or 4 hours) earlier, on the finest bars the read has. When the bars do not reach back that far, or the chart's timeframe is too coarse to measure the window (fewer than 4 bars fit in it — a 1h chart cannot give a 1h change, only 'the previous close'), the change reads n/a, never 0. It appears on the crypto paths only: the AI prompt, the grid prompt and the assistant's market context; the MNQ decision prompt does not print it. Before this (W1, 2026-09-23) the futures '1h' was 100 minutes of 5m bars, the '4h' was the previous bar's close, and a short series read 0.",
     },
     { kind: 'h', text: 'The boot ledger, line by line' },
     {

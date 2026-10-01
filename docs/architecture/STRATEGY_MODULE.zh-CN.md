@@ -40,7 +40,7 @@ names rewritten to vl on 2026-09-30 (VL rename)
         ↓
 4. 用户提示词 (BuildUserPrompt)
    ├─ 系统状态 (时间, 周期号)
-   ├─ BTC市场概览
+
    ├─ 账户信息
    ├─ 当前持仓 (含技术指标)
    ├─ 候选币种 (完整市场数据)
@@ -179,7 +179,7 @@ if config.Indicators.EnableQuantData {
 **数据结构:**
 ```go
 QuantData {
-    Netflow {
+
         Institution: {Future, Spot},  // 机构资金流
         Personal: {Future, Spot}      // 散户资金流
     },
@@ -292,7 +292,7 @@ minConfidence := config.RiskControl.MinConfidence            // 默认: 75
 
 ```
 1. 系统状态          [时间, 周期号, 运行时长]
-2. BTC市场概览      [价格, 涨跌幅, MACD, RSI]
+
 3. 账户信息          [权益, 余额%, 盈亏%, 保证金%, 持仓数]
 4. 最近成交          [最近10笔已平仓交易]
 5. 当前持仓          [详细持仓数据 + 技术指标]
