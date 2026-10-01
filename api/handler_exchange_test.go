@@ -97,8 +97,6 @@ func TestCreateExchangeRequest_NinjaTraderJSON(t *testing.T) {
 	// happy path: validation must pass
 	missing := store.MissingRequiredExchangeCredentialFields(
 		req.ExchangeType, req.APIKey, req.SecretKey, req.Passphrase,
-		"", "", "", "",
-		"", "",
 		req.NTDataDir,
 	)
 	if len(missing) != 0 {
