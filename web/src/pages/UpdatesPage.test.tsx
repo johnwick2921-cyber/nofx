@@ -872,4 +872,52 @@ describe('UpdatesPage', () => {
     expect(button.disabled).toBe(true)
     expect(mocks.installWithPassword).not.toHaveBeenCalled()
   })
+
+  // owner-facing bug 15:1x CT: the check button said "Up to date" for a
+  // verified_ready answer. The label must reflect the actual answer.
+  it('never labels a verified_ready check "Up to date" (Go fixture)', async () => {
+    enableInstall()
+    mocks.check.mockResolvedValue(checkFixture.verified_ready)
+    render(<UpdatesPage />)
+    await waitFor(() => expect(screen.getByText('Update now')).toBeTruthy())
+    fireEvent.click(screen.getByTestId('check-button'))
+    await waitFor(() =>
+      expect(screen.getByTestId('update-available')).toHaveTextContent(
+        checkFixture.verified_ready.tag!
+      )
+    )
+    // the green banner names the version; the button says Check again
+    expect(screen.queryByText('Up to date')).toBeNull()
+    expect(screen.getByTestId('check-button')).toHaveTextContent('Check again')
+  })
+
+  it('labels an up_to_date check "Up to date" (Go fixture)', async () => {
+    enableInstall()
+    mocks.check.mockResolvedValue(checkFixture.up_to_date)
+    render(<UpdatesPage />)
+    await waitFor(() => expect(screen.getByText('Update now')).toBeTruthy())
+    fireEvent.click(screen.getByTestId('check-button'))
+    await waitFor(() =>
+      expect(screen.getByTestId('check-button')).toHaveTextContent('Up to date')
+    )
+    expect(screen.queryByText('Check again')).toBeNull()
+  })
+
+  it('labels an available-but-not-ready check "Check again"', async () => {
+    enableInstall()
+    mocks.check.mockResolvedValue({
+      checked: true,
+      reason: 'verified, not ready',
+      available: true,
+      ready: false,
+      tag: 'v2026.10.02.5',
+    })
+    render(<UpdatesPage />)
+    await waitFor(() => expect(screen.getByText('Update now')).toBeTruthy())
+    fireEvent.click(screen.getByTestId('check-button'))
+    await waitFor(() =>
+      expect(screen.getByTestId('check-button')).toHaveTextContent('Check again')
+    )
+    expect(screen.queryByText('Up to date')).toBeNull()
+  })
 })
