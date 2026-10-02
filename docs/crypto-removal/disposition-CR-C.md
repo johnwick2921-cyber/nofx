@@ -1,14 +1,14 @@
 # CR-C disposition table — web + docs (crypto removal, part CR-C, regenerated at the integrated head)
 
 - branch point: b6648fcab9cf495e316ef5492ec6852cc3fcc2cf (integration head branched from)
-- integrator tip at generation: 133226793336a5e0a1ef9a4c8f71cbe7cacfeb23 (regenerated at the integrated head; provenance: branch + sha only)
+- integrator tip at generation: ce4cb71ed65c9a301625b33b239633b2231ada48 (regenerated at the integrated head; provenance: branch + sha only)
 - paths: web docs :(exclude)docs/crypto-removal
 - regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续|btc|ethusdt|\beth\b|altcoin|ethereum
-- line rows: 238 · blanket-KEEP paths: 207
+- line rows: 243 · blanket-KEEP paths: 207
 
 | path | line | token | disposition | owner | reason |
 |---|---|---|---|---|---|
-| docs/ONBOARDING.md | 12 | `Binance` | KEEP | CR-C | historical doc — not shipped code, KEEP byte-identical |
+| docs/ONBOARDING.md | 12 | `Binance` | KEEP | CR-C | origin statement (history), not a capability claim — CTO ruling 10-01 19:48 |
 | docs/README-VL-SYSTEM.md | 359 | `BTC` | KEEP | CR-C | historical doc — not shipped code, KEEP byte-identical |
 | docs/architecture/AGENT_CURRENT_DESIGN.zh-CN.md | 261 | `BTC` | KEEP | CR-C | historical doc — not shipped code, KEEP byte-identical |
 | docs/architecture/STRATEGY_MODULE.md | 242 | `altcoin` | KEEP | CR-C | historical doc — not shipped code, KEEP byte-identical |
@@ -74,6 +74,11 @@
 | docs/superpowers/plans/2026-05-22-nq-databento-ninjatrader.md | 6326 | `BTC` | KEEP | CR-C | historical doc — not shipped code, KEEP byte-identical |
 | docs/superpowers/plans/2026-05-22-nq-databento-ninjatrader.md | 6341 | `BTC` | KEEP | CR-C | historical doc — not shipped code, KEEP byte-identical |
 | docs/superpowers/plans/2026-05-22-nq-databento-ninjatrader.md | 9878 | `btc` | KEEP | CR-C | historical doc — not shipped code, KEEP byte-identical |
+| web/CLAUDE.md | 30 | `USDT` | KEEP | CR-C | subsystem CLAUDE.md — agent instructions, byte-identical to dev; CTO drafts any update for the owner (KEEP) |
+| web/CLAUDE.md | 31 | `USDT` | KEEP | CR-C | subsystem CLAUDE.md — agent instructions, byte-identical to dev; CTO drafts any update for the owner (KEEP) |
+| web/CLAUDE.md | 33 | `USDT` | KEEP | CR-C | subsystem CLAUDE.md — agent instructions, byte-identical to dev; CTO drafts any update for the owner (KEEP) |
+| web/CLAUDE.md | 34 | `Aster` | KEEP | CR-C | subsystem CLAUDE.md — agent instructions, byte-identical to dev; CTO drafts any update for the owner (KEEP) |
+| web/CLAUDE.md | 35 | `USDT` | KEEP | CR-C | subsystem CLAUDE.md — agent instructions, byte-identical to dev; CTO drafts any update for the owner (KEEP) |
 | web/README.md | 92 | `Binance` | KEEP | CR-C | historical doc — not shipped code, KEEP byte-identical |
 | web/package-lock.json | 3812 | `okX` | KEEP | CR-C | npm integrity hash — incidental base64 substring, KEEP byte-identical |
 | web/package-lock.json | 4158 | `oKX` | KEEP | CR-C | npm integrity hash — incidental base64 substring, KEEP byte-identical |
