@@ -2497,16 +2497,10 @@ func primaryDiagnosisSymbol(candidates []string, decisionJSON string) string {
 func openingAmountAndMinimum(evidence string) (float64, float64) {
 	amount := 0.0
 	minimum := 0.0
-	if match := regexp.MustCompile(`(?i)opening amount too small \((\d+(?:\.\d+)?)\s*USDT\)`).FindStringSubmatch(evidence); len(match) >= 2 {
-		amount, _ = strconv.ParseFloat(match[1], 64)
-	}
 	if amount == 0 {
 		if match := regexp.MustCompile(`(?i)"position_size_usd"\s*:\s*(\d+(?:\.\d+)?)`).FindStringSubmatch(evidence); len(match) >= 2 {
 			amount, _ = strconv.ParseFloat(match[1], 64)
 		}
-	}
-	if match := regexp.MustCompile(`(?:must be|must be ≥|>=|≥)\s*(\d+(?:\.\d+)?)\s*USDT`).FindStringSubmatch(evidence); len(match) >= 2 {
-		minimum, _ = strconv.ParseFloat(match[1], 64)
 	}
 	return amount, minimum
 }
