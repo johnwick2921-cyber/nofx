@@ -132,6 +132,7 @@ export interface UpdatesCheck {
   // API affirms it; it never invents one.
   update_available?: boolean
   latest_tag?: string
+  release_id?: string
   rate_limited?: boolean
 }
 
@@ -240,6 +241,16 @@ export interface UpdateJobView {
   status?: number
 }
 
+// ── POST /api/updates/install-with-password (owner password flow) ──
+// Same result shape as /api/updates/install; the password travels ONLY in this
+// request body and is never echoed by the page.
+export interface InstallWithPasswordResult {
+  ok: boolean
+  job_id?: string
+  error?: string
+  status?: number
+}
+
 export const updatesApi = {
   async health(silent = true): Promise<HealthStatus | null> {
     const res = await httpClient.request<HealthStatus>(`${API_BASE}/health`, {
@@ -307,6 +318,29 @@ export const updatesApi = {
     const res = await httpClient.request<{ job_id: string; error?: string }>(
       `${API_BASE}/updates/install`,
       { method: 'POST', data: body, headers: UPDATE_HEADERS, silent: true }
+    )
+    if (res.success && res.data?.job_id) {
+      return { ok: true, job_id: res.data.job_id }
+    }
+    return {
+      ok: false,
+      error: res.data?.error || res.message,
+      status: res.statusCode,
+    }
+  },
+
+  async installWithPassword(
+    releaseId: string,
+    password: string
+  ): Promise<InstallWithPasswordResult> {
+    const res = await httpClient.request<{ job_id: string; error?: string }>(
+      `${API_BASE}/updates/install-with-password`,
+      {
+        method: 'POST',
+        data: { release_id: releaseId, password },
+        headers: UPDATE_HEADERS,
+        silent: true,
+      }
     )
     if (res.success && res.data?.job_id) {
       return { ok: true, job_id: res.data.job_id }
