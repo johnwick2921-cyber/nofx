@@ -264,7 +264,7 @@ var censusTable = map[string][]censusEntry{
 		{count: 4, phase: "R5", reason: "transitional — re-pinned at final"},
 	},
 	"internal/updaterworker/host_os_test.go": {
-		{count: 4, phase: "R5", reason: "transitional — re-pinned at final"},
+		{count: 3, phase: "final", reason: "2026-10-02: MainTreeLockHeld pinning test removed (P3c, worker-lock-cancel) — the token lived only in that deleted test's fake lock script name"},
 	},
 	"internal/updaterworker/preflight_test.go": {
 		{count: 4, phase: "R5", reason: "transitional — re-pinned at final"},

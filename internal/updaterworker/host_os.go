@@ -102,16 +102,8 @@ func (h OSHost) runLockVerb(verb string, args ...string) (string, int, error) {
 // and `STALE — held by 'X' (task: ...)` both name the holder.
 var lockHolderRe = regexp.MustCompile(`held by '([^']*)'`)
 
-// MainTreeLockHeld runs `bash <LockScript> check` and reads ONLY its exit
-// code: 0 free · 1 held · 2 stale · 3 incomplete · 4 abandoned-incomplete. Only
-// rc 1 is "held" (a stale or incomplete lock is not a working owner).
-func (h OSHost) MainTreeLockHeld() (bool, string, error) {
-	_, rc, err := h.runLockVerb("check")
-	if err != nil {
-		return false, "", fmt.Errorf("lock check: %w", err)
-	}
-	return rc == 1, "check rc=" + strconv.Itoa(rc), nil
-}
+// MainTreeLockHeld was removed (P3c, worker-lock-cancel): it had no callers
+// left after WORKER-TAKES-THE-LOCK — LockHolder is the worker's status read.
 
 // LockHolder reports the current lock holder from `bash <LockScript> status`.
 // "" when free. Held and STALE both name their holder. INCOMPLETE and
