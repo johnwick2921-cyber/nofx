@@ -100,15 +100,6 @@ func TestLegacyCryptoRowsLoadWithFuturesSettingsIntact(t *testing.T) {
 		APIKey:                  crypto.EncryptedString("legacy-api-key"),
 		SecretKey:               crypto.EncryptedString("legacy-secret"),
 		Passphrase:              crypto.EncryptedString(""),
-		HyperliquidWalletAddr:   "0xhyper",
-		HyperliquidUnifiedAcct:  true,
-		AsterUser:               "aster-user",
-		AsterSigner:             "aster-signer",
-		AsterPrivateKey:         crypto.EncryptedString("aster-pk"),
-		LighterWalletAddr:       "0xlighter",
-		LighterPrivateKey:       crypto.EncryptedString("lighter-pk"),
-		LighterAPIKeyPrivateKey: crypto.EncryptedString("lighter-apk"),
-		LighterAPIKeyIndex:      7,
 	}).Error; err != nil {
 		t.Fatalf("plant legacy exchange row: %v", err)
 	}
@@ -119,10 +110,9 @@ func TestLegacyCryptoRowsLoadWithFuturesSettingsIntact(t *testing.T) {
 	if ex.ExchangeType != "binance" || !ex.Enabled {
 		t.Fatalf("legacy exchange identity changed: type=%q enabled=%v", ex.ExchangeType, ex.Enabled)
 	}
-	if ex.HyperliquidWalletAddr != "0xhyper" || ex.AsterUser != "aster-user" ||
-		ex.AsterSigner != "aster-signer" || ex.LighterWalletAddr != "0xlighter" || ex.LighterAPIKeyIndex != 7 {
-		t.Fatalf("legacy credential columns changed on load: %+v", ex)
-	}
+	// The crypto credential columns were dropped from the store.Exchange struct
+	// (integration, CTO ruling: columns stay, struct fields go). The row loads,
+	// and the legacy columns are simply no longer surfaced.
 	if len(string(ex.APIKey)) == 0 || len(string(ex.SecretKey)) == 0 {
 		t.Fatalf("legacy credential columns did not round-trip (empty after decrypt)")
 	}

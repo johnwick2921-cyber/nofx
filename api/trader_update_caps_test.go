@@ -31,7 +31,7 @@ func TestTraderUpdatePreservesStoredRiskCaps(t *testing.T) {
 	if err := e.st.AIModel().UpdateWithName(updAdminID, "default_deepseek", "DeepSeek", true, "sk-test", "", "deepseek-chat"); err != nil {
 		t.Fatalf("seed model: %v", err)
 	}
-	exID, err := e.st.Exchange().Create(updAdminID, "ninjatrader", "Main", true, "", "", "", false, "", false, "", "", "", "", "", "", 0, "/tmp/nt-fixture", "MNQ", 1)
+	exID, err := e.st.Exchange().Create(updAdminID, "ninjatrader", "Main", true, "", "", "", false, "/tmp/nt-fixture", "MNQ", 1)
 	if err != nil {
 		t.Fatalf("seed exchange: %v", err)
 	}

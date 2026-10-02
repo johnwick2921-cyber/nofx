@@ -50,14 +50,6 @@ func IsVisibleExchange(exchange *Exchange) bool {
 		strings.TrimSpace(string(exchange.APIKey)) != "" ||
 		strings.TrimSpace(string(exchange.SecretKey)) != "" ||
 		strings.TrimSpace(string(exchange.Passphrase)) != "" ||
-		strings.TrimSpace(exchange.HyperliquidWalletAddr) != "" ||
-		strings.TrimSpace(exchange.AsterUser) != "" ||
-		strings.TrimSpace(exchange.AsterSigner) != "" ||
-		strings.TrimSpace(string(exchange.AsterPrivateKey)) != "" ||
-		strings.TrimSpace(exchange.LighterWalletAddr) != "" ||
-		strings.TrimSpace(string(exchange.LighterPrivateKey)) != "" ||
-		strings.TrimSpace(string(exchange.LighterAPIKeyPrivateKey)) != "" ||
-		exchange.LighterAPIKeyIndex != 0 ||
 		strings.TrimSpace(exchange.NTDataDir) != ""
 }
 

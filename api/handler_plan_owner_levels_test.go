@@ -44,7 +44,7 @@ func newOwnerLevelsServer(t *testing.T) (*Server, string) {
 	// A ninjatrader exchange row: its trader seats as the offline CSV transport
 	// (no NT8 TCP dial, no network side effect) — all the manager needs.
 	exID, err := st.Exchange().Create(olTestUser, "ninjatrader", "Default", true,
-		"", "", "", false, "", false, "", "", "", "", "", "", 0,
+		"", "", "", false,
 		filepath.Join(t.TempDir(), "nt-data"), "MNQ", 1)
 	if err != nil {
 		t.Fatalf("exchange: %v", err)

@@ -801,24 +801,16 @@ func (a *Agent) handleToolCall(ctx context.Context, storeUserID string, userID i
 }
 
 type safeExchangeToolConfig struct {
-	ID                    string `json:"id"`
-	ExchangeType          string `json:"exchange_type"`
-	AccountName           string `json:"account_name"`
-	Name                  string `json:"name"`
-	Type                  string `json:"type"`
-	Enabled               bool   `json:"enabled"`
-	HasAPIKey             bool   `json:"has_api_key"`
-	HasSecretKey          bool   `json:"has_secret_key"`
-	HasPassphrase         bool   `json:"has_passphrase"`
-	Testnet               bool   `json:"testnet"`
-	HyperliquidWalletAddr string `json:"hyperliquid_wallet_addr,omitempty"`
-	HasAsterPrivateKey    bool   `json:"has_aster_private_key"`
-	AsterUser             string `json:"aster_user,omitempty"`
-	AsterSigner           string `json:"aster_signer,omitempty"`
-	LighterWalletAddr     string `json:"lighter_wallet_addr,omitempty"`
-	LighterAPIKeyIndex    int    `json:"lighter_api_key_index,omitempty"`
-	HasLighterPrivateKey  bool   `json:"has_lighter_private_key"`
-	HasLighterAPIKey      bool   `json:"has_lighter_api_key_private_key"`
+	ID            string `json:"id"`
+	ExchangeType  string `json:"exchange_type"`
+	AccountName   string `json:"account_name"`
+	Name          string `json:"name"`
+	Type          string `json:"type"`
+	Enabled       bool   `json:"enabled"`
+	HasAPIKey     bool   `json:"has_api_key"`
+	HasSecretKey  bool   `json:"has_secret_key"`
+	HasPassphrase bool   `json:"has_passphrase"`
+	Testnet       bool   `json:"testnet"`
 }
 
 type safeModelToolConfig struct {
@@ -905,24 +897,16 @@ type manageTraderArgs struct {
 
 func safeExchangeForTool(ex *store.Exchange) safeExchangeToolConfig {
 	return safeExchangeToolConfig{
-		ID:                    ex.ID,
-		ExchangeType:          ex.ExchangeType,
-		AccountName:           ex.AccountName,
-		Name:                  ex.Name,
-		Type:                  ex.Type,
-		Enabled:               ex.Enabled,
-		HasAPIKey:             ex.APIKey != "",
-		HasSecretKey:          ex.SecretKey != "",
-		HasPassphrase:         ex.Passphrase != "",
-		Testnet:               ex.Testnet,
-		HyperliquidWalletAddr: ex.HyperliquidWalletAddr,
-		HasAsterPrivateKey:    ex.AsterPrivateKey != "",
-		AsterUser:             ex.AsterUser,
-		AsterSigner:           ex.AsterSigner,
-		LighterWalletAddr:     ex.LighterWalletAddr,
-		LighterAPIKeyIndex:    ex.LighterAPIKeyIndex,
-		HasLighterPrivateKey:  ex.LighterPrivateKey != "",
-		HasLighterAPIKey:      ex.LighterAPIKeyPrivateKey != "",
+		ID:            ex.ID,
+		ExchangeType:  ex.ExchangeType,
+		AccountName:   ex.AccountName,
+		Name:          ex.Name,
+		Type:          ex.Type,
+		Enabled:       ex.Enabled,
+		HasAPIKey:     ex.APIKey != "",
+		HasSecretKey:  ex.SecretKey != "",
+		HasPassphrase: ex.Passphrase != "",
+		Testnet:       ex.Testnet,
 	}
 }
 
@@ -1353,10 +1337,6 @@ func (a *Agent) toolManageExchangeConfig(storeUserID, argsJSON string) string {
 			strings.TrimSpace(args.SecretKey),
 			strings.TrimSpace(args.Passphrase),
 			testnet,
-			"",
-			false,
-			"", "", "",
-			"", "", "", 0,
 			strings.TrimSpace(args.NTDataDir),
 			strings.TrimSpace(args.NTInstrumentName),
 			args.NTDefaultContractQty,
@@ -1452,10 +1432,6 @@ func (a *Agent) toolManageExchangeConfig(storeUserID, argsJSON string) string {
 			strings.TrimSpace(args.SecretKey),
 			strings.TrimSpace(args.Passphrase),
 			testnet,
-			"",
-			false,
-			"", "", "",
-			"", "", "", 0,
 			ntDataDir, ntInstrument, ntQty,
 		); err != nil {
 			return fmt.Sprintf(`{"error":"failed to update exchange config: %s"}`, err)

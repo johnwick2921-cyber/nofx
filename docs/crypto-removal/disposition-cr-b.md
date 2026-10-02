@@ -1,7 +1,7 @@
 # CR-B disposition table — engine + tests + config surface (crypto removal, part CR-B, regenerated at the integrated head)
 
 branch-point: dc630ad8fc06c49aebd5e59a8814744c2cbab5e7
-integrator-tip: 628b0a168444a8fbac9627735e8bfd067d2583e5 (regenerated at the integrated head; provenance: branch + sha only)
+integrator-tip: c8db9013dba0e41d2a4beba571cfbe3be7f92291 (regenerated at the integrated head; provenance: branch + sha only)
 paths: manager kernel market config store agent branding internal ninjascript screenshots cmd scripts deploy docker nginx .github patches hook telegram provider/ninjatrader provider/databento trader/ninjatrader SECURITY.md Makefile .env.example docs/superpowers/AUDIT-CHECKLIST.md docs/superpowers/SYSTEM-MAP.md trader/auto_trader_decision.go api/handler_debug.go api/strategy_effective.go api/handler_competition.go api/handler_plan_order_truth.go api/handler_order.go api/handler_trader_config.go trader/protection_reconciler.go
 regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续|btc|ethusdt|\beth\b|altcoin|ethereum
 
@@ -267,90 +267,90 @@ regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\bast
 | branding/census_test.go | 197 | `wallet` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
 | branding/census_test.go | 319 | `lighter` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
 | branding/census_test.go | 403 | `lighter` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 27 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 42 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 65 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 70 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 71 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 29 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 44 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 67 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
 | branding/gate_format_test.go | 72 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 107 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 108 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 124 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 142 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 143 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 159 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 170 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 171 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 188 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 208 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 215 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 216 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 73 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 74 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 109 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 110 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 126 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 144 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 145 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 161 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 172 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 173 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 190 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 210 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
 | branding/gate_format_test.go | 217 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 218 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
 | branding/gate_format_test.go | 219 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 220 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 236 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 237 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 263 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 266 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 269 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 286 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 290 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 291 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 221 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 222 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 238 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 239 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 265 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 268 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 271 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 288 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 292 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
 | branding/gate_format_test.go | 293 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 294 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 313 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 321 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 322 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 295 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 296 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 315 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
 | branding/gate_format_test.go | 323 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 324 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
 | branding/gate_format_test.go | 325 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 326 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 346 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 347 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 327 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 328 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
 | branding/gate_format_test.go | 348 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 349 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
 | branding/gate_format_test.go | 350 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
-| branding/gate_format_test.go | 351 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
 | branding/gate_format_test.go | 352 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 353 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
+| branding/gate_format_test.go | 354 | `bybit` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
 | branding/no_crypto.go | 16 | `aster` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
 | branding/no_crypto.go | 17 | `quant` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
 | branding/no_crypto.go | 18 | `BTC` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
 | branding/no_crypto.go | 19 | `BTC` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
 | branding/no_crypto.go | 20 | `BTC` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 23 | `btc` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 24 | `BTC` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 25 | `btc` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 27 | `ethusdt` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 29 | `ETH` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 30 | `eth` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 31 | `altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 33 | `ethereum` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 37 | `binance` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 42 | `binance` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 49 | `aster` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 50 | `hyperliquid` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 51 | `lighter` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 52 | `coinank` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 53 | `wallet` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 60 | `binance` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 61 | `lighter` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 67 | `Altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 76 | `BTC` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 77 | `Altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 24 | `btc` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 25 | `BTC` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 26 | `btc` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 28 | `ethusdt` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 30 | `ETH` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 31 | `eth` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 32 | `altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 34 | `ethereum` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 39 | `binance` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 44 | `binance` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 51 | `aster` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 52 | `hyperliquid` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 53 | `lighter` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 54 | `coinank` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 55 | `wallet` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 62 | `binance` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 63 | `lighter` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 69 | `Altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
 | branding/no_crypto.go | 78 | `BTC` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
 | branding/no_crypto.go | 79 | `Altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 80 | `btc` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 81 | `altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 80 | `BTC` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 81 | `Altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
 | branding/no_crypto.go | 82 | `btc` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
 | branding/no_crypto.go | 83 | `altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 85 | `BTC` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 86 | `Altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 84 | `btc` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 85 | `altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
 | branding/no_crypto.go | 87 | `BTC` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
 | branding/no_crypto.go | 88 | `Altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 89 | `BTC` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
 | branding/no_crypto.go | 90 | `Altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 91 | `Altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 93 | `altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 94 | `altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 98 | `"mixed"` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
-| branding/no_crypto.go | 111 | `wallet` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 92 | `Altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 93 | `Altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 95 | `altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 96 | `altcoin` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 100 | `"mixed"` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
+| branding/no_crypto.go | 113 | `wallet` | KEEP | CR-B | the guard's own file — the literal's home (byte-identical) |
 | branding/no_crypto_test.go | 18 | `BTC` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
 | branding/no_crypto_test.go | 19 | `aster` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
 | branding/no_crypto_test.go | 20 | `"mixed"` | KEEP | CR-B | guard fixture — pins the literal and KEEP surfaces byte-for-byte |
@@ -650,23 +650,13 @@ regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\bast
 | store/legacy_crypto_rows_c1_test.go | 59 | `altcoin` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
 | store/legacy_crypto_rows_c1_test.go | 95 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
 | store/legacy_crypto_rows_c1_test.go | 97 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 103 | `Hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 104 | `Hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 105 | `aster` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 106 | `aster` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 107 | `aster` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 108 | `Wallet` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 109 | `lighter` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 110 | `lighter` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 119 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 122 | `Hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 123 | `aster` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 130 | `claw402` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 131 | `Claw402` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 138 | `claw402` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 233 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 236 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 237 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 110 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 120 | `claw402` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 121 | `Claw402` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 128 | `claw402` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 223 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 226 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 227 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
 | store/strategy.go | 49 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
 | store/strategy.go | 153 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
 | store/strategy.go | 154 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
@@ -722,6 +712,10 @@ regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\bast
 | store/strategy_legacy_hyper_test.go | 18 | `hyper_main` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
 | store/strategy_legacy_hyper_test.go | 19 | `hyper_main` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
 | store/strategy_legacy_hyper_test.go | 33 | `hyper_all` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_legacy_hyper_test.go | 41 | `hyper_all` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_legacy_hyper_test.go | 42 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_legacy_hyper_test.go | 44 | `"mixed"` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/strategy_legacy_hyper_test.go | 46 | `hyper_all` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
 | store/strategy_schema_test.go | 13 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
 | store/strategy_schema_test.go | 47 | `ETHUSDT` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
 | store/strategy_schema_test.go | 51 | `ETH` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |

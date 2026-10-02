@@ -286,7 +286,7 @@ func TestLoadExchangeOptionsHidesInvisibleExchangeRows(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatalf("seed legacy hidden exchange: %v", err)
 	}
-	if _, err := st.Exchange().Create("default", "ninjatrader", "我的主力NT账户", true, "", "", "", false, "", false, "", "", "", "", "", "", 0, "/tmp/nt-fixture", "MNQ", 1); err != nil {
+	if _, err := st.Exchange().Create("default", "ninjatrader", "我的主力NT账户", true, "", "", "", false, "/tmp/nt-fixture", "MNQ", 1); err != nil {
 		t.Fatalf("create visible exchange: %v", err)
 	}
 
@@ -307,7 +307,7 @@ func TestDescribeExchangeIncludesTypeSpecificVisibleFields(t *testing.T) {
 	}
 	a := New(nil, st, DefaultConfig(), slog.Default())
 
-	ntID, err := st.Exchange().Create("default", "ninjatrader", "NT Sim", true, "", "", "", false, "", false, "", "", "", "", "", "", 0, "/tmp/nt-fixture", "MNQ", 1)
+	ntID, err := st.Exchange().Create("default", "ninjatrader", "NT Sim", true, "", "", "", false, "/tmp/nt-fixture", "MNQ", 1)
 	if err != nil {
 		t.Fatalf("seed ninjatrader exchange: %v", err)
 	}
@@ -449,7 +449,7 @@ func TestToolUpdateTraderRejectsRenameOutsideManualPanel(t *testing.T) {
 	if err := st.AIModel().UpdateWithName("default", "default_deepseek", "DeepSeek", true, "sk-test-12345", "", "deepseek-chat"); err != nil {
 		t.Fatalf("seed model: %v", err)
 	}
-	exchangeID, err := st.Exchange().Create("default", "ninjatrader", "Main", true, "", "", "", false, "", false, "", "", "", "", "", "", 0, "/tmp/nt-fixture", "MNQ", 1)
+	exchangeID, err := st.Exchange().Create("default", "ninjatrader", "Main", true, "", "", "", false, "/tmp/nt-fixture", "MNQ", 1)
 	if err != nil {
 		t.Fatalf("seed exchange: %v", err)
 	}
@@ -501,7 +501,7 @@ func TestToolCreateTraderResponseHidesLegacyTraderTuningFields(t *testing.T) {
 	if err := st.AIModel().UpdateWithName("default", "default_deepseek", "DeepSeek", true, "sk-test-12345", "", "deepseek-chat"); err != nil {
 		t.Fatalf("seed model: %v", err)
 	}
-	exchangeID, err := st.Exchange().Create("default", "ninjatrader", "Main", true, "", "", "", false, "", false, "", "", "", "", "", "", 0, "/tmp/nt-fixture", "MNQ", 1)
+	exchangeID, err := st.Exchange().Create("default", "ninjatrader", "Main", true, "", "", "", false, "/tmp/nt-fixture", "MNQ", 1)
 	if err != nil {
 		t.Fatalf("seed exchange: %v", err)
 	}
@@ -552,7 +552,7 @@ func TestToolCreateTraderAutoReadsInitialBalanceFromExchange(t *testing.T) {
 	if err := st.AIModel().UpdateWithName("default", "default_deepseek", "DeepSeek", true, "sk-test-12345", "", "deepseek-chat"); err != nil {
 		t.Fatalf("seed model: %v", err)
 	}
-	exchangeID, err := st.Exchange().Create("default", "ninjatrader", "Main", true, "", "", "", false, "", false, "", "", "", "", "", "", 0, "/tmp/nt-fixture", "MNQ", 1)
+	exchangeID, err := st.Exchange().Create("default", "ninjatrader", "Main", true, "", "", "", false, "/tmp/nt-fixture", "MNQ", 1)
 	if err != nil {
 		t.Fatalf("seed exchange: %v", err)
 	}

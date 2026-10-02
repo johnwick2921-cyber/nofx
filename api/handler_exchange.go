@@ -233,7 +233,7 @@ func (s *Server) handleUpdateExchangeConfigs(c *gin.Context) {
 			tradersToReload[t.ID] = true
 		}
 
-		err = s.store.Exchange().Update(userID, exchangeID, true, effectiveAPIKey, effectiveSecretKey, effectivePassphrase, exchangeData.Testnet, "", false, "", "", "", "", "", "", 0, effectiveNTDataDir, effectiveNTInstrumentName, effectiveNTDefaultContractQty)
+		err = s.store.Exchange().Update(userID, exchangeID, true, effectiveAPIKey, effectiveSecretKey, effectivePassphrase, exchangeData.Testnet, effectiveNTDataDir, effectiveNTInstrumentName, effectiveNTDefaultContractQty)
 		if err != nil {
 			SafeInternalError(c, fmt.Sprintf("Update exchange %s", exchangeID), err)
 			return
@@ -352,9 +352,6 @@ func (s *Server) handleCreateExchange(c *gin.Context) {
 	id, err := s.store.Exchange().Create(
 		userID, req.ExchangeType, req.AccountName, true,
 		req.APIKey, req.SecretKey, req.Passphrase, req.Testnet,
-		"", false,
-		"", "", "",
-		"", "", "", 0,
 		req.NTDataDir, req.NTInstrumentName, req.NTDefaultContractQty,
 	)
 	if err != nil {

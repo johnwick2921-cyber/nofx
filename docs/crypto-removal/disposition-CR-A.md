@@ -1,8 +1,8 @@
 # CR-A disposition table — brokers + payments + providers (crypto removal, part CR-A)
 
 base sha (branch point): db412e61c
-integrator tip generated against: 628b0a168
-generated: 2026-10-01T18:15:06-05:00 (branch crypto-removal-integration @ 628b0a168 — provenance: branch + sha only, never a filesystem path)
+integrator tip generated against: c8db9013d
+generated: 2026-10-01T19:16:43-05:00 (branch crypto-removal-integration @ c8db9013d — provenance: branch + sha only, never a filesystem path)
 sweep regex (exported programmatically from branding/no_crypto.go SweepRegexLiteral — the guard's amended literal, never hand-typed):
   `binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续|btc|ethusdt|\beth\b|altcoin|ethereum`
 
@@ -34,22 +34,18 @@ sweep regex (exported programmatically from branding/no_crypto.go SweepRegexLite
 | README.ja.md | 501 | `altcoin` | KEEP | CR-A | historical doc/config file — not shipped code, KEEP byte-identical |
 | README.ja.md | 508 | `altcoin` | KEEP | CR-A | historical doc/config file — not shipped code, KEEP byte-identical |
 | README.ja.md | 1013 | `Aster` | KEEP | CR-A | historical doc/config file — not shipped code, KEEP byte-identical |
-| agent/tools.go | 814 | `Hyperliquid` | KEEP | CR-A | skill/tool surface — cut deferred until DS-107 skill-handler consumer cuts land |
-| agent/tools.go | 818 | `Wallet` | KEEP | CR-A | skill/tool surface — cut deferred until DS-107 skill-handler consumer cuts land |
-| agent/tools.go | 834 | `Wallet` | KEEP | CR-A | skill/tool surface — cut deferred until DS-107 skill-handler consumer cuts land |
-| agent/tools.go | 835 | `USDC` | KEEP | CR-A | skill/tool surface — cut deferred until DS-107 skill-handler consumer cuts land |
-| agent/tools.go | 918 | `Hyperliquid` | KEEP | CR-A | skill/tool surface — cut deferred until DS-107 skill-handler consumer cuts land |
-| agent/tools.go | 922 | `Wallet` | KEEP | CR-A | skill/tool surface — cut deferred until DS-107 skill-handler consumer cuts land |
-| agent/tools.go | 957 | `Wallet` | KEEP | CR-A | NT8 account-snapshot shape — balance key family (CTO ruling, byte-identical) |
-| agent/tools.go | 2165 | `btc` | KEEP | CR-A | risk-cap knob family (union-gate risk-cap canary) |
-| agent/tools.go | 2166 | `altcoin` | KEEP | CR-A | risk-cap knob family (union-gate risk-cap canary) |
-| agent/tools.go | 2168 | `AI500` | KEEP | CR-A | skill/tool surface — cut deferred until DS-107 skill-handler consumer cuts land |
-| agent/tools.go | 2188 | `BTC` | KEEP | CR-A | risk-cap knob family (union-gate risk-cap canary) |
-| agent/tools.go | 2189 | `Altcoin` | KEEP | CR-A | risk-cap knob family (union-gate risk-cap canary) |
-| agent/tools.go | 2191 | `AI500` | KEEP | CR-A | skill/tool surface — cut deferred until DS-107 skill-handler consumer cuts land |
-| agent/tools.go | 2260 | `BTC` | KEEP | CR-A | risk-cap knob family (union-gate risk-cap canary) |
-| agent/tools.go | 2261 | `Altcoin` | KEEP | CR-A | risk-cap knob family (union-gate risk-cap canary) |
-| agent/tools.go | 2263 | `AI500` | KEEP | CR-A | skill/tool surface — cut deferred until DS-107 skill-handler consumer cuts land |
+| agent/tools.go | 826 | `Wallet` | KEEP | CR-A | skill/tool surface — cut deferred until DS-107 skill-handler consumer cuts land |
+| agent/tools.go | 827 | `USDC` | KEEP | CR-A | skill/tool surface — cut deferred until DS-107 skill-handler consumer cuts land |
+| agent/tools.go | 941 | `Wallet` | KEEP | CR-A | NT8 account-snapshot shape — balance key family (CTO ruling, byte-identical) |
+| agent/tools.go | 2141 | `btc` | KEEP | CR-A | risk-cap knob family (union-gate risk-cap canary) |
+| agent/tools.go | 2142 | `altcoin` | KEEP | CR-A | risk-cap knob family (union-gate risk-cap canary) |
+| agent/tools.go | 2144 | `AI500` | KEEP | CR-A | skill/tool surface — cut deferred until DS-107 skill-handler consumer cuts land |
+| agent/tools.go | 2164 | `BTC` | KEEP | CR-A | risk-cap knob family (union-gate risk-cap canary) |
+| agent/tools.go | 2165 | `Altcoin` | KEEP | CR-A | risk-cap knob family (union-gate risk-cap canary) |
+| agent/tools.go | 2167 | `AI500` | KEEP | CR-A | skill/tool surface — cut deferred until DS-107 skill-handler consumer cuts land |
+| agent/tools.go | 2236 | `BTC` | KEEP | CR-A | risk-cap knob family (union-gate risk-cap canary) |
+| agent/tools.go | 2237 | `Altcoin` | KEEP | CR-A | risk-cap knob family (union-gate risk-cap canary) |
+| agent/tools.go | 2239 | `AI500` | KEEP | CR-A | skill/tool surface — cut deferred until DS-107 skill-handler consumer cuts land |
 | agents.md | 219 | `BTC` | KEEP | CR-A | historical doc/config file — not shipped code, KEEP byte-identical |
 | api/exchange_account_state.go | 200 | `Wallet` | KEEP | CR-A | NT8 account-snapshot shape — balance key family (CTO ruling, byte-identical) |
 | api/exchange_account_state.go | 250 | `Wallet` | KEEP | CR-A | NT8 account-snapshot shape — balance key family (CTO ruling, byte-identical) |
@@ -82,28 +78,9 @@ sweep regex (exported programmatically from branding/no_crypto.go SweepRegexLite
 | store/ai_charge.go | 153 | `usdc` | KEEP | CR-A | EstimateRunway stays per CTO ruling — daily-cost/runway estimate; usdcBalance naming byte-identical (exported API; zero callers after the dead claw402 pre-launch check was cut) |
 | store/ai_charge.go | 160 | `usdc` | KEEP | CR-A | EstimateRunway stays per CTO ruling — daily-cost/runway estimate; usdcBalance naming byte-identical (exported API; zero callers after the dead claw402 pre-launch check was cut) |
 | store/ai_charge.go | 161 | `usdc` | KEEP | CR-A | EstimateRunway stays per CTO ruling — daily-cost/runway estimate; usdcBalance naming byte-identical (exported API; zero callers after the dead claw402 pre-launch check was cut) |
-| store/exchange.go | 32 | `Hyperliquid` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
-| store/exchange.go | 33 | `Hyperliquid` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
-| store/exchange.go | 37 | `Wallet` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
-| store/exchange.go | 142 | `binance` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
-| store/exchange.go | 156 | `binance` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
-| store/exchange.go | 166 | `binance` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
-| store/exchange.go | 233 | `hyperliquid` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
-| store/exchange.go | 235 | `Wallet` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
-| store/exchange.go | 267 | `Hyperliquid` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
-| store/exchange.go | 268 | `Hyperliquid` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
-| store/exchange.go | 272 | `Wallet` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
-| store/exchange.go | 291 | `hyperliquid` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
-| store/exchange.go | 292 | `Wallet` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
-| store/exchange.go | 300 | `hyperliquid` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
-| store/exchange.go | 301 | `hyperliquid` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
-| store/exchange.go | 304 | `wallet` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
-| store/exchange.go | 381 | `hyperliquid` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
-| store/exchange.go | 384 | `binance` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
-| store/exchange.go | 386 | `hyperliquid` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
-| store/exchange.go | 402 | `Hyperliquid` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
-| store/visibility.go | 53 | `Hyperliquid` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
-| store/visibility.go | 57 | `Wallet` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
+| store/exchange.go | 133 | `binance` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
+| store/exchange.go | 147 | `binance` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
+| store/exchange.go | 157 | `binance` | KEEP | CR-A | legacy crypto columns/params — stored rows must load (C1); column drop pending CTO ruling |
 | trader/auto_trader.go | 256 | `Binance` | KEEP | CR-A | AutoTraderConfig per-broker credential fields — sole populator manager/trader_manager.go (DS-103 deferred) |
 | trader/auto_trader.go | 257 | `Binance` | KEEP | CR-A | AutoTraderConfig per-broker credential fields — sole populator manager/trader_manager.go (DS-103 deferred) |
 | trader/auto_trader.go | 258 | `Binance` | KEEP | CR-A | AutoTraderConfig per-broker credential fields — sole populator manager/trader_manager.go (DS-103 deferred) |
