@@ -57,22 +57,6 @@ type IpResult struct {
 
 ---
 
-### 3. `NEW_ASTER_TRADER` - Aster客户端创建
-
-**调用位置**：`trader/aster_trader.go:68`
-
-**参数**：`user string, client *http.Client`
-
-**返回**：`*NewAsterTraderResult`
-```go
-type NewAsterTraderResult struct {
-    Err    error
-    Client *http.Client  // 可修改HTTP client
-}
-```
-
-**用途**：为Aster客户端注入代理等
-
 ## 使用示例
 
 ### 示例1：代理模块注册Hook

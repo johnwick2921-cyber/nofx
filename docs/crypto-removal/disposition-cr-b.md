@@ -1,11 +1,11 @@
 # Crypto-removal disposition table — CR-B (DS-107), plan v10 FINAL
 # The gate (scripts/crypto-union-gate.sh, DS-102) owns this format: headers below + plain pipe rows.
 branch-point: 44e02e6ad101bb46d4ef0d13b1948696c7dd5d54
-integrator-tip: 74e443e080f039fc0e9a982fc053cb704392f856
+integrator-tip: 6d51e221ffe2e7495089d854abbfe986eb854ebc
 paths: manager kernel market config store agent branding internal ninjascript screenshots cmd scripts deploy docker nginx .github patches hook telegram provider/ninjatrader provider/databento trader/ninjatrader SECURITY.md Makefile .env.example docs/superpowers/AUDIT-CHECKLIST.md docs/superpowers/SYSTEM-MAP.md trader/auto_trader_decision.go api/handler_debug.go api/strategy_effective.go api/handler_competition.go api/handler_plan_order_truth.go api/handler_order.go api/handler_trader_config.go trader/protection_reconciler.go
 regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续|btc|ethusdt|\beth\b|altcoin|ethereum
-# Generated:  @ 74e443e080f0 (2026-10-02T07:07:04.947639+00:00); branch + sha only, never a filesystem path
-# Swept: 636 tracked non-test files under CR-B paths (git ls-files -z, grep -I semantics); hits in 45 files.
+# Generated:  @ 6d51e221ffe2 (2026-10-02T07:10:43.575836+00:00); branch + sha only, never a filesystem path
+# Swept: 638 tracked non-test files under CR-B paths (git ls-files -z, grep -I semantics); hits in 46 files.
 # EXACTLY ONE OWNER PER HIT LINE (Finding 3 file-level ruling): CR-A-owned lines are ceded rows (owner CR-A, disposition mirrored from their canonical table); everything else here is CR-B. One file, one owner.
 # Dispositions are reconciled to the tree (CTO ruling 2026-10-01): KEEP =
 # futures-core text kept as-is; CUT = crypto content in a KEPT file, the cut is
@@ -15,16 +15,16 @@ regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\bast
 |---|---|---|---|---|---|
 | .github/ISSUE_TEMPLATE/bug_report.md | 118 | btc | KEEP | CR-B | live risk caps — KEEP (P0) |
 | .github/ISSUE_TEMPLATE/bug_report.md | 119 | altcoin | KEEP | CR-B | live risk caps — KEEP (P0) |
-| CHANGELOG.zh-CN.md | 45 | Binance | KEEP | CR-B | historical changelog entry — records what shipped, not what ships |
-| CHANGELOG.zh-CN.md | 90 | USDT | KEEP | CR-B | historical changelog entry — records what shipped, not what ships |
-| CHANGELOG.zh-CN.md | 91 | USDT | KEEP | CR-B | historical changelog entry — records what shipped, not what ships |
-| CHANGELOG.zh-CN.md | 92 | USDT | KEEP | CR-B | historical changelog entry — records what shipped, not what ships |
-| CHANGELOG.zh-CN.md | 103 | BTC | KEEP | CR-B | historical changelog entry — records what shipped, not what ships |
-| CHANGELOG.zh-CN.md | 110 | USDT | KEEP | CR-B | historical changelog entry — records what shipped, not what ships |
-| CHANGELOG.zh-CN.md | 119 | Aster | KEEP | CR-B | historical changelog entry — records what shipped, not what ships |
-| CHANGELOG.zh-CN.md | 121 | Aster | KEEP | CR-B | historical changelog entry — records what shipped, not what ships |
-| CHANGELOG.zh-CN.md | 151 | 币安 | KEEP | CR-B | historical changelog entry — records what shipped, not what ships |
-| CHANGELOG.zh-CN.md | 170 | 币安 | KEEP | CR-B | historical changelog entry — records what shipped, not what ships |
+| CHANGELOG.zh-CN.md | 45 | Binance | KEEP | CR-A | ceded to CR-A — historical doc/config file — not shipped code, KEEP byte-identical |
+| CHANGELOG.zh-CN.md | 90 | USDT | KEEP | CR-A | ceded to CR-A — historical doc/config file — not shipped code, KEEP byte-identical |
+| CHANGELOG.zh-CN.md | 91 | USDT | KEEP | CR-A | ceded to CR-A — historical doc/config file — not shipped code, KEEP byte-identical |
+| CHANGELOG.zh-CN.md | 92 | USDT | KEEP | CR-A | ceded to CR-A — historical doc/config file — not shipped code, KEEP byte-identical |
+| CHANGELOG.zh-CN.md | 103 | BTC | KEEP | CR-A | ceded to CR-A — historical doc/config file — not shipped code, KEEP byte-identical |
+| CHANGELOG.zh-CN.md | 110 | USDT | KEEP | CR-A | ceded to CR-A — historical doc/config file — not shipped code, KEEP byte-identical |
+| CHANGELOG.zh-CN.md | 119 | Aster | KEEP | CR-A | ceded to CR-A — historical doc/config file — not shipped code, KEEP byte-identical |
+| CHANGELOG.zh-CN.md | 121 | Aster | KEEP | CR-A | ceded to CR-A — historical doc/config file — not shipped code, KEEP byte-identical |
+| CHANGELOG.zh-CN.md | 151 | 币安 | KEEP | CR-A | ceded to CR-A — historical doc/config file — not shipped code, KEEP byte-identical |
+| CHANGELOG.zh-CN.md | 170 | 币安 | KEEP | CR-A | ceded to CR-A — historical doc/config file — not shipped code, KEEP byte-identical |
 | README.ja.md | 365 | btc | KEEP | CR-A | ceded to CR-A — historical doc/config file — not shipped code, KEEP byte-identical |
 | README.ja.md | 366 | altcoin | KEEP | CR-A | ceded to CR-A — historical doc/config file — not shipped code, KEEP byte-identical |
 | README.ja.md | 446 | btc | KEEP | CR-A | ceded to CR-A — historical doc/config file — not shipped code, KEEP byte-identical |
@@ -104,7 +104,7 @@ regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\bast
 | agent/strategy_field_catalog.go | 103 | altcoin | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
 | agent/tools.go | 826 | Wallet | KEEP | CR-A | ceded to CR-A — skill/tool surface — cut deferred until DS-107 skill-handler consumer cuts land |
 | agent/tools.go | 827 | USDC | KEEP | CR-A | ceded to CR-A — skill/tool surface — cut deferred until DS-107 skill-handler consumer cuts land |
-| agent/tools.go | 941 | Wallet | KEEP | CR-B | balance/position map shape the NinjaTrader trader returns — permanent KEEP (CTO ruling 10-01 19:48) |
+| agent/tools.go | 941 | Wallet | KEEP | CR-A | ceded to CR-A — NT8 account-snapshot shape — balance key family (CTO ruling, byte-identical) |
 | agent/tools.go | 2141 | btc | KEEP | CR-A | ceded to CR-A — risk-cap knob family (union-gate risk-cap canary) |
 | agent/tools.go | 2142 | altcoin | KEEP | CR-A | ceded to CR-A — risk-cap knob family (union-gate risk-cap canary) |
 | agent/tools.go | 2144 | AI500 | KEEP | CR-A | ceded to CR-A — skill/tool surface — cut deferred until DS-107 skill-handler consumer cuts land |
@@ -177,6 +177,22 @@ regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\bast
 | cmd/picture_htf_replay/main.go | 355 | ETH | KEEP | CR-B | CME 'ETH' = Extended Trading Hours session, not Ethereum — permanent KEEP (CTO ruling 10-01 19:48) |
 | cmd/picture_htf_replay/main.go | 356 | ETH | KEEP | CR-B | CME 'ETH' = Extended Trading Hours session, not Ethereum — permanent KEEP (CTO ruling 10-01 19:48) |
 | cmd/picture_htf_replay/main.go | 360 | ETH | KEEP | CR-B | CME 'ETH' = Extended Trading Hours session, not Ethereum — permanent KEEP (CTO ruling 10-01 19:48) |
+| docs/superpowers/AUDIT-CHECKLIST.md | 196 | ethereum | KEEP | CR-B | dated audit history — bug-class records |
+| docs/superpowers/AUDIT-CHECKLIST.md | 541 | USDT | KEEP | CR-B | dated audit history — bug-class records |
+| docs/superpowers/AUDIT-CHECKLIST.md | 545 | USDT | KEEP | CR-B | dated audit history — bug-class records |
+| docs/superpowers/AUDIT-CHECKLIST.md | 1297 | binance | KEEP | CR-B | dated audit history — bug-class records |
+| docs/superpowers/AUDIT-CHECKLIST.md | 6315 | BINANCE | KEEP | CR-B | dated audit history — bug-class records |
+| docs/superpowers/AUDIT-CHECKLIST.md | 6316 | Binance | KEEP | CR-B | dated audit history — bug-class records |
+| docs/superpowers/AUDIT-CHECKLIST.md | 6318 | BINANCE | KEEP | CR-B | dated audit history — bug-class records |
+| docs/superpowers/AUDIT-CHECKLIST.md | 6322 | BINANCE | KEEP | CR-B | dated audit history — bug-class records |
+| docs/superpowers/AUDIT-CHECKLIST.md | 6325 | BINANCE | KEEP | CR-B | dated audit history — bug-class records |
+| docs/superpowers/AUDIT-CHECKLIST.md | 6336 | BINANCE | KEEP | CR-B | dated audit history — bug-class records |
+| docs/superpowers/AUDIT-CHECKLIST.md | 6337 | CoinAnk | KEEP | CR-B | dated audit history — bug-class records |
+| docs/superpowers/AUDIT-CHECKLIST.md | 6339 | BTC | KEEP | CR-B | dated audit history — bug-class records |
+| docs/superpowers/AUDIT-CHECKLIST.md | 6814 | USDT | KEEP | CR-B | dated audit history — bug-class records |
+| docs/superpowers/AUDIT-CHECKLIST.md | 6817 | USDT | KEEP | CR-B | dated audit history — bug-class records |
+| docs/superpowers/AUDIT-CHECKLIST.md | 6900 | USDT | KEEP | CR-B | dated audit history — bug-class records |
+| docs/superpowers/AUDIT-CHECKLIST.md | 7197 | wallet | KEEP | CR-B | dated audit history — bug-class records |
 | kernel/engine.go | 136 | BTC | KEEP | CR-B | live risk caps — KEEP (P0) |
 | kernel/engine.go | 137 | Altcoin | KEEP | CR-B | live risk caps — KEEP (P0) |
 | kernel/engine_analysis.go | 559 | BTC | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
@@ -227,8 +243,8 @@ regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\bast
 | kernel/engine_prompt.go | 461 | USDT | KEEP | CR-B | live futures-prompt display, golden-pinned — permanent KEEP (CTO ruling 10-01 19:48) |
 | kernel/engine_prompt.go | 618 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
 | kernel/engine_prompt.go | 628 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
-| main.go | 252 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
-| main.go | 371 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
+| main.go | 252 | BINANCE | KEEP | CR-A | ceded to CR-A — wave-name comment (W-NO-BINANCE) — documents the OI-absent-on-MNQ behavior |
+| main.go | 371 | BINANCE | KEEP | CR-A | ceded to CR-A — wave-name comment (W-NO-BINANCE) — documents the OI-absent-on-MNQ behavior |
 | market/data.go | 13 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
 | market/data.go | 21 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
 | market/data.go | 87 | BINANCE | KEEP | CR-B | guard-name comment (W-NO-BINANCE A) — documents the crypto-read refusal; nothing to cut |
