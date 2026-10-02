@@ -71,6 +71,10 @@ export default function UpdatesPage() {
   const [status, setStatus] = useState<UpdatesStatus | null>(null)
   const [check, setCheck] = useState<UpdatesCheck | null>(null)
   const [checking, setChecking] = useState(false)
+  const [checkError, setCheckError] = useState<{
+    status?: number
+    reason: string
+  } | null>(null)
   const [installError, setInstallError] = useState<string | null>(null)
   const [notEnrolled, setNotEnrolled] = useState(false)
   const [job, setJob] = useState<UpdateJobView | null>(null)
@@ -258,17 +262,46 @@ export default function UpdatesPage() {
   )
 
   // Check asks the bot whether an update exists (it never installs).
+  // The label reflects the actual answer (owner-facing bug 15:1x CT): a
+  // verified_ready answer is NOT "Up to date". available (ready or not) ->
+  // "Check again" (the green banner names the version); checked without an
+  // available release -> "Up to date"; never checked -> "Check".
   const checkLabel = checking
     ? up('checking', language)
-    : check?.checked
-      ? up('upToDate', language)
-      : up('check', language)
+    : check?.available === true
+      ? up('checkAgain', language)
+      : check?.checked
+        ? up('upToDate', language)
+        : up('check', language)
 
   const doCheck = useCallback(async () => {
     setChecking(true)
-    const c = await updatesApi.check()
-    setCheck(c)
-    setChecking(false)
+    setCheckError(null)
+    try {
+      const c = await updatesApi.check()
+      setCheck(c)
+    } catch (e) {
+      // A refusal (e.g. the 403 cross-origin answer on a non-8080 origin)
+      // must not leave the button on "Checking…" forever: render the
+      // status + the server's own reason under the button.
+      const err = e as
+        | {
+            statusCode?: number
+            response?: { status?: number; data?: { error?: string; message?: string } }
+            message?: string
+          }
+        | undefined
+      setCheckError({
+        status: err?.statusCode ?? err?.response?.status,
+        reason:
+          err?.response?.data?.error ||
+          err?.response?.data?.message ||
+          err?.message ||
+          'check refused',
+      })
+    } finally {
+      setChecking(false)
+    }
   }, [])
 
   // The install control's enabled state comes from the SERVER
@@ -446,6 +479,17 @@ export default function UpdatesPage() {
             {checkLabel}
           </button>
         </div>
+        {checkError && (
+          <p
+            className="mt-2 text-xs text-red-400"
+            data-testid="check-error"
+          >
+            {up('checkRefused', language, {
+              status: checkError.status ? ` (${checkError.status})` : '',
+              reason: checkError.reason,
+            })}
+          </p>
+        )}
         <label
           htmlFor="updates-password"
           className="mt-3 block text-xs text-zinc-400"

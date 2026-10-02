@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"vl/internal/updaterjob"
+	"vl/internal/updaterwire"
 )
 
 // The free-lock path: preflight ACQUIRES the lock as our deterministic
@@ -157,6 +158,89 @@ func TestWorkerKeepsTheLockOnRecoveryNeeded(t *testing.T) {
 	}
 	if !kept {
 		t.Fatal("the job must NAME the kept lock (session + a human looks first)")
+	}
+}
+
+// Cancel at preflight_ok after the acquire releases OUR lock exactly once,
+// with the same receipt shape as refused (the CTO's mutant 'drop the
+// release' must fail here).
+func TestWorkerReleasesTheLockOnCancel(t *testing.T) {
+	r := newRig(t)
+	r.install()
+	// walk the job to preflight_ok/started along the legal move chain (the
+	// state where a cancel-before-boundary is accepted)
+	walkReceipt := func(j updaterjob.Job) {
+		now := r.w.now(j)
+		if err := j.AddReceipt(Receipt{Step: "walk", StartedAt: now, EndedAt: now, OK: true}, now); err != nil {
+			t.Fatal(err)
+		}
+		if err := updaterjob.Write(r.data, j); err != nil {
+			t.Fatal(err)
+		}
+	}
+	j := r.job()
+	if err := j.Enter(updaterjob.StateDownloaded, r.w.now(j)); err != nil {
+		t.Fatal(err)
+	}
+	if err := updaterjob.Write(r.data, j); err != nil {
+		t.Fatal(err)
+	}
+	walkReceipt(r.job())
+	j = r.job()
+	if err := j.Finish(r.w.now(j)); err != nil {
+		t.Fatal(err)
+	}
+	if err := updaterjob.Write(r.data, j); err != nil {
+		t.Fatal(err)
+	}
+	j = r.job()
+	if err := j.Enter(updaterjob.StateVerified, r.w.now(j)); err != nil {
+		t.Fatal(err)
+	}
+	if err := updaterjob.Write(r.data, j); err != nil {
+		t.Fatal(err)
+	}
+	walkReceipt(r.job())
+	j = r.job()
+	if err := j.Finish(r.w.now(j)); err != nil {
+		t.Fatal(err)
+	}
+	if err := updaterjob.Write(r.data, j); err != nil {
+		t.Fatal(err)
+	}
+	j = r.job()
+	if err := j.Enter(updaterjob.StatePreflightOK, r.w.now(j)); err != nil {
+		t.Fatal(err)
+	}
+	if err := updaterjob.Write(r.data, j); err != nil {
+		t.Fatal(err)
+	}
+	// the lock is ours, as it would be mid-preflight
+	if state, err := r.w.ensureMainTreeLock(r.job()); err != nil || state != "acquired" {
+		t.Fatalf("ensureMainTreeLock: state=%q err=%v", state, err)
+	}
+	// cancel at the boundary
+	if resp := r.w.Handle(updaterwire.NewCancelBeforeBoundary(boxJobID)); !resp.OK || resp.State != "cancelled" {
+		t.Fatalf("cancel: %+v", resp)
+	}
+	j = r.job()
+	if j.State != updaterjob.StateCancelled {
+		t.Fatalf("job %s: want cancelled, got %s", j.State, states(j))
+	}
+	r.mu.Lock()
+	rel, holder := r.box.lockReleaseCalls, r.box.lockHolder
+	r.mu.Unlock()
+	if rel != 1 || holder != "" {
+		t.Fatalf("cancel must release our lock exactly once (releases %d, holder %q)", rel, holder)
+	}
+	released := false
+	for _, rc := range j.Receipts {
+		if rc.Step == "main_tree_lock" && rc.Evidence["outcome"] == "released" {
+			released = true
+		}
+	}
+	if !released {
+		t.Fatal("the cancelled job must record the main_tree_lock release receipt")
 	}
 }
 

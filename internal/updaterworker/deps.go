@@ -231,10 +231,6 @@ type Host interface {
 	Now() time.Time
 	// Sleep waits d or until ctx ends.
 	Sleep(ctx context.Context, d time.Duration) error
-	// MainTreeLockHeld runs the installation's deploy/vl-lock.sh check
-	// (C19: rc 1 = held). The worker never RECLAIMS and never
-	// clear-incomplete; it acquires only a FREE lock (LockAcquire).
-	MainTreeLockHeld() (held bool, detail string, err error)
 	// LockAcquire runs `bash <LockScript> acquire <session> <task>
 	// <minutes>`: the same atomic acquire humans use. acquired=true when
 	// rc 0 (the lock is now ours). When rc 1 (held), holder names the

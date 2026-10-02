@@ -24,7 +24,7 @@ type stubHost struct {
 
 func (stubHost) Now() time.Time                             { return time.Now().UTC() }
 func (stubHost) Sleep(context.Context, time.Duration) error { return nil }
-func (stubHost) MainTreeLockHeld() (bool, string, error)    { return true, "test", nil }
+
 func (stubHost) LockAcquire(string, string, int) (bool, string, error) {
 	return false, "", nil
 }
