@@ -182,7 +182,7 @@ var (
 	// that may reference it. An empty set = nobody outside.
 	updateAuthRestricted = map[string]map[string]bool{
 		"Enroll":        {"internal/updaterbootstrap/bootstrap.go": true},
-		"Authorize":     {"internal/updaterbootstrap/bootstrap.go": true, "api/handler_updates.go": true}, // owner order 10-02 07:3x: install-with-password mints the grant server-side with the SAME Authorize the attended CLI uses (runInstall consumes it)
+		"Authorize":     {"internal/updaterbootstrap/bootstrap.go": true},
 		"ComputeMAC":    {},
 		"Message":       {},
 		"LoadDeviceKey": {"api/handler_updates.go": true},
@@ -194,6 +194,15 @@ var (
 		"AdminPath":     {"internal/updaterbootstrap/bootstrap.go": true},
 		"DeviceKeyPath": {"internal/updaterbootstrap/bootstrap.go": true},
 		"SeenPath":      {},
+	}
+	// owner order 2026-10-02 07:3x CT: install with the VL password on the
+	// page — the server mints the grant only after the password proof. The
+	// ONLY Authorize reference admitted in api/ sits inside the one function
+	// below and after a successful auth.CheckPassword branch (judged in
+	// updateAuthOffenders); any other reference anywhere in api/ still fails
+	// (M3: the web server must never mint install grants).
+	updateAuthAuthorizeFunction = map[string]string{
+		"api/handler_updates.go": "handleUpdatesInstallWithPassword",
 	}
 	// updateAuthOpen: identifiers any admitted importer may reference.
 	updateAuthOpen = map[string]bool{
@@ -265,12 +274,20 @@ func TestUpdateAuthCensusTablesArePinned(t *testing.T) {
 		restricted = append(restricted, name+"="+keys(files))
 	}
 	sort.Strings(restricted)
-	want := "AdminPath=internal/updaterbootstrap/bootstrap.go;Authorize=api/handler_updates.go,internal/updaterbootstrap/bootstrap.go;ComputeMAC=;" +
+	want := "AdminPath=internal/updaterbootstrap/bootstrap.go;Authorize=internal/updaterbootstrap/bootstrap.go;ComputeMAC=;" +
 		"Consume=api/handler_updates.go;DeviceKeyPath=internal/updaterbootstrap/bootstrap.go;Dir=internal/updaterbootstrap/bootstrap.go;" +
 		"Enroll=internal/updaterbootstrap/bootstrap.go;LoadAdmin=api/handler_updates.go,internal/updaterbootstrap/bootstrap.go;LoadDeviceKey=api/handler_updates.go;" +
 		"Message=;NoteExpired=api/handler_updates.go;SeenPath=;VerifyMAC=api/handler_updates.go"
 	if got := strings.Join(restricted, ";"); got != want {
 		t.Fatalf("restricted identifiers =\n%s\nwant exactly\n%s", got, want)
+	}
+	var authorizeAllowance []string
+	for file, fn := range updateAuthAuthorizeFunction {
+		authorizeAllowance = append(authorizeAllowance, file+"="+fn)
+	}
+	sort.Strings(authorizeAllowance)
+	if got := strings.Join(authorizeAllowance, ";"); got != "api/handler_updates.go=handleUpdatesInstallWithPassword" {
+		t.Fatalf("authorize allowance = %s, want exactly api/handler_updates.go=handleUpdatesInstallWithPassword", got)
 	}
 	// every classified name exists; nothing is both restricted and open
 	exported := map[string]bool{}
@@ -511,6 +528,69 @@ func updateAuthOffenders(t *testing.T, root string) (offenders []string, scanned
 			}
 		}
 
+		// owner order 2026-10-02 07:3x CT: in api/, updateauth.Authorize is
+		// admitted inside exactly ONE function and only after a successful
+		// auth.CheckPassword branch — judged here (AST positions, same parse),
+		// so the restricted check below is waived for it only there.
+		authorizeFn, authorizable := updateAuthAuthorizeFunction[rel]
+		if authorizable {
+			authAliases := map[string]bool{}
+			for _, im := range f.Imports {
+				ip, _ := strconv.Unquote(im.Path.Value)
+				if ip != module+"/auth" {
+					continue
+				}
+				name := "auth"
+				if im.Name != nil {
+					name = im.Name.Name
+				}
+				authAliases[name] = true
+			}
+			var fn *ast.FuncDecl
+			for _, d := range f.Decls {
+				if fd, ok := d.(*ast.FuncDecl); ok && fd.Name.Name == authorizeFn {
+					fn = fd
+				}
+			}
+			inside := func(p token.Pos) bool { return fn != nil && p >= fn.Pos() && p <= fn.End() }
+			var authorized, checkPassword []token.Pos
+			ast.Inspect(f, func(n ast.Node) bool {
+				sel, ok := n.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				id, ok := sel.X.(*ast.Ident)
+				if !ok {
+					return true
+				}
+				switch {
+				case aliases[id.Name] && sel.Sel.Name == "Authorize":
+					if inside(sel.Pos()) {
+						authorized = append(authorized, sel.Pos())
+					} else {
+						offend(rel + ": references updateauth.Authorize")
+					}
+				case authAliases[id.Name] && sel.Sel.Name == "CheckPassword":
+					if inside(sel.Pos()) {
+						checkPassword = append(checkPassword, sel.Pos())
+					}
+				}
+				return true
+			})
+			for _, p := range authorized {
+				after := false
+				for _, cp := range checkPassword {
+					if p > cp {
+						after = true
+						break
+					}
+				}
+				if !after {
+					offend(rel + ": updateauth.Authorize in " + authorizeFn + " must come after a successful auth.CheckPassword branch (owner order 2026-10-02 07:3x CT: install with the VL password on the page — the server mints the grant only after the password proof)")
+				}
+			}
+		}
+
 		holdsKey := false
 		ast.Inspect(f, func(n ast.Node) bool {
 			switch x := n.(type) {
@@ -523,7 +603,7 @@ func updateAuthOffenders(t *testing.T, root string) (offenders []string, scanned
 					name := x.Sel.Name
 					holdsKey = holdsKey || name == "LoadDeviceKey"
 					if allowed, restricted := updateAuthRestricted[name]; restricted {
-						if !allowed[rel] {
+						if !allowed[rel] && !(authorizable && name == "Authorize") {
 							offend(rel + ": references updateauth." + name)
 						}
 					} else if !updateAuthOpen[name] {
