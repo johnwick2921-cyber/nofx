@@ -38,9 +38,11 @@ func TestWorkerRefusesRoot(t *testing.T) {
 	}
 }
 
-// C19 as ruled: the worker READS the main-tree lock and never takes it — the
-// only verb it ever runs is `check`, and only rc 1 (held) passes; free (0),
-// stale (2), incomplete (3) and abandoned-incomplete (4) all refuse.
+// MainTreeLockHeld reads the lock via `check` ONLY: free (0), stale (2),
+// incomplete (3) and abandoned-incomplete (4) are all NOT held — only rc 1
+// counts. The worker's acquire path is the separate LockAcquire verb, which
+// this test does not exercise (the fake lock script would exit 0 and claim
+// the lock; acquisition is pinned by the WORKER-TAKES-THE-LOCK tests).
 func TestLockCheckRunsCheckOnlyAndOnlyRc1IsHeld(t *testing.T) {
 	dir := t.TempDir()
 	argsFile := filepath.Join(dir, "args")

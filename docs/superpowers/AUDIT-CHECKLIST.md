@@ -7864,3 +7864,22 @@ NEW violation must not be judged harder than it. rule: stale + no violation =
 same verdict as absent, with the age printed; stale + violation still fails
 closed. Reference: trader/installation_gate.go addon_census_prehold
 (prehold-stale-census, owner order 2026-10-02 10:15 CT).
+
+## CLASS NN (assigned at merge) — a button-only operator has no path to satisfy a terminal-side precondition
+
+symptom: PARTNER-ALONE-AUDIT (2026-10-02, DS-102): a partner could do Check →
+password → Update now entirely from the browser, but every install was refused
+at preflight because C19 required the main-tree lock to be HELD and only an
+attended terminal (`deploy/vl-lock.sh acquire`) could hold it — the worker ran
+`check` only and never acquired. probe: for every operator class (owner, CTO,
+partner), walk each gate's preconditions end to end and ask "can THIS operator
+satisfy this precondition with the controls they actually have?" — a
+precondition satisfied only from a terminal is a hard blocker for a
+button-only operator. rule: the worker acquires the lock itself as session
+`updater-<job id first 12>` before preflight (atomic acquire, budget-sized
+expiry), refuses a lock held by anyone else naming the holder, proceeds
+without acquiring when VL_ATTENDED_LOCK_SESSION names the holder (the
+attended path), releases at complete/rolled_back/refused, and KEEPS + names
+the lock in the job on recovery_needed. Reference:
+internal/updaterworker/steps.go ensureMainTreeLock +
+runner.go finish failure edges + stepReleaseHold.

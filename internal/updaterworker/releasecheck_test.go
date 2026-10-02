@@ -25,6 +25,11 @@ type stubHost struct {
 func (stubHost) Now() time.Time                             { return time.Now().UTC() }
 func (stubHost) Sleep(context.Context, time.Duration) error { return nil }
 func (stubHost) MainTreeLockHeld() (bool, string, error)    { return true, "test", nil }
+func (stubHost) LockAcquire(string, string, int) (bool, string, error) {
+	return false, "", nil
+}
+func (stubHost) LockHolder() (string, error)                { return "", nil }
+func (stubHost) LockRelease(string) error                   { return nil }
 func (s stubHost) BuildInfo(string) (string, string, error) { return s.rev, "false", nil }
 func (stubHost) ExeOf(int) (string, error)                  { return "", fmt.Errorf("unused") }
 

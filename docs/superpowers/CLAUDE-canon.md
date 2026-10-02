@@ -77,6 +77,24 @@ and the exit code was first misread as an environment problem. Before any
 `kill -- -$N`: confirm `N` is a genuine group leader (`pgrp == pid`) and positively
 identify the target. A bare pid signals whatever unrelated group owns that number.
 
+**THE WORKER ACQUIRES ITS OWN LOCK (WORKER-TAKES-THE-LOCK, owner order
+2026-10-02 12:1x CT).** The updater worker takes the main-tree lock itself,
+with the SAME atomic `acquire` humans use, as session `updater-<job id first
+12>`, with an expiry covering the job budget — right before preflight. It
+**never reclaims, never takes a held or stale lock, and never
+clear-incomplete**. A lock held by anyone else refuses preflight naming the
+holder. The attended path keeps working: when the worker env
+`VL_ATTENDED_LOCK_SESSION` names the holder, the worker proceeds WITHOUT
+acquiring (that session owns it) — the attended deploy adds the line to the
+unit's env file before the button press and removes it after. The worker
+releases its own lock at complete / rolled_back / refused; on
+recovery_needed it KEEPS the lock and names it in the job, so a human looks
+before anything else touches the tree. A worker restart mid-job finds its
+own lock by the deterministic session name and continues — it never
+double-acquires. (The old "the worker never acquires — the attended deploy
+does" rule is superseded; `MainTreeLockHeld`'s check-only semantics are
+unchanged.)
+
 ---
 
 ## THE STANDING RULE THIS FILE ENCODES
