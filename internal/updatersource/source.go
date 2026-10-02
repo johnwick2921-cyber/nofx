@@ -131,13 +131,15 @@ var ErrRateLimited = errors.New("updatersource: release API rate limited")
 // BEFORE any path is built from it (CTO 05:54 fix).
 var ErrInvalidTag = errors.New("updatersource: release tag not valid")
 
-// ErrInvalidCommitish is returned when target_commitish is not a 40-hex
-// commit. Releases are cut from TAGS only (release.yml --verify-tag), so a
-// branch-name target_commitish is refused fail-closed — never resolved over
-// the network.
-var ErrInvalidCommitish = errors.New("updatersource: release target commit unknown")
+// ErrReleaseCommitUnknown is returned when the tag's commit cannot be
+// resolved to a 40-hex sha (the commits/<tag> endpoint answered 404 or a
+// non-hex sha). Fail-closed: the release is never offered without a known
+// commit.
+var ErrReleaseCommitUnknown = errors.New("updatersource: release commit unknown")
 
-// commitishRe is the 40-hex commit form GitHub returns for a tag release.
+// commitishRe is the 40-hex commit form the commits/<tag> answer must
+// carry. target_commitish on releases/latest is IGNORED: for a tag release
+// GitHub stores the DEFAULT BRANCH there (observed live 2026-10-02: "dev").
 var commitishRe = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 // ErrSizeCap is returned when the download exceeds the size bound. The
@@ -280,10 +282,58 @@ func (s *Source) latest(ctx context.Context) (Latest, error) {
 	if !updaterwire.ValidReleaseID(raw.TagName) {
 		return Latest{}, fmt.Errorf("%w: %q", ErrInvalidTag, raw.TagName)
 	}
-	if !commitishRe.MatchString(raw.TargetCommitish) {
-		return Latest{}, fmt.Errorf("%w: %q", ErrInvalidCommitish, raw.TargetCommitish)
+	// target_commitish is IGNORED (for a tag release GitHub stores the default
+	// branch there — observed live 2026-10-02: "dev"). The release's commit is
+	// the tag's commit, resolved with the same client bounds.
+	sha, err := s.commitForTag(ctx, raw.TagName)
+	if err != nil {
+		return Latest{}, err
 	}
-	return Latest{Tag: raw.TagName, TargetCommitish: raw.TargetCommitish}, nil
+	return Latest{Tag: raw.TagName, TargetCommitish: sha}, nil
+}
+
+// commitForTag resolves the commit the tag points at: GET
+// /repos/<repo>/commits/<tag> → .sha, validated 40-hex. The tag is already
+// ValidReleaseID-validated by latest() before it is placed in the URL.
+func (s *Source) commitForTag(ctx context.Context, tag string) (string, error) {
+	u, err := url.Parse(s.cfg.APIBase + "/repos/" + s.cfg.Repo + "/commits/" + tag)
+	if err != nil {
+		return "", err
+	}
+	if err := checkURL(u, s.cfg.Hosts); err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "vl-updater")
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusForbidden, http.StatusTooManyRequests:
+		return "", ErrRateLimited
+	case http.StatusOK:
+	case http.StatusNotFound:
+		return "", fmt.Errorf("%w: tag %q", ErrReleaseCommitUnknown, tag)
+	default:
+		return "", fmt.Errorf("updatersource: commits API answered %d", resp.StatusCode)
+	}
+	var raw struct {
+		SHA string `json:"sha"`
+	}
+	dec := json.NewDecoder(io.LimitReader(resp.Body, 1<<20))
+	if err := dec.Decode(&raw); err != nil {
+		return "", fmt.Errorf("updatersource: commits API body: %w", err)
+	}
+	if !commitishRe.MatchString(raw.SHA) {
+		return "", fmt.Errorf("%w: tag %q", ErrReleaseCommitUnknown, tag)
+	}
+	return raw.SHA, nil
 }
 
 // Download fetches <tag>.tar.gz into destDir and returns the final path.

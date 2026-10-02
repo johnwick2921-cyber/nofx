@@ -15,11 +15,15 @@ import (
 	"vl/auth"
 )
 
-// workerEnvForTest isolates every env write under a temp HOME.
+// workerEnvForTest returns the env path under the throwaway home the
+// package's attended(t) seam installed — never the real ~/.config/vl-updater
+// (the package guard fails the run if the real dir changes).
 func workerEnvForTest(t *testing.T) string {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home, err := userHomeDir()
+	if err != nil {
+		t.Fatalf("userHomeDir: %v", err)
+	}
 	return workerEnvPath(home)
 }
 
@@ -172,8 +176,10 @@ func TestRevokeWorkerBumpsTheEpoch(t *testing.T) {
 func TestAuthorizeWritesLastAuthzAndNeverOverwrites(t *testing.T) {
 	attended(t)
 	inst := install(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home, err := userHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := os.MkdirAll(filepath.Join(home, ".config", "vl-updater"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -212,8 +218,10 @@ func TestAuthorizeWritesLastAuthzAndNeverOverwrites(t *testing.T) {
 func TestAuthorizeWorksAfterEnrollBootstrappedTheConfigDir(t *testing.T) {
 	attended(t)
 	inst := install(t)
-	home := t.TempDir() // no ~/.config/vl-updater at all
-	t.Setenv("HOME", home)
+	home, err := userHomeDir() // no ~/.config/vl-updater in the seam home yet
+	if err != nil {
+		t.Fatal(err)
+	}
 	if rc, _, errb := run(inst, enrollLine(bEmail), "enroll", bEmail); rc != 0 {
 		t.Fatalf("enroll rc=%d %s", rc, errb)
 	}

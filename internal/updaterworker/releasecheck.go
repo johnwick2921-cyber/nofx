@@ -92,8 +92,8 @@ func (w *Worker) handleCheck() updaterwire.Response {
 			return okWithDetail("rate_limited", detailJSON(CheckDetail{Reason: "rate limited, try later"}))
 		case errors.Is(err, updatersource.ErrInvalidTag):
 			return okWithDetail("error", detailJSON(CheckDetail{Reason: "release tag not valid"}))
-		case errors.Is(err, updatersource.ErrInvalidCommitish):
-			return okWithDetail("error", detailJSON(CheckDetail{Reason: "release target commit unknown"}))
+		case errors.Is(err, updatersource.ErrReleaseCommitUnknown):
+			return okWithDetail("error", detailJSON(CheckDetail{Reason: "release commit unknown"}))
 		default:
 			w.logf("updater: check API: %v", err)
 			return okWithDetail("error", detailJSON(CheckDetail{Reason: "release API unavailable"}))
