@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"vl/kernel"
 	ntwire "vl/provider/ninjatrader"
 	"vl/store"
 	ntTrader "vl/trader/ninjatrader"
@@ -265,7 +266,7 @@ func InstallationGateStatus(loaded map[string]*AutoTrader, st *store.Store) (g I
 		if len(held) > 0 {
 			inFlight := strings.Join(held, ", ")
 			if start, ok := plannerClaimStarts(); ok {
-				return false, fmt.Sprintf("waiting for the AI plan (started %s) — IN FLIGHT: %s", start.Format("15:04:05"), inFlight)
+				return false, fmt.Sprintf("waiting for the AI plan (started %s) — IN FLIGHT: %s", kernel.ClockCTSeconds(start), inFlight)
 			}
 			return false, "waiting for the AI plan — IN FLIGHT: " + inFlight
 		}

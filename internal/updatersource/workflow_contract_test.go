@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// TestReleaseRepoMatchesWorkflowContract (fold B1, nofx half): the ONE
+// TestReleaseRepoMatchesWorkflowContract (fold B1): the ONE
 // build-time release-repo constant must equal release.yml's RELEASE_REPO —
 // a box checks releases for the repo the workflow publishes under, never
 // another. The workflow file is read relative to the repo root (the module

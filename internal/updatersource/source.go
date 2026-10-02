@@ -38,16 +38,16 @@ import (
 	"vl/internal/updaterwire"
 )
 
-// ReleaseRepo is the ONE build-time release-repo constant (fold B1): the
-// nofx tree checks THIS repo. The partner tree's updatersource carries the
+// ReleaseRepo is the ONE build-time release-repo constant (fold B1): this
+// tree checks THIS repo. The partner tree's updatersource carries the
 // SAME package/file/identifier with its own value, so every future sync's
 // partner carve-out stays one line. The worker reads updatersource.ReleaseRepo
 // — never an env var for the repo (VL_RELEASE_SOURCE only toggles on/off).
 const ReleaseRepo = "johnwick2921-cyber/nofx"
 
 // DefaultHosts is the production allow-list (fold A3). The asset path was
-// verified live 2026-10-02 [A]: GET
-// https://github.com/johnwick2921-cyber/nofx/releases/download/v2026.10.01.1/v2026.10.01.1.tar.gz
+// verified live 2026-10-02 [A]: the asset URL
+// /<repo>/releases/download/v2026.10.01.1/v2026.10.01.1.tar.gz
 // answers HTTP/2 302 to release-assets.githubusercontent.com, then 200.
 // objects.githubusercontent.com stays listed for tarball source links.
 var DefaultHosts = []string{

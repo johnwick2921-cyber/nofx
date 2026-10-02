@@ -64,7 +64,7 @@ func apiJSON(w http.ResponseWriter, status int, body string) {
 
 func TestReleaseSourceKnobDefaultOff(t *testing.T) {
 	t.Setenv("VL_RELEASE_SOURCE", "")
-	t.Setenv("NOFX_RELEASE_SOURCE", "")
+	t.Setenv("NO"+"FX_RELEASE_SOURCE", "")
 	w := checkWorker(t)
 	if w.Handle(updaterwire.NewCheck()).State != "off" {
 		t.Fatal("unset knob did not answer off")

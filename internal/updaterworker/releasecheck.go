@@ -12,7 +12,7 @@ package updaterworker
 // A4: the downloaded tarball goes to <inbox>/<tag>.tar.gz and through the
 // SAME updaterworker.FetchRelease the attended CLI runs (cmd/vl-updater
 // main.go fetch) — no second unpack/hash/verify path.
-// A5: knob VL_RELEASE_SOURCE (envcompat VL_/NOFX_ prefix), default OFF.
+// A5: knob VL_RELEASE_SOURCE (envcompat VL_ prefix + legacy fallback), default OFF.
 
 import (
 	"context"
