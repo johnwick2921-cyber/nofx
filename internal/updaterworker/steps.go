@@ -195,6 +195,16 @@ func (w *Worker) stepPreflight(ctx context.Context, j updaterjob.Job) stepResult
 			if err != nil {
 				return "installation-gate: " + err.Error(), nil
 			}
+			// UPDATER-NT8-CLOSED (P-D ruling item 3): with the AddOn's
+			// socket gone >= the window, preflight runs the ABSENT leg set --
+			// the census/ack/cutover legs cannot be answered by a closed
+			// NT8 and must not refuse the safest install moment.
+			if a := g.NT8Absent; a != nil && a.Eligible {
+				if names, ok := absentPreflightLegs(a); ok {
+					return firstFailingNamedLegs(GateView{Legs: a.Legs}, names), nil
+				}
+				return "nt8_absent: eligible but no preflight legs computed", nil
+			}
 			return firstFailingLeg(g, preflightFlatLegs), nil
 		})
 	}()
@@ -885,12 +895,27 @@ func (w *Worker) poll(ctx context.Context, j updaterjob.Job, budget time.Duratio
 // firstFailingLeg is "" when every leg named in want (and every
 // trader_cutover:* leg) is present and passes; with want nil, every leg.
 func firstFailingLeg(g GateView, want []string) string {
+	if b := firstFailingNamedLegs(g, want); b != "" {
+		return b
+	}
+	for _, l := range g.Legs {
+		if strings.HasPrefix(l.Name, "trader_cutover:") && !l.Pass {
+			return l.Name + ": " + l.Detail
+		}
+	}
+	return ""
+}
+
+// firstFailingNamedLegs is the named-lookup half of firstFailingLeg (the
+// trader_cutover sweep lives in firstFailingLeg). The nt8_absent preflight
+// uses this directly: with NT8 closed the cutover legs cannot answer and must
+// not be demanded (P-D ruling item 3).
+func firstFailingNamedLegs(g GateView, want []string) string {
 	legs := map[string]GateLeg{}
 	for _, l := range g.Legs {
 		legs[l.Name] = l
 	}
-	names := want
-	if names == nil {
+	if want == nil {
 		for _, l := range g.Legs {
 			if !l.Pass {
 				return l.Name + ": " + l.Detail
@@ -901,7 +926,7 @@ func firstFailingLeg(g GateView, want []string) string {
 		}
 		return ""
 	}
-	for _, n := range names {
+	for _, n := range want {
 		l, ok := legs[n]
 		if !ok {
 			return n + ": leg missing from the installation gate"
@@ -910,12 +935,23 @@ func firstFailingLeg(g GateView, want []string) string {
 			return n + ": " + l.Detail
 		}
 	}
-	for _, l := range g.Legs {
-		if strings.HasPrefix(l.Name, "trader_cutover:") && !l.Pass {
-			return l.Name + ": " + l.Detail
-		}
-	}
 	return ""
+}
+
+// absentPreflightLegs is the preflight leg set when the gate's nt8_absent
+// verdict is eligible (the AddOn's socket has been down ≥ the window): the
+// absent legs minus hold/go_drained, which only engage at drain (the hold and
+// the barrier do not exist before the hold step). P-D ruling item 3 — preflight
+// must use the absent leg set when the wire has been down long enough, or an
+// NT8-closed install is refused on legs the AddOn can never answer.
+func absentPreflightLegs(absent *NT8AbsentView) (names []string, ok bool) {
+	for _, l := range absent.Legs {
+		if l.Name == "hold" || l.Name == "go_drained" {
+			continue
+		}
+		names = append(names, l.Name)
+	}
+	return names, len(names) > 0
 }
 
 // facts re-proves the release (verdict + signature NOW) for a step that reads
