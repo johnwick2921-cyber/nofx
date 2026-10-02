@@ -35,9 +35,12 @@ import (
 	"time"
 )
 
-// DefaultReleaseRepo is the ONE build-time release-repo constant (fold B1):
-// the nofx tree checks THIS repo. The partner tree sets its own constant.
-const DefaultReleaseRepo = "johnwick2921-cyber/nofx"
+// ReleaseRepo is the ONE build-time release-repo constant (fold B1): the
+// nofx tree checks THIS repo. The partner tree's updatersource carries the
+// SAME package/file/identifier with its own value, so every future sync's
+// partner carve-out stays one line. The worker reads updatersource.ReleaseRepo
+// — never an env var for the repo (VL_RELEASE_SOURCE only toggles on/off).
+const ReleaseRepo = "johnwick2921-cyber/nofx"
 
 // DefaultHosts is the production allow-list (fold A3). The asset path was
 // verified live 2026-10-02 [A]: GET
@@ -89,7 +92,7 @@ type Config struct {
 
 func (c Config) withDefaults() Config {
 	if c.Repo == "" {
-		c.Repo = DefaultReleaseRepo
+		c.Repo = ReleaseRepo
 	}
 	if c.Hosts == nil {
 		c.Hosts = append([]string(nil), DefaultHosts...)
