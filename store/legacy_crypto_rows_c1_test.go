@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"gorm.io/gorm"
+
 	"vl/crypto"
 )
 
@@ -19,9 +21,11 @@ import (
 // Synthetic fixture only (never data.db or a copy of it; the real-copy check is
 // the CTO's).
 //
-// Boot-cleanup survival is NOT asserted for the exchange row here: the C1 P0
-// fix (cleanupIncompleteExchangeConfigs skips unsupported types, PR #188 D1–D3)
-// is not yet ported at this head — do not pin the pre-fix deletion.
+// Boot-cleanup survival IS asserted for the exchange row here (the C1 P0
+// cleanup-skip is ported — unsupported types are kept, never deleted), and the
+// legacy DB COLUMNS are proven at the raw-SQL level to survive a load and an
+// update through the store (CTO item 2: the struct mapping is not enough — the
+// physical columns must round-trip).
 func TestLegacyCryptoRowsLoadWithFuturesSettingsIntact(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "c1-legacy.db")
 	st, err := New(dbPath)
@@ -117,6 +121,58 @@ func TestLegacyCryptoRowsLoadWithFuturesSettingsIntact(t *testing.T) {
 		t.Fatalf("legacy credential columns did not round-trip (empty after decrypt)")
 	}
 
+	// 2b) RAW SQL — the legacy columns must physically hold the planted values
+	// (CTO item 2). Read them straight off the DB, not through the struct.
+	rawBefore := readLegacyColumns(t, st.gdb, userID, "e-legacy")
+	if rawBefore.HyperliquidWalletAddr != "0xhyper" ||
+		rawBefore.HyperliquidUnifiedAccount != true ||
+		rawBefore.AsterUser != "aster-user" ||
+		rawBefore.AsterSigner != "aster-signer" ||
+		rawBefore.LighterWalletAddr != "0xlighter" ||
+		rawBefore.LighterAPIKeyIndex != 7 {
+		t.Fatalf("legacy DB columns wrong at raw-SQL level: %+v", rawBefore)
+	}
+	for name, v := range map[string]string{
+		"aster_private_key":           rawBefore.AsterPrivateKey,
+		"lighter_private_key":         rawBefore.LighterPrivateKey,
+		"lighter_api_key_private_key": rawBefore.LighterAPIKeyPrivateKey,
+	} {
+		if len(v) == 0 {
+			t.Fatalf("encrypted legacy column %s empty at raw-SQL level", name)
+		}
+	}
+
+	// 2c) A production-path Update round-tripping the loaded values must leave
+	// the legacy columns byte-identical (the store must never wipe or rewrite
+	// them behind the caller's back).
+	if err := st.Exchange().Update(userID, "e-legacy",
+		ex.Enabled,
+		string(ex.APIKey), string(ex.SecretKey), string(ex.Passphrase), ex.Testnet,
+		ex.HyperliquidWalletAddr, ex.HyperliquidUnifiedAcct,
+		ex.AsterUser, ex.AsterSigner, string(ex.AsterPrivateKey),
+		ex.LighterWalletAddr, string(ex.LighterPrivateKey), string(ex.LighterAPIKeyPrivateKey),
+		ex.LighterAPIKeyIndex,
+		ex.NTDataDir, ex.NTInstrumentName, ex.NTDefaultContractQty,
+	); err != nil {
+		t.Fatalf("production update of legacy exchange row: %v", err)
+	}
+	rawAfter := readLegacyColumns(t, st.gdb, userID, "e-legacy")
+	if rawAfter.HyperliquidWalletAddr != rawBefore.HyperliquidWalletAddr ||
+		rawAfter.HyperliquidUnifiedAccount != rawBefore.HyperliquidUnifiedAccount ||
+		rawAfter.AsterUser != rawBefore.AsterUser ||
+		rawAfter.AsterSigner != rawBefore.AsterSigner ||
+		rawAfter.LighterWalletAddr != rawBefore.LighterWalletAddr ||
+		rawAfter.LighterAPIKeyIndex != rawBefore.LighterAPIKeyIndex {
+		t.Fatalf("legacy DB columns changed across a store Update:\nbefore: %+v\nafter:  %+v", rawBefore, rawAfter)
+	}
+	if len(rawAfter.AsterPrivateKey) == 0 || len(rawAfter.LighterPrivateKey) == 0 ||
+		len(rawAfter.LighterAPIKeyPrivateKey) == 0 {
+		t.Fatalf("encrypted legacy columns emptied by the store Update: %+v", rawAfter)
+	}
+	if _, err := st.Exchange().GetByID(userID, "e-legacy"); err != nil {
+		t.Fatalf("legacy exchange row unloadable after the store Update: %v", err)
+	}
+
 	// 3) AI MODEL — the disabled claw402 row (C1: it stays, it never crashes).
 	if err := st.AIModel().Create(userID, "m-legacy", "Claw402 legacy", "claw402", false, "0xlegacy", "https://claw402.ai"); err != nil {
 		t.Fatalf("plant legacy ai_model row: %v", err)
@@ -129,9 +185,9 @@ func TestLegacyCryptoRowsLoadWithFuturesSettingsIntact(t *testing.T) {
 		t.Fatalf("legacy ai_model changed on load: provider=%q enabled=%v", model.Provider, model.Enabled)
 	}
 
-	// 4) REOPEN — initTables + cleanup run again; the strategy and the ai_model
-	// must survive byte-for-byte (the exchange-row survival assertion lands with
-	// the C1 P0 cleanup-skip port — see the header comment).
+	// 4) REOPEN — initTables + cleanup run again; the strategy, the ai_model AND
+	// the unsupported-type exchange row must all survive (the exchange row is a
+	// legacy crypto row — cleanup SKIPS it, never deletes it).
 	if err := st.Close(); err != nil {
 		t.Fatalf("close store: %v", err)
 	}
@@ -150,6 +206,43 @@ func TestLegacyCryptoRowsLoadWithFuturesSettingsIntact(t *testing.T) {
 	if _, err := st2.AIModel().Get(userID, "m-legacy"); err != nil {
 		t.Fatalf("ai_model row did not survive the reopen: %v", err)
 	}
+	ex2, err := st2.Exchange().GetByID(userID, "e-legacy")
+	if err != nil {
+		t.Fatalf("legacy exchange row did not survive the boot-cleanup pass: %v", err)
+	}
+	if ex2.ExchangeType != "binance" || ex2.HyperliquidWalletAddr != "0xhyper" ||
+		ex2.AsterUser != "aster-user" || ex2.LighterWalletAddr != "0xlighter" {
+		t.Fatalf("legacy exchange row changed across the reopen: %+v", ex2)
+	}
+}
+
+// legacyColumns is the raw-SQL shadow of the pre-cut crypto credential columns.
+// The GORM struct still maps them (migration tolerance), but C1's data-safety
+// proof is at the column level: these physical columns must round-trip a load
+// and a production update untouched.
+type legacyColumns struct {
+	HyperliquidWalletAddr     string
+	HyperliquidUnifiedAccount bool
+	AsterUser                 string
+	AsterSigner               string
+	AsterPrivateKey           string
+	LighterWalletAddr         string
+	LighterPrivateKey         string
+	LighterAPIKeyPrivateKey   string
+	LighterAPIKeyIndex        int
+}
+
+func readLegacyColumns(t *testing.T, db *gorm.DB, userID, id string) legacyColumns {
+	t.Helper()
+	var c legacyColumns
+	if err := db.Raw(`SELECT hyperliquid_wallet_addr, hyperliquid_unified_account,
+		aster_user, aster_signer, aster_private_key,
+		lighter_wallet_addr, lighter_private_key, lighter_api_key_private_key,
+		lighter_api_key_index
+		FROM exchanges WHERE id = ? AND user_id = ?`, id, userID).Scan(&c).Error; err != nil {
+		t.Fatalf("raw-SQL read of legacy columns: %v", err)
+	}
+	return c
 }
 
 // TestC1RealCopyLoadEveryRow is the CTO's opt-in real-copy mode (the CTO runs
