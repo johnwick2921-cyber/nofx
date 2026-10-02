@@ -94,6 +94,7 @@ func TestDecideCheckTable(t *testing.T) {
 		{"missing tag", updatersource.Latest{Tag: "", TargetCommitish: rev}, rev, nil, false, "error"},
 		{"missing commitish", updatersource.Latest{Tag: "v1", TargetCommitish: ""}, rev, nil, false, "error"},
 		{"verdict for tag exists", updatersource.Latest{Tag: "v9", TargetCommitish: other}, rev, nil, true, "verified_ready"},
+		{"the RUNNING release keeps its verdict: up_to_date first (live 18:13 fix)", updatersource.Latest{Tag: "v9", TargetCommitish: rev}, rev, nil, true, "up_to_date"},
 		{"same commit as running", updatersource.Latest{Tag: "v9", TargetCommitish: rev}, rev, nil, false, "up_to_date"},
 		{"commit already in a verdict", updatersource.Latest{Tag: "v9", TargetCommitish: other}, rev, map[string]bool{other: true}, false, "up_to_date"},
 		{"newer", updatersource.Latest{Tag: "v9", TargetCommitish: other}, rev, nil, false, "available"},
