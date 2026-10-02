@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -14,6 +15,7 @@ import (
 	"vl/internal/envcompat"
 	"vl/internal/updateauth"
 	"vl/internal/updaterjob"
+	"vl/internal/updatersource"
 	"vl/internal/updaterwire"
 	"vl/logger"
 	"vl/trader"
@@ -76,6 +78,11 @@ const maxUpdateInstallBody = 4096
 // can never stall on a half-dead socket (CTO ruling on #206 — a measured
 // value, never inferred).
 const workerProbeTimeout = 250 * time.Millisecond
+
+// checkRelayTimeout is the relay deadline for POST /api/updates/check: the
+// worker's own download is bounded at updatersource.DefaultTimeout (5 min);
+// the relay adds one minute of margin (fold A1).
+const checkRelayTimeout = updatersource.DefaultTimeout + time.Minute
 
 var errForbiddenBody = gin.H{"error": "forbidden"}
 
@@ -531,10 +538,83 @@ func (s *Server) handleUpdatesStatus(c *gin.Context) {
 	})
 }
 
-// handleUpdatesCheck — POST /api/updates/check. M3 has no release source and
-// makes no network call; it says so rather than inventing a result.
+// handleUpdatesCheck — POST /api/updates/check (ONE-BUTTON P-A, fold A1).
+// The bot makes NO network call: it relays the `check` verb to the worker
+// over the unix socket. The worker owns every byte of release-source network
+// code (updatersource). When the worker or the source is absent the answer
+// keeps the M3 shape ({checked:false, reason}), so old clients degrade to
+// exactly today's text.
 func (s *Server) handleUpdatesCheck(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"checked": false, "reason": "no release source in this build"})
+	conn, err := updaterwire.DialWorker(trader.MaintenanceDataDir())
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"checked": false, "reason": "updater worker unreachable"})
+		return
+	}
+	defer conn.Close()
+	// The check may download + verify (the worker bounds its own network at
+	// updatersource.DefaultTimeout); the relay deadline adds a margin.
+	resp, err := conn.DoWithTimeout(updaterwire.NewCheck(), checkRelayTimeout)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"checked": false, "reason": "updater worker unreachable"})
+		return
+	}
+	if !resp.OK {
+		c.JSON(http.StatusOK, gin.H{"checked": false, "reason": "check failed"})
+		return
+	}
+	switch resp.State {
+	case "off":
+		c.JSON(http.StatusOK, gin.H{"checked": false, "reason": "no release source in this build"})
+	case "rate_limited":
+		c.JSON(http.StatusOK, gin.H{"checked": false, "reason": "rate limited, try later"})
+	case "up_to_date":
+		d := checkDetailFrom(resp.Detail)
+		c.JSON(http.StatusOK, gin.H{
+			"checked":          true,
+			"available":        false,
+			"ready":            false,
+			"tag":              d.Tag,
+			"target_commitish": d.TargetCommitish,
+			"reason":           "up to date",
+		})
+	case "verified_ready":
+		d := checkDetailFrom(resp.Detail)
+		c.JSON(http.StatusOK, gin.H{
+			"checked":          true,
+			"available":        true,
+			"ready":            true,
+			"tag":              d.Tag,
+			"target_commitish": d.TargetCommitish,
+			"source_sha":       d.SourceSHA,
+			"reason":           "verified, ready",
+		})
+	case "error":
+		d := checkDetailFrom(resp.Detail)
+		reason := d.Reason
+		if reason == "" {
+			reason = "check failed"
+		}
+		c.JSON(http.StatusOK, gin.H{"checked": false, "reason": reason})
+	default:
+		c.JSON(http.StatusOK, gin.H{"checked": false, "reason": "check failed"})
+	}
+}
+
+// checkDetail is the worker's CheckDetail as the relay re-reads it. The relay
+// re-parses (never re-interprets) the worker's own JSON.
+type checkDetail struct {
+	Available       bool   `json:"available"`
+	Ready           bool   `json:"ready"`
+	Tag             string `json:"tag"`
+	TargetCommitish string `json:"target_commitish"`
+	SourceSHA       string `json:"source_sha"`
+	Reason          string `json:"reason"`
+}
+
+func checkDetailFrom(raw string) checkDetail {
+	var d checkDetail
+	_ = json.Unmarshal([]byte(raw), &d)
+	return d
 }
 
 // handleUpdatesInstall — POST /api/updates/install
