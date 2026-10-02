@@ -209,7 +209,7 @@ func TestAuthorizeWritesLastAuthzAndNeverOverwrites(t *testing.T) {
 	}
 }
 
-func TestAuthorizeSucceedsWithoutTheConfigDir(t *testing.T) {
+func TestAuthorizeWorksAfterEnrollBootstrappedTheConfigDir(t *testing.T) {
 	attended(t)
 	inst := install(t)
 	home := t.TempDir() // no ~/.config/vl-updater at all
@@ -217,14 +217,44 @@ func TestAuthorizeSucceedsWithoutTheConfigDir(t *testing.T) {
 	if rc, _, errb := run(inst, enrollLine(bEmail), "enroll", bEmail); rc != 0 {
 		t.Fatalf("enroll rc=%d %s", rc, errb)
 	}
+	// enroll created the config dir for the worker env file; authorize then
+	// writes the G2 file into it and prints the line.
 	rc, out, errb := run(inst, authorizeLine(bRel), "authorize", bRel)
 	if rc != 0 {
 		t.Fatalf("authorize rc=%d %s", rc, errb)
 	}
 	if strings.TrimSpace(out) == "" {
-		t.Fatal("the grant line must still print when the file cannot be written")
+		t.Fatal("the grant line must print")
 	}
-	if _, err := os.Lstat(lastAuthzPath(home, bRel)); !os.IsNotExist(err) {
-		t.Fatal("no file may appear when the config dir is missing")
+	if _, err := os.Lstat(lastAuthzPath(home, bRel)); err != nil {
+		t.Fatalf("last-authz missing after enroll created the dir: %v", err)
+	}
+}
+
+func TestWriteLastAuthzUnitGuards(t *testing.T) {
+	home := t.TempDir()
+	if err := writeLastAuthz(home, "v1.2.3", []byte("x")); err == nil {
+		t.Fatal("missing config dir must refuse")
+	}
+	dir := filepath.Join(home, ".config", "vl-updater")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeLastAuthz(home, "v1.2.3", []byte("x")); err == nil {
+		t.Fatal("a 0755 config dir must refuse (0700 required)")
+	}
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeLastAuthz(home, "v1.2.3", []byte("x")); err != nil {
+		t.Fatalf("0700 dir must admit the write: %v", err)
+	}
+	before, _ := os.ReadFile(lastAuthzPath(home, "v1.2.3"))
+	if err := writeLastAuthz(home, "v1.2.3", []byte("overwrite")); err == nil {
+		t.Fatal("an existing last-authz file must refuse (never overwrite)")
+	}
+	after, _ := os.ReadFile(lastAuthzPath(home, "v1.2.3"))
+	if string(after) != string(before) {
+		t.Fatal("the existing file changed")
 	}
 }
