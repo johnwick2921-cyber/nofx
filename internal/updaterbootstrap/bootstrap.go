@@ -74,11 +74,16 @@ import (
 	_ "vl/store/sqlitedriver"
 )
 
-// Seams (tests only): root refusal, the attended check and the clock.
+// Seams (tests only): root refusal, the attended check, the clock and the
+// home directory. userHomeDir is the ONE resolver for ~/.config/vl-updater
+// (P0 test-isolation fix): tests override it AND set HOME so nothing ever
+// reaches the real config dir; the package guard fails the run if the real
+// dir changes.
 var (
-	geteuid    = os.Geteuid
-	isTerminal = stdinIsTerminal
-	now        = time.Now
+	geteuid     = os.Geteuid
+	isTerminal  = stdinIsTerminal
+	now         = time.Now
+	userHomeDir = os.UserHomeDir
 )
 
 // DataDirFor is the ONE resolver's answer for THIS process (identical to
@@ -323,7 +328,7 @@ func enroll(tgt target, email string, replace bool, stdin io.Reader, stdout, std
 	// P-E E2/E3 — the worker credential (minted ONLY here, attended).
 	// --replace revokes the previous worker token first: the API refuses it
 	// from the moment this process returns.
-	home, err := os.UserHomeDir()
+	home, err := userHomeDir()
 	if err != nil {
 		fmt.Fprintf(stderr, "worker token: cannot resolve HOME: %v (the enrollment stands; re-run --replace once HOME is resolvable)\n", err)
 		return 1
@@ -400,7 +405,7 @@ func authorize(tgt target, releaseID string, stdin io.Reader, stdout, stderr io.
 	// wrapped terminal paste never loses it). The write is guarded but NOT
 	// fatal to the grant: an existing file is never overwritten, and a
 	// missing/mis-owned config dir only means the line prints below alone.
-	if home, herr := os.UserHomeDir(); herr == nil {
+	if home, herr := userHomeDir(); herr == nil {
 		if lerr := writeLastAuthz(home, releaseID, b); lerr != nil {
 			fmt.Fprintf(stderr, "authorize: note — %v (the line prints below; paste it from there)\n", lerr)
 		} else {

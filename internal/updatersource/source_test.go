@@ -97,7 +97,14 @@ func TestLatestRateLimitedIsCached(t *testing.T) {
 func TestLatestParsesTagAndCommitish(t *testing.T) {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"tag_name":"v2026.10.01.1","target_commitish":"`+strings.Repeat("ab", 20)+`"}`)
+		switch {
+		case r.URL.Path == "/repos/johnwick2921-cyber/nofx/releases/latest":
+			fmt.Fprint(w, `{"tag_name":"v2026.10.01.1","target_commitish":"dev"}`)
+		case r.URL.Path == "/repos/johnwick2921-cyber/nofx/commits/v2026.10.01.1":
+			fmt.Fprint(w, `{"sha":"`+strings.Repeat("ab", 20)+`"}`)
+		default:
+			http.NotFound(w, r)
+		}
 	}))
 	defer srv.Close()
 	s := testSource(t, srv, srv, srv, 1<<20, 3)
@@ -110,42 +117,87 @@ func TestLatestParsesTagAndCommitish(t *testing.T) {
 	}
 }
 
-// TestLatestRefusesInvalidTagAndCommitish (CTO 05:54 fix): tag_name is
-// network data that becomes a PATH element — validated with the wire's own
-// validator before any file is touched; target_commitish must be 40-hex
-// (releases are cut from tags only, release.yml --verify-tag; a branch
-// target fails closed, never resolved over the network).
-func TestLatestRefusesInvalidTagAndCommitish(t *testing.T) {
-	cases := []struct {
-		name     string
-		tag      string
-		commit   string
-		wantSent error
-	}{
-		{"path traversal", "../evil", strings.Repeat("ab", 20), ErrInvalidTag},
-		{"slash", "a/b", strings.Repeat("ab", 20), ErrInvalidTag},
-		{"empty", "", strings.Repeat("ab", 20), ErrInvalidTag},
-		{"65 chars", strings.Repeat("v", 65), strings.Repeat("ab", 20), ErrInvalidTag},
-		{"leading dot", ".hidden", strings.Repeat("ab", 20), ErrInvalidTag},
-		{"branch commitish", "v1.0.0", "main", ErrInvalidCommitish},
-		{"short commitish", "v1.0.0", "abc123", ErrInvalidCommitish},
-		{"upper hex commitish", "v1.0.0", strings.ToUpper(strings.Repeat("ab", 20)), ErrInvalidCommitish},
+// TestLatestResolvesCommitFromTagIsTheLiveFix (P0 2026-10-02): releases/latest
+// stores the DEFAULT BRANCH in target_commitish ("dev" on the live repo); the
+// release's commit is the TAG's commit, resolved via commits/<tag>. The
+// branch target is IGNORED — this test pins the exact live shape.
+func TestLatestResolvesCommitFromTagIsTheLiveFix(t *testing.T) {
+	sha := strings.Repeat("cd", 20)
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/repos/johnwick2921-cyber/nofx/releases/latest":
+			fmt.Fprint(w, `{"tag_name":"v2026.10.02.1","target_commitish":"dev"}`)
+		case r.URL.Path == "/repos/johnwick2921-cyber/nofx/commits/v2026.10.02.1":
+			fmt.Fprint(w, `{"sha":"`+sha+`"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	s := testSource(t, srv, srv, srv, 1<<20, 3)
+	latest, err := s.Latest(context.Background())
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
+	if latest.TargetCommitish != sha {
+		t.Fatalf("commit = %q, want the tag's commit %q", latest.TargetCommitish, sha)
+	}
+}
+
+// TestLatestRefusesInvalidTag: tag_name is network data that becomes a PATH
+// element — validated with the wire's own validator before any file is
+// touched.
+func TestLatestRefusesInvalidTag(t *testing.T) {
+	for _, tag := range []string{"../evil", "a/b", "", strings.Repeat("v", 65), ".hidden"} {
+		t.Run(tag, func(t *testing.T) {
 			dir := t.TempDir() // the inbox: must stay empty
 			srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
-				fmt.Fprint(w, `{"tag_name":"`+c.tag+`","target_commitish":"`+c.commit+`"}`)
+				fmt.Fprint(w, `{"tag_name":"`+tag+`","target_commitish":"dev"}`)
 			}))
 			defer srv.Close()
 			s := testSource(t, srv, srv, srv, 1<<20, 3)
 			_, err := s.Latest(context.Background())
-			if !errors.Is(err, c.wantSent) {
-				t.Fatalf("err = %v, want %v", err, c.wantSent)
+			if !errors.Is(err, ErrInvalidTag) {
+				t.Fatalf("err = %v, want ErrInvalidTag", err)
 			}
 			if entries, _ := os.ReadDir(dir); len(entries) != 0 {
 				t.Fatalf("inbox not empty after a refused tag: %v", entries)
+			}
+		})
+	}
+}
+
+// TestLatestRefusesUnknownOrMalformedCommit: the commits/<tag> answer must be
+// a 40-hex sha — 404 or a non-hex sha refuses fail-closed.
+func TestLatestRefusesUnknownOrMalformedCommit(t *testing.T) {
+	for name, body := range map[string]string{
+		"not found":  `{"message":"Not Found"}`,
+		"branch sha": `{"sha":"dev"}`,
+		"short":      `{"sha":"abc123"}`,
+		"upper":      `{"sha":"` + strings.ToUpper(strings.Repeat("ab", 20)) + `"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch {
+				case r.URL.Path == "/repos/johnwick2921-cyber/nofx/releases/latest":
+					fmt.Fprint(w, `{"tag_name":"v1.0.0","target_commitish":"dev"}`)
+				case r.URL.Path == "/repos/johnwick2921-cyber/nofx/commits/v1.0.0":
+					if name == "not found" {
+						w.WriteHeader(http.StatusNotFound)
+					}
+					fmt.Fprint(w, body)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer srv.Close()
+			s := testSource(t, srv, srv, srv, 1<<20, 3)
+			_, err := s.Latest(context.Background())
+			if !errors.Is(err, ErrReleaseCommitUnknown) {
+				t.Fatalf("err = %v, want ErrReleaseCommitUnknown", err)
 			}
 		})
 	}
