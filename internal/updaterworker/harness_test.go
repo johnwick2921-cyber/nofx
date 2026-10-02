@@ -83,6 +83,14 @@ type box struct {
 	id      Identity // the unit's MainPID identity
 	running string   // the sha the running process serves
 
+	// the fake lock (WORKER-TAKES-THE-LOCK): lockHolder is the current
+	// holder ("" free); the counters pin the acquire/release edges.
+	lockHolder          string
+	lockAcquireCalls    int
+	lockAcquireSessions []string
+	lockReleaseCalls    int
+	lockAcquireErr      error
+
 	// knobs
 	lockHeld         bool
 	flat             bool
@@ -657,6 +665,45 @@ func (h *fakeHost) MainTreeLockHeld() (bool, string, error) {
 		return true, "check rc=1", nil
 	}
 	return false, "check rc=0", nil
+}
+
+// LockHolder simulates the lock script's status: "" free, else the holder.
+func (h *fakeHost) LockHolder() (string, error) {
+	h.b.mu.Lock()
+	defer h.b.mu.Unlock()
+	return h.b.lockHolder, nil
+}
+
+// LockAcquire simulates `vl-lock.sh acquire`. Free (lockHolder "") takes it
+// as our session; held refuses naming the holder; an error flag fails it.
+func (h *fakeHost) LockAcquire(session, task string, minutes int) (bool, string, error) {
+	h.b.mu.Lock()
+	defer h.b.mu.Unlock()
+	h.b.lockAcquireCalls++
+	h.b.lockAcquireSessions = append(h.b.lockAcquireSessions, session)
+	if h.b.lockAcquireErr != nil {
+		return false, "", h.b.lockAcquireErr
+	}
+	if h.b.lockHolder == "" {
+		h.b.lockHolder = session
+		return true, "", nil
+	}
+	return false, h.b.lockHolder, nil
+}
+
+// LockRelease simulates `vl-lock.sh release` (only the holder may release).
+func (h *fakeHost) LockRelease(session string) error {
+	h.b.mu.Lock()
+	defer h.b.mu.Unlock()
+	h.b.lockReleaseCalls++
+	if h.b.lockHolder == "" {
+		return nil // the script's no-lock no-op
+	}
+	if h.b.lockHolder != session {
+		return fmt.Errorf("release refused: '%s' is not the holder ('%s')", session, h.b.lockHolder)
+	}
+	h.b.lockHolder = ""
+	return nil
 }
 
 func (h *fakeHost) BuildInfo(binary string) (string, string, error) {
