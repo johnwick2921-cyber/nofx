@@ -127,6 +127,12 @@ export interface UpdatesStatus {
 export interface UpdatesCheck {
   checked: boolean
   reason: string
+  // P-A: the release-source check result — OPTIONAL and ABSENT until the
+  // worker's `check` verb lands. The page renders each state ONLY when the
+  // API affirms it; it never invents one.
+  update_available?: boolean
+  latest_tag?: string
+  rate_limited?: boolean
 }
 
 // ── POST /api/updates/install (api/handler_updates.go:236) — 202 {job_id};
@@ -161,7 +167,11 @@ export type InstallAuthorizationParse =
 export function parseInstallAuthorization(
   text: string
 ): InstallAuthorizationParse {
-  const trimmed = text.trim()
+  // G1: a terminal-wrapped paste carries hard newlines where the terminal
+  // folded the ONE printed line. json.Marshal output is compact and escapes
+  // control characters, so a raw newline can never sit inside the hmac —
+  // stripping them is safe. Un-wrapped pastes are byte-identical.
+  const trimmed = text.replace(/\r/g, '').replace(/\n/g, '').trim()
   if (!trimmed) {
     return { ok: false, error: 'paste the authorization line first' }
   }

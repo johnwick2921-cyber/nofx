@@ -57,8 +57,11 @@ func TestInstallUpdaterWorkerScript(t *testing.T) {
 		"$BUILD_DIR/vl-updater",
 		"$HOME/bin/vl-updater",
 		"systemd-user/vl-updater.service",
-		// the token has a 24-hour lifetime and there is no longer-lived type
-		"24-hour",
+		// P-E E4: the token is the cutover-worker credential enroll writes —
+		// never a hand-minted 24-hour gate-jwt.
+		"auth.ScopeCutoverWorker",
+		"vl-updater-bootstrap --install-dir <bot> enroll <owner-email>",
+		"never a hand-minted gate-jwt",
 	} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("install script must carry %q", want)
