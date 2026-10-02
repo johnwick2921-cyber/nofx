@@ -1,7 +1,7 @@
 # CR-B disposition table — engine + tests + config surface (crypto removal, part CR-B, regenerated at the integrated head)
 
 branch-point: dc630ad8fc06c49aebd5e59a8814744c2cbab5e7
-integrator-tip: 1760ea0ab82a058da7c95ac49a570c76744eaa6a (regenerated at the integrated head; provenance: branch + sha only)
+integrator-tip: 133226793336a5e0a1ef9a4c8f71cbe7cacfeb23 (regenerated at the integrated head; provenance: branch + sha only)
 paths: manager kernel market config store agent branding internal ninjascript screenshots cmd scripts deploy docker nginx .github patches hook telegram provider/ninjatrader provider/databento trader/ninjatrader SECURITY.md Makefile .env.example docs/superpowers/AUDIT-CHECKLIST.md docs/superpowers/SYSTEM-MAP.md trader/auto_trader_decision.go api/handler_debug.go api/strategy_effective.go api/handler_competition.go api/handler_plan_order_truth.go api/handler_order.go api/handler_trader_config.go trader/protection_reconciler.go
 regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续|btc|ethusdt|\beth\b|altcoin|ethereum
 
@@ -637,49 +637,54 @@ regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\bast
 | store/knob_registry_table.go | 15 | `altcoin` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
 | store/knob_registry_table.go | 26 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
 | store/knob_registry_table.go | 27 | `btc` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
-| store/legacy_crypto_rows_c1_test.go | 41 | `hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 42 | `hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 46 | `wallet` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 60 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 62 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 63 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 64 | `oi_top` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 65 | `oi_top` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 66 | `hyper_all` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 67 | `hyper_main` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 68 | `netflow` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 71 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 82 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 83 | `altcoin` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 119 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 121 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 131 | `hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 132 | `aster` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 133 | `wallet` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 134 | `lighter` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 142 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 155 | `Hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 156 | `Hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 157 | `aster` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 158 | `aster` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 159 | `Wallet` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 184 | `Hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 185 | `Hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 188 | `Wallet` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 200 | `claw402` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 201 | `Claw402` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 40 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 42 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 43 | `ai500` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 44 | `oi_top` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 45 | `oi_top` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 46 | `hyper_all` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 47 | `hyper_main` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 48 | `netflow` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 51 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 62 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 63 | `altcoin` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 102 | `hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 103 | `hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 107 | `wallet` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 120 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 122 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 132 | `hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 133 | `hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 134 | `aster` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 135 | `aster` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 136 | `aster` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 137 | `wallet` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 138 | `lighter` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 139 | `lighter` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 148 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 161 | `Hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 162 | `Hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 163 | `aster` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 164 | `aster` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 165 | `Wallet` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 192 | `Hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 193 | `Hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 196 | `Wallet` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
 | store/legacy_crypto_rows_c1_test.go | 208 | `claw402` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 237 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 244 | `Hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 246 | `Wallet` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 256 | `Hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 257 | `Hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 261 | `Wallet` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 270 | `hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 272 | `wallet` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 348 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 351 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
-| store/legacy_crypto_rows_c1_test.go | 352 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 209 | `Claw402` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 216 | `claw402` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 245 | `binance` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 251 | `Hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 252 | `Hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 255 | `Wallet` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 270 | `Hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 271 | `Hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 275 | `Wallet` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 284 | `hyperliquid` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 286 | `wallet` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 362 | `btc` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 365 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
+| store/legacy_crypto_rows_c1_test.go | 366 | `BTC` | KEEP | CR-B | test fixture — pins the guard KEEP surfaces (byte-identical) |
 | store/strategy.go | 49 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
 | store/strategy.go | 153 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |
 | store/strategy.go | 154 | `BTC` | KEEP | CR-B | risk-cap knob family (union-gate risk-cap canary) |

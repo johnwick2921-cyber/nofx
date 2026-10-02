@@ -1,10 +1,10 @@
 # CR-C disposition table — web + docs (crypto removal, part CR-C, regenerated at the integrated head)
 
 - branch point: b6648fcab9cf495e316ef5492ec6852cc3fcc2cf (integration head branched from)
-- integrator tip at generation: 1760ea0ab82a058da7c95ac49a570c76744eaa6a (regenerated at the integrated head; provenance: branch + sha only)
+- integrator tip at generation: 133226793336a5e0a1ef9a4c8f71cbe7cacfeb23 (regenerated at the integrated head; provenance: branch + sha only)
 - paths: web docs :(exclude)docs/crypto-removal
 - regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续|btc|ethusdt|\beth\b|altcoin|ethereum
-- line rows: 237 · blanket-KEEP paths: 207
+- line rows: 238 · blanket-KEEP paths: 207
 
 | path | line | token | disposition | owner | reason |
 |---|---|---|---|---|---|
@@ -49,6 +49,7 @@
 | docs/internal/inventory/page-5-strategy.md | 110 | `btc` | KEEP | CR-C | historical doc — not shipped code, KEEP byte-identical |
 | docs/internal/inventory/page-5-strategy.md | 218 | `BTC` | KEEP | CR-C | historical doc — not shipped code, KEEP byte-identical |
 | docs/operations/MONITORING.md | 27 | `ETH` | KEEP | CR-C | historical doc — not shipped code, KEEP byte-identical |
+| docs/plans/2026-01-14-grid-trading-fixes.md | 574 | `Wallet` | KEEP | CR-C | historical doc — not shipped code, KEEP byte-identical |
 | docs/plans/2026-03-06-telegram-agent-redesign.md | 760 | `BTC` | KEEP | CR-C | historical doc — not shipped code, KEEP byte-identical |
 | docs/plans/2026-03-06-telegram-agent-redesign.md | 772 | `BTC` | KEEP | CR-C | historical doc — not shipped code, KEEP byte-identical |
 | docs/plans/2026-03-06-telegram-agent-redesign.md | 778 | `BTC` | KEEP | CR-C | historical doc — not shipped code, KEEP byte-identical |
@@ -77,7 +78,7 @@
 | web/package-lock.json | 3812 | `okX` | KEEP | CR-C | npm integrity hash — incidental base64 substring, KEEP byte-identical |
 | web/package-lock.json | 4158 | `oKX` | KEEP | CR-C | npm integrity hash — incidental base64 substring, KEEP byte-identical |
 | web/src/components/agent/PositionsPanel.tsx | 5 | `Wallet` | KEEP | CR-C | lucide icon name restored per CTO ruling (original name — KEEP) |
-| web/src/components/agent/PositionsPanel.tsx | 47 | `Wallet` | KEEP | CR-C | lucide icon name restored per CTO ruling (original name — KEEP) |
+| web/src/components/agent/PositionsPanel.tsx | 46 | `Wallet` | KEEP | CR-C | lucide icon name restored per CTO ruling (original name — KEEP) |
 | web/src/components/auth/LoginRequiredOverlay.tsx | 53 | `lighter` | KEEP | CR-C | incidental color-token name — not the venue |
 | web/src/components/auth/LoginRequiredOverlay.tsx | 98 | `lighter` | KEEP | CR-C | incidental color-token name — not the venue |
 | web/src/components/charts/EquityChart.tsx | 85 | `binance` | KEEP | CR-C | CSS token/class name restored per CTO removal-only ruling (names that stay are NOT renamed — KEEP) |
