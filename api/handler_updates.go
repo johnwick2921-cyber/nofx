@@ -580,25 +580,10 @@ func (s *Server) handleUpdatesCheck(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"checked": false, "reason": "rate limited, try later"})
 	case "up_to_date":
 		d := checkDetailFrom(resp.Detail)
-		c.JSON(http.StatusOK, gin.H{
-			"checked":          true,
-			"available":        false,
-			"ready":            false,
-			"tag":              d.Tag,
-			"target_commitish": d.TargetCommitish,
-			"reason":           "up to date",
-		})
+		c.JSON(http.StatusOK, checkAnswerUpToDate(d))
 	case "verified_ready":
 		d := checkDetailFrom(resp.Detail)
-		c.JSON(http.StatusOK, gin.H{
-			"checked":          true,
-			"available":        true,
-			"ready":            true,
-			"tag":              d.Tag,
-			"target_commitish": d.TargetCommitish,
-			"source_sha":       d.SourceSHA,
-			"reason":           "verified, ready",
-		})
+		c.JSON(http.StatusOK, checkAnswerVerifiedReady(d))
 	case "error":
 		d := checkDetailFrom(resp.Detail)
 		reason := d.Reason
@@ -608,6 +593,35 @@ func (s *Server) handleUpdatesCheck(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"checked": false, "reason": reason})
 	default:
 		c.JSON(http.StatusOK, gin.H{"checked": false, "reason": "check failed"})
+	}
+}
+
+// checkAnswerVerifiedReady / checkAnswerUpToDate are the ONLY builders of
+// the two check answers the web client reads. Named builders so the parity
+// fixture test (handler_updates_check_fixture_test.go) serialises the REAL
+// wire shape into web/src/lib/api/fixtures/updates-check.json and the
+// vitest side consumes that fixture — the web can never drift from the
+// wire again (P0 field-names hotfix, owner 10-02 12:2x CT).
+func checkAnswerVerifiedReady(d checkDetail) gin.H {
+	return gin.H{
+		"checked":          true,
+		"available":        true,
+		"ready":            true,
+		"tag":              d.Tag,
+		"target_commitish": d.TargetCommitish,
+		"source_sha":       d.SourceSHA,
+		"reason":           "verified, ready",
+	}
+}
+
+func checkAnswerUpToDate(d checkDetail) gin.H {
+	return gin.H{
+		"checked":          true,
+		"available":        false,
+		"ready":            false,
+		"tag":              d.Tag,
+		"target_commitish": d.TargetCommitish,
+		"reason":           "up to date",
 	}
 }
 
