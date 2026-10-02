@@ -333,14 +333,10 @@ export const updatesApi = {
     releaseId: string,
     password: string
   ): Promise<InstallWithPasswordResult> {
+    const payload = { release_id: releaseId, password }
     const res = await httpClient.request<{ job_id: string; error?: string }>(
       `${API_BASE}/updates/install-with-password`,
-      {
-        method: 'POST',
-        data: { release_id: releaseId, password },
-        headers: UPDATE_HEADERS,
-        silent: true,
-      }
+      { method: 'POST', data: payload, headers: UPDATE_HEADERS, silent: true }
     )
     if (res.success && res.data?.job_id) {
       return { ok: true, job_id: res.data.job_id }
