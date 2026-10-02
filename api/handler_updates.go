@@ -763,16 +763,16 @@ type installPasswordLimiter struct {
 
 var apiInstallPasswordLimiter = &installPasswordLimiter{m: make(map[string]*loginLimiterEntry)}
 
-func (l *installPasswordLimiter) blocked(now time.Time, key string) (time.Duration, bool) {
+func (l *installPasswordLimiter) blocked(now time.Time, adminID string) (time.Duration, bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if e := l.m[key]; e != nil && e.blockedUntil.After(now) {
+	if e := l.m[adminID]; e != nil && e.blockedUntil.After(now) {
 		return e.blockedUntil.Sub(now), true
 	}
 	return 0, false
 }
 
-func (l *installPasswordLimiter) recordFail(now time.Time, key string) time.Duration {
+func (l *installPasswordLimiter) recordFail(now time.Time, adminID string) time.Duration {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if len(l.m) > loginLimiterMaxKeys {
@@ -782,10 +782,10 @@ func (l *installPasswordLimiter) recordFail(now time.Time, key string) time.Dura
 			}
 		}
 	}
-	e := l.m[key]
+	e := l.m[adminID]
 	if e == nil || now.Sub(e.windowStart) > installPasswordFailWindow {
 		e = &loginLimiterEntry{windowStart: now}
-		l.m[key] = e
+		l.m[adminID] = e
 	}
 	e.fails++
 	if e.fails >= installPasswordBlockAfter {
@@ -795,10 +795,10 @@ func (l *installPasswordLimiter) recordFail(now time.Time, key string) time.Dura
 	return 0
 }
 
-func (l *installPasswordLimiter) clear(key string) {
+func (l *installPasswordLimiter) clear(adminID string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	delete(l.m, key)
+	delete(l.m, adminID)
 }
 
 // handleUpdatesInstallWithPassword — POST /api/updates/install-with-password.

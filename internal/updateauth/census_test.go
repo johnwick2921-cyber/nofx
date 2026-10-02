@@ -182,7 +182,7 @@ var (
 	// that may reference it. An empty set = nobody outside.
 	updateAuthRestricted = map[string]map[string]bool{
 		"Enroll":        {"internal/updaterbootstrap/bootstrap.go": true},
-		"Authorize":     {"internal/updaterbootstrap/bootstrap.go": true},
+		"Authorize":     {"internal/updaterbootstrap/bootstrap.go": true, "api/handler_updates.go": true}, // owner order 10-02 07:3x: install-with-password mints the grant server-side with the SAME Authorize the attended CLI uses (runInstall consumes it)
 		"ComputeMAC":    {},
 		"Message":       {},
 		"LoadDeviceKey": {"api/handler_updates.go": true},
@@ -265,7 +265,7 @@ func TestUpdateAuthCensusTablesArePinned(t *testing.T) {
 		restricted = append(restricted, name+"="+keys(files))
 	}
 	sort.Strings(restricted)
-	want := "AdminPath=internal/updaterbootstrap/bootstrap.go;Authorize=internal/updaterbootstrap/bootstrap.go;ComputeMAC=;" +
+	want := "AdminPath=internal/updaterbootstrap/bootstrap.go;Authorize=api/handler_updates.go,internal/updaterbootstrap/bootstrap.go;ComputeMAC=;" +
 		"Consume=api/handler_updates.go;DeviceKeyPath=internal/updaterbootstrap/bootstrap.go;Dir=internal/updaterbootstrap/bootstrap.go;" +
 		"Enroll=internal/updaterbootstrap/bootstrap.go;LoadAdmin=api/handler_updates.go,internal/updaterbootstrap/bootstrap.go;LoadDeviceKey=api/handler_updates.go;" +
 		"Message=;NoteExpired=api/handler_updates.go;SeenPath=;VerifyMAC=api/handler_updates.go"
