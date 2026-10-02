@@ -27,8 +27,8 @@ func TestReleaseRepoMatchesWorkflowContract(t *testing.T) {
 		rest = rest[:nl]
 	}
 	got := strings.TrimSpace(rest)
-	if got != DefaultReleaseRepo {
-		t.Fatalf("release.yml RELEASE_REPO = %q, DefaultReleaseRepo = %q", got, DefaultReleaseRepo)
+	if got != ReleaseRepo {
+		t.Fatalf("release.yml RELEASE_REPO = %q, ReleaseRepo = %q", got, ReleaseRepo)
 	}
 }
 
