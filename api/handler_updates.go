@@ -18,6 +18,7 @@ import (
 	"vl/internal/updaterjob"
 	"vl/internal/updatersource"
 	"vl/internal/updaterwire"
+	"vl/internal/updatescheck"
 	"vl/logger"
 	"vl/telemetry"
 	"vl/trader"
@@ -580,10 +581,10 @@ func (s *Server) handleUpdatesCheck(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"checked": false, "reason": "rate limited, try later"})
 	case "up_to_date":
 		d := checkDetailFrom(resp.Detail)
-		c.JSON(http.StatusOK, checkAnswerUpToDate(d))
+		c.JSON(http.StatusOK, updatescheck.UpToDate(d.detail()))
 	case "verified_ready":
 		d := checkDetailFrom(resp.Detail)
-		c.JSON(http.StatusOK, checkAnswerVerifiedReady(d))
+		c.JSON(http.StatusOK, updatescheck.VerifiedReady(d.detail()))
 	case "error":
 		d := checkDetailFrom(resp.Detail)
 		reason := d.Reason
@@ -596,35 +597,9 @@ func (s *Server) handleUpdatesCheck(c *gin.Context) {
 	}
 }
 
-// checkAnswerVerifiedReady / checkAnswerUpToDate are the ONLY builders of
-// the two check answers the web client reads. Named builders so the parity
-// fixture test (handler_updates_check_fixture_test.go) serialises the REAL
-// wire shape into web/src/lib/api/fixtures/updates-check.json and the
-// vitest side consumes that fixture — the web can never drift from the
-// wire again (P0 field-names hotfix, owner 10-02 12:2x CT).
-func checkAnswerVerifiedReady(d checkDetail) gin.H {
-	return gin.H{
-		"checked":          true,
-		"available":        true,
-		"ready":            true,
-		"tag":              d.Tag,
-		"target_commitish": d.TargetCommitish,
-		"source_sha":       d.SourceSHA,
-		"reason":           "verified, ready",
-	}
-}
-
-func checkAnswerUpToDate(d checkDetail) gin.H {
-	return gin.H{
-		"checked":          true,
-		"available":        false,
-		"ready":            false,
-		"tag":              d.Tag,
-		"target_commitish": d.TargetCommitish,
-		"reason":           "up to date",
-	}
-}
-
+// The two check answers come from internal/updatescheck — the single
+// source shared with the parity test and the fixture generator
+// (cmd/gen-updates-check-fixture). Never build them inline here.
 // checkDetail is the worker's CheckDetail as the relay re-reads it. The relay
 // re-parses (never re-interprets) the worker's own JSON.
 type checkDetail struct {
@@ -634,6 +609,15 @@ type checkDetail struct {
 	TargetCommitish string `json:"target_commitish"`
 	SourceSHA       string `json:"source_sha"`
 	Reason          string `json:"reason"`
+}
+
+// detail is the updatescheck view of the parsed worker answer.
+func (d checkDetail) detail() updatescheck.Detail {
+	return updatescheck.Detail{
+		Tag:             d.Tag,
+		TargetCommitish: d.TargetCommitish,
+		SourceSHA:       d.SourceSHA,
+	}
 }
 
 func checkDetailFrom(raw string) checkDetail {
