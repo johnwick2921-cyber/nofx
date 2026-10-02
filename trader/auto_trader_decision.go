@@ -2,14 +2,14 @@ package trader
 
 import (
 	"fmt"
+	"strings"
+	"time"
 	"vl/discipline"
 	"vl/kernel"
 	"vl/logger"
 	"vl/market"
 	"vl/store"
 	"vl/telemetry"
-	"strings"
-	"time"
 )
 
 // saveEquitySnapshot saves equity snapshot independently (for drawing profit curve, decoupled from AI decision)
