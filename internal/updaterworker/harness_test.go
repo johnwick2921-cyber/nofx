@@ -92,7 +92,6 @@ type box struct {
 	lockAcquireErr      error
 
 	// knobs
-	lockHeld         bool
 	flat             bool
 	addonConnected   bool
 	addonBuild       string // what the running AddOn reports
@@ -206,7 +205,7 @@ func newRig(t *testing.T, opts ...rigOpt) *rig {
 		inst: filepath.Join(root, "nofx"), backupRoot: filepath.Join(root, "nofx-backups", "updater"),
 		binName: "nofx-bin",
 		id:      Identity{PID: 4242, StartTicks: 1000}, running: boxOld,
-		lockHeld: true, flat: true, addonConnected: true, addonBuild: boxOldBuild, manifestBuild: boxOldBuild,
+		flat: true, addonConnected: true, addonBuild: boxOldBuild, manifestBuild: boxOldBuild,
 		absentSim:  true,
 		refuseBoot: map[string]bool{}, watchFail: map[string]bool{},
 	}
@@ -660,14 +659,6 @@ func (h *fakeHost) Sleep(ctx context.Context, d time.Duration) error {
 	return nil
 }
 
-func (h *fakeHost) MainTreeLockHeld() (bool, string, error) {
-	if h.b.lockHeld {
-		return true, "check rc=1", nil
-	}
-	return false, "check rc=0", nil
-}
-
-// LockHolder simulates the lock script's status: "" free, else the holder.
 func (h *fakeHost) LockHolder() (string, error) {
 	h.b.mu.Lock()
 	defer h.b.mu.Unlock()
