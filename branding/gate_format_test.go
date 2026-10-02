@@ -52,6 +52,15 @@ func TestCryptoUnionGateCanonicalFormat(t *testing.T) {
 	git := func(args ...string) string {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = tmp
+		// CI runners have no git identity; pin author + committer for every
+		// git call this synthetic repo makes (commits must not fail with
+		// "empty ident name").
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=gate-test",
+			"GIT_AUTHOR_EMAIL=gate-test@example.invalid",
+			"GIT_COMMITTER_NAME=gate-test",
+			"GIT_COMMITTER_EMAIL=gate-test@example.invalid",
+		)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("git %v: %v\n%s", args, err, out)
