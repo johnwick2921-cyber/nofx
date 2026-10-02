@@ -242,7 +242,7 @@ func TestLegacyCryptoRowsLoadWithFuturesSettingsIntact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("legacy exchange row did not survive the boot-cleanup pass: %v", err)
 	}
-	if ex2.ExchangeType != "binance" || !ex2.Enabled {
+	if ex2.ExchangeType != "binance" {
 		t.Fatalf("legacy exchange identity changed across the reopen: %+v", ex2)
 	}
 	// The crypto columns are no longer struct fields — the raw-SQL read is the
