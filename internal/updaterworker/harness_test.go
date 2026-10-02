@@ -94,6 +94,7 @@ type box struct {
 	// knobs
 	flat             bool
 	addonConnected   bool
+	pollHook         func() // run at every fake-host sleep boundary (planner-wait tests)
 	addonBuild       string // what the running AddOn reports
 	manifestBuild    string // the signed manifest's addon.build_id
 	refuseBoot       map[string]bool
@@ -656,6 +657,9 @@ func (h *fakeHost) Sleep(ctx context.Context, d time.Duration) error {
 		return err
 	}
 	h.b.clock.Advance(d)
+	if h.b.pollHook != nil {
+		h.b.pollHook()
+	}
 	return nil
 }
 
