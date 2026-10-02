@@ -32,7 +32,7 @@ func TestDeskLinkFollowsRealSocket(t *testing.T) {
 		t.Fatalf("dial: %v", err)
 	}
 	defer client.Close()
-	waitDesk(t, 2*time.Second, func() bool { return srv.IsConnected() })
+	waitAddonRegistered(t, srv) // CTO M7: the producer must not race the accept
 
 	at := NewAutoTraderOnBrokerForTest("t-desk", "ninjatrader", ntTrader.NewTCPTrader(srv, "MNQ", "Sim101"), true)
 	if link, known := at.deskLinkStatus(); !known || link != "up" {

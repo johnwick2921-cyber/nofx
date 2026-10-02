@@ -80,9 +80,11 @@ type NT8AbsentView struct {
 }
 
 // plannerClaimStarts returns the OLDEST claim-started wall time across the
-// four planner in-flight maps, or ok=false when nothing is claimed (F1). The
-// values are written by the claim sites (claimPlannerRead / claimWeeklyRead /
-// flipRereadInFlight / deathRereadInFlight), all time.Time.
+// four planner in-flight maps, or ok=false when nothing is claimed or no claim
+// carried a time (F1). The claim sites (claimPlannerRead / claimWeeklyRead /
+// flipRereadInFlight / deathRereadInFlight) store time.Time; a held claim with
+// no time (a test fixture storing the old struct{}/bool shape) is tolerated —
+// its identity is reported by the leg, the started time is simply absent.
 func plannerClaimStarts() (oldest time.Time, ok bool) {
 	for _, m := range []*sync.Map{&plannerReadInFlight, &weeklyReadClaim, &flipRereadInFlight, &deathRereadInFlight} {
 		m.Range(func(_, v any) bool {
@@ -260,8 +262,12 @@ func InstallationGateStatus(loaded map[string]*AutoTrader, st *store.Store) (g I
 				held = append(held, m.name+"["+k+"]")
 			}
 		}
-		if start, ok := plannerClaimStarts(); ok {
-			return false, fmt.Sprintf("waiting for the AI plan (started %s)", start.Format("15:04:05"))
+		if len(held) > 0 {
+			inFlight := strings.Join(held, ", ")
+			if start, ok := plannerClaimStarts(); ok {
+				return false, fmt.Sprintf("waiting for the AI plan (started %s) — IN FLIGHT: %s", start.Format("15:04:05"), inFlight)
+			}
+			return false, "waiting for the AI plan — IN FLIGHT: " + inFlight
 		}
 		return true, "no planner-class read claimed, any trader"
 	}
