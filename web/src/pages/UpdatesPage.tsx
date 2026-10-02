@@ -316,9 +316,11 @@ export default function UpdatesPage() {
   // install-with-password (owner order 10-02 07:3x CT): the PRIMARY
   // flow — the release id comes from the last Check the SERVER affirmed; the
   // password is sent only in the request body and never rendered anywhere.
-  const releaseId = check?.release_id || check?.latest_tag || null
+  const releaseId = check?.tag || null
+  const availableReady = check?.available === true && check?.ready === true
   const passwordInstallDisabled =
-    installDisabled || installing || !password.trim() || !releaseId
+    installDisabled || installing || !password.trim() || !releaseId ||
+    !availableReady
 
   const doInstallWithPassword = useCallback(async () => {
     if (INSTALL_AUTHZ_UNDER_REVIEW || installing) return
@@ -559,25 +561,34 @@ export default function UpdatesPage() {
             {up('checkReason', language)}: {check.reason || na(language)}
           </p>
         )}
-        {check?.update_available === true && (
+        {check?.available === true && check?.ready === true && (
           <p
             className="mt-2 text-xs text-emerald-400 font-semibold"
             data-testid="update-available"
           >
             {up('updateAvailableVerified', language).replace(
               '{tag}',
-              check.latest_tag || ''
+              check.tag || ''
             )}
           </p>
         )}
-        {check?.rate_limited === true && (
+        {check?.available === true && check?.ready !== true && (
           <p
             className="mt-2 text-xs text-amber-400"
-            data-testid="check-rate-limited"
+            data-testid="update-not-ready"
           >
-            {up('rateLimited', language)}
+            {up('updateNotReady', language).replace('{tag}', check.tag || '')}
           </p>
         )}
+        {check?.checked === false &&
+          /rate limited/i.test(check?.reason || '') && (
+            <p
+              className="mt-2 text-xs text-amber-400"
+              data-testid="check-rate-limited"
+            >
+              {up('rateLimited', language)}
+            </p>
+          )}
         {(status?.install_state === 'downloading' ||
           status?.install_state === 'verifying') && (
           <p

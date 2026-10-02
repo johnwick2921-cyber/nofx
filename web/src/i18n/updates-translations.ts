@@ -73,6 +73,11 @@ export const updatesStrings = {
     zh: '发现新版本 {tag} — 已验证',
     id: 'Pembaruan tersedia {tag} — terverifikasi',
   },
+  updateNotReady: {
+    en: 'Update available {tag} — not yet verified',
+    zh: '发现新版本 {tag} — 尚未验证',
+    id: 'Pembaruan tersedia {tag} — belum terverifikasi',
+  },
   rateLimited: {
     en: 'rate limited, try later',
     zh: '请求受限，请稍后再试',
