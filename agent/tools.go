@@ -397,7 +397,7 @@ func exchangeConfigFieldsSchema() map[string]any {
 		},
 		"exchange_type": map[string]any{
 			"type":        "string",
-			"description": "Exchange type; only ninjatrader is supported for new accounts.",
+			"description": "Exchange type.",
 		},
 		"account_name": map[string]any{
 			"type":        "string",
@@ -650,7 +650,7 @@ func buildAgentTools() []mcp.Tool {
 			Type: "function",
 			Function: mcp.FunctionDef{
 				Name:        "execute_trade",
-				Description: "Execute a trade order (futures or US stocks). Use this only when the user explicitly asks to trade. For stocks (e.g. AAPL, TSLA), use open_long to buy and close_long to sell. This creates a pending trade first; it does not execute immediately. Large orders require an extra confirmation with 确认大额 trade_xxx / confirm large trade_xxx, and pending trades expire after 5 minutes.",
+				Description: "Execute a trade order (US stocks). Use this only when the user explicitly asks to trade. For stocks (e.g. AAPL, TSLA), use open_long to buy and close_long to sell. This creates a pending trade first; it does not execute immediately. Large orders require an extra confirmation with 确认大额 trade_xxx / confirm large trade_xxx, and pending trades expire after 5 minutes.",
 				Parameters: map[string]any{
 					"type": "object",
 					"properties": map[string]any{
@@ -661,7 +661,7 @@ func buildAgentTools() []mcp.Tool {
 						},
 						"symbol": map[string]any{
 							"type":        "string",
-							"description": "Trading symbol. For futures: MNQ, MES. For US stocks: AAPL, TSLA, NVDA (no suffix needed).",
+							"description": "Trading symbol. For US stocks: AAPL, TSLA, NVDA (no suffix needed).",
 						},
 						"quantity": map[string]any{
 							"type":        "number",
@@ -704,13 +704,13 @@ func buildAgentTools() []mcp.Tool {
 			Type: "function",
 			Function: mcp.FunctionDef{
 				Name:        "get_market_price",
-				Description: "Get the current market price for a futures or stock symbol.",
+				Description: "Get the current market price for a stock symbol.",
 				Parameters: map[string]any{
 					"type": "object",
 					"properties": map[string]any{
 						"symbol": map[string]any{
 							"type":        "string",
-							"description": "Trading symbol, e.g. MNQ for futures, AAPL for stocks",
+							"description": "Trading symbol, e.g. AAPL for stocks",
 						},
 					},
 					"required": []string{"symbol"},

@@ -466,7 +466,7 @@ func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 		return fmt.Sprintf(`你是 `+branding.PersonaName()+`，一个专业的 AI 交易 Agent。你不是一个简单的聊天机器人——你是用户的交易伙伴。
 
 ## 你的核心能力
-1. **市场分析** — CME 期货（MNQ 等）与美股有实时数据，A股/港股/外汇你可以基于知识分析
+1. **市场分析** — A股/港股/美股/外汇你可以基于知识分析
 2. **交易管理** — 查看持仓、余额、交易历史、Trader 状态
 3. **策略建议** — 根据用户需求制定交易策略
 4. **策略模板管理** — 创建、查看、修改、删除、激活策略模板
@@ -478,7 +478,6 @@ func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 %s
 
 ## 数据说明（极其重要，违反即失职！）
-- CME 期货（MNQ）：NinjaTrader 实时数据，标注 [Real-time]
 - A股/港股/美股：**必须调用 search_stock 工具**获取实时行情。不调工具就没有数据。
 - 美股盘前盘后：search_stock 返回的 quote 中 ext_price/ext_change_pct/ext_time
 - 外汇/指数期货：当前没有数据源，如实告知
@@ -495,10 +494,10 @@ func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 ## 工具使用
 你可以调用以下工具来执行操作：
 - **search_stock** — 搜索股票（支持中文名、英文名、代码）。当用户提到你不认识的股票时，先用这个工具搜索。
-- **execute_trade** — 下单交易（期货或美股）。常见写法："做多 MNQ 1"、"做空 MNQ 1"、"平多 MNQ"、"平空 MNQ"；英文也支持 "long MNQ 1"、"short MNQ 1"、"close long MNQ"、"close short MNQ"。美股：open_long=买入，close_long=卖出。调用后先创建待确认订单，不会立刻成交。若触发大额风控，用户必须回复"确认大额 trade_xxx"；待确认订单 5 分钟后自动失效。
-- **get_positions** — 查看当前所有持仓（期货 + 股票）
+- **execute_trade** — 下单交易（美股）。美股：open_long=买入，close_long=卖出。调用后先创建待确认订单，不会立刻成交。若触发大额风控，用户必须回复"确认大额 trade_xxx"；待确认订单 5 分钟后自动失效。
+- **get_positions** — 查看当前所有持仓（股票）
 - **get_balance** — 查看账户余额
-- **get_market_price** — 获取实时价格（期货或股票代码）
+- **get_market_price** — 获取实时价格（股票代码）
 - **get_exchange_configs / manage_exchange_config** — 查看、新增、修改、删除交易所绑定配置
 - **get_model_configs / manage_model_config** — 查看、新增、修改、删除 AI 模型配置
 - **get_strategies / manage_strategy** — 查看、新增、修改、删除、激活、复制策略模板
@@ -564,7 +563,6 @@ func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 %s
 
 ## Data Notice (CRITICAL — violating this is unacceptable!)
-- CME futures (MNQ): NinjaTrader real-time data, marked [Real-time]
 - Stocks: You MUST call search_stock tool to get real-time quotes. No tool call = no data.
 - US stocks pre/after-hours: ext_price/ext_change_pct/ext_time in search_stock results
 - Forex/Index futures: No data source currently — tell user honestly
@@ -581,10 +579,10 @@ func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 ## Tools
 You can call these tools to take action:
 - **search_stock** — Search for stocks by name, ticker, or code. Covers A-share, HK, and US markets. Use when the user mentions an unknown stock.
-- **execute_trade** — Place a trade order (futures or US stocks). Common phrasings include "long MNQ 1", "short MNQ 1", "close long MNQ", and "close short MNQ". For stocks: open_long=buy, close_long=sell. This creates a pending trade first; it does not execute immediately. Large orders require "confirm large trade_xxx", and pending trades expire after 5 minutes.
-- **get_positions** — View all current open positions (futures + stocks)
+- **execute_trade** — Place a trade order (US stocks). For stocks: open_long=buy, close_long=sell. This creates a pending trade first; it does not execute immediately. Large orders require "confirm large trade_xxx", and pending trades expire after 5 minutes.
+- **get_positions** — View all current open positions (stocks)
 - **get_balance** — View account balance and equity
-- **get_market_price** — Get real-time price from the exchange (futures or stock symbol)
+- **get_market_price** — Get real-time price from the exchange (stock symbol)
 - **get_exchange_configs / manage_exchange_config** — View, create, update, and delete exchange bindings
 - **get_model_configs / manage_model_config** — View, create, update, and delete AI model bindings
 - **get_strategies / manage_strategy** — View, create, update, delete, activate, and duplicate strategy templates
@@ -759,9 +757,9 @@ func (a *Agent) noAIFallback(storeUserID, lang, text string) (string, error) {
 	}
 
 	if lang == "zh" {
-		return "🤖 我是 " + branding.PersonaName() + "。配置 AI 模型后我就能理解你的任何问题——分析股票、制定策略、管理交易。\n\n现在可用：\n• 期货实时行情（试试「MNQ」）\n• `/status` 查看系统状态\n• `/clear` 清空当前对话记忆\n\n发送 *开始配置* 配置 AI 模型。", nil
+		return "🤖 我是 " + branding.PersonaName() + "。配置 AI 模型后我就能理解你的任何问题——分析股票、制定策略、管理交易。\n\n现在可用：\n• `/status` 查看系统状态\n• `/clear` 清空当前对话记忆\n\n发送 *开始配置* 配置 AI 模型。", nil
 	}
-	return "🤖 I'm " + branding.PersonaName() + ". Configure an AI model and I can understand anything — analyze stocks, build strategies, manage trades.\n\nAvailable now:\n• Futures real-time data (try 'MNQ')\n• `/status` to check system status\n• `/clear` to clear the current conversation memory\n\nSend *setup* to configure AI.", nil
+	return "🤖 I'm " + branding.PersonaName() + ". Configure an AI model and I can understand anything — analyze stocks, build strategies, manage trades.\n\nAvailable now:\n• `/status` to check system status\n• `/clear` to clear the current conversation memory\n\nSend *setup* to configure AI.", nil
 }
 
 func (a *Agent) aiServiceFailure(lang string, err error) (string, error) {

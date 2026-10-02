@@ -292,7 +292,7 @@ Creates a NEW independently-addressable row (unique id) so a provider can hold m
 
 			// Exchange configuration
 			s.routeWithSchema(protected, "GET", "/exchanges", "List exchange accounts",
-				`Returns: [{"id":"<EXACT id — use this as exchange_id when creating/updating a trader>","exchange_type":"ninjatrader","account_name":"<user label>","enabled":<bool>}]
+				`Returns: [{"id":"<EXACT id — use this as exchange_id when creating/updating a trader>","exchange_type":"<string>","account_name":"<user label>","enabled":<bool>}]
 CRITICAL: Always use the "id" field for exchange_id. Do not use "exchange_type" as an id.`,
 				s.handleGetExchangeConfigs)
 			s.routeWithSchema(protected, "GET", "/exchanges/account-state", "Get connection and balance state for each exchange account",
@@ -300,12 +300,10 @@ CRITICAL: Always use the "id" field for exchange_id. Do not use "exchange_type" 
 Use this endpoint to show balance and health in the exchange list without depending on traders.`,
 				s.handleGetExchangeAccountStates)
 			s.routeWithSchema(protected, "POST", "/exchanges", "Create a new exchange account",
-				`Body: {"exchange_type":"ninjatrader","account_name":"<string, user label>","enabled":true,"api_key":"<string>","secret_key":"<string>","passphrase":"<string, optional>"}
-The only supported exchange_type for new accounts is "ninjatrader" (CME futures, SIM execution). Required fields by exchange:
-  ninjatrader: account_name; api_key/secret_key/passphrase optional`,
+				`Body: {"exchange_type":"<string>","account_name":"<string, user label>","enabled":true,"api_key":"<string>","secret_key":"<string>","passphrase":"<string>"}`,
 				s.handleCreateExchange)
 			s.routeWithSchema(protected, "PUT", "/exchanges", "Update an existing exchange account configuration",
-				`Body: {"id":"<EXACT id from GET /api/exchanges>","exchange_type":"ninjatrader","account_name":"<string>","enabled":<bool>,"api_key":"<string>","secret_key":"<string>","passphrase":"<string, optional>"}
+				`Body: {"id":"<EXACT id from GET /api/exchanges>","exchange_type":"<string>","account_name":"<string>","enabled":<bool>,"api_key":"<string>","secret_key":"<string>","passphrase":"<string>"}
 Use this to enable/disable an exchange or update API credentials. The "id" field is required to identify which exchange to update.`,
 				s.handleUpdateExchangeConfigs)
 			s.routeWithSchema(protected, "DELETE", "/exchanges/:id", "Delete exchange account",
