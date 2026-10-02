@@ -1,11 +1,11 @@
 # Crypto-removal disposition table — CR-B (DS-107), plan v10 FINAL
 # The gate (scripts/crypto-union-gate.sh, DS-102) owns this format: headers below + plain pipe rows.
 branch-point: 44e02e6ad101bb46d4ef0d13b1948696c7dd5d54
-integrator-tip: bc6f2f43c7126321e00952de39ad2f4abfcd5462
+integrator-tip: 74e443e080f039fc0e9a982fc053cb704392f856
 paths: manager kernel market config store agent branding internal ninjascript screenshots cmd scripts deploy docker nginx .github patches hook telegram provider/ninjatrader provider/databento trader/ninjatrader SECURITY.md Makefile .env.example docs/superpowers/AUDIT-CHECKLIST.md docs/superpowers/SYSTEM-MAP.md trader/auto_trader_decision.go api/handler_debug.go api/strategy_effective.go api/handler_competition.go api/handler_plan_order_truth.go api/handler_order.go api/handler_trader_config.go trader/protection_reconciler.go
 regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\baster\b|asterdex|\blighter\b|coinank|usdc|usdt|x402|claw402|blockrun|wallet|ai500|hyper_all|hyper_main|oi_top|oi_low|netflow|quant\b|price ranking|"mixed"|币安|欧易|火币|U本位|永续|btc|ethusdt|\beth\b|altcoin|ethereum
-# Generated:  @ bc6f2f43c712 (2026-10-02T06:16:20.361579+00:00); branch + sha only, never a filesystem path
-# Swept: 636 tracked non-test files under CR-B paths (git ls-files -z, grep -I semantics); hits in 46 files.
+# Generated:  @ 74e443e080f0 (2026-10-02T07:07:04.947639+00:00); branch + sha only, never a filesystem path
+# Swept: 636 tracked non-test files under CR-B paths (git ls-files -z, grep -I semantics); hits in 45 files.
 # EXACTLY ONE OWNER PER HIT LINE (Finding 3 file-level ruling): CR-A-owned lines are ceded rows (owner CR-A, disposition mirrored from their canonical table); everything else here is CR-B. One file, one owner.
 # Dispositions are reconciled to the tree (CTO ruling 2026-10-01): KEEP =
 # futures-core text kept as-is; CUT = crypto content in a KEPT file, the cut is
@@ -40,7 +40,6 @@ regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\bast
 | agent/central_brain.go | 1178 | altcoin | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
 | agent/central_brain.go | 1200 | btc | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
 | agent/central_brain.go | 1201 | altcoin | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
-| agent/skill_domain_context.go | 41 | wallet | CUT | CR-B | CTO-ruled follow-up residue (ruling 10-01 19:48) — unreachable for the ninjatrader trader; cut in the follow-up wave |
 | agent/skill_execution_handlers.go | 545 | btc | KEEP | CR-B | live futures risk caps (crypto-named) — KEEP byte-identical; the rename is a separate owner-gated wave (CTO ruling 10-01 10:5x) |
 | agent/skill_execution_handlers.go | 547 | BTC | KEEP | CR-B | live risk caps (crypto-named) — CTO P0 ruling 10-01 10:46 CT |
 | agent/skill_execution_handlers.go | 549 | BTC | KEEP | CR-B | live risk caps (crypto-named) — CTO P0 ruling 10-01 10:46 CT |
@@ -244,9 +243,9 @@ regex: binance|bybit|okx|bitget|kucoin|gate\.io|gateio|indodax|hyperliquid|\bast
 | ninjascript/VLBarsSubscriptionManager.cs | 96 | ETH | KEEP | CR-B | CME 'ETH' = Extended Trading Hours session, not Ethereum — permanent KEEP (CTO ruling 10-01 19:48) |
 | ninjascript/VLBarsSubscriptionManager.cs | 349 | ETH | KEEP | CR-B | CME 'ETH' = Extended Trading Hours session, not Ethereum — permanent KEEP (CTO ruling 10-01 19:48) |
 | ninjascript/VLBarsSubscriptionManager.cs | 631 | ETH | KEEP | CR-B | CME 'ETH' = Extended Trading Hours session, not Ethereum — permanent KEEP (CTO ruling 10-01 19:48) |
-| ninjascript/VLContractResolver.cs | 66 | BTC | CUT | CR-B | crypto wording — rewrite futures-only |
-| ninjascript/VLContractResolver_VERIFY.md | 20 | BTC | CUT | CR-B | crypto wording — rewrite futures-only |
-| ninjascript/VLContractResolver_VERIFY.md | 123 | BTC | CUT | CR-B | crypto wording — rewrite futures-only |
+| ninjascript/VLContractResolver.cs | 66 | BTC | KEEP | CR-B | documents the live non-CME passthrough rule; any .cs edit forces an AddOn F5 (CTO ruling 10-02 01:17) |
+| ninjascript/VLContractResolver_VERIFY.md | 20 | BTC | KEEP | CR-B | documents the live non-CME passthrough rule; any .cs edit forces an AddOn F5 (CTO ruling 10-02 01:17) |
+| ninjascript/VLContractResolver_VERIFY.md | 123 | BTC | KEEP | CR-B | documents the live non-CME passthrough rule; any .cs edit forces an AddOn F5 (CTO ruling 10-02 01:17) |
 | ninjascript/VLContractResolver_VERIFY.md | 124 | ETH | KEEP | CR-B | CME 'ETH' = Extended Trading Hours session, not Ethereum — permanent KEEP (CTO ruling 10-01 19:48) |
 | ninjascript/VLHistoryPull.cs | 132 | ETH | KEEP | CR-B | CME 'ETH' = Extended Trading Hours session, not Ethereum — permanent KEEP (CTO ruling 10-01 19:48) |
 | ninjascript/vltrader_tcp_PROTOCOL.md | 333 | ETH | KEEP | CR-B | CME 'ETH' = Extended Trading Hours session, not Ethereum — permanent KEEP (CTO ruling 10-01 19:48) |
