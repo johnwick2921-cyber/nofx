@@ -483,6 +483,37 @@ export default function UpdatesPage() {
             {up('checkReason', language)}: {check.reason || na(language)}
           </p>
         )}
+        {check?.update_available === true && (
+          <p
+            className="mt-2 text-xs text-emerald-400 font-semibold"
+            data-testid="update-available"
+          >
+            {up('updateAvailableVerified', language).replace(
+              '{tag}',
+              check.latest_tag || ''
+            )}
+          </p>
+        )}
+        {check?.rate_limited === true && (
+          <p
+            className="mt-2 text-xs text-amber-400"
+            data-testid="check-rate-limited"
+          >
+            {up('rateLimited', language)}
+          </p>
+        )}
+        {(status?.install_state === 'downloading' ||
+          status?.install_state === 'verifying') && (
+          <p
+            className="mt-2 text-xs text-sky-400 flex items-center gap-1.5"
+            data-testid="install-state"
+          >
+            <Loader2 size={13} className="animate-spin" />
+            {status.install_state === 'downloading'
+              ? up('downloading', language)
+              : up('verifying', language)}
+          </p>
+        )}
       </Panel>
 
       {/* Panel C — Maintenance hold + gate */}
@@ -565,7 +596,9 @@ export default function UpdatesPage() {
               <Row label={up('jobStep', language)} value={job.step} />
             )}
             {job?.blocker && (
-              <Row label={up('jobBlocker', language)} value={job.blocker} />
+              <div data-testid="job-blocker">
+                <Row label={up('jobBlocker', language)} value={job.blocker} />
+              </div>
             )}
             {job?.timestamps && Object.keys(job.timestamps).length > 0 && (
               <div

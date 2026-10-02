@@ -18,6 +18,15 @@ export const updates: GuideSection = {
       kind: 'p',
       text: 'The update panel has two buttons. Check asks the bot whether an update exists and never installs anything — it reads Checking…, Up to date, or Check. Update now fires the install. The paste box above the buttons takes the ONE line “vl-updater-bootstrap authorize <release_id>” prints — {release_id, job_id, expires_at, hmac}, valid 5 minutes and single use — and the page sends exactly those parsed fields; expires_at must stay an unquoted whole number of unix seconds, and the box refuses a quoted one with its own text before the server ever sees it. Update now is enabled only when the bot answers install_enabled true AND worker_listening true (both measured, never guessed) AND the review constant is off, and a valid authorization is pasted. Blocked: the bot says installs are not enabled on this build. Installing…: the install was accepted and is running. A refusal (400/403/409/422/503) shows the bot’s own text under the buttons, and the pasted code is spent either way — a retried code answers “job already used”. While the adversarial review of the update authorization is open, the review constant keeps the install control disabled and the page reads “install authorization under review” — no install can be started from the page while that is in force. The simplest owner flow is to CLOSE NT8 first: with NT8 closed nothing can trade (every account is NT8 SIM and Sim101 executes inside NT8), so the update proceeds on the nt8_absent path — no AddOn ack is waited for, because none can come — and a .cs change is recorded as “AddOn F5 owed at next NT8 start” instead of parking the job. A page opened from a non-8080 origin (the :3000 dev server) says plainly “open http://localhost:8080 to install” — the origin check itself is unchanged. The header badge polls the same endpoint every 60 seconds and reads Unknown whenever the bot has not affirmed a state.',
     },
+    { kind: 'h', text: 'Release-source states (Check)' },
+    {
+      kind: 'p',
+      text: 'When the release source is enabled (VL_RELEASE_SOURCE), Check asks the bot whether a newer verified release exists. The page then shows one of: Update available vX — verified (downloaded and signature-verified, ready to install); rate limited, try later (GitHub answered 403/429); or the server’s own reason. The page renders each state ONLY when the API affirms it — it never invents one. While a job is downloading or verifying, the panel shows Downloading… / Verifying… from the server’s install_state.',
+    },
+    {
+      kind: 'p',
+      text: 'If an AI plan is still running when an update job starts, the job panel shows the live blocker — “waiting for the AI plan (started hh:mm:ss)” — instead of a refusal, and the job continues once the plan finishes.',
+    },
     { kind: 'h', text: 'The hold and the gate' },
     {
       kind: 'p',

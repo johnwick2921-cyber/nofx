@@ -48,6 +48,18 @@ export const updatesStrings = {
   upToDate: { en: 'Up to date', zh: '已是最新', id: 'Sudah terbaru' },
   blocked: { en: 'Blocked', zh: '已阻止', id: 'Diblokir' },
   check: { en: 'Check', zh: '检查', id: 'Periksa' },
+  updateAvailableVerified: {
+    en: 'Update available {tag} — verified',
+    zh: '发现新版本 {tag} — 已验证',
+    id: 'Pembaruan tersedia {tag} — terverifikasi',
+  },
+  rateLimited: {
+    en: 'rate limited, try later',
+    zh: '请求受限，请稍后再试',
+    id: 'dibatasi, coba lagi nanti',
+  },
+  downloading: { en: 'Downloading…', zh: '下载中…', id: 'Mengunduh…' },
+  verifying: { en: 'Verifying…', zh: '验证中…', id: 'Memverifikasi…' },
   installUnderReview: {
     en: 'install authorization under review',
     zh: '安装授权审核中',
