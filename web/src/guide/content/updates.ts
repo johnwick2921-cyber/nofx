@@ -21,19 +21,11 @@ export const updates: GuideSection = {
     { kind: 'h', text: 'Release-source states (Check)' },
     {
       kind: 'p',
-      text: 'When the release source is enabled (VL_RELEASE_SOURCE), Check asks
- the bot whether a newer verified release exists. The page then shows one of:
- Update available vX — verified (the release is downloaded and signature-verified
-, ready to install); rate limited, try later (GitHub answered 403/429); or the
-server\u2019s own reason. The page renders each state ONLY when the API affirms
- it — it never invents one. While a job is downloading or verifying, the panel
- shows Downloading… / Verifying… from the server\u2019s install_state.',
+      text: 'When the release source is enabled (VL_RELEASE_SOURCE), Check asks the bot whether a newer verified release exists. The page then shows one of: Update available vX — verified (downloaded and signature-verified, ready to install); rate limited, try later (GitHub answered 403/429); or the server’s own reason. The page renders each state ONLY when the API affirms it — it never invents one. While a job is downloading or verifying, the panel shows Downloading… / Verifying… from the server’s install_state.',
     },
     {
       kind: 'p',
-      text: 'If an AI plan is still running when an update job starts, the job
- panel shows the live blocker — \u201cwaiting for the AI plan (started hh:mm:ss)
-\u201d — instead of a refusal, and the job continues once the plan finishes.',
+      text: 'If an AI plan is still running when an update job starts, the job panel shows the live blocker — “waiting for the AI plan (started hh:mm:ss)” — instead of a refusal, and the job continues once the plan finishes.',
     },
     { kind: 'h', text: 'The hold and the gate' },
     {
