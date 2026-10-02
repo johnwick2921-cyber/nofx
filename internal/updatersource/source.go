@@ -30,9 +30,12 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"vl/internal/updaterwire"
 )
 
 // ReleaseRepo is the ONE build-time release-repo constant (fold B1): the
@@ -121,6 +124,21 @@ func (c Config) withDefaults() Config {
 // ErrRateLimited is returned (and cached) when the API answers 403 or 429:
 // the page shows "rate limited, try later", never a retry storm.
 var ErrRateLimited = errors.New("updatersource: release API rate limited")
+
+// ErrInvalidTag is returned when the API's tag_name is not a valid release id.
+// The tag becomes the tarball basename and FetchRelease's release id, so it is
+// validated with the SAME validator the bot uses (updaterwire.ValidReleaseID)
+// BEFORE any path is built from it (CTO 05:54 fix).
+var ErrInvalidTag = errors.New("updatersource: release tag not valid")
+
+// ErrInvalidCommitish is returned when target_commitish is not a 40-hex
+// commit. Releases are cut from TAGS only (release.yml --verify-tag), so a
+// branch-name target_commitish is refused fail-closed — never resolved over
+// the network.
+var ErrInvalidCommitish = errors.New("updatersource: release target commit unknown")
+
+// commitishRe is the 40-hex commit form GitHub returns for a tag release.
+var commitishRe = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 // ErrSizeCap is returned when the download exceeds the size bound. The
 // partial file is removed before it is returned.
@@ -257,8 +275,13 @@ func (s *Source) latest(ctx context.Context) (Latest, error) {
 	if err := dec.Decode(&raw); err != nil {
 		return Latest{}, fmt.Errorf("updatersource: releases API body: %w", err)
 	}
-	if raw.TagName == "" || raw.TargetCommitish == "" {
-		return Latest{}, errors.New("updatersource: release is missing tag_name or target_commitish")
+	// The tag is network data that becomes a PATH element and a release id:
+	// validate it with the wire's own validator before anything else uses it.
+	if !updaterwire.ValidReleaseID(raw.TagName) {
+		return Latest{}, fmt.Errorf("%w: %q", ErrInvalidTag, raw.TagName)
+	}
+	if !commitishRe.MatchString(raw.TargetCommitish) {
+		return Latest{}, fmt.Errorf("%w: %q", ErrInvalidCommitish, raw.TargetCommitish)
 	}
 	return Latest{Tag: raw.TagName, TargetCommitish: raw.TargetCommitish}, nil
 }
@@ -269,6 +292,12 @@ func (s *Source) latest(ctx context.Context) (Latest, error) {
 // (size cap, timeout, redirect off-list, http error) the partial is removed
 // and nothing else is written.
 func (s *Source) Download(ctx context.Context, tag, destDir string) (string, error) {
+	// Defense in depth: the caller only passes a validated latest.Tag, but a
+	// path element is built from this string — refuse anything the wire would
+	// refuse BEFORE touching the filesystem.
+	if !updaterwire.ValidReleaseID(tag) {
+		return "", fmt.Errorf("%w: %q", ErrInvalidTag, tag)
+	}
 	if !filepath.IsAbs(destDir) {
 		return "", fmt.Errorf("updatersource: destination %q must be an absolute path", destDir)
 	}

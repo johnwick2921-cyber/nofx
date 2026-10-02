@@ -234,6 +234,31 @@ func TestHandleCheckRejectsOffListHost(t *testing.T) {
 	}
 }
 
+// TestHandleCheckInvalidTagLeavesInboxEmpty: a refused tag (path traversal
+// from the API) answers error with the exact reason and touches NOTHING.
+func TestHandleCheckInvalidTagLeavesInboxEmpty(t *testing.T) {
+	t.Setenv("VL_RELEASE_SOURCE", "github")
+	inbox := t.TempDir()
+	t.Setenv("VL_RELEASE_INBOX", inbox)
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiJSON(w, 200, `{"tag_name":"../evil","target_commitish":"`+strings.Repeat("ab", 20)+`"}`)
+	}))
+	defer srv.Close()
+	checkSourceAt(t, testCheckSource(srv))
+	w := checkWorker(t)
+	resp := w.Handle(updaterwire.NewCheck())
+	if !resp.OK || resp.State != "error" {
+		t.Fatalf("resp = %+v, want ok/error", resp)
+	}
+	var d CheckDetail
+	if err := json.Unmarshal([]byte(resp.Detail), &d); err != nil || d.Reason != "release tag not valid" {
+		t.Fatalf("detail = %q (%v), want 'release tag not valid'", resp.Detail, err)
+	}
+	if entries, _ := os.ReadDir(inbox); len(entries) != 0 {
+		t.Fatalf("inbox not empty after a refused tag: %v", entries)
+	}
+}
+
 // testCheckSource is a check-scope source whose API and asset live on srv.
 func testCheckSource(srv *httptest.Server) *updatersource.Source {
 	return updatersource.New(updatersource.Config{

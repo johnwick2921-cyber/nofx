@@ -110,6 +110,64 @@ func TestLatestParsesTagAndCommitish(t *testing.T) {
 	}
 }
 
+// TestLatestRefusesInvalidTagAndCommitish (CTO 05:54 fix): tag_name is
+// network data that becomes a PATH element — validated with the wire's own
+// validator before any file is touched; target_commitish must be 40-hex
+// (releases are cut from tags only, release.yml --verify-tag; a branch
+// target fails closed, never resolved over the network).
+func TestLatestRefusesInvalidTagAndCommitish(t *testing.T) {
+	cases := []struct {
+		name     string
+		tag      string
+		commit   string
+		wantSent error
+	}{
+		{"path traversal", "../evil", strings.Repeat("ab", 20), ErrInvalidTag},
+		{"slash", "a/b", strings.Repeat("ab", 20), ErrInvalidTag},
+		{"empty", "", strings.Repeat("ab", 20), ErrInvalidTag},
+		{"65 chars", strings.Repeat("v", 65), strings.Repeat("ab", 20), ErrInvalidTag},
+		{"leading dot", ".hidden", strings.Repeat("ab", 20), ErrInvalidTag},
+		{"branch commitish", "v1.0.0", "main", ErrInvalidCommitish},
+		{"short commitish", "v1.0.0", "abc123", ErrInvalidCommitish},
+		{"upper hex commitish", "v1.0.0", strings.ToUpper(strings.Repeat("ab", 20)), ErrInvalidCommitish},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir() // the inbox: must stay empty
+			srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprint(w, `{"tag_name":"`+c.tag+`","target_commitish":"`+c.commit+`"}`)
+			}))
+			defer srv.Close()
+			s := testSource(t, srv, srv, srv, 1<<20, 3)
+			_, err := s.Latest(context.Background())
+			if !errors.Is(err, c.wantSent) {
+				t.Fatalf("err = %v, want %v", err, c.wantSent)
+			}
+			if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+				t.Fatalf("inbox not empty after a refused tag: %v", entries)
+			}
+		})
+	}
+}
+
+// TestDownloadRefusesInvalidTagBeforeTouchingDisk: Download's own defense in
+// depth refuses a bad tag before the destination is touched.
+func TestDownloadRefusesInvalidTagBeforeTouchingDisk(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	s := testSource(t, srv, srv, srv, 1024, 3)
+	if _, err := s.Download(context.Background(), "../evil", dir); !errors.Is(err, ErrInvalidTag) {
+		t.Fatalf("err = %v, want ErrInvalidTag", err)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+		t.Fatalf("destination not empty: %v", entries)
+	}
+}
+
 func TestDownloadRefusesContentLengthOverCap(t *testing.T) {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", "2048")
