@@ -31,7 +31,7 @@ export function CoinSourceEditor({
     : sourceTypes
   const effectiveSourceType = isFutures ? 'static' : config.source_type
 
-  // xyz dex assets (stocks, forex, commodities) - should NOT get a USD suffix
+  // xyz dex assets (stocks, forex, commodities)
   const xyzDexAssets = new Set([
     // Stocks
     'TSLA',
@@ -102,15 +102,14 @@ export function CoinSourceEditor({
 
     const symbol = newCoin.toUpperCase().trim()
 
-    // For xyz dex assets (stocks, forex, commodities), use xyz: prefix without a USD suffix
+    // For xyz dex assets (stocks, forex, commodities), use xyz: prefix
     let formattedSymbol: string
     if (isXyzDexAsset(symbol)) {
       // Remove xyz: prefix (case-insensitive) and any USD suffixes
       const base = symbol.replace(/^xyz:/i, '').replace(/USD$/i, '')
       formattedSymbol = `xyz:${base}`
     } else if (isCMEFutures(symbol)) {
-      // CME futures root (ES, MNQ, NG, …) — recognized as a futures symbol, NOT
-      // keep the bare root (no USD suffix).
+      // CME futures root (ES, MNQ, NG, …) — recognized as a futures symbol.
       formattedSymbol = symbol
     } else {
       formattedSymbol = symbol
@@ -136,14 +135,13 @@ export function CoinSourceEditor({
     if (!newExcludedCoin.trim()) return
     const symbol = newExcludedCoin.toUpperCase().trim()
 
-    // For xyz dex assets, use xyz: prefix without a USD suffix
+    // For xyz dex assets, use xyz: prefix
     let formattedSymbol: string
     if (isXyzDexAsset(symbol)) {
       const base = symbol.replace(/^xyz:/i, '').replace(/USD$/i, '')
       formattedSymbol = `xyz:${base}`
     } else if (isCMEFutures(symbol)) {
-      // CME futures root (ES, MNQ, NG, …) — recognized as a futures symbol, NOT
-      // keep the bare root (no USD suffix).
+      // CME futures root (ES, MNQ, NG, …) — recognized as a futures symbol.
       formattedSymbol = symbol
     } else {
       formattedSymbol = symbol

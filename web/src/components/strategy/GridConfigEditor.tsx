@@ -81,10 +81,7 @@ export function GridConfigEditor({
               disabled={disabled}
               className="w-full px-3 py-2 rounded"
               style={inputStyle}
-              options={[
-                { value: 'MNQ', label: 'MNQ' },
-                { value: 'ES', label: 'ES' },
-              ]}
+              options={[{ value: 'MNQ', label: 'MNQ' }]}
             />
           </div>
 
