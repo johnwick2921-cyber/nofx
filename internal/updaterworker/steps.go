@@ -187,7 +187,7 @@ func (w *Worker) stepPreflight(ctx context.Context, j updaterjob.Job) stepResult
 		}
 		// C22: flat BEFORE the hold, or the job is refused with no hold. A 401
 		// here is the token proof failing: refused at once.
-		return w.poll(ctx, j, w.cfg.Budgets.PreflightFlat, func() (string, error) {
+		return w.pollPlanner(ctx, j, w.cfg.Budgets.PreflightFlat, w.cfg.Budgets.PlannerWait, func() (string, error) {
 			g, err := w.app.InstallationGate(ctx)
 			if errors.Is(err, ErrUnauthorized) {
 				return "", err
@@ -275,7 +275,7 @@ func (w *Worker) stepHold(j updaterjob.Job) stepResult {
 // legs apply again, never grandfathered.
 func (w *Worker) stepDrain(ctx context.Context, j updaterjob.Job) stepResult {
 	start, ev := w.host.Now(), map[string]string{}
-	err := w.poll(ctx, j, w.cfg.Budgets.Drain, func() (string, error) {
+	err := w.pollPlanner(ctx, j, w.cfg.Budgets.Drain, w.cfg.Budgets.PlannerWait, func() (string, error) {
 		g, gerr := w.app.InstallationGate(ctx)
 		if gerr != nil {
 			return "installation-gate: " + gerr.Error(), nil
@@ -310,7 +310,7 @@ func (w *Worker) stepDrain(ctx context.Context, j updaterjob.Job) stepResult {
 		ev["drain_path"] = "normal"
 		return firstFailingLeg(g, drainLegs), nil
 	})
-	return stepResult{
+	res := stepResult{
 		receipts: []Receipt{w.receipt("drain", start, ev, err)},
 		err:      err,
 		set: func(k *updaterjob.Job) {
@@ -322,6 +322,22 @@ func (w *Worker) stepDrain(ctx context.Context, j updaterjob.Job) stepResult {
 			}
 		},
 	}
+	// F2: a live AI-plan read outlived the planner wait — a KNOWN BENIGN
+	// blocker must not keep the desk held. Release THIS job's hold and refuse
+	// (nothing was installed). If the release itself fails, the hold stays and
+	// the failure is recovery_needed, never a refused job with a hold on disk.
+	var pe plannerExpired
+	if errors.As(err, &pe) {
+		relStart := w.host.Now()
+		if relErr := ReleaseJob(w.dataDir(), j.JobID); relErr != nil {
+			return stepResult{receipts: res.receipts, err: err, failTo: updaterjob.StateRecoveryNeeded,
+				reason: "AI plan still running and the hold could not be released: " + clipText(relErr.Error())}
+		}
+		rev := map[string]string{"reason": "planner wait expired", "hold_after": "released"}
+		res.receipts = append(res.receipts, w.receipt("release_hold", relStart, rev, nil))
+		res.failTo, res.reason = updaterjob.StateRefused, "AI plan still running — hold released, nothing installed"
+	}
+	return res
 }
 
 // legEvidence renders one leg's verdict for the receipt: its own detail text
@@ -411,7 +427,7 @@ func ackFor(a *AckView, jobID string) string {
 func (w *Worker) stepGate(ctx context.Context, j updaterjob.Job) stepResult {
 	start, ev := w.host.Now(), map[string]string{}
 	var firstArrival time.Time
-	err := w.poll(ctx, j, w.cfg.Budgets.Gate, func() (string, error) {
+	err := w.pollPlanner(ctx, j, w.cfg.Budgets.Gate, w.cfg.Budgets.PlannerWait, func() (string, error) {
 		// UPDATER-NT8-CLOSED: with NT8 absent there is no ack to double-read.
 		// The absent verdict is ready (every ledger leg + the hold on disk
 		// ours); a reconnect flips eligible=false and the normal two-ack path
@@ -459,7 +475,21 @@ func (w *Worker) stepGate(ctx context.Context, j updaterjob.Job) stepResult {
 		ev["ack_2_at"] = arrival.Format(time.RFC3339Nano)
 		return "", nil
 	})
-	return stepResult{receipts: []Receipt{w.receipt("gate", start, ev, err)}, err: err}
+	res := stepResult{receipts: []Receipt{w.receipt("gate", start, ev, err)}, err: err}
+	// F2: same planner-wait expiry as the drain — release THIS job's hold and
+	// refuse; a benign blocker must not keep the desk held.
+	var pe plannerExpired
+	if errors.As(err, &pe) {
+		relStart := w.host.Now()
+		if relErr := ReleaseJob(w.dataDir(), j.JobID); relErr != nil {
+			return stepResult{receipts: res.receipts, err: err, failTo: updaterjob.StateRecoveryNeeded,
+				reason: "AI plan still running and the hold could not be released: " + clipText(relErr.Error())}
+		}
+		rev := map[string]string{"reason": "planner wait expired", "hold_after": "released"}
+		res.receipts = append(res.receipts, w.receipt("release_hold", relStart, rev, nil))
+		res.failTo, res.reason = updaterjob.StateRefused, "AI plan still running — hold released, nothing installed"
+	}
+	return res
 }
 
 // reprove is R-i: one more ready:true for THIS job, polled for the Reprove
@@ -860,10 +890,36 @@ func (w *Worker) stepReleaseHold(ctx context.Context, j updaterjob.Job) stepResu
 	return stepResult{receipts: []Receipt{w.receipt("release_hold", start, ev, err)}, err: err}
 }
 
+// plannerExpired is the F2 expiry error: the step waited the full planner
+// budget while an AI plan read stayed in flight. Preflight refuses (no hold,
+// as today); drain/gate RELEASE the hold and refuse — a known benign blocker
+// must not leave the desk held.
+type plannerExpired struct{ budget time.Duration }
+
+func (e plannerExpired) Error() string {
+	return fmt.Sprintf("AI plan still running after %s", e.budget)
+}
+
+// plannerBlocker reports whether the blocker is the planner_in_flight leg (the
+// gate names it as "planner_in_flight: <detail>").
+func plannerBlocker(b string) bool { return strings.HasPrefix(b, "planner_in_flight") }
+
 // poll re-reads until check passes ("" blocker) or the budget runs out. Each
 // NEW blocker is persisted (M5 shows it). A fatal error ends it at once.
 func (w *Worker) poll(ctx context.Context, j updaterjob.Job, budget time.Duration, check func() (string, error)) error {
-	deadline := w.host.Now().Add(budget)
+	return w.pollPlanner(ctx, j, budget, 0, check)
+}
+
+// pollPlanner is poll plus the F2 planner wait: while the CURRENT blocker is a
+// live AI-plan read, the step waits up to plannerBudget (a benign blocker must
+// not fail the step on its normal budget) and the live blocker — "waiting for
+// the AI plan (started hh:mm:ss)" — is what the job shows. On planner-wait
+// expiry it returns plannerExpired; every other blocker keeps the normal
+// budget and the normal "not passed within" failure.
+func (w *Worker) pollPlanner(ctx context.Context, j updaterjob.Job, budget, plannerBudget time.Duration, check func() (string, error)) error {
+	start := w.host.Now()
+	deadline := start.Add(budget)
+	plannerDeadline := start.Add(plannerBudget)
 	last := ""
 	for {
 		b, fatal := check()
@@ -883,7 +939,11 @@ func (w *Worker) poll(ctx context.Context, j updaterjob.Job, budget time.Duratio
 				return err
 			}
 		}
-		if !w.host.Now().Before(deadline) {
+		if plannerBlocker(b) && plannerBudget > 0 {
+			if !w.host.Now().Before(plannerDeadline) {
+				return plannerExpired{plannerBudget}
+			}
+		} else if !w.host.Now().Before(deadline) {
 			return fmt.Errorf("not passed within %s: %s", budget, b)
 		}
 		if err := w.host.Sleep(ctx, w.cfg.Budgets.Poll); err != nil {
