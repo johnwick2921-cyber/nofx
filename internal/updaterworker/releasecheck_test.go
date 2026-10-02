@@ -107,7 +107,11 @@ func TestHandleCheckUpToDateByCommit(t *testing.T) {
 	t.Setenv("VL_RELEASE_SOURCE", "github")
 	rev := "aaaa" + strings.Repeat("bb", 18)
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		apiJSON(w, 200, `{"tag_name":"v9.9.9","target_commitish":"`+rev+`"}`)
+		if r.URL.Path == "/repos/johnwick2921-cyber/nofx/commits/v9.9.9" {
+			apiJSON(w, 200, `{"sha":"`+rev+`"}`)
+			return
+		}
+		apiJSON(w, 200, `{"tag_name":"v9.9.9","target_commitish":"dev"}`)
 	}))
 	defer srv.Close()
 	checkSourceAt(t, testCheckSource(srv))
@@ -148,8 +152,12 @@ func TestHandleCheckVerifiedReadyReusesFetchRelease(t *testing.T) {
 	var assetHits int
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assetHits++
-		if strings.HasSuffix(r.URL.Path, "/releases/latest") {
-			apiJSON(w, 200, `{"tag_name":"`+testReleaseID+`","target_commitish":"`+testSHA+`"}`)
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/releases/latest"):
+			apiJSON(w, 200, `{"tag_name":"`+testReleaseID+`","target_commitish":"dev"}`)
+			return
+		case strings.HasSuffix(r.URL.Path, "/commits/"+testReleaseID):
+			apiJSON(w, 200, `{"sha":"`+testSHA+`"}`)
 			return
 		}
 		b, err := os.ReadFile(rel.archive)
