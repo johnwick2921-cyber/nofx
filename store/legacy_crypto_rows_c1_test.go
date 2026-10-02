@@ -32,26 +32,6 @@ func TestLegacyCryptoRowsLoadWithFuturesSettingsIntact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
-	// The crypto credential columns were dropped from the store.Exchange struct
-	// (integration, CTO ruling: columns stay, struct fields go). A FRESH schema
-	// therefore has no such columns, while a migrated one does — the test
-	// recreates the migrated shape test-side so the raw-SQL survival proof
-	// (2b/2c/reopen) runs against the physical columns.
-	for _, ddl := range []string{
-		`ALTER TABLE exchanges ADD COLUMN hyperliquid_wallet_addr TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE exchanges ADD COLUMN hyperliquid_unified_account NUMERIC NOT NULL DEFAULT 1`,
-		`ALTER TABLE exchanges ADD COLUMN aster_user TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE exchanges ADD COLUMN aster_signer TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE exchanges ADD COLUMN aster_private_key TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE exchanges ADD COLUMN lighter_wallet_addr TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE exchanges ADD COLUMN lighter_private_key TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE exchanges ADD COLUMN lighter_api_key_private_key TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE exchanges ADD COLUMN lighter_api_key_index INTEGER NOT NULL DEFAULT 0`,
-	} {
-		if err := st.gdb.Exec(ddl).Error; err != nil {
-			t.Fatalf("add legacy column for test schema: %v", err)
-		}
-	}
 	const userID = "u1"
 
 	// 1) STRATEGY — every legacy crypto field, plus explicit futures settings.
@@ -113,6 +93,27 @@ func TestLegacyCryptoRowsLoadWithFuturesSettingsIntact(t *testing.T) {
 
 	// 2) EXCHANGE — a pre-existing crypto row with every legacy credential
 	// column set, planted at the DB level exactly as a migrated row would be.
+	// The columns were dropped from the store.Exchange struct (CTO ruling:
+	// columns stay, struct fields go), so AutoMigrate no longer creates them on
+	// a fresh fixture — the DDL below stands in for the pre-existing legacy
+	// schema (same nullable-with-default shape the CTO verified on the real
+	// copy), and the UPDATE stands in for the values a legacy migration wrote.
+	legacyDDL := []string{
+		`ALTER TABLE exchanges ADD COLUMN hyperliquid_wallet_addr TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE exchanges ADD COLUMN hyperliquid_unified_account BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE exchanges ADD COLUMN aster_user TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE exchanges ADD COLUMN aster_signer TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE exchanges ADD COLUMN aster_private_key TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE exchanges ADD COLUMN lighter_wallet_addr TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE exchanges ADD COLUMN lighter_private_key TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE exchanges ADD COLUMN lighter_api_key_private_key TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE exchanges ADD COLUMN lighter_api_key_index INTEGER NOT NULL DEFAULT 0`,
+	}
+	for _, ddl := range legacyDDL {
+		if err := st.gdb.Exec(ddl).Error; err != nil {
+			t.Fatalf("add legacy column (%s): %v", ddl, err)
+		}
+	}
 	if err := st.gdb.Create(&Exchange{
 		ID:           "e-legacy",
 		UserID:       userID,
@@ -128,12 +129,17 @@ func TestLegacyCryptoRowsLoadWithFuturesSettingsIntact(t *testing.T) {
 		t.Fatalf("plant legacy exchange row: %v", err)
 	}
 	if err := st.gdb.Exec(`UPDATE exchanges SET
-		hyperliquid_wallet_addr='0xhyper', hyperliquid_unified_account=1,
-		aster_user='aster-user', aster_signer='aster-signer', aster_private_key='aster-pk',
-		lighter_wallet_addr='0xlighter', lighter_private_key='lighter-pk',
-		lighter_api_key_private_key='lighter-apk', lighter_api_key_index=7
-		WHERE id='e-legacy'`).Error; err != nil {
-		t.Fatalf("plant legacy credential columns: %v", err)
+		hyperliquid_wallet_addr = '0xhyper',
+		hyperliquid_unified_account = true,
+		aster_user = 'aster-user',
+		aster_signer = 'aster-signer',
+		aster_private_key = 'enc:aster-priv',
+		lighter_wallet_addr = '0xlighter',
+		lighter_private_key = 'enc:lighter-priv',
+		lighter_api_key_private_key = 'enc:lighter-apik',
+		lighter_api_key_index = 7
+		WHERE id = ? AND user_id = ?`, "e-legacy", userID).Error; err != nil {
+		t.Fatalf("plant legacy column values: %v", err)
 	}
 	ex, err := st.Exchange().GetByID(userID, "e-legacy")
 	if err != nil {
@@ -172,7 +178,9 @@ func TestLegacyCryptoRowsLoadWithFuturesSettingsIntact(t *testing.T) {
 
 	// 2c) A production-path Update round-tripping the loaded values must leave
 	// the legacy columns byte-identical (the store must never wipe or rewrite
-	// them behind the caller's back).
+	// them behind the caller's back). The crypto positional params were removed
+	// from Update (CTO ruling: struct fields go, columns stay) — the call passes
+	// only the fields this build still surfaces.
 	if err := st.Exchange().Update(userID, "e-legacy",
 		ex.Enabled,
 		string(ex.APIKey), string(ex.SecretKey), string(ex.Passphrase), ex.Testnet,
@@ -234,17 +242,23 @@ func TestLegacyCryptoRowsLoadWithFuturesSettingsIntact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("legacy exchange row did not survive the boot-cleanup pass: %v", err)
 	}
-	if ex2.ExchangeType != "binance" {
+	if ex2.ExchangeType != "binance" || !ex2.Enabled {
 		t.Fatalf("legacy exchange identity changed across the reopen: %+v", ex2)
 	}
-	// The crypto credential columns were dropped from the store.Exchange struct
-	// (integration, CTO ruling: columns stay, struct fields go) — the survival
-	// proof is at the raw-SQL column level, readLegacyColumns above.
+	// The crypto columns are no longer struct fields — the raw-SQL read is the
+	// surviving assertion; the legacy bytes must be identical across the reopen.
 	rawReopen := readLegacyColumns(t, st2.gdb, userID, "e-legacy")
 	if rawReopen.HyperliquidWalletAddr != rawBefore.HyperliquidWalletAddr ||
+		rawReopen.HyperliquidUnifiedAccount != rawBefore.HyperliquidUnifiedAccount ||
 		rawReopen.AsterUser != rawBefore.AsterUser ||
-		rawReopen.LighterWalletAddr != rawBefore.LighterWalletAddr {
+		rawReopen.AsterSigner != rawBefore.AsterSigner ||
+		rawReopen.LighterWalletAddr != rawBefore.LighterWalletAddr ||
+		rawReopen.LighterAPIKeyIndex != rawBefore.LighterAPIKeyIndex {
 		t.Fatalf("legacy DB columns changed across the reopen:\nbefore: %+v\nafter:  %+v", rawBefore, rawReopen)
+	}
+	if len(rawReopen.AsterPrivateKey) == 0 || len(rawReopen.LighterPrivateKey) == 0 ||
+		len(rawReopen.LighterAPIKeyPrivateKey) == 0 {
+		t.Fatalf("encrypted legacy columns emptied across the reopen: %+v", rawReopen)
 	}
 }
 
