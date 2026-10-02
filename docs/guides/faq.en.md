@@ -8,10 +8,9 @@ Quick answers to common questions. For detailed troubleshooting, see [Troublesho
 ## General Questions
 
 ### What is VL?
-VL is an AI-powered trading bot that uses large language models (LLMs) to make trading decisions on CME futures (MNQ) via NinjaTrader 8.
+VL is an AI-powered trading bot that uses large language models (LLMs) to make trading decisions on futures markets.
 
 ### Which exchanges are supported?
-- ✅ NinjaTrader 8 (CME futures, SIM execution)
 
 ### Is VL profitable?
 AI trading is **experimental** and **not guaranteed** to be profitable. Always start with small amounts and never invest more than you can afford to lose.
@@ -32,15 +31,6 @@ Yes! VL supports running multiple traders with different configurations, AI mode
 ### Do I need coding experience?
 No! VL has a web UI for all configuration. However, basic command line knowledge helps with setup and troubleshooting.
 
-### How do I get API keys?
-No exchange API keys are needed. NinjaTrader 8 is the single venue — the NT8
-AddOn connects over the TCP bridge (data and SIM execution). Configure the AI
-model API keys in Settings → AI Models.
-
-### Which account does VL trade on?
-VL trades only on a NinjaTrader **SIM** account — never live. Keep the SIM
-account dedicated to the bot.
-
 ---
 
 ## Trading Questions
@@ -58,7 +48,7 @@ Configurable! Default is every **3-5 minutes**. Too frequent = overtrading, too 
 ### Can I customize the trading strategy?
 Yes! You can:
 - Adjust leverage settings
-- Modify symbol selection
+- Modify coin selection pool
 - Change decision intervals
 - Customize system prompts (advanced)
 
