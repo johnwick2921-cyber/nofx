@@ -25,13 +25,14 @@ Task 11 (commit `45c434a3` and following). Routes + nav entries also removed.
 The remaining pages are Agent, Traders, Trader Dashboard, Strategy Studio,
 Settings, FAQ. If you find stray references, delete them.
 
-## Venue-coupling hotspots (watch when adding non-futures support)
+## Crypto-coupling hotspots (watch when adding non-crypto support)
 
-- `components/strategy/CoinSourceEditor.tsx` — suffix normalization: USD suffixes are stripped for CME futures patterns.
-- `pages/TraderDashboardPage.tsx:513,522,530` — hardcoded `unit="USD"` on StatCards. Make conditional on `exchange_type`.
+- `components/strategy/CoinSourceEditor.tsx:69-79` — auto-appends "USDT" to symbols. Skip USDT for CME futures patterns.
+- `pages/TraderDashboardPage.tsx:513,522,530` — hardcoded `unit="USDT"` on StatCards. Make conditional on `exchange_type`.
 - `pages/TraderDashboardPage.tsx:609,663,673` — Leverage + Liquidation Price columns. Hide for non-margin exchanges.
-- `i18n/translations.ts` — `invalidSymbolFormat` requires "must end with a supported symbol". Soften.
-- ~80 i18n keys mention value-currency/leverage-tier/funding-rate wording. Add conditional rendering rather than wholesale i18n rewrite.
+- `i18n/translations.ts:347,1693,2971` — `invalidSymbolFormat` requires "must end with USDT". Soften.
+- `i18n/translations.ts:250` — Aster USDT warning (crypto-specific).
+- ~80 i18n keys mention USDT/altcoin/BTC-ETH/funding-rate. Add conditional rendering rather than wholesale i18n rewrite.
 
 ## i18n
 
