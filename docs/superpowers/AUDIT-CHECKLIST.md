@@ -7877,9 +7877,10 @@ satisfy this precondition with the controls they actually have?" — a
 precondition satisfied only from a terminal is a hard blocker for a
 button-only operator. rule: the worker acquires the lock itself as session
 `updater-<job id first 12>` before preflight (atomic acquire, budget-sized
-expiry), refuses a lock held by anyone else naming the holder, proceeds
-without acquiring when VL_ATTENDED_LOCK_SESSION names the holder (the
-attended path), releases at complete/rolled_back/refused, and KEEPS + names
-the lock in the job on recovery_needed. Reference:
+expiry), refuses a lock held by ANYONE naming the holder (an attended
+install is just a button install — humans never hold the lock across one),
+releases at complete/rolled_back/refused, and KEEPS + names the lock in the
+job on recovery_needed; after the release the CTO acquires for the
+RELEASE-marker commit as usual. Reference:
 internal/updaterworker/steps.go ensureMainTreeLock +
 runner.go finish failure edges + stepReleaseHold.

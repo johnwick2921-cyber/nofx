@@ -78,22 +78,22 @@ and the exit code was first misread as an environment problem. Before any
 identify the target. A bare pid signals whatever unrelated group owns that number.
 
 **THE WORKER ACQUIRES ITS OWN LOCK (WORKER-TAKES-THE-LOCK, owner order
-2026-10-02 12:1x CT).** The updater worker takes the main-tree lock itself,
-with the SAME atomic `acquire` humans use, as session `updater-<job id first
-12>`, with an expiry covering the job budget — right before preflight. It
-**never reclaims, never takes a held or stale lock, and never
-clear-incomplete**. A lock held by anyone else refuses preflight naming the
-holder. The attended path keeps working: when the worker env
-`VL_ATTENDED_LOCK_SESSION` names the holder, the worker proceeds WITHOUT
-acquiring (that session owns it) — the attended deploy adds the line to the
-unit's env file before the button press and removes it after. The worker
-releases its own lock at complete / rolled_back / refused; on
-recovery_needed it KEEPS the lock and names it in the job, so a human looks
-before anything else touches the tree. A worker restart mid-job finds its
-own lock by the deterministic session name and continues — it never
-double-acquires. (The old "the worker never acquires — the attended deploy
-does" rule is superseded; `MainTreeLockHeld`'s check-only semantics are
-unchanged.)
+2026-10-02 12:1x CT; CTO fold 12:40 CT).** The updater worker takes the
+main-tree lock itself, with the SAME atomic `acquire` humans use, as session
+`updater-<job id first 12>`, with an expiry covering the job budget — right
+before preflight. It **never reclaims, never takes a held or stale lock, and
+never clear-incomplete**. ANY lock held by anyone else refuses preflight
+naming the holder — an attended install is just a button install: the CTO
+does NOT hold the lock before pressing, and **humans never hold the lock
+across a button install**. The worker releases its own lock at complete /
+rolled_back / refused; on recovery_needed it KEEPS the lock and names it in
+the job, so a human looks before anything else touches the tree. A worker
+restart mid-job finds its own lock by the deterministic session name and
+continues — it never double-acquires. After the worker releases at complete,
+the CTO acquires the lock for the RELEASE-marker commit as usual (canon
+four halves unchanged). (The old "the worker never acquires — the attended
+deploy does" rule is superseded; `MainTreeLockHeld`'s check-only semantics
+are unchanged.)
 
 ---
 

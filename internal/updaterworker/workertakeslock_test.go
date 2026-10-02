@@ -1,13 +1,13 @@
 package updaterworker
 
-// WORKER-TAKES-THE-LOCK (owner order 10-02 12:1x CT) — the worker acquires the
-// main-tree lock itself right before preflight, as session
+// WORKER-TAKES-THE-LOCK (owner order 10-02 12:1x CT, CTO fold 12:40 CT) — the
+// worker acquires the main-tree lock itself right before preflight, as session
 // "updater-<job id first 12>", with the SAME atomic acquire humans use. It
 // never reclaims, never takes a held or stale lock, never clears-incomplete;
-// the attended deploy's session (VL_ATTENDED_LOCK_SESSION) proceeds without
-// acquiring; the lock is released at complete/rolled_back/refused and KEPT +
-// named in the job on recovery_needed; a restart mid-job recognises its own
-// lock and never double-acquires.
+// ANY held lock refuses naming the holder (an attended install is just a button
+// install — humans never hold the lock across one); the lock is released at
+// complete/rolled_back/refused and KEPT + named in the job on recovery_needed;
+// a restart mid-job recognises its own lock and never double-acquires.
 //
 // These tests pin the PRODUCTION CALL SITES: ensureMainTreeLock inside
 // stepPreflight (driven by the real runner through the rig), settleMainTreeLock
@@ -49,7 +49,7 @@ func TestWorkerAcquiresAFreeLockAndReleasesOnRefused(t *testing.T) {
 	}
 }
 
-// The held-by-another path: preflight REFUSES naming the holder and NEVER
+// The held-by-anyone path: preflight REFUSES naming the holder and NEVER
 // calls acquire (the CTO's mutant 'acquire when held' must fail here).
 func TestWorkerRefusesAHeldLockNamingTheHolder(t *testing.T) {
 	r := newRig(t)
@@ -72,28 +72,6 @@ func TestWorkerRefusesAHeldLockNamingTheHolder(t *testing.T) {
 	}
 	if r.box.lockHolder != "other-lane" {
 		t.Fatalf("the stranger's lock must stay untouched (holder %q)", r.box.lockHolder)
-	}
-}
-
-// The attended path: when VL_ATTENDED_LOCK_SESSION names the holder, preflight
-// proceeds WITHOUT acquiring (the CTO/owner holds it from a terminal).
-func TestWorkerProceedsOnTheAttendedSession(t *testing.T) {
-	t.Setenv("VL_ATTENDED_LOCK_SESSION", "cto-attended")
-	r := newRig(t)
-	r.lockHolder = "cto-attended"
-	r.flat = false // refuse later, on the flat leg — NOT on the lock
-	r.install()
-	if err := r.drive(); err != nil {
-		t.Fatal(err)
-	}
-	j := r.job()
-	if j.State != updaterjob.StateRefused || !strings.Contains(j.Error, "addon_census_prehold") {
-		t.Fatalf("job %s: want the FLAT refusal, not a lock refusal: %q", j.State, j.Error)
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.box.lockAcquireCalls != 0 {
-		t.Fatal("the attended session must proceed without acquiring")
 	}
 }
 

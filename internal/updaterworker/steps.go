@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"vl/internal/envcompat"
 	"vl/internal/updaterjob"
 )
 
@@ -64,13 +63,13 @@ var drainLegs = []string{"hold", "go_drained", "in_flight_sends", "queued_signal
 // "updater-<job id first 12>", right before preflight — the SAME atomic
 // acquire verb humans use, with an expiry covering the job budget. It never
 // reclaims, never takes a held or stale lock, and never clears-incomplete.
-// A lock held by anyone else refuses preflight naming the holder. The
-// attended path keeps working: when VL_ATTENDED_LOCK_SESSION names the
-// holder, the worker proceeds WITHOUT acquiring (that session owns it). The
-// worker releases its own lock at every terminal state except
-// recovery_needed, where it KEEPS the lock and names it in the job. A worker
-// restart mid-job finds its own lock by the deterministic session name and
-// continues — it never double-acquires.
+// A lock held by anyone else refuses preflight naming the holder: an
+// attended install is just a button install — humans never hold the lock
+// across one. The worker releases its own lock at complete / rolled_back /
+// refused; on recovery_needed it KEEPS the lock and names it in the job, so
+// a human looks before anything else touches the tree. A worker restart
+// mid-job finds its own lock by the deterministic session name and continues
+// — it never double-acquires.
 
 // lockSessionPrefix is the session name a worker lock always starts with.
 const lockSessionPrefix = "updater-"
@@ -83,16 +82,6 @@ func lockSessionFor(jobID string) string {
 		id = id[:12]
 	}
 	return lockSessionPrefix + id
-}
-
-// attendedLockSession is the attended deploy's session name from the worker's
-// process env (VL_ATTENDED_LOCK_SESSION, NOFX_ fallback), "" when unset. The
-// attended deploy adds the line to the unit's env file before the button
-// press and removes it after — the worker otherwise has no way to tell the
-// CTO's session from a stranger's.
-func attendedLockSession() string {
-	v, _ := envcompat.Env("ATTENDED_LOCK_SESSION")
-	return strings.TrimSpace(v)
 }
 
 // lockWindowMinutes is the acquire expiry: every job budget plus the three
@@ -108,16 +97,15 @@ func (w *Worker) lockWindowMinutes() int {
 }
 
 // ensureMainTreeLock acquires-or-verifies the main-tree lock for THIS job
-// and returns the outcome: "acquired" (we took a free lock), "ours" (the
-// lock already names our session — a restart mid-job), or "attended" (held
-// by the session VL_ATTENDED_LOCK_SESSION names). Any other state refuses.
+// and returns the outcome: "acquired" (we took a free lock) or "ours" (the
+// lock already names our session — a restart mid-job). Any other state
+// refuses, naming the holder.
 func (w *Worker) ensureMainTreeLock(j updaterjob.Job) (string, error) {
 	session := lockSessionFor(j.JobID)
 	holder, err := w.host.LockHolder()
 	if err != nil {
 		return "", fmt.Errorf("the main-tree lock status is unreadable (C19: %v)", err)
 	}
-	attended := attendedLockSession()
 	switch {
 	case holder == "":
 		acquired, holderNow, err := w.host.LockAcquire(session, "worker job "+j.JobID, w.lockWindowMinutes())
@@ -127,27 +115,21 @@ func (w *Worker) ensureMainTreeLock(j updaterjob.Job) (string, error) {
 		if acquired {
 			return "acquired", nil
 		}
-		// Lost the race to another acquirer. Only the attended session is
-		// acceptable; anything else is a stranger and refuses.
-		if holderNow != "" && attended != "" && holderNow == attended {
-			return "attended", nil
-		}
+		// Lost the race to another acquirer: refuse naming whoever won.
 		return "", fmt.Errorf("the main-tree lock is not held by this job (C19: held by %q) — the worker never takes a held or stale lock", orNA(holderNow))
 	case holder == session:
 		// Ours from before a restart: continue, never double-acquire. This
 		// includes our OWN stale lock — the keeper window is a bound, not
 		// liveness for a holder that is still running.
 		return "ours", nil
-	case attended != "" && holder == attended:
-		return "attended", nil
 	default:
 		return "", fmt.Errorf("the main-tree lock is not held by this job (C19: held by %q) — the worker never takes a held or stale lock", holder)
 	}
 }
 
 // releaseOurLock releases the main-tree lock ONLY when it is ours: a free
-// lock is a no-op, and a lock held by anyone else (the attended session, a
-// stranger) is never touched. It is the ONE release path the worker uses.
+// lock is a no-op, and a lock held by anyone else is never touched. It is
+// the ONE release path the worker uses.
 func (w *Worker) releaseOurLock(session string) error {
 	holder, err := w.host.LockHolder()
 	if err != nil {
