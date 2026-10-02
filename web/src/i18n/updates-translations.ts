@@ -48,6 +48,26 @@ export const updatesStrings = {
   upToDate: { en: 'Up to date', zh: '已是最新', id: 'Sudah terbaru' },
   blocked: { en: 'Blocked', zh: '已阻止', id: 'Diblokir' },
   check: { en: 'Check', zh: '检查', id: 'Periksa' },
+  installPasswordLabel: {
+    en: 'Your VL login password',
+    zh: '你的 VL 登录密码',
+    id: 'Kata sandi login VL Anda',
+  },
+  installPasswordPlaceholder: {
+    en: 'password (never stored)',
+    zh: '密码（不会保存）',
+    id: 'kata sandi (tidak disimpan)',
+  },
+  advancedInstallCode: {
+    en: 'Advanced: paste an install code',
+    zh: '高级：粘贴安装授权码',
+    id: 'Lanjutan: tempel kode pemasangan',
+  },
+  checkFirstForUpdate: {
+    en: 'run Check first — the release id comes from the server',
+    zh: '请先点击检查 — 版本号由服务器返回',
+    id: 'jalankan Periksa dulu — id rilis dari server',
+  },
   updateAvailableVerified: {
     en: 'Update available {tag} — verified',
     zh: '发现新版本 {tag} — 已验证',
