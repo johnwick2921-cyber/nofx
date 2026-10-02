@@ -107,7 +107,7 @@ func TestHandleCheckUpToDateByCommit(t *testing.T) {
 	t.Setenv("VL_RELEASE_SOURCE", "github")
 	rev := "aaaa" + strings.Repeat("bb", 18)
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/repos/johnwick2921-cyber/nofx/commits/v9.9.9" {
+		if r.URL.Path == "/repos/"+updatersource.ReleaseRepo+"/commits/v9.9.9" {
 			apiJSON(w, 200, `{"sha":"`+rev+`"}`)
 			return
 		}

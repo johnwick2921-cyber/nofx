@@ -98,9 +98,9 @@ func TestLatestParsesTagAndCommitish(t *testing.T) {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
-		case r.URL.Path == "/repos/johnwick2921-cyber/nofx/releases/latest":
+		case r.URL.Path == "/repos/"+ReleaseRepo+"/releases/latest":
 			fmt.Fprint(w, `{"tag_name":"v2026.10.01.1","target_commitish":"dev"}`)
-		case r.URL.Path == "/repos/johnwick2921-cyber/nofx/commits/v2026.10.01.1":
+		case r.URL.Path == "/repos/"+ReleaseRepo+"/commits/v2026.10.01.1":
 			fmt.Fprint(w, `{"sha":"`+strings.Repeat("ab", 20)+`"}`)
 		default:
 			http.NotFound(w, r)
@@ -126,9 +126,9 @@ func TestLatestResolvesCommitFromTagIsTheLiveFix(t *testing.T) {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
-		case r.URL.Path == "/repos/johnwick2921-cyber/nofx/releases/latest":
+		case r.URL.Path == "/repos/"+ReleaseRepo+"/releases/latest":
 			fmt.Fprint(w, `{"tag_name":"v2026.10.02.1","target_commitish":"dev"}`)
-		case r.URL.Path == "/repos/johnwick2921-cyber/nofx/commits/v2026.10.02.1":
+		case r.URL.Path == "/repos/"+ReleaseRepo+"/commits/v2026.10.02.1":
 			fmt.Fprint(w, `{"sha":"`+sha+`"}`)
 		default:
 			http.NotFound(w, r)
@@ -182,9 +182,9 @@ func TestLatestRefusesUnknownOrMalformedCommit(t *testing.T) {
 			srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				switch {
-				case r.URL.Path == "/repos/johnwick2921-cyber/nofx/releases/latest":
+				case r.URL.Path == "/repos/"+ReleaseRepo+"/releases/latest":
 					fmt.Fprint(w, `{"tag_name":"v1.0.0","target_commitish":"dev"}`)
-				case r.URL.Path == "/repos/johnwick2921-cyber/nofx/commits/v1.0.0":
+				case r.URL.Path == "/repos/"+ReleaseRepo+"/commits/v1.0.0":
 					if name == "not found" {
 						w.WriteHeader(http.StatusNotFound)
 					}
