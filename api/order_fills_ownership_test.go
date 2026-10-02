@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"vl/auth"
-	"vl/manager"
-	"vl/store"
 	"strings"
 	"testing"
 	"time"
+	"vl/auth"
+	"vl/manager"
+	"vl/store"
 )
 
 func TestOrderFillsProductionRouteScopesOrderAndFills(t *testing.T) {
