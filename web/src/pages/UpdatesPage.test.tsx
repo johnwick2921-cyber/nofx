@@ -830,6 +830,7 @@ describe('UpdatesPage', () => {
     enableInstall()
     mocks.check.mockResolvedValue(checkFixture.verified_ready)
     mocks.installWithPassword.mockResolvedValue({ ok: true, job_id: 'job-fx' })
+    mocks.job.mockResolvedValue({ job_id: 'job-fx', state: 'downloaded' })
     render(<UpdatesPage />)
     await waitFor(() => expect(screen.getByText('Update now')).toBeTruthy())
     fireEvent.click(screen.getByTestId('check-button'))
