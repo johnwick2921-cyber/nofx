@@ -30,8 +30,7 @@ export function PositionsPanel() {
       void mutatePositions()
     }
     window.addEventListener('agent-config-refresh', handleRefresh)
-    return () =>
-      window.removeEventListener('agent-config-refresh', handleRefresh)
+    return () => window.removeEventListener('agent-config-refresh', handleRefresh)
   }, [mutatePositions, mutateTraders])
 
   if (!user || !token) {
@@ -73,8 +72,7 @@ export function PositionsPanel() {
         const pnl = pos.unrealized_pnl
         const isProfit = pnl >= 0
         const color = isProfit ? '#00e5a0' : '#F6465D'
-        const side =
-          pos.side?.toUpperCase() || (pos.quantity > 0 ? 'LONG' : 'SHORT')
+        const side = pos.side?.toUpperCase() || (pos.quantity > 0 ? 'LONG' : 'SHORT')
         const rawSymbol = pos.symbol || ''
         // Stock symbols are pure letters (1-5 chars)
         const isStock = /^[A-Z]{1,5}$/.test(rawSymbol)
@@ -144,8 +142,7 @@ export function PositionsPanel() {
                   <ArrowDownRight size={12} />
                 )}
                 {isProfit ? '+' : ''}
-                {currencyPrefix}
-                {pnl.toFixed(2)}
+                {currencyPrefix}{pnl.toFixed(2)}
               </div>
             </div>
             <div
@@ -156,13 +153,8 @@ export function PositionsPanel() {
                 color: '#5c5c72',
               }}
             >
-              <span>
-                {isStock ? 'Shares' : 'Qty'}: {pos.quantity}
-              </span>
-              <span>
-                Entry: {currencyPrefix}
-                {pos.entry_price.toFixed(2)}
-              </span>
+              <span>{isStock ? 'Shares' : 'Qty'}: {pos.quantity}</span>
+              <span>Entry: {currencyPrefix}{pos.entry_price.toFixed(2)}</span>
             </div>
           </div>
         )
