@@ -7848,3 +7848,19 @@ KNOWN LIMIT by CTO ruling (P-D item 2): the trading feed gate IsFeedConnected
 keeps today's latched behaviour — entries are protected on a dead socket by the
 dead-man watchdog (ninjaLinkConnected → IsConnected), and the close path must
 never be stricter (exits are never blocked). Recorded in the PR body.
+
+## CLASS NN (assigned at merge) — stale evidence stricter than absent evidence
+
+symptom: a gate treats a stale-but-present signal as STRICTER evidence than the
+absence of the signal, so the same physical state (flat, nothing new to report)
+passes when the source never spoke and fails when it spoke long ago — the
+second install of one bot process sat at preflight until an NT8/bot restart,
+because the previous install's held:false release ack (never refreshed until
+the next hold) made the pre-hold census "present but old", while a never-held
+connection's missing census passed. probe: for every freshness gate, compare
+the stale-present case against the absent case and ask which is really stronger
+evidence; if the absent case passes on other legs, a stale case carrying no
+NEW violation must not be judged harder than it. rule: stale + no violation =
+same verdict as absent, with the age printed; stale + violation still fails
+closed. Reference: trader/installation_gate.go addon_census_prehold
+(prehold-stale-census, owner order 2026-10-02 10:15 CT).

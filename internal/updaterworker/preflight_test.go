@@ -112,6 +112,36 @@ func TestPreflightPassesOnANeverHeldConnection(t *testing.T) {
 	}
 }
 
+// prehold-stale-census (owner order 2026-10-02 10:15 CT): the worker reaches
+// the hold step when the gate's prehold leg passes on a stale flat census —
+// the held:false release ack left by the PREVIOUS install's hold on this
+// process's connection, which the wire never refreshes. The rig's gateView
+// MIRRORS the production rule (the real leg is an unexported closure inside
+// trader.InstallationGateStatus, so the rig cannot call it without dragging
+// the bot's store/TCP fixtures into the worker package); the PRODUCTION rule
+// is pinned by the trader package's own
+// TestInstallationGatePreholdCensusStale* tests — under CTO mutant B (the
+// production fix reverted) THOSE go RED while this test stays green, which is
+// exactly its job: it proves the worker flows, not the rule.
+func TestPreflightStaleFlatCensusReachesTheHold(t *testing.T) {
+	r := newRig(t)
+	r.ackStale = true // 20 s old — past the 15 s freshness max; the census itself is flat
+	r.install()
+	if err := r.drive(); err != nil {
+		t.Fatal(err)
+	}
+	j := r.job()
+	if j.State == updaterjob.StateRefused {
+		t.Fatalf("preflight refused a stale flat census: %q", j.Error)
+	}
+	if strings.Contains(j.Error, "addon_census_prehold") {
+		t.Fatalf("the stale flat census must not block preflight: %q", j.Error)
+	}
+	if r.callCount("hold_write") != 1 {
+		t.Fatalf("preflight must pass and write the hold; hold_write ran %d times (job %s)", r.callCount("hold_write"), j.State)
+	}
+}
+
 // brief §3.4.3: a step that keeps crashing is retried at most MaxAttempts
 // times in all, then recovery_needed (the hold kept) — never a crash loop.
 func TestAStepThatKeepsCrashingIsRecoveryNeeded(t *testing.T) {
