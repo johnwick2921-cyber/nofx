@@ -258,11 +258,17 @@ export default function UpdatesPage() {
   )
 
   // Check asks the bot whether an update exists (it never installs).
+  // The label reflects the actual answer (owner-facing bug 15:1x CT): a
+  // verified_ready answer is NOT "Up to date". available (ready or not) ->
+  // "Check again" (the green banner names the version); checked without an
+  // available release -> "Up to date"; never checked -> "Check".
   const checkLabel = checking
     ? up('checking', language)
-    : check?.checked
-      ? up('upToDate', language)
-      : up('check', language)
+    : check?.available === true
+      ? up('checkAgain', language)
+      : check?.checked
+        ? up('upToDate', language)
+        : up('check', language)
 
   const doCheck = useCallback(async () => {
     setChecking(true)
