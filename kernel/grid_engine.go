@@ -147,7 +147,7 @@ func buildGridSystemPromptZh(config *store.GridStrategyConfig) string {
 
 示例:
 [
-  {"symbol": "MNQ", "action": "place_buy_limit", "price": 42000, "quantity": 1, "level_index": 2, "confidence": 85, "reasoning": "第2层价格接近，下买单"},
+  {"symbol": "MNQ", "action": "place_buy_limit", "price": 94000, "quantity": 0.01, "level_index": 2, "confidence": 85, "reasoning": "第2层价格接近，下买单"},
   {"symbol": "MNQ", "action": "hold", "confidence": 90, "reasoning": "市场震荡，保持当前网格"}
 ]
 `, config.Symbol, config.Symbol, config.GridCount, config.TotalInvestment, config.Leverage, config.Distribution)
@@ -202,7 +202,7 @@ running out of room, drop everything else; never drop the JSON.
 
 Example:
 [
-  {"symbol": "MNQ", "action": "place_buy_limit", "price": 42000, "quantity": 1, "level_index": 2, "confidence": 85, "reasoning": "Level 2 price approaching, place buy order"},
+  {"symbol": "MNQ", "action": "place_buy_limit", "price": 94000, "quantity": 0.01, "level_index": 2, "confidence": 85, "reasoning": "Level 2 price approaching, place buy order"},
   {"symbol": "MNQ", "action": "hold", "confidence": 90, "reasoning": "Market ranging, maintain current grid"}
 ]
 `, config.Symbol, config.Symbol, config.GridCount, config.TotalInvestment, config.Leverage, config.Distribution)

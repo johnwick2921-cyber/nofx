@@ -2,7 +2,7 @@ import useSWR from 'swr'
 import { useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { api } from '../../lib/api'
-import { ArrowUpRight, ArrowDownRight, Activity } from 'lucide-react'
+import { ArrowUpRight, ArrowDownRight, Wallet } from 'lucide-react'
 import type { Position, TraderInfo } from '../../types'
 
 export function PositionsPanel() {
@@ -44,7 +44,7 @@ export function PositionsPanel() {
           fontSize: 12,
         }}
       >
-        <Activity size={20} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
+        <Wallet size={20} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
         <div>Login to view positions</div>
       </div>
     )
@@ -76,10 +76,9 @@ export function PositionsPanel() {
         const side =
           pos.side?.toUpperCase() || (pos.quantity > 0 ? 'LONG' : 'SHORT')
         const rawSymbol = pos.symbol || ''
-        // Stock symbols are pure letters (1-5 chars), futures are roots
-        const isStock =
-          /^[A-Z]{1,5}$/.test(rawSymbol) && !rawSymbol.endsWith('USD')
-        const symbol = isStock ? rawSymbol : rawSymbol.replace('USD', '')
+        // Stock symbols are pure letters (1-5 chars)
+        const isStock = /^[A-Z]{1,5}$/.test(rawSymbol)
+        const symbol = rawSymbol
         const currencyPrefix = isStock ? '$' : ''
 
         return (

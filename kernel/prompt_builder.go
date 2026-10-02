@@ -105,7 +105,7 @@ func (pb *PromptBuilder) buildSystemPromptZH() string {
   - OPEN_NEW: 开设新仓位
   - WAIT: 等待，不采取任何行动
 - **leverage**: 杠杆倍数（开新仓时必需）
-- **position_size_usd**: 仓位大小（价值货币，开新仓时必需）
+- **position_size_usd**: 仓位大小（开新仓时必需）
 - **stop_loss**: 止损价格（开新仓时建议提供）
 - **take_profit**: 止盈价格（开新仓时建议提供）
 - **confidence**: 信心度（0-100）
@@ -160,16 +160,6 @@ func (pb *PromptBuilder) getDecisionRequirementsZH() string {
     "confidence": 85,
     "reasoning": "当前PnL +2.96%，接近历史峰值+2.99%（回撤仅0.03%）。建议部分平仓锁定利润，因为：1) 持仓时间仅11分钟，已获得3%收益；2) 5分钟K线显示价格接近短期阻力位；3) 成交量开始萎缩，上涨动能减弱。建议平仓50%，剩余仓位设置跟踪止盈在峰值回撤20%处。"
   },
-  {
-    "symbol": "ES",
-    "action": "OPEN_NEW",
-    "leverage": 3,
-    "position_size_usd": 500,
-    "stop_loss": 6000,
-    "take_profit": 6600,
-    "confidence": 75,
-    "reasoning": "ES在5分钟时间框架放量突破关键阻力位，15分钟和1小时时间框架均呈现上涨趋势，多周期共振。建议开仓做多，止损设在突破点下方，止盈目标+8%。"
-  }
 ]
 ` + "```" + `
 
@@ -240,7 +230,7 @@ func (pb *PromptBuilder) buildSystemPromptEN() string {
   - OPEN_NEW: Open new position
   - WAIT: Wait, take no action
 - **leverage**: Leverage multiplier (required for new positions)
-- **position_size_usd**: Position size in the value currency (required for new positions)
+- **position_size_usd**: Position size (required for new positions)
 - **stop_loss**: Stop-loss price (recommended for new positions)
 - **take_profit**: Take-profit price (recommended for new positions)
 - **confidence**: Confidence level (0-100)
@@ -295,16 +285,6 @@ func (pb *PromptBuilder) getDecisionRequirementsEN() string {
     "confidence": 85,
     "reasoning": "Current PnL +2.96%, near historical peak +2.99% (only 0.03% pullback). Suggest partial close to lock profits because: 1) Only 11 minutes holding time with 3% gain; 2) 5M chart shows price approaching short-term resistance; 3) Volume declining, upward momentum weakening. Recommend closing 50%, set trailing stop at 20% pullback from peak for remainder."
   },
-  {
-    "symbol": "ES",
-    "action": "OPEN_NEW",
-    "leverage": 3,
-    "position_size_usd": 500,
-    "stop_loss": 6000,
-    "take_profit": 6600,
-    "confidence": 75,
-    "reasoning": "ES broke key resistance on the 5M timeframe with rising volume and multi-timeframe uptrend resonance on 15M and 1H. Recommend long entry, stop-loss just below the breakout, target +8% profit."
-  }
 ]
 ` + "```" + `
 

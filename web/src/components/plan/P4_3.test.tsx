@@ -252,7 +252,7 @@ describe('SessionPlanCard states', () => {
       <SessionPlanCard
         plan={activePlan}
         symbol="MNQ"
-        exchange="brand"
+        exchange="binance"
         language="en"
       />
     )

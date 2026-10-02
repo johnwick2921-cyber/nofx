@@ -83,7 +83,7 @@ function props(futures = true): ComponentProps<typeof TraderDashboardPage> {
     exchanges: [
       {
         id: 'ex',
-        exchange_type: futures ? 'ninjatrader' : 'brand',
+        exchange_type: futures ? 'ninjatrader' : 'binance',
         name: 'Test',
         account_name: 'Test SIM',
         enabled: true,
