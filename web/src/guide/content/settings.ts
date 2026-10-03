@@ -1421,17 +1421,32 @@ const sessions: KnobSpec[] = [
     perSession: 'No.',
   },
   {
-    label: 'Partial close (mentor scale-out) — same knob',
-    where: 'Environment only (CANCEL_CONFIRM_REQUIRE_REPORT ON)',
-    what: 'The exact-quantity exit the mentor scale-out needs: reduce_position exits EXACTLY qty contracts at market (never more than the open position; qty ≥ open is refused — a full close stays close_position) and reports the fill WITH the remaining quantity. After a confirmed reduce fill the protective stop is resized to the remaining quantity through the cancel-confirm path; a leg cancel that cannot be confirmed FAILS CLOSED and the remainder is flattened — never a blind re-place, never a naked remainder. AddOn build 2026-10-03-c1 (hello flag reduce_position); Go refuses to send the frame to an older AddOn.',
+    label: 'Partial close (mentor scale-out) — own knob',
+    where: 'Environment only (PARTIAL_CLOSE_ENABLED, default OFF)',
+    what: 'The exact-quantity exit the mentor scale-out needs: reduce_position exits EXACTLY qty contracts at market (never more than the open position; qty ≥ open is refused — a full close stays close_position). As part of the same frame the AddOn shrinks the existing SL and TP IN PLACE (Account.Change — never cancel-and-replace) to the remaining quantity and reports it as bracket_qty; Go verifies the shrink on the next snapshot and FAILS CLOSED (flattens the remainder) on a mismatch or an absent quantity. AddOn build 2026-10-03-c1 (hello flag reduce_position); Go refuses the send to an older AddOn.',
     trader:
-      'Nothing changes for the AI mode: the feature is byte-off unless the knob is ON, and the AI mode keeps its 1-contract rule.',
+      'Nothing changes for the AI mode: the feature is byte-off unless its own knob is ON (it is SPLIT from CANCEL_CONFIRM_REQUIRE_REPORT), and the AI mode keeps its 1-contract rule.',
     consumer:
-      'trader/partial_close.go (ReducePosition · consumeReduceFills · confirmStopResizes) · trader/ninjatrader/tcp_trader.go (ReducePosition · CancelBracketLeg) · store/partial_close.go (position_reductions + stop_resizes) · ninjascript VLTraderTCPClient.cs HandleReducePosition',
-    range: 'off | on · default off (same knob as the cancel-report regime)',
+      'trader/partial_close.go (ReducePosition · consumeReduceFills · verifyBracketResizes) · trader/ninjatrader/tcp_trader.go (ReducePosition) · store/partial_close.go (position_reductions) · ninjascript VLTraderTCPClient.cs HandleReducePosition + ShrinkBracketsForReduction',
+    range:
+      'off | on · default off · companion knob MENTOR_STOP_LIMIT (default OFF)',
     systemDefault: 'off',
     recommended:
       '⭐ keep OFF; the owner switches it ON with Mentor mode (SIM only).',
+    whenToTouch: 'Only with Mentor mode.',
+    perSession: 'No.',
+  },
+  {
+    label: 'Mentor stop-limit entries',
+    where: 'Environment only (MENTOR_STOP_LIMIT, default OFF)',
+    what: 'D1.4: never a stop-MARKET. With the knob ON, stop entries carry stop_limit=true and the AddOn builds OrderType.StopLimit with LimitPrice == StopPrice: the entry fills at its price or misses. Fail-closed: Go refuses the flag unless the AddOn proves build 2026-10-03-c1.',
+    trader: 'The mentor evaluator drives this knob; the AI path never sets it.',
+    consumer:
+      'provider/ninjatrader/tcp_framing.go (SignalPayload.StopLimit, MinAddonBuildStopLimit) · trader/ninjatrader/tcp_trader.go (PlaceStopEntryWithLimit) · ninjascript VLTraderTCPClient.cs (stop_limit construction)',
+    range: 'off | on · default off',
+    systemDefault: 'off',
+    recommended:
+      '⭐ keep OFF until Mentor mode; then ON with SIM-only trading.',
     whenToTouch: 'Only with Mentor mode.',
     perSession: 'No.',
   },
