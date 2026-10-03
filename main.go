@@ -11,7 +11,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	nofxiagent "vl/agent"
+	vliagent "vl/agent"
 	"vl/api"
 	"vl/auth"
 	"vl/branding"
@@ -224,7 +224,7 @@ func main() {
 	}
 	// P0 2026-08-19 — agent sub-call token caps are AI parameters too; audit
 	// them the same way.
-	ac := nofxiagent.AITokenCapsSnapshot()
+	ac := vliagent.AITokenCapsSnapshot()
 	logger.Infof("🤖 agent sub-call caps: taskstate_summary=%d taskstate_incremental=%d replanner=%d",
 		ac.TaskStateSummary, ac.TaskStateIncremental, ac.Replanner)
 	if !ac.SummarySet {
@@ -714,12 +714,12 @@ func main() {
 	telegramReloadCh := make(chan struct{}, 1)
 	server.SetTelegramReloadCh(telegramReloadCh)
 
-	// Start the NOFXi web agent on top of the current dev branch services.
-	nofxiAgent := nofxiagent.New(traderManager, st, nil, slog.Default())
-	agentWeb := nofxiagent.NewWebHandler(nofxiAgent, slog.Default())
+	// Start the VLi web agent on top of the current dev branch services.
+	vliAgent := vliagent.New(traderManager, st, nil, slog.Default())
+	agentWeb := vliagent.NewWebHandler(vliAgent, slog.Default())
 	server.RegisterAgentHandler(agentWeb)
-	nofxiAgent.Start()
-	defer nofxiAgent.Stop()
+	vliAgent.Start()
+	defer vliAgent.Stop()
 
 	safe.GoNet("api-server", "", func() {
 		if err := server.Start(); err != nil {

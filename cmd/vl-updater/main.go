@@ -10,7 +10,7 @@
 //
 // It never runs as root, never touches the hold (only the worker's census-
 // admitted hold.go does), never mints a token (serve reads the operator's
-// NOFX_CUTOVER_TOKEN from its environment) and never runs a step itself.
+// VL_CUTOVER_TOKEN from its environment) and never runs a step itself.
 //
 // fetch is wired (U4N item B): it only verifies a LOCAL archive into the
 // release root and writes its verdict — it installs nothing.
@@ -134,7 +134,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 }
 
 // lockScriptFor is the deploy lock script for this install: deploy/vl-lock.sh
-// (R5 removed the old nofx-lock.sh branch). Only `check` is ever run.
+// (R5 removed the old vl-lock.sh branch). Only `check` is ever run.
 func lockScriptFor(installDir string) string {
 	return filepath.Join(installDir, "deploy", "vl-lock.sh")
 }
@@ -226,9 +226,9 @@ func serve(t updaterworker.Target, stderr io.Writer) int {
 }
 
 // fetch is the ATTENDED pre-fetch (brief C9): it verifies the local archive
-// <$NOFX_RELEASE_INBOX>/<release_id>.tar.gz against the INSTALL's
+// <$VL_RELEASE_INBOX>/<release_id>.tar.gz against the INSTALL's
 // deploy/release_allowed_signers (C6/C7: absent ⇒ refused), materializes it
-// under $NOFX_RELEASE_DIR/<source_sha> (the one release-dir resolver,
+// under $VL_RELEASE_DIR/<source_sha> (the one release-dir resolver,
 // installpath.ReleaseDir; never inside the install) and writes the verdict
 // into the installation's data dir — U3's FetchRelease does all of it, in
 // its order. No network code; nothing is written on a refusal. It prints the

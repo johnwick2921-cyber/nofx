@@ -23,7 +23,7 @@ import (
 const DefaultDBPath = "data/data.db"
 
 // BackupRoot is the one backup-directory default: ~/vl-backups. (R5 dropped
-// the old ~/nofx-backups branch.) Callers:
+// the old ~/vl-backups branch.) Callers:
 // store backups, the activate and updater CLIs.
 func BackupRoot() string {
 	home, err := os.UserHomeDir()

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// R5: the worker's lock script is deploy/vl-lock.sh (the old nofx-lock.sh
+// R5: the worker's lock script is deploy/vl-lock.sh (the old vl-lock.sh
 // branch was removed with R5).
 
 func TestLockScriptForIsVl(t *testing.T) {

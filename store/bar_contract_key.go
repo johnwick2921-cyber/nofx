@@ -215,7 +215,7 @@ func (r BarsKeyReport) BootLine() string {
 
 // barsKeyBackupDir is where the pre-migration backup goes: BARS_KEY_BACKUP_DIR
 // if set (tests and failure injection), else installpath.BackupRoot() —
-// the vl-backups tree (R5 removed the old ~/nofx branch).
+// the vl-backups tree (R5 removed the old ~/vl branch).
 func barsKeyBackupDir() (string, error) {
 	if v := strings.TrimSpace(os.Getenv("BARS_KEY_BACKUP_DIR")); v != "" {
 		return v, nil // BARS_KEY_BACKUP_DIR still wins: an explicit dir is explicit
