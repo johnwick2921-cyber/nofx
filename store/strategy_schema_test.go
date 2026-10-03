@@ -129,13 +129,16 @@ func TestStrategyConfigNormalizeProductSchemaForLLMLabels(t *testing.T) {
 // anywhere on the strategy-config path) — so those keys must be
 // readable-and-ignored, the load must succeed, and the legacy source_type must
 // degrade to static (never a DB write, never a migration).
+// R5 (2026-10-03): the fixture's own api-key column is now vlos_api_key —
+// the same proof (an unknown/legacy column is ignored on load), without
+// keeping the old name in a fixture. No production code reads vlos_api_key.
 func TestStoredLegacyNofxOSConfigLoadsWithoutError(t *testing.T) {
 	legacyJSON := `{
 		"strategy_type":"ai_trading",
 		"coin_source":{"source_type":"ai500","use_ai500":true,"ai500_limit":5,"use_oi_top":false,"oi_top_limit":3,"use_oi_low":false,"oi_low_limit":3},
 		"indicators":{
 			"klines":{"primary_timeframe":"5m","selected_timeframes":["5m","15m","1h"],"enable_multi_timeframe":true,"enable_raw_klines":true},
-			"nofxos_api_key":"cm_568c67eae410d912c54c",
+			"vlos_api_key":"cm_568c67eae410d912c54c",
 			"enable_quant_data":true,
 			"enable_quant_oi":true,
 			"enable_quant_netflow":true,
