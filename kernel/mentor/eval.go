@@ -52,10 +52,13 @@ type State struct {
 
 	// E2 (CTO 12:27:25Z): the EMA34 loss machinery — the pending stop of the
 	// last emitted EMA setup, and the one-loss block until a departure.
-	EmaPendingSide  Side    `json:"ema_pending_side,omitempty"`
-	EmaPendingEntry float64 `json:"ema_pending_entry,omitempty"`
-	EmaPendingStop  float64 `json:"ema_pending_stop,omitempty"`
-	EmaBlocked      bool    `json:"ema_blocked,omitempty"`
+	EmaPendingSide   Side    `json:"ema_pending_side,omitempty"`
+	EmaPendingEntry  float64 `json:"ema_pending_entry,omitempty"`
+	EmaPendingStop   float64 `json:"ema_pending_stop,omitempty"`
+	EmaPendingTarget float64 `json:"ema_pending_target,omitempty"`
+	EmaPendingExpiry int64   `json:"ema_pending_expiry,omitempty"`
+	EmaPendingFilled bool    `json:"ema_pending_filled,omitempty"`
+	EmaBlocked       bool    `json:"ema_blocked,omitempty"`
 	// ArmSeq names the next arm.
 	ArmSeq int `json:"arm_seq"`
 }
@@ -338,8 +341,16 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 	boxes := BoxesBuild(bars, e.Cfg.Box, time.UnixMilli(now))
 	levels = append(levels, BoxEdgeLocations(boxes)...)
 
-	// §3: first-touch classification per level.
+	// §3: first-touch classification per level. BOX edges are OUT of this
+	// loop (BOX PATH DECISION, CTO 12:38:50Z): the box path is DS-106's
+	// boxEntryIntent — the level path treating each edge as a separate line
+	// would double-trade a box return (a candle inside the box can look like
+	// an approach from above). The edges stay in `levels` for location /
+	// InsideAnyBox / boxBanFilter / midRangeBoxed checks.
 	for _, lvl := range levels {
+		if lvl.Kind == KindFTGHEdge || lvl.Kind == KindFTGLEdge {
+			continue
+		}
 		tr := e.State.Touches[lvl.Key]
 		if e.State.ISBOnly[lvl.Key] {
 			continue // invalid level: no PHL/PLH, and touches need no re-read
@@ -504,7 +515,7 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 		}
 	}
 	if emaPrice != 0 {
-		emaLossTick(e, emaPrice, cur)
+		emaLossTick(e, emaPrice, cur, now)
 	}
 
 	for _, lvl := range levels {
@@ -552,6 +563,9 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 					e.State.EmaPendingSide = in.Side
 					e.State.EmaPendingEntry = in.Price
 					e.State.EmaPendingStop = in.Stop
+					e.State.EmaPendingTarget = in.Target
+					e.State.EmaPendingExpiry = in.ExpiryMs
+					e.State.EmaPendingFilled = false
 				}
 				out = append(out, in)
 				break
