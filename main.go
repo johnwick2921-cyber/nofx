@@ -11,7 +11,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	nofxiagent "vl/agent"
+	vliagent "vl/agent"
 	"vl/api"
 	"vl/auth"
 	"vl/branding"
@@ -31,7 +31,6 @@ import (
 	"vl/trader"
 
 	"github.com/google/uuid"
-	"vl/internal/envcompat"
 	ntwire "vl/provider/ninjatrader"
 	"vl/safe"
 	ntTrader "vl/trader/ninjatrader"
@@ -41,10 +40,6 @@ func main() {
 	// Initialize logger first so the .env outcome has somewhere to land
 	// (logger.Init reads no environment variable, so config sees the same order)
 	logger.Init(nil)
-
-	// envcompat: reads at package init (chart across-roll, bar-source knobs)
-	// queue their NOFX_-fallback WARN until a sink exists; the logger is it.
-	envcompat.SetWarnSink(func(m string) { logger.Warn(m) })
 
 	// Load .env environment variables — fails open: on any error nothing is
 	// set and every variable falls back to the process environment; the
@@ -229,7 +224,7 @@ func main() {
 	}
 	// P0 2026-08-19 — agent sub-call token caps are AI parameters too; audit
 	// them the same way.
-	ac := nofxiagent.AITokenCapsSnapshot()
+	ac := vliagent.AITokenCapsSnapshot()
 	logger.Infof("🤖 agent sub-call caps: taskstate_summary=%d taskstate_incremental=%d replanner=%d",
 		ac.TaskStateSummary, ac.TaskStateIncremental, ac.Replanner)
 	if !ac.SummarySet {
@@ -662,7 +657,9 @@ func main() {
 	// CANCEL-CONFIRMATION (2026-09-06) — a send is not a settlement. Every
 	// field READ; the reconciliation half prints n/a until a broker book exists,
 	// because at process start there is none and a number here would be invented.
-	logger.Infof("🧾 %s", trader.CancelBootLine(st, trader.ReconcileCounts{}, time.Now().UnixMilli()))
+	// The far-side build id arrives on the first hello/heartbeat — at this
+	// point there is none yet, and the line reads it as n/a (report regime).
+	logger.Infof("🧾 %s", trader.CancelBootLine(st, trader.ReconcileCounts{}, time.Now().UnixMilli(), ""))
 	// THE DESK STRIP (2026-09-06) — one read, one row per fact the owner needs.
 	// The UNKNOWN count is per-request, so at boot the line says n/a instead of
 	// printing a zero it has not measured.
@@ -719,12 +716,12 @@ func main() {
 	telegramReloadCh := make(chan struct{}, 1)
 	server.SetTelegramReloadCh(telegramReloadCh)
 
-	// Start the NOFXi web agent on top of the current dev branch services.
-	nofxiAgent := nofxiagent.New(traderManager, st, nil, slog.Default())
-	agentWeb := nofxiagent.NewWebHandler(nofxiAgent, slog.Default())
+	// Start the VLi web agent on top of the current dev branch services.
+	vliAgent := vliagent.New(traderManager, st, nil, slog.Default())
+	agentWeb := vliagent.NewWebHandler(vliAgent, slog.Default())
 	server.RegisterAgentHandler(agentWeb)
-	nofxiAgent.Start()
-	defer nofxiAgent.Stop()
+	vliAgent.Start()
+	defer vliAgent.Stop()
 
 	safe.GoNet("api-server", "", func() {
 		if err := server.Start(); err != nil {
