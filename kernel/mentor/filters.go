@@ -41,17 +41,24 @@ func TriggerTick(prev TriggerLine, bars []market.Kline, tfMin int, cfg Config) T
 	}
 	next := prev
 	ms := int64(tfMin) * 60_000
-	for _, b := range bars {
+	for i, b := range bars {
 		if b.OpenTime <= next.LastBucket {
-			continue
+			continue // a committed bucket
 		}
 		last := next.LastBar
 		if last.OpenTime > 0 && b.OpenTime == last.OpenTime+ms {
 			next = applyBreak(next, last, b)
 		}
-		// the first bucket ever, or a gap: record and move on
-		next.LastBar = b
-		next.LastBucket = b.OpenTime
+		// Only NON-tail buckets commit. The LAST bucket is the forming one: it
+		// is re-evaluated every tick with its growing extremes, so an intrabar
+		// break fires at the MINUTE it happens — never from the bucket open
+		// (replay-audit look-ahead (a) — the Go side must not register early),
+		// and never lost (the break is idempotent: same-direction re-breaks do
+		// not move the line, B3).
+		if i < len(bars)-1 {
+			next.LastBar = b
+			next.LastBucket = b.OpenTime
+		}
 	}
 	return next
 }

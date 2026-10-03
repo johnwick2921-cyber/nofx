@@ -50,7 +50,7 @@ func TestTriggerOnRecordedTapeNeverOn1m(t *testing.T) {
 	if got.Dir == "" {
 		t.Fatal("no trigger line on the 5m aggregation of the recorded tape")
 	}
-	if got.LastBucket != five[len(five)-1].OpenTime {
-		t.Fatalf("LastBucket = %d, want %d (every bucket processed exactly once)", got.LastBucket, five[len(five)-1].OpenTime)
+	if got.LastBucket != five[len(five)-2].OpenTime {
+		t.Fatalf("LastBucket = %d, want %d (the forming tail never commits)", got.LastBucket, five[len(five)-2].OpenTime)
 	}
 }
