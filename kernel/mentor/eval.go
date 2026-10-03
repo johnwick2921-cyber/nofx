@@ -287,6 +287,14 @@ func closedBuckets(bars []market.Kline, now int64, cfg Config) []market.Kline {
 // nextLevelBeyond is the §6 target ladder [D3.3 p1 @ 05:07]: the NEAREST level
 // beyond price in the trade direction ("the first thing standing in your way").
 // 0 = no level beyond.
+// targetFloorOK is the D1.2 floor: "the target is never smaller than the
+// stop" [D1.2 p1 @ 07:48] — |target−entry| must be >= |entry−stop|. It holds
+// for EVERY setup's intent (CTO E-2 2026-10-03T15:12Z): the room knob may
+// tighten a target but never loosens this floor.
+func targetFloorOK(entry, stop, target float64) bool {
+	return abs(target-entry) >= abs(entry-stop)
+}
+
 func nextLevelBeyond(levels []Level, price float64, side Side) float64 {
 	best := 0.0
 	for _, l := range levels {
@@ -439,13 +447,12 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 				// fold item 3: entries only with the 4h trigger direction
 				// (1h agreeing or silent); fold item 4: a DayOff shuts the
 				// machine off for the day.
-				if htfOK, htfSide, htfReason := HTFVerdict(e.State.HTF); !htfOK {
-					_ = htfReason
+				if htfOK, htfSide, _ := HTFVerdict(e.State.HTF); !htfOK {
+					e.refuse("isb_htf_blocked")
 				} else {
 					// R1 (RULES-FIX-v3): the order is a STOP-LIMIT in the
 					// CANDLE-1 colour direction (the only skip: a stop in
 					// the twenties) [D1.4 p1 @ 09:20–10:20, 24:41–24:55].
-					side, chosen, ok, reason := ISBStopLimitOrder(prev, cur, e.Cfg)
 					// R5: while the box stands nothing trades inside it except a
 					// SAME-direction 1m ISB — compute the verdict up front so an
 					// allowed ISB still falls through to the emit below.
@@ -455,44 +462,53 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 							boxBlocked, _ = true, r
 						}
 					}
+					side, chosen, ok, _ := ISBStopLimitOrder(prev, cur, e.Cfg)
 					if !ok {
-						_ = reason // twenties — no entry
+						e.refuse("isb_stop_twenties")
 					} else if isbArmActive(e.State.ISBArms, side) {
 						// ONE ARM PER SIDE (CTO parity ruling 1791008332386 #1):
 						// stacking extends the EXISTING arm — no new arm.
 					} else if boxBlocked {
 						// R5: an opposite-direction ISB inside the box — no entry
+						e.refuse("isb_box_blocked")
 					} else if side != "" && htfSide != "" && side != htfSide {
 						// ISB direction against the 4h — no entry
+						e.refuse("isb_htf_side_mismatch")
 					} else if e.State.Day.Verdict == DayOff {
 						// day off — no mentor entries today
+						e.refuse("isb_day_off")
 					} else {
 						// §6 [D3.3 p1 @ 05:07]: "TARGET LÀ VỀ NHỮNG LEVEL KẾ
 						// TIẾP" — a setup gives entry, stop AND target
-						// [D4.1 p1 @ 01:39]; no level beyond → no trade.
-						if target := nextLevelBeyond(levels, chosen.Price, side); target != 0 {
-							chosen.Target = target
+						// [D4.1 p1 @ 01:39]; no level beyond → no trade — a
+						// missing (or sub-1:1) target skips ONLY this ISB, never
+						// the rest of the tick (CTO E-1/E-2 2026-10-03T15:12Z).
+						target := nextLevelBeyond(levels, chosen.Price, side)
+						if target == 0 {
+							e.refuse("isb_missing_target")
+						} else if !targetFloorOK(chosen.Price, chosen.Stop, target) {
+							e.refuse("isb_target_below_floor")
 						} else {
-							return out // missing target — not a setup [D4.1 p1 @ 01:45]
+							chosen.Target = target
+							// ISB size flags for the injector: rule 2 (at an old
+							// high/low → REDUCE SIZE) and rule 3 (in a range → REDUCE
+							// SIZE, "Khi trade isb in-range bắt buộc giảm size" [D4.1 p1
+							// @ 08:05/09:40]) — the range is the same mid-range test as
+							// the PHL/PLH ban.
+							chosen.Flag = isbFlags(cur, levels, boxes)
+							// N12: a single ISB fills by the close of the NEXT 1m candle
+							// or it is cancelled ("cancel if the next candle does not
+							// fill" [D1.4 p1 @ 18:32–18:45]); stacking extends it below.
+							chosen.ExpiryMs = cur.CloseTime + 60_000
+							e.State.ArmSeq++
+							id := fmt.Sprintf("isb-%d", e.State.ArmSeq)
+							// the ISB candle is the 1st inside candle (Inside=1), so the
+							// stacking loop must skip this arm on the placement bar.
+							e.State.ISBArms[id] = ISBArm{FirstBar: cur, Inside: 0, Side: side}
+							justPlaced[id] = true
+							chosen.ArmID = id
+							out = append(out, chosen)
 						}
-						// ISB size flags for the injector: rule 2 (at an old
-						// high/low → REDUCE SIZE) and rule 3 (in a range → REDUCE
-						// SIZE, "Khi trade isb in-range bắt buộc giảm size" [D4.1 p1
-						// @ 08:05/09:40]) — the range is the same mid-range test as
-						// the PHL/PLH ban.
-						chosen.Flag = isbFlags(cur, levels, boxes)
-						// N12: a single ISB fills by the close of the NEXT 1m candle
-						// or it is cancelled ("cancel if the next candle does not
-						// fill" [D1.4 p1 @ 18:32–18:45]); stacking extends it below.
-						chosen.ExpiryMs = cur.CloseTime + 60_000
-						e.State.ArmSeq++
-						id := fmt.Sprintf("isb-%d", e.State.ArmSeq)
-						// the ISB candle is the 1st inside candle (Inside=1), so the
-						// stacking loop must skip this arm on the placement bar.
-						e.State.ISBArms[id] = ISBArm{FirstBar: cur, Inside: 0, Side: side}
-						justPlaced[id] = true
-						chosen.ArmID = id
-						out = append(out, chosen)
 					}
 				}
 			} else {
