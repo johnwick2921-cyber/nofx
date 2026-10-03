@@ -3,6 +3,7 @@ package mentor
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -53,12 +54,17 @@ type State struct {
 
 	// Seeded state (P0 1791009358785): built by Seed from the STORED bars and
 	// updated incrementally — never rebuilt from the live slice.
-	SeedLevels       []Level `json:"seed_levels,omitempty"` // 1H RTH key levels, full stored history
-	Seed1HWatermark  int64   `json:"seed_1h_watermark,omitempty"`
-	Seed1HLastColour bool    `json:"seed_1h_last_colour,omitempty"`
-	Seed1mWatermark  int64   `json:"seed_1m_watermark,omitempty"`
-	EMA34            float64 `json:"ema34,omitempty"` // 1m EMA 34 (incremental)
-	EMA9             float64 `json:"ema9,omitempty"`  // 1m EMA 9 (incremental)
+	SeedLevels      []Level `json:"seed_levels,omitempty"` // 1H RTH key levels, full stored history
+	Seed1HWatermark int64   `json:"seed_1h_watermark,omitempty"`
+	// Seed1HBars is the full 1H RTH candle series (stored history at seed,
+	// extended incrementally per tick). The KEY-LEVEL deletion check runs
+	// against it per tick — re-aggregating the whole slice per level per tick
+	// is O(levels x bars) and timed the replay out.
+	Seed1HBars       []market.Kline `json:"seed_1h_bars,omitempty"`
+	Seed1HLastColour bool           `json:"seed_1h_last_colour,omitempty"`
+	Seed1mWatermark  int64          `json:"seed_1m_watermark,omitempty"`
+	EMA34            float64        `json:"ema34,omitempty"` // 1m EMA 34 (incremental)
+	EMA9             float64        `json:"ema9,omitempty"`  // 1m EMA 9 (incremental)
 
 	// E2 (CTO 12:27:25Z): the EMA34 loss machinery — the pending stop of the
 	// last emitted EMA setup, and the one-loss block until a departure.
@@ -324,11 +330,17 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 	// closed through a key level DELETES it; a 1H wick through does not. The
 	// deletion is permanent for the session and the level leaves the set at
 	// once — it can no longer be touched, located, or laddered to.
+	var b60 []market.Kline
+	if e.seeded {
+		b60 = e.State.Seed1HBars // incremental (seed + ticks), O(new) per tick
+	} else {
+		b60 = keyLevel1HBars(bars) // cold: one aggregation per tick
+	}
 	for _, l := range levels {
 		if l.Kind != KindKeyLevel || e.State.DeletedLevels[l.Key] {
 			continue
 		}
-		if levelDeletedBy1HBody(l, bars, now) {
+		if levelDeletedBy1HBody(l, b60, now) {
 			e.State.DeletedLevels[l.Key] = true
 		}
 	}
@@ -786,9 +798,14 @@ func (e *Evaluator) seededLevels(bars []market.Kline, now int64) []Level {
 	// seed has not seen yet. O(new bars) per tick, not O(all bars).
 	k34 := 2.0 / float64(e.Cfg.EMAPeriod34+1)
 	k9 := 2.0 / float64(e.Cfg.EMAPeriod9+1)
-	for _, b := range bars {
-		if b.CloseTime <= e.State.Seed1mWatermark || b.CloseTime > now {
-			continue
+	// Index-start at the first bar past the watermark: scanning the whole
+	// (growing) slice every tick is the O(n^2) replay killer. CloseTime is
+	// non-decreasing, so sort.Search is exact.
+	i := sort.Search(len(bars), func(i int) bool { return bars[i].CloseTime > e.State.Seed1mWatermark })
+	for ; i < len(bars); i++ {
+		b := bars[i]
+		if b.CloseTime > now {
+			break
 		}
 		e.State.EMA34 += k34 * (b.Close - e.State.EMA34)
 		e.State.EMA9 += k9 * (b.Close - e.State.EMA9)
@@ -797,13 +814,21 @@ func (e *Evaluator) seededLevels(bars []market.Kline, now int64) []Level {
 
 	// Extend the 1H RTH key-level walk with the candles that closed since the
 	// seed watermark (colour-change level at the candle OPEN, prune newest-first).
-	for _, c := range keyLevel1HBars(bars) {
+	// Feed keyLevel1HBars only the tail from the first bar of the next
+	// anchored candle: the full-slice walk is O(n) allocs per tick (site 4
+	// made it rthHourAnchor/rthMinuteOf per bar) = O(n^2) over the tape.
+	// The tail starts on a bucket boundary, so aggregation is identical.
+	start := sort.Search(len(bars), func(i int) bool {
+		return rthHourAnchor(bars[i].OpenTime) > e.State.Seed1HWatermark
+	})
+	for _, c := range keyLevel1HBars(bars[start:]) {
 		if c.OpenTime <= e.State.Seed1HWatermark || c.CloseTime > now {
 			continue
 		}
 		e.State.SeedLevels, e.State.Seed1HLastColour =
 			keyLevelsAppend(e.State.SeedLevels, c, e.State.Seed1HLastColour, e.Cfg.KeyLevelPrunePts)
 		e.State.Seed1HWatermark = c.OpenTime
+		e.State.Seed1HBars = append(e.State.Seed1HBars, c)
 	}
 
 	var out []Level

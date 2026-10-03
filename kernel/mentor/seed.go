@@ -100,6 +100,7 @@ func Seed(e *Evaluator, bars1m []market.Kline, now int64) []string {
 
 	// 1H RTH key levels from the FULL stored history (F7, no cap).
 	candles1h := bars1h
+	e.State.Seed1HBars = candles1h // the deletion check needs the FULL series
 	e.State.SeedLevels = keyLevelsFromCandles(candles1h, e.Cfg.KeyLevelPrunePts)
 	if n := len(candles1h); n > 0 {
 		e.State.Seed1HWatermark = candles1h[n-1].OpenTime
