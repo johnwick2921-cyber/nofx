@@ -84,7 +84,7 @@ case "$real_root" in
     exit 2 ;;
 esac
 echo "install-updater-worker: env ok (release dir outside the install; token present, not shown)"
-echo "install-updater-worker: note — VL_CUTOVER_TOKEN is the cutover-worker credential enroll writes (auth.ScopeCutoverWorker); never a hand-minted gate-jwt"a hand-minted gate-jwt"ended install window — no longer-lived token type exists"
+echo "install-updater-worker: note — VL_CUTOVER_TOKEN is the cutover-worker credential enroll writes (auth.ScopeCutoverWorker); never a hand-minted gate-jwt — the enroll token is the long-lived type (auth.WorkerTokenTTL)"
 
 BUILD_DIR="$(mktemp -d /tmp/vl-updater-build.XXXXXX)" || { echo "install-updater-worker: REFUSED — cannot make a build dir" >&2; exit 2; }
 trap 'rm -rf "$BUILD_DIR"' EXIT

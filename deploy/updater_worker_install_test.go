@@ -67,6 +67,13 @@ func TestInstallUpdaterWorkerScript(t *testing.T) {
 			t.Fatalf("install script must carry %q", want)
 		}
 	}
+	// P-E E4 (2026-10-02 follow-up): the old 24-hour gate-jwt tail is DEAD —
+	// the enroll token is the long-lived type, and the script's note must
+	// never resurrect the false claim.
+	if strings.Contains(content, "no longer-lived token type") {
+		t.Fatalf("install script note must not carry the dead " +
+			"\"no longer-lived token type\" tail")
+	}
 	// No privilege escalation anywhere: no line RUNS sudo.
 	for _, l := range strings.Split(content, "\n") {
 		line := strings.TrimSpace(l)
