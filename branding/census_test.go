@@ -26,133 +26,16 @@ type censusEntry struct {
 
 var censusTable = map[string][]censusEntry{
 	".env.example": {
-		{count: 3, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	".github/workflows/docker-build.yml": {
-		{count: 4, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	".github/workflows/release.yml": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	".gitignore": {
-		{count: 2, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"Makefile": {
-		{count: 2, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/bars-key-rollback.sh": {
-		{count: 9, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/canon_contract_test.go": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/cutover.sh": {
-		{count: 21, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/cutover_test.sh": {
-		{count: 10, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/install-autostart.sh": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/install-updater-worker.sh": {
-		{count: 13, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/planner-ab-report.sh": {
-		{count: 13, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/planner_ab_report_fixture_test.sh": {
-		{count: 2, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/postboot-check.sh": {
-		{count: 41, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/release/README.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/release/package.sh": {
-		{count: 8, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/release_contract_test.go": {
-		{count: 13, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/release_manifest_addon_pin_test.go": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/release_manifest_caller_test.go": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/release_manifest_versions_test.go": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/rename_r1a_contract_test.go": {
-		{count: 18, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/unit_templates_test.go": {
-		{count: 7, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/updater_worker_install_test.go": {
-		{count: 15, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/vl-claim.sh": {
-		{count: 5, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/vl-clock-guard.sh": {
-		{count: 3, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/vl-db-backup.sh": {
-		{count: 18, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/vl-lock-test.sh": {
-		{count: 15, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/vl-lock.sh": {
-		{count: 6, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/vl_db_backup_test.go": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/vl_twin_contract_test.go": {
-		{count: 8, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/{OLD}-claim.sh": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/{OLD}-clock-guard.sh": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/{OLD}-db-backup.sh": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"deploy/{OLD}-lock.sh": {
-		{count: 2, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docker/Dockerfile.backend": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"internal/updaterjob/testdata/legacy-jobs/README.md": {
 		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
 	},
 	"ninjascript/VLTraderTCPClient.cs": {
 		{count: 10, phase: "R5", reason: "transitional — re-pinned at final"},
 	},
-	"scripts/sandbox-down.sh": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"scripts/sandbox-up.sh": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"start.sh": {
-		{count: 3, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"web/src/test/brand-scope-baseline.json": {
-		{count: 3, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
 }
 
 // Ceiling = sum of allowed counts at the R1b merge (1160) + 11 for the
 // e1dcc173 legacy job fixture (2026-10-02 #307).
-const censusCeiling = 269
+const censusCeiling = 11
 
 func TestCensusGuard(t *testing.T) {
 	tok := "no" + "fx" // runtime assembly — never the literal
