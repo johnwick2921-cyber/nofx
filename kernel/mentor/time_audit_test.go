@@ -207,6 +207,21 @@ func TestTimeAuditBucketOpen4h(t *testing.T) {
 	}
 }
 
+func TestTimeAuditSeedTodayWindow(t *testing.T) {
+	for _, c := range auditDates {
+		if got := sessionKeyCT(auditMs(c.y, c.mo, c.d, 9, 0, 0)); got != auditDateFmt(c.y, c.mo, c.d) {
+			t.Fatalf("%s 09:00: session key = %s, want %s", c.label, got, auditDateFmt(c.y, c.mo, c.d))
+		}
+		if got := sessionKeyCT(auditMs(c.y, c.mo, c.d, 18, 0, 0)); got != auditDateFmt(c.y, c.mo, c.d+1) {
+			t.Fatalf("%s 18:00: session key = %s, want %s (the 17:00 CT flip moves it to the next day)", c.label, got, auditDateFmt(c.y, c.mo, c.d+1))
+		}
+		// a bar in the overnight half of the session belongs to the same key.
+		if got := sessionKeyCT(auditMs(c.y, c.mo, c.d-1, 20, 0, 0)); got != auditDateFmt(c.y, c.mo, c.d) {
+			t.Fatalf("%s prev 20:00: session key = %s, want %s (17:00 CT opens the NEXT key)", c.label, got, auditDateFmt(c.y, c.mo, c.d))
+		}
+	}
+}
+
 func TestTimeAuditCTOf(t *testing.T) {
 	for _, c := range auditDates {
 		_, hh, mm := ctOf(auditMs(c.y, c.mo, c.d, 8, 30, 0))
