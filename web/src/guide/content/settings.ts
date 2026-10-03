@@ -1384,6 +1384,20 @@ const pictureHtf: KnobSpec[] = [
     whenToTouch: 'To set a stricter floor than risk control.',
     perSession: 'No.',
   },
+  {
+    label: 'Mentor stop-limit entries',
+    where: 'Environment only (MENTOR_STOP_LIMIT, default OFF)',
+    what: 'D1.4: never a stop-MARKET. With the knob ON, stop entries carry stop_limit=true and the AddOn builds OrderType.StopLimit with LimitPrice == StopPrice: the entry fills at its price or misses. The order carries a per-order expiry (expiry_ms) authored by the evaluator intent and is cancelled unfilled when it lapses (N12: a gap through the trigger otherwise leaves a resting limit that can fill later at a stale price).',
+    trader: 'The mentor evaluator drives this knob; the AI path never sets it.',
+    consumer:
+      'provider/ninjatrader/tcp_framing.go (SignalPayload.StopLimit, MinAddonBuildStopLimit) · trader/ninjatrader/tcp_trader.go (PlaceStopEntryWithLimit) · trader/armed_executor.go (routing + expiry sweep) · store/armed_orders.go (expiry_ms) · ninjascript VLTraderTCPClient.cs (stop_limit).',
+    range: 'off | on · default off',
+    systemDefault: 'off',
+    recommended:
+      '⭐ keep OFF until Mentor mode; then ON with SIM-only trading.',
+    whenToTouch: 'Only with Mentor mode.',
+    perSession: 'No.',
+  },
 ]
 
 const sessions: KnobSpec[] = [
@@ -1403,6 +1417,23 @@ const sessions: KnobSpec[] = [
       '⭐ keep the current rows — they ARE the deployed session map.',
     whenToTouch: 'Only with a deliberate session-thesis change.',
     perSession: 'N/A (they define it).',
+  },
+  {
+    label: 'Cancel confirmation — report regime',
+    where: 'Environment only (no Strategy-page row)',
+    what: 'env CANCEL_CONFIRM_REQUIRE_REPORT (default OFF). OFF: a requested cancel is confirmed by the order’s absence from a fresh broker snapshot (2026-09-06 wave). ON: a cancel is DONE only when the AddOn reports the order Cancelled (or Filled, which is the filled path) for that order id — the positive per-order report. Until then the arm slot is BUSY (no re-place), a timeout prints one owner-visible CENSUS WARN naming every unconfirmed id, and cancels are re-requested up to the cap, never silently promoted.',
+    trader:
+      'The knob is the Mentor-mode gate (cancel/re-place every few candles). With it OFF the bot is byte-identical to today. An AddOn below build 2026-10-03-c1 fails closed while ON: no confirmation → no stop-entry placement.',
+    consumer:
+      'trader/cancel_confirm.go (cancelConfirmRequireReport · confirmPendingCancelsReport · slotReportBlock in armSlotGuard) · store/armed_orders.go (RecordCancelReport · ConfirmCancelByReport) · the AddOn echoes the order’s state on every cancel_order (VL_BUILD_ID 2026-10-03-c1)',
+    range:
+      'off | on · default off · companion envs CANCEL_CONFIRM_TIMEOUT_S (90) · CANCEL_REREQUEST_MAX (5)',
+    systemDefault: 'off',
+    recommended:
+      '⭐ keep OFF for the AI path; the owner turns it ON before Mentor mode places its first live (SIM) stop entry.',
+    whenToTouch:
+      'Only with a deliberate move of the Mentor-mode gate — and do NOT turn ON until: (1) lost-report recovery works across every SIM account (SendCancelReport currently scans only the active account); (2) the slot refusal also raises the book-outage P0 with an uncertified or disconnected AddOn; (3) part-filled entries can never be cancelled by a report; (4) an operator path exists to clear a cancel_pending row that can never receive a report.',
+    perSession: 'No.',
   },
 ]
 
