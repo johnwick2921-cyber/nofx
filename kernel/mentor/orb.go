@@ -2,6 +2,7 @@ package mentor
 
 import (
 	"strings"
+	"time"
 
 	"vl/market"
 )
@@ -19,9 +20,12 @@ type ORB struct {
 	Escaped Side    `json:"escaped"` // "" = not escaped yet; else the escape direction
 }
 
-// dayStartCT floors a CT-based epoch-millis time to its CT day start.
+// dayStartCT floors a REAL-UTC epoch-millis time to its CT-midnight epoch
+// (EPOCH RULING 2026-10-03: one convention = real UTC everywhere; wall
+// arithmetic shifts by 5h/6h with DST).
 func dayStartCT(t int64) int64 {
-	return (t / (24 * 60 * 60_000)) * (24 * 60 * 60_000)
+	tt := time.UnixMilli(t).In(ctime())
+	return time.Date(tt.Year(), tt.Month(), tt.Day(), 0, 0, 0, 0, ctime()).UnixMilli()
 }
 
 // ORBAdvance draws the ORB once the 08:30 2-minute candle has completed and
