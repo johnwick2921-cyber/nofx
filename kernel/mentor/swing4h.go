@@ -387,6 +387,7 @@ func swingRejectIntent(approach Side, ref market.Kline, line float64, cfg SwingC
 			Side:   SideShort,
 			Price:  ref.Low - cfg.EntryBufferPts,
 			Stop:   line + cfg.StopBeyondLinePts,
+			Setup:  "SWING4H",
 		}
 	} else {
 		in = Intent{
@@ -394,6 +395,7 @@ func swingRejectIntent(approach Side, ref market.Kline, line float64, cfg SwingC
 			Side:   SideLong,
 			Price:  ref.High + cfg.EntryBufferPts,
 			Stop:   line - cfg.StopBeyondLinePts,
+			Setup:  "SWING4H",
 		}
 	}
 	if abs(in.Stop-in.Price) >= cfg.MaxStopPts {
@@ -418,9 +420,9 @@ func swingRejectIntent(approach Side, ref market.Kline, line float64, cfg SwingC
 func swingISBIntent(t *swingTouch, ref market.Kline, line float64, cfg SwingCfg) (Intent, bool) {
 	var in Intent
 	if t.Approach == SideShort {
-		in = Intent{Action: PlaceStopEntry, Side: SideShort, Price: ref.Low - cfg.EntryBufferPts, Stop: line}
+		in = Intent{Action: PlaceStopEntry, Side: SideShort, Price: ref.Low - cfg.EntryBufferPts, Stop: line, Setup: "SWING4H"}
 	} else {
-		in = Intent{Action: PlaceStopEntry, Side: SideLong, Price: ref.High + cfg.EntryBufferPts, Stop: line}
+		in = Intent{Action: PlaceStopEntry, Side: SideLong, Price: ref.High + cfg.EntryBufferPts, Stop: line, Setup: "SWING4H"}
 	}
 	if abs(in.Stop-in.Price) >= cfg.MaxStopPts {
 		return Intent{}, false
