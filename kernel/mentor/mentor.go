@@ -93,6 +93,11 @@ type Intent struct {
 	// (the setup carries its own explicit CancelArm instead).
 	ExpiryMs int64
 
+	// Confluence is the R2 flag [00-METHOD Risk-reward, D3.4 p3 @ 07:38]:
+	// box edge + a key level inside the box or within 2 pts of its edge +
+	// the 5m trigger agrees — DS-102's exit-C / size-10 branch reads it.
+	Confluence bool
+
 	// CancelArm / LevelInvalid fields.
 	ArmID    string
 	LevelKey string
@@ -126,6 +131,20 @@ type Config struct {
 	// Default 0: any closed candle that did not touch ends the visit ("he never
 	// states one"). Key-level touch references are per VISIT, not per day.
 	LvlRevisitMinPts float64
+	// LossDeparturePts — departure rule for loss blocks (CTO 13:24:53Z):
+	// a closed candle AFTER the loss candle whose |close - loss price| reaches
+	// this distance lifts the block. Default 20 ("leave the area", no number
+	// from the mentor). ONE rule for E2 (EMA) and G2 (levels/boxes).
+	LossDeparturePts float64
+	// LocTriggerFilter — mirror of the replay row v5_loc_notrig (CTO
+	// 13:20:22Z): true (default) keeps the 5m-trigger filter on LEVEL and BOX
+	// rejects; false switches it off for those two only.
+	LocTriggerFilter bool
+	// EmaMaxCross30m — E4 knob (CTO 12:27:25Z): refuse the EMA34 setup when the
+	// close crossed the line this many times over the last 30 closed 1m candles
+	// ("xien len xien xuong", D4.2 p1 @ 22:27 — he never gives a number).
+	// Default 0 = OFF (base). Sensitivity rows: v5_ema_cross2 / v5_ema_cross4.
+	EmaMaxCross30m int
 
 	// ISB (PLAN v1 §3).
 	ISBBufferPts   float64 // order buffer beyond the wick extremes, BOTH sides; default 1.5 [D1.4 p1 @ 22:22–22:30]
@@ -193,9 +212,11 @@ func DefaultConfig() Config {
 		PHLMinCandlesFromExtreme: 3,
 		PHLTargetShyPts:          5,
 
-		StopCeilingPts: 25,
-		RoomMultiple:   2,
-		RangeGapPts:    0,
+		StopCeilingPts:   25,
+		RoomMultiple:     2,
+		LossDeparturePts: 20,
+		LocTriggerFilter: true,
+		RangeGapPts:      0,
 
 		DayGateSpentPts:     300,
 		DayGateTargetCapPts: 15,

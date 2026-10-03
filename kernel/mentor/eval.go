@@ -25,6 +25,10 @@ type State struct {
 	DeletedLevels map[string]bool `json:"deleted_levels,omitempty"`
 	// ISBArms are the live inside-bar orders (stacking counter, §2.1).
 	ISBArms map[string]ISBArm `json:"isb_arms,omitempty"`
+	// BoxRefs records, per live box key, the bar index of the last return
+	// visit already evaluated — every return trades (R1, D3.2 p2 @ 06:25),
+	// each exactly once.
+	BoxRefs map[string]int `json:"box_refs,omitempty"`
 	// Trigger is the 5m trigger-line state (§5.1).
 	Trigger TriggerLine `json:"trigger"`
 	// HTF is the §5.4 4h/1h direction state (DS-106, fold item 3).
@@ -49,6 +53,18 @@ type State struct {
 	Seed1mWatermark  int64   `json:"seed_1m_watermark,omitempty"`
 	EMA34            float64 `json:"ema34,omitempty"` // 1m EMA 34 (incremental)
 	EMA9             float64 `json:"ema9,omitempty"`  // 1m EMA 9 (incremental)
+
+	// E2 (CTO 12:27:25Z): the EMA34 loss machinery — the pending stop of the
+	// last emitted EMA setup, and the one-loss block until a departure.
+	EmaPendingSide   Side    `json:"ema_pending_side,omitempty"`
+	EmaPendingEntry  float64 `json:"ema_pending_entry,omitempty"`
+	EmaPendingStop   float64 `json:"ema_pending_stop,omitempty"`
+	EmaPendingTarget float64 `json:"ema_pending_target,omitempty"`
+	EmaPendingExpiry int64   `json:"ema_pending_expiry,omitempty"`
+	EmaPendingFilled bool    `json:"ema_pending_filled,omitempty"`
+	EmaLossPrice     float64 `json:"ema_loss_price,omitempty"`
+	EmaLossBarTime   int64   `json:"ema_loss_bar_time,omitempty"`
+	EmaBlocked       bool    `json:"ema_blocked,omitempty"`
 	// ArmSeq names the next arm.
 	ArmSeq int `json:"arm_seq"`
 }
@@ -71,6 +87,9 @@ func UnmarshalState(b []byte) (State, error) {
 	}
 	if s.ISBArms == nil {
 		s.ISBArms = map[string]ISBArm{}
+	}
+	if s.BoxRefs == nil {
+		s.BoxRefs = map[string]int{}
 	}
 	return s, err
 }
@@ -95,6 +114,7 @@ func New(cfg Config) *Evaluator {
 		ISBOnly:       map[string]bool{},
 		DeletedLevels: map[string]bool{},
 		ISBArms:       map[string]ISBArm{},
+		BoxRefs:       map[string]int{},
 	}}
 }
 
@@ -347,8 +367,16 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 	boxes := BoxesBuild(bars, e.Cfg.Box, time.UnixMilli(now))
 	levels = append(levels, BoxEdgeLocations(boxes)...)
 
-	// §3: first-touch classification per level.
+	// §3: first-touch classification per level. BOX edges are OUT of this
+	// loop (BOX PATH DECISION, CTO 12:38:50Z): the box path is DS-106's
+	// boxEntryIntent — the level path treating each edge as a separate line
+	// would double-trade a box return (a candle inside the box can look like
+	// an approach from above). The edges stay in `levels` for location /
+	// InsideAnyBox / boxBanFilter / midRangeBoxed checks.
 	for _, lvl := range levels {
+		if lvl.Kind == KindFTGHEdge || lvl.Kind == KindFTGLEdge {
+			continue
+		}
 		tr := e.State.Touches[lvl.Key]
 		if e.State.ISBOnly[lvl.Key] {
 			continue // invalid level: no PHL/PLH, and touches need no re-read
@@ -504,9 +532,26 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 	// §2.2: PHL/PLH from a fresh reject touch against an old extreme,
 	// gated by trigger side, mid-range and the setup's own gates.
 	oldExtremes := oldExtremeIndexes(levels, bars)
+	// E2: watch the last emitted EMA stop; block the EMA line on a loss.
+	emaPrice := 0.0
+	for _, lvl := range levels {
+		if lvl.Kind == KindEMA34 {
+			emaPrice = lvl.Price
+			break
+		}
+	}
+	if emaPrice != 0 {
+		emaLossTick(e, emaPrice, cur, now)
+	}
+
 	for _, lvl := range levels {
 		tr := e.State.Touches[lvl.Key]
 		if tr.Outcome != TouchReject || e.State.ISBOnly[lvl.Key] {
+			continue
+		}
+		// E2 + E4: the EMA34 setup is gated on the loss block and the
+		// 30-minute crossing knob.
+		if isEMA34(lvl) && !emaSetupAllowed(e, lvl, bars, e.Cfg) {
 			continue
 		}
 		// LOCATION GATE (fold item 1): a PHL/PLH entry level must be a real
@@ -518,8 +563,12 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 		if !ok {
 			continue
 		}
-		if dirOK, trigSide, _ := TriggerVerdict(e.State.Trigger, price); !dirOK || trigSide != "" && trigSide != side {
-			continue
+		// LocTriggerFilter (CTO 13:20:22Z): false switches the 5m-trigger
+		// filter off for LEVEL rejects (the box path honours it separately).
+		if e.Cfg.LocTriggerFilter {
+			if dirOK, trigSide, _ := TriggerVerdict(e.State.Trigger, price); !dirOK || trigSide != "" && trigSide != side {
+				continue
+			}
 		}
 		if allowed, _ := SetupPermittedVerdict("PHL", levels, price, e.Cfg); !allowed {
 			continue
@@ -542,9 +591,38 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 			if ok {
 				// N12: a level touch fills by the close of the NEXT 1m candle.
 				in.ExpiryMs = cur.CloseTime + 60_000
+				if isEMA34(lvl) {
+					e.State.EmaPendingSide = in.Side
+					e.State.EmaPendingEntry = in.Price
+					e.State.EmaPendingStop = in.Stop
+					e.State.EmaPendingTarget = in.Target
+					e.State.EmaPendingExpiry = in.ExpiryMs
+					e.State.EmaPendingFilled = false
+				}
 				out = append(out, in)
 				break
 			}
+		}
+	}
+
+	// §4.1 box trades (BOX RULING R1 2026-10-03, ONE path = DS-106's
+	// boxEntryIntent — CTO 12:38:50Z): every return visit of every live box is
+	// evaluated, not only the first [D3.2 p2 @ 06:25]. The R2 confluence flag
+	// rides the emitted intent. BoxRefs dedups: a return is evaluated exactly
+	// once, on the tick its reference candle closes. The box edges are OUT of
+	// the level touch loop above, so a return emits exactly ONE entry.
+	if e.State.BoxRefs == nil {
+		e.State.BoxRefs = map[string]int{}
+	}
+	boxCfg := DefaultBoxCfg()
+	for _, b := range boxes {
+		last := e.State.BoxRefs[b.Key]
+		for _, r := range BoxReturnBars(bars, b, b.FormedAt, boxCfg) {
+			if r.RefBar <= last {
+				continue
+			}
+			e.State.BoxRefs[b.Key] = r.RefBar
+			out = append(out, boxEntryIntent(bars[r.RefBar], b, boxes, levels, e.State.Trigger, e.Cfg)...)
 		}
 	}
 
