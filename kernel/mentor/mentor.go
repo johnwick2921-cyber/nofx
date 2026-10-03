@@ -288,20 +288,14 @@ func barsTF(bars []market.Kline, tfMin int) []market.Kline {
 	return out
 }
 
-// bucketOpen floors a CT-based epoch-millis open time to its TF bucket. For
-// 240 minutes the anchor is the CME session open at 17:00 CT (B1).
+// bucketOpen floors an open time to its TF bucket. 1m/5m/15m/1h buckets are
+// whole TF multiples of real-UTC epoch ms (whole-hour UTC offsets — DST
+// safe). The 4h bucket is anchored at the CME session open 17:00 CT and is
+// DST-aware via America/Chicago (EPOCH RULING 2026-10-03: bars carry real
+// UTC ms; the CT read never uses raw division on the epoch).
 func bucketOpen(openMs int64, tfMin int) int64 {
-	t := openMs / 60_000 // minutes since epoch, CT basis (DS-108 §1.2)
 	if tfMin == 240 {
-		const sess = 17 * 60 // 17:00 CT
-		d := t - sess
-		day := d / (24 * 60)
-		rem := d % (24 * 60)
-		if rem < 0 {
-			day--
-			rem += 24 * 60
-		}
-		return (day*(24*60) + sess + (rem/240)*240) * 60_000
+		return fourHBucketStart(openMs, ctime())
 	}
-	return (t / int64(tfMin)) * int64(tfMin) * 60_000
+	return (openMs / (int64(tfMin) * 60_000)) * (int64(tfMin) * 60_000)
 }
