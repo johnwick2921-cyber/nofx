@@ -97,6 +97,13 @@ type Intent struct {
 	// box edge + a key level inside the box or within 2 pts of its edge +
 	// the 5m trigger agrees — DS-102's exit-C / size-10 branch reads it.
 	Confluence bool
+	// Anchor / AnchorKey name the G2 place the setup was taken at (CTO R-b
+	// 2026-10-03): the level price, the box edge, or the EMA — NOT the old
+	// extreme. The PHL/PLH emit site sets both from the touch level; a plain
+	// ISB sets neither (no anchor = not loss-boxed). Limits keys the loss
+	// box on AnchorKey when set, else the quarter-tick Anchor.
+	Anchor    float64
+	AnchorKey string
 
 	// CancelArm / LevelInvalid fields.
 	ArmID    string
@@ -184,6 +191,15 @@ type Config struct {
 	// intraday entry — nothing inside, no reversal at the edges, only the
 	// escape side after a 1m body close outside. The §8 swing is exempt.
 	OrbGateEnabled bool
+
+	// LegBudgetEnabled — G1 (R12, DS-107, CTO 2026-10-03): at most 2 entries
+	// per leg (the PHL/PLH + a same-direction ISB); a stop-out inside the leg
+	// closes it. Default ON.
+	LegBudgetEnabled bool
+	// LegResetOn — G1 parity knob: a NEW leg starts only on a break beyond
+	// the prior extreme. "close" (default): the previous candle's CLOSE
+	// strictly beyond the extreme; "touch": this candle's wick reaching it.
+	LegResetOn string
 }
 
 // DefaultConfig returns the mentor defaults per PLAN v1 (knob values start from
@@ -226,11 +242,13 @@ func DefaultConfig() Config {
 		Box: DefaultBoxCfg(),
 
 		OrbGateEnabled: true,
+
+		LegBudgetEnabled: true,
+		LegResetOn:       "close",
 	}
 }
 
 // barsTF aggregates 1m bars into the given timeframe on CLOCK-ALIGNED buckets
-// in CT (B1, CTO review): 5m/15m/1h floor the open time to the TF; 4h anchors
 // to the CME session open 17:00 CT (17–21, 21–01, 01–05, 05–09, 09–13, 13–16)
 // the way NT8 draws them. Buckets never re-anchor when the window slides or a
 // gap appears.

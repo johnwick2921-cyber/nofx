@@ -1,6 +1,10 @@
 package mentor
 
-import "vl/market"
+import (
+	"strings"
+
+	"vl/market"
+)
 
 // Box trade evaluation — BOX REUSE (R1) and CONFLUENCE (R2), CTO rulings
 // 2026-10-03 verified in the sources [A].
@@ -132,7 +136,12 @@ func boxEntryIntent(ref market.Kline, b Box, boxes []Box, levels []Level, trig T
 		return nil
 	}
 	fl := ConfluenceVerdict(b, side, levels, trig)
+	// G2 place (CTO R-b / 13:20:08Z): a box is ONE place — the key WITHOUT the
+	// ":top"/":bottom" suffix, the anchor is the box MIDPOINT (the replay's).
+	base := strings.TrimSuffix(strings.TrimSuffix(b.Key, ":top"), ":bottom")
 	return []Intent{{
+		AnchorKey:  base,
+		Anchor:     (b.Top + b.Bottom) / 2,
 		Action:     PlaceStopEntry,
 		Side:       side,
 		Price:      price,

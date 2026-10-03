@@ -29,6 +29,8 @@ type State struct {
 	// visit already evaluated — every return trades (R1, D3.2 p2 @ 06:25),
 	// each exactly once.
 	BoxRefs map[string]int `json:"box_refs,omitempty"`
+	// Limits is the G1 leg budget + G2 loss box state machine (DS-107).
+	Limits Limits `json:"limits,omitempty"`
 	// Trigger is the 5m trigger-line state (§5.1).
 	Trigger TriggerLine `json:"trigger"`
 	// HTF is the §5.4 4h/1h direction state (DS-106, fold item 3).
@@ -573,6 +575,13 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 			if ok {
 				// N12: a level touch fills by the close of the NEXT 1m candle.
 				in.ExpiryMs = cur.CloseTime + 60_000
+				// G2 place (CTO R-b): the setup's PLACE — the touch level. For the
+				// EMA the anchor is the loss-time price (the stop, K1).
+				in.AnchorKey = lvl.Key
+				in.Anchor = lvl.Price
+				if lvl.Kind == KindEMA34 || lvl.Kind == KindEMA9 || lvl.Kind == KindEMA34HTF {
+					in.Anchor = in.Stop
+				}
 				if isEMA34(lvl) {
 					e.State.EmaPendingSide = in.Side
 					e.State.EmaPendingEntry = in.Price
@@ -625,6 +634,19 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 	if e.seeded && len(e.missing) > 0 {
 		out = failClosedFilter(out)
 	}
+
+	// G1/G2 limits hook (DS-107): the leg budget and the loss box apply to
+	// intraday entries; the §8 swing runs its own machine and is exempt.
+	intraday := out[:0]
+	var swings []Intent
+	for _, in := range out {
+		if strings.HasPrefix(in.Reason, "swing") {
+			swings = append(swings, in)
+			continue
+		}
+		intraday = append(intraday, in)
+	}
+	out = append(e.State.Limits.Apply(intraday, bars[len(bars)-2], bars[len(bars)-1], now, levels, e.Cfg), swings...)
 
 	return out
 }
