@@ -899,6 +899,48 @@ func (t *TCPTrader) CancelOrder(signalID string) error {
 	})
 }
 
+// CancelBracketLeg (PARTIAL-CLOSE) cancels ONE named bracket leg for the entry
+// signal — the explicit leg call the C# D1 ruling (2026-09-07) reserves for:
+// cancelling a protective leg is its own request, never a side effect of an
+// entry cancel. Leg is "sl" or "tp". Refuses when the entry's bracket is not
+// tracked; the #309 report regime confirms the outcome.
+func (t *TCPTrader) CancelBracketLeg(signalID, leg string) error {
+	if t == nil || t.server == nil {
+		return fmt.Errorf("ninjatrader/tcp: trader not bound")
+	}
+	leg = strings.ToLower(strings.TrimSpace(leg))
+	if leg != "sl" && leg != "tp" {
+		return fmt.Errorf("ninjatrader/tcp: bracket leg must be sl or tp, got %q", leg)
+	}
+	return t.server.SendCancelOrder(ntwire.CancelOrderPayload{
+		Symbol: t.symbol, SignalID: signalID, Leg: leg,
+		Account: t.boundAccount, TraderID: t.traderID,
+	})
+}
+
+// ReducePosition (PARTIAL-CLOSE) asks the AddOn to exit EXACTLY qty contracts
+// at market. It refuses BEFORE the send when the far side never advertised the
+// reduce_position capability in its hello (ErrReduceUnsupported) — a reduce
+// that is not supported is never attempted (dispatch item 3).
+func (t *TCPTrader) ReducePosition(side string, qty int, clientID string) error {
+	if t == nil || t.server == nil || !t.server.ReducePositionSupported() {
+		return ntwire.ErrReduceUnsupported
+	}
+	return t.server.SendReducePosition(ntwire.ReducePositionPayload{
+		Symbol: t.symbol, Side: side, Quantity: qty, ClientID: clientID,
+		Account: t.boundAccount, TraderID: t.traderID,
+	})
+}
+
+// ReduceFills returns THIS trader's reduce_fill stream (symbol, account) — the
+// AddOn's report of a filled partial exit with the remaining quantity.
+func (t *TCPTrader) ReduceFills() <-chan ntwire.ReduceFillPayload {
+	if t == nil || t.server == nil {
+		return nil
+	}
+	return t.server.SubscribeReduceFillsFor(t.symbol, t.boundAccount)
+}
+
 // ModifyBracket (PHASE 2 armed orders) modifies the live bracket SL/TP in place.
 func (t *TCPTrader) ModifyBracket(signalID string, newSL, newTP float64) error {
 	return t.server.SendModifyBracket(ntwire.ModifyBracketPayload{
