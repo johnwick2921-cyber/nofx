@@ -33,6 +33,32 @@ func TestORBDrawsAfterTheFirst2mCandle(t *testing.T) {
 	}
 }
 
+// TestORBDrawsAndTestsTheSameClosedCandle — P5: the ORB is drawn at the
+// 08:32 tick (the tick processing the bar that closed at 08:32) and the
+// escape test must run on that SAME closed candle, not the next one.
+// Range-day shape: the ORB's high comes from the 08:30 bar and the 08:32
+// bar's BODY closes above it → the escape latches at 08:32, not 08:33.
+func TestORBDrawsAndTestsTheSameClosedCandle(t *testing.T) {
+	day := int64(19645) * 24 * 60 * 60_000 // 2026-09-15 CT
+	mk := func(hh, mm int, o, h, l, c float64) market.Kline {
+		t0 := day + int64(hh*60+mm)*60_000
+		return market.Kline{OpenTime: t0, CloseTime: t0 + 59_999, Open: o, High: h, Low: l, Close: c}
+	}
+	bars := []market.Kline{
+		mk(8, 30, 24820, 24844, 24814, 24830), // ORB high 24844, low 24814
+		mk(8, 31, 24830, 24836, 24816, 24820),
+		mk(8, 32, 24840, 24870, 24830, 24860), // BODY closes above the high → escape
+	}
+	// the 08:32 tick: the 08:32 bar just closed at 08:32:59.999
+	orb := ORBAdvance(ORB{}, bars, day+(8*60+32)*60_000+59_999)
+	if !orb.Drawn || orb.High != 24844 || orb.Low != 24814 {
+		t.Fatalf("ORB = %+v, want drawn 24844/24814", orb)
+	}
+	if orb.Escaped != SideLong {
+		t.Fatalf("escape = %q, want long at the 08:32 tick — the drawing candle itself is tested [P5]", orb.Escaped)
+	}
+}
+
 // TestORBGateWorkedExample — the seen example: Mon 22 Sep '25, ORB
 // 24,814.00–24,844.00; price clears 24,844.00 → longs only. Inside the ORB
 // nothing trades and there is no reversal at the edges; the escape only picks

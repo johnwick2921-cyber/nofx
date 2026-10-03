@@ -50,8 +50,12 @@ func ORBAdvance(orb ORB, bars []market.Kline, now int64) ORB {
 			orb.High = maxf(b1.High, b2.High)
 			orb.Low = minf(b1.Low, b2.Low)
 			orb.Drawn = true
+		} else {
+			return orb
 		}
-		return orb
+		// P5: fall through — the escape test runs on the SAME closed candle
+		// that completed the 2m ORB. Drawing and returning here skipped the
+		// 08:32 escape candle and latched one tick late (08:33).
 	}
 	if orb.Escaped != "" {
 		return orb
