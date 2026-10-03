@@ -93,6 +93,14 @@ type Intent struct {
 	// (the setup carries its own explicit CancelArm instead).
 	ExpiryMs int64
 
+	// Anchor / AnchorKey name the G2 place the setup was taken at (CTO R-b
+	// 2026-10-03): the level price, the box edge, or the EMA — NOT the old
+	// extreme. The PHL/PLH emit site sets both from the touch level; a plain
+	// ISB sets neither (no anchor = not loss-boxed). Limits keys the loss
+	// box on AnchorKey when set, else the quarter-tick Anchor.
+	Anchor    float64
+	AnchorKey string
+
 	// CancelArm / LevelInvalid fields.
 	ArmID    string
 	LevelKey string
