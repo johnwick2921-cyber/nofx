@@ -20,6 +20,10 @@ type State struct {
 	ISBOnly map[string]bool `json:"isb_only,omitempty"`
 	// ISBArms are the live inside-bar orders (stacking counter, §2.1).
 	ISBArms map[string]ISBArm `json:"isb_arms,omitempty"`
+	// BoxRefs records, per live box key, the bar index of the last return
+	// visit already evaluated — every return trades (R1, D3.2 p2 @ 06:25),
+	// each exactly once.
+	BoxRefs map[string]int `json:"box_refs,omitempty"`
 	// Trigger is the 5m trigger-line state (§5.1).
 	Trigger TriggerLine `json:"trigger"`
 	// ArmSeq names the next arm.
@@ -41,6 +45,9 @@ func UnmarshalState(b []byte) (State, error) {
 	}
 	if s.ISBArms == nil {
 		s.ISBArms = map[string]ISBArm{}
+	}
+	if s.BoxRefs == nil {
+		s.BoxRefs = map[string]int{}
 	}
 	return s, err
 }
@@ -217,6 +224,27 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 				out = append(out, in)
 				break
 			}
+		}
+	}
+
+	// §4.1 box trades (BOX RULING R1 2026-10-03): every return visit of
+	// every live box is evaluated — not only the first [D3.2 p2 @ 06:25].
+	// The R2 confluence flag rides the emitted intent. BoxRefs dedups: a
+	// return is evaluated exactly once, on the tick its reference candle
+	// closes.
+	if e.State.BoxRefs == nil {
+		e.State.BoxRefs = map[string]int{}
+	}
+	boxCfg := DefaultBoxCfg()
+	boxes := BoxesBuild(bars, boxCfg, time.UnixMilli(now))
+	for _, b := range boxes {
+		last := e.State.BoxRefs[b.Key]
+		for _, r := range BoxReturnBars(bars, b, b.FormedAt, boxCfg) {
+			if r.RefBar <= last {
+				continue
+			}
+			e.State.BoxRefs[b.Key] = r.RefBar
+			out = append(out, boxEntryIntent(bars[r.RefBar], b, boxes, levels, e.State.Trigger, e.Cfg)...)
 		}
 	}
 	return out
