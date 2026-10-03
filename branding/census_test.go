@@ -130,163 +130,7 @@ var censusTable = map[string][]censusEntry{
 	"docker/Dockerfile.backend": {
 		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
 	},
-	"docs/internal/external-reviews/2026-05-28-end-to-end-architecture.md": {
-		{count: 5, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/AUDIT-CHECKLIST.md": {
-		{count: 2, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/CLAUDE-canon.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/VL-TRADING-RULEBOOK-v1.md": {
-		{count: 40, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/plans/2026-08-29-news-hygiene-micro-wave.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/plans/2026-08-29-sunday-shield-wave.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-08-18-timegate-audit-ai-timeout.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-08-19-final-bundle.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-08-19-ledger-close-FINAL.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-08-19-zerotrade-forensics.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-08-20-brand-census-docs-brand-census.md": {
-		{count: 9, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-08-20-brand-census.md": {
-		{count: 9, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-08-25-1h-wave-r2-r4-implementation.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-08-26-bar-persistence.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-08-26-fvg-entry-model.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-08-26-packb-volume-levels.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-08-26-s-fix-wave.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-08-27-guide-page.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-08-27-plan-mode-layering-ux.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-08-28-bar-truth-wave.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-08-28-forensics-hygiene-wave.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-08-28-missed-200pt.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-08-28-waterfall-class-wave.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-08-29-f1-dependency-vuln-scan.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-08-29-total-audit-15.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-08-30-weekly-bias-wave.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-09-01-class35-replan-budget.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-09-01-full-system-audit.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-09-01-planner-api-failure.md": {
-		{count: 2, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-09-02-bar-source-audit.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-09-02-deepseek-e2e-audit.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-09-02-detector-redesign.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-09-03-rebrand-census.md": {
-		{count: 5, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-09-06-v5-precheck.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-09-08-brand-visible.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-09-08-plan-liveness.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-09-08-scenario-economics.md": {
-		{count: 2, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-09-10-scenario-level-identity-data/basis-receipts.json": {
-		{count: 5, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-09-10-scenario-level-identity-data/basis_receipts.py": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-09-10-scenario-level-identity-data/remote-ci-setup-failures.txt": {
-		{count: 16, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-09-12-structural-stop.md": {
-		{count: 2, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-09-12-structural-stop/evidence/github-checks.json": {
-		{count: 26, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-09-13-repo-understanding/CORE-TRACE.md": {
-		{count: 35, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-09-13-repo-understanding/CTO-REPORT.md": {
-		{count: 35, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-09-13-repo-understanding/FULL-AUDIT.md": {
-		{count: 35, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-09-13-repo-understanding/tools/build-core-trace.py": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-09-13-repository-repairs/dependency-alerts-at-review.jsonl": {
-		{count: 5, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/reports/2026-09-13-structural-stop-daily-loss-evidence/github-checks.json": {
-		{count: 33, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/research/2026-09-08-trading-policy/README.md": {
-		{count: 16, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/research/2026-09-09-structure-candle-targets-staleness/README.md": {
-		{count: 7, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/research/2026-09-12-stop-target-geometry/README.md": {
-		{count: 12, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/runbooks/2026-09-04-partner-update.md": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"docs/superpowers/runbooks/2026-09-08-clean-machine.md": {
+	"internal/updaterjob/testdata/legacy-jobs/README.md": {
 		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
 	},
 	"ninjascript/VLTraderTCPClient.cs": {
@@ -301,24 +145,6 @@ var censusTable = map[string][]censusEntry{
 	"start.sh": {
 		{count: 3, phase: "R5", reason: "transitional — re-pinned at final"},
 	},
-	"web/src/brand-scope.test.ts": {
-		{count: 21, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"web/src/components/faq/FAQContent.tsx": {
-		{count: 8, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"web/src/guide/content/status.ts": {
-		{count: 2, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"web/src/i18n/translations.ts": {
-		{count: 8, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"web/src/lib/storageMigration.test.ts": {
-		{count: 32, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
-	"web/src/lib/storageMigration.ts": {
-		{count: 5, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
 	"web/src/test/brand-scope-baseline.json": {
 		{count: 3, phase: "R5", reason: "transitional — re-pinned at final"},
 	},
@@ -326,7 +152,7 @@ var censusTable = map[string][]censusEntry{
 
 // Ceiling = sum of allowed counts at the R1b merge (1160) + 11 for the
 // e1dcc173 legacy job fixture (2026-10-02 #307).
-const censusCeiling = 678
+const censusCeiling = 269
 
 func TestCensusGuard(t *testing.T) {
 	tok := "no" + "fx" // runtime assembly — never the literal
