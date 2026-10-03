@@ -1,6 +1,7 @@
 package mentor
 
 import (
+	"strings"
 	"testing"
 
 	"vl/market"
@@ -17,10 +18,19 @@ func TestEvaluatorOnRecordedDaysEmitsOnlyCompleteIntents(t *testing.T) {
 		e := New(cfg)
 		bars := loadFixture(t, day, "1m")
 		total := 0
+		swingIntents := 0
 		for i := 2; i <= len(bars); i++ {
 			now := bars[i-1].OpenTime + 59_999
 			for _, in := range e.Tick(bars[:i], now) {
 				total++
+				if strings.HasPrefix(in.Reason, "swing") {
+					swingIntents++
+					// SWING EXPIRY (CTO 1791008594562): an unfilled swing order
+					// lives until the close of the CURRENT 4h candle.
+					if in.Action == PlaceStopEntry && in.ExpiryMs != swingExpiry(now) {
+						t.Fatalf("%s bar %d: swing expiry = %d, want the current 4h close %d: %+v", day, i, in.ExpiryMs, swingExpiry(now), in)
+					}
+				}
 				if in.Reason == "" {
 					t.Fatalf("%s bar %d: intent without a reason: %+v", day, i, in)
 				}
@@ -31,8 +41,16 @@ func TestEvaluatorOnRecordedDaysEmitsOnlyCompleteIntents(t *testing.T) {
 					if in.Side == SideShort && !(in.Stop > in.Price && in.Price > in.Target) {
 						t.Fatalf("%s bar %d: short %+v is not stop > entry > target", day, i, in)
 					}
-					if in.Price-in.Stop > cfg.StopCeilingPts || in.Stop-in.Price > cfg.StopCeilingPts {
-						t.Fatalf("%s bar %d: stop distance over the ceiling: %+v", day, i, in)
+					// the intraday 25-pt ceiling is the ISB/PHL rule; the §8
+					// swing carries its own stop budget (30 pts beyond the
+					// 4h EMA, MaxStopPts=100 — never the 25-pt ceiling).
+					swing := strings.HasPrefix(in.Reason, "swing")
+					ceiling := cfg.StopCeilingPts
+					if swing {
+						ceiling = cfg.Swing.MaxStopPts
+					}
+					if in.Price-in.Stop > ceiling || in.Stop-in.Price > ceiling {
+						t.Fatalf("%s bar %d: stop distance over its ceiling: %+v", day, i, in)
 					}
 				}
 				if in.Action == LevelInvalid && in.LevelKey == "" {
@@ -41,6 +59,11 @@ func TestEvaluatorOnRecordedDaysEmitsOnlyCompleteIntents(t *testing.T) {
 			}
 		}
 		t.Logf("%s: %d intents over %d bars", day, total, len(bars))
+		if day == "mnq_1m_2026-09-15_rth" && swingIntents == 0 {
+			// the wiring mutant (dropping runSwing from Tick) must turn RED
+			// here: 09-15's tape provably produces §8 swing intents.
+			t.Fatalf("%s: no swing intents emitted — runSwing not wired into Tick", day)
+		}
 	}
 }
 
@@ -125,5 +148,63 @@ func TestEvaluatorInvalidLevelBlocksPHL(t *testing.T) {
 		if in.Action == PlaceStopEntry && in.LevelKey != "" {
 			t.Fatalf("PHL/PLH emitted against a wrong-way level: %+v", in)
 		}
+	}
+}
+
+// TestSwingZoneGateKnob — CTO swing ruling (mails 1791001124127 /
+// 1791001760445): §8 swings are NOT gated on the 5m trigger zone by default —
+// nothing in D5.2 ties the 4h→5m swing to the 5m trigger lines. The knob
+// swing_respects_5m_zone (default false) turns the zone gate on at the
+// runSwing call site [C]: not stated in the method.
+func TestSwingZoneGateKnob(t *testing.T) {
+	tl := TriggerLine{Dir: SideShort, Price: 97, OldPrice: 100, OldDir: SideLong}
+	ints := []Intent{
+		{Action: PlaceStopEntry, Reason: "swing §8: reject touch", Price: 98.5}, // inside the two-trigger zone
+		{Action: PlaceStopEntry, Reason: "swing §8: reject touch", Price: 96},   // escaped below — allowed
+	}
+	if DefaultSwingCfg().Respects5mZone {
+		t.Fatal("swing_respects_5m_zone default must be false")
+	}
+	if got := swingZoneGate(ints, tl, false); len(got) != 2 {
+		t.Fatalf("knob off: the zone gate must be OFF, got %d intents", len(got))
+	}
+	got := swingZoneGate(ints, tl, true)
+	if len(got) != 1 || got[0].Price != 96 {
+		t.Fatalf("knob on: the zone-price swing must be dropped, got %+v", got)
+	}
+}
+
+// TestEvaluatorRefusesEverythingInTriggerZone — R4 (RULES FIX v3, verified in
+// the transcript, D3.4 p1 @ 16:56–17:17): between two opposing trigger lines
+// there is NO trade at all, ISB included, and the zone INCLUDES the lines.
+// The evaluator's ISB branch gates on TriggerVerdict(cur.Close) BEFORE any
+// other check, so an ISB whose close is in the zone emits nothing.
+func TestEvaluatorRefusesEverythingInTriggerZone(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Enabled = true
+	mk := func(i int, o, h, l, c float64) market.Kline {
+		return market.Kline{OpenTime: int64(i) * 60_000, Open: o, High: h, Low: l, Close: c}
+	}
+	// an ISB pair: cur's body inside prev's full range (wicks included).
+	prev := mk(0, 99, 101, 96, 99)
+	for _, tc := range []struct {
+		name  string
+		close float64
+	}{
+		{"strictly between", 98.5},
+		{"exactly on the new sell line", 97},
+		{"exactly on the old buy line", 100},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := New(cfg)
+			e.State.Trigger = TriggerLine{Dir: SideShort, Price: 97, OldPrice: 100, OldDir: SideLong}
+			bars := []market.Kline{prev, mk(1, 97.5, 98.5, 96.5, tc.close)}
+			intents := e.Tick(bars, bars[1].OpenTime+59_999)
+			for _, in := range intents {
+				if in.Action == PlaceStopEntry {
+					t.Fatalf("entry emitted inside the two-trigger zone: %+v", in)
+				}
+			}
+		})
 	}
 }

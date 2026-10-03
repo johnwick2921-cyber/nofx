@@ -12,7 +12,7 @@ import (
 // must escape BOTH before anything may trade.
 func TestTriggerVerdictZoneIncludesTheLines(t *testing.T) {
 	// long line at 100, reversal moved it to short at 97 (old long line 100).
-	tl := TriggerLine{Dir: SideShort, Price: 97, Moved: true, OldPrice: 100, OldDir: SideLong}
+	tl := TriggerLine{Dir: SideShort, Price: 97, OldPrice: 100, OldDir: SideLong}
 	for _, p := range []float64{97, 100, 98.5} {
 		if ok, _, _ := TriggerVerdict(tl, p); ok {
 			t.Fatalf("price %.2f inside/at the zone must refuse everything, ISB included [D3.4 p1 @ 16:56]", p)
@@ -33,7 +33,7 @@ func TestTriggerVerdictZoneIncludesTheLines(t *testing.T) {
 // inside-bar candle's close into TriggerVerdict; a close inside the zone
 // refuses the arm (the evaluator's ISB branch then never arms).
 func TestTriggerVerdictISBInTheZoneIsRefused(t *testing.T) {
-	tl := TriggerLine{Dir: SideShort, Price: 97, Moved: true, OldPrice: 100, OldDir: SideLong}
+	tl := TriggerLine{Dir: SideShort, Price: 97, OldPrice: 100, OldDir: SideLong}
 	// a perfect ISB pair whose close sits between the two lines
 	prev := market.Kline{Open: 99, High: 101, Low: 96, Close: 98}
 	cur := market.Kline{Open: 98.5, High: 99, Low: 97.5, Close: 98.5}
