@@ -18,11 +18,6 @@ type TriggerLine struct {
 	Dir   Side    // allowed direction ("" before the first break)
 	Price float64 // the broken extreme (wick included)
 
-	// OldPrice/oldDir are the line from BEFORE the last reversal move; the
-	// zone strictly between the two lines is the no-trade zone [@ 16:38].
-	OldPrice float64
-	OldDir   Side
-
 	// B2: persistence — the last PROCESSED bucket (clock-aligned open) and
 	// its bar. TriggerTick processes only newer buckets; the forming bucket
 	// may fire a break once and is never re-applied.
@@ -86,34 +81,24 @@ func applyBreak(next TriggerLine, before, cur market.Kline) TriggerLine {
 			next.Dir, next.Price = SideShort, before.Low
 		}
 	case next.Dir == SideLong && brokeLow: // reversal: move the line once
-		next.OldDir, next.OldPrice = next.Dir, next.Price
+		// B1 (10-03 ruling): ONE line, moved on a reversal — the old line is
+		// gone, not kept as a second line [D3.4 p1 @11:11–12:40].
 		next.Dir, next.Price = SideShort, before.Low
 	case next.Dir == SideShort && brokeHigh: // reversal: move the line once
-		next.OldDir, next.OldPrice = next.Dir, next.Price
 		next.Dir, next.Price = SideLong, before.High
 	}
 	// same-direction breaks (including repeats) never move the line
 	return next
 }
 
-// TriggerVerdict filters an entry by the trigger line: allowed side only,
-// nothing between two opposing lines [@ 16:38].
+// TriggerVerdict filters an entry by the trigger line: allowed side only.
+// B1 (10-03 ruling): there is ONE line, moved on a reversal — the no-trade
+// zone "between two trigger lines" was a misread; the real zone sits between
+// an FTGL and the buy line (mirror: FTGH and the sell line) and lives in
+// triggerBoxZoneVerdict (eval.go), where the boxes are known.
 func TriggerVerdict(t TriggerLine, price float64) (ok bool, side Side, reason string) {
 	if t.Dir == "" {
 		return true, "", ""
-	}
-	// R4 (RULES FIX v3, D3.4 p1 @ 16:56–17:17 [A]): between two opposing
-	// trigger lines there is NO trade at all, ISB included — and the zone
-	// INCLUDES the lines themselves ("KHỎI ĐÁNH… đợi nó thoát ra khỏi 2
-	// cái"). Price must escape BOTH before anything may trade.
-	if t.OldPrice != 0 {
-		lo, hi := t.Price, t.OldPrice
-		if lo > hi {
-			lo, hi = hi, lo
-		}
-		if price >= lo && price <= hi {
-			return false, "", "between two opposing trigger lines — no trade at all, ISB included [D3.4 p1 @ 16:56–17:17]"
-		}
 	}
 	if t.Dir == SideLong && price < t.Price {
 		return false, "", "below the buy trigger line — do nothing [D3.4 p1 @ 06:22]"

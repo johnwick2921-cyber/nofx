@@ -212,6 +212,29 @@ func boxBanFilter(out []Intent, boxes []Box, cur market.Kline) (kept []Intent, r
 	return kept, refusals
 }
 
+// triggerBoxZoneFilter drops non-swing place entries refused by the B1
+// trigger zone (between an FTGL and the buy line, mirror FTGH + sell line).
+func triggerBoxZoneFilter(out []Intent, t TriggerLine, boxes []Box) (kept []Intent, refusals []string) {
+	if t.Dir == "" || len(boxes) == 0 {
+		return out, nil
+	}
+	kept = out[:0:0]
+	for _, in := range out {
+		if (in.Action == PlaceStopEntry || in.Action == PlaceStopLimitEntry) && !strings.HasPrefix(in.Reason, "swing") {
+			if ok, _ := triggerBoxZoneVerdict(t, boxes, in.Price); !ok {
+				if t.Dir == SideLong {
+					refusals = append(refusals, "trigger_ftgl_buy_zone")
+				} else {
+					refusals = append(refusals, "trigger_ftgh_sell_zone")
+				}
+				continue
+			}
+		}
+		kept = append(kept, in)
+	}
+	return kept, refusals
+}
+
 // midRangeBoxed reports whether price sits between an FTGL floor box below
 // and an FTGH ceiling box above — the mid-range ban with NO width threshold
 // (CTO 1791003862333): "between two boxes: NO PHL, NO PLH, only the ISB".
@@ -293,6 +316,33 @@ func closedBuckets(bars []market.Kline, now int64, cfg Config) []market.Kline {
 // tighten a target but never loosens this floor.
 func targetFloorOK(entry, stop, target float64) bool {
 	return abs(target-entry) >= abs(entry-stop)
+}
+
+// triggerBoxZoneVerdict is the B1 no-trade zone (10-03 ruling, D3.4 p1
+// @16:38–17:19): between an FTGL below and the BUY trigger line above there
+// is NO trade ("khỏi đánh, đợi nó thoát ra khỏi 2 cái") — mirror: an FTGH
+// above and the SELL line below. Price must escape BOTH. This replaces the
+// misread "between two opposing trigger lines" band (there is only ONE
+// line, moved on a reversal).
+func triggerBoxZoneVerdict(t TriggerLine, boxes []Box, price float64) (ok bool, reason string) {
+	if t.Dir == "" {
+		return true, ""
+	}
+	switch t.Dir {
+	case SideLong:
+		for _, b := range boxes {
+			if b.Kind == FTGL && b.Top < t.Price && price >= b.Top && price <= t.Price {
+				return false, "between the FTGL and the buy trigger line — no trade, wait to escape both [D3.4 p1 @ 16:38–17:19]"
+			}
+		}
+	case SideShort:
+		for _, b := range boxes {
+			if b.Kind == FTGH && b.Bottom > t.Price && price <= b.Bottom && price >= t.Price {
+				return false, "between the sell trigger line and the FTGH — no trade, wait to escape both [D3.4 p1 @ 16:38–17:19]"
+			}
+		}
+	}
+	return true, ""
 }
 
 func nextLevelBeyond(levels []Level, price float64, side Side) float64 {
@@ -672,6 +722,14 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 	// BOX RULING part 2: InsideAnyBox — "NEVER trade inside the box" — neither
 	// the candle nor the entry point [D3.2 p1 @ 06:59].
 	out, refused := boxBanFilter(out, boxes, bars[len(bars)-1])
+	for _, r := range refused {
+		e.refuse(r)
+	}
+
+	// B1 trigger zone (10-03 ruling): between an FTGL and the buy line (mirror:
+	// FTGH + sell line) NO entry, ISB included; price must escape both. The
+	// swing runs its own machine and is exempt (orbGateFilter pattern).
+	out, refused = triggerBoxZoneFilter(out, e.State.Trigger, boxes)
 	for _, r := range refused {
 		e.refuse(r)
 	}
