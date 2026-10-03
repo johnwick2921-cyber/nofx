@@ -662,7 +662,9 @@ func main() {
 	// CANCEL-CONFIRMATION (2026-09-06) — a send is not a settlement. Every
 	// field READ; the reconciliation half prints n/a until a broker book exists,
 	// because at process start there is none and a number here would be invented.
-	logger.Infof("🧾 %s", trader.CancelBootLine(st, trader.ReconcileCounts{}, time.Now().UnixMilli()))
+		// The far-side build id arrives on the first hello/heartbeat — at this
+		// point there is none yet, and the line reads it as n/a (report regime).
+		logger.Infof("🧾 %s", trader.CancelBootLine(st, trader.ReconcileCounts{}, time.Now().UnixMilli(), ""))
 	// THE DESK STRIP (2026-09-06) — one read, one row per fact the owner needs.
 	// The UNKNOWN count is per-request, so at boot the line says n/a instead of
 	// printing a zero it has not measured.
