@@ -100,6 +100,7 @@ type SwingState struct {
 	LastBarTime  int64   // ms, last closed 5m bar processed
 	FirstTouch   *swingTouch
 	LeewayLeft   int     // candles left in the ISB window after a through-close
+	EmaCount     int     // 4h closes consumed by Line — ≥ FourHEMA34Min means warm (seed path)
 	ClearLongAt  float64 // price ≤ this re-arms longs (line − stop)
 	ClearShortAt float64 // price ≥ this re-arms shorts (line + stop)
 	Pos          *swingPosition
@@ -171,6 +172,18 @@ func swingLine(bars5m []market.Kline, now int64, cfg SwingCfg, loc *time.Locatio
 	return emaValue(kbars, cfg.EMAPeriod), cur, true
 }
 
+// bucketClose returns the close of the closed 4h bucket starting at start
+// (the last 5m bar inside it), 0 when absent.
+func bucketClose(bars5m []market.Kline, start int64) float64 {
+	var out float64
+	for _, b := range bars5m {
+		if fourHBucketStart(b.OpenTime, ctime()) == start {
+			out = b.Close
+		}
+	}
+	return out
+}
+
 // SwingTick advances the swing machine over the closed 5m bars since the
 // last tick and returns the intents. Pure in (state, bars): the same tape
 // rebuilds the same state.
@@ -188,13 +201,31 @@ func SwingTick(s *SwingState, bars5m []market.Kline, cfg SwingCfg, now int64) []
 	}
 	line, bucketStart, ok := swingLine(bars5m, now, cfg, loc)
 	if !ok {
+		// Seeded warm line: the local slice is too short to recompute the 4h
+		// EMA — KEEP the seeded line, never wipe a warm line to 0 (P0 seed).
+		if s.EmaCount >= FourHEMA34Min {
+			return out
+		}
 		s.Line, s.BucketStart = 0, bucketStart
 		return out
 	}
 	if bucketStart != s.BucketStart {
 		// A 4h candle finished: FLIP to the new line, do not wait for a
 		// retest [D5.2 p3 @ 12:30]; the "used" approach resets (R8).
-		s.Line = line
+		// P0: a warm line continues the SAME EMA recurrence incrementally
+		// (exact parity with a full-history rebuild) instead of a cold
+		// recompute from the ~2-day slice.
+		if s.EmaCount >= FourHEMA34Min {
+			if nc := bucketClose(bars5m, s.BucketStart); nc != 0 {
+				k := 2.0 / float64(cfg.EMAPeriod+1)
+				s.Line = s.Line + k*(nc-s.Line)
+				s.EmaCount++
+			} else {
+				s.Line = line
+			}
+		} else {
+			s.Line = line
+		}
 		s.BucketStart = bucketStart
 		s.FirstTouch = nil
 		s.LeewayLeft = 0
