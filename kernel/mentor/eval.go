@@ -79,6 +79,11 @@ type State struct {
 	EmaBlocked       bool    `json:"ema_blocked,omitempty"`
 	// ArmSeq names the next arm.
 	ArmSeq int `json:"arm_seq"`
+	// LevelArms are the RESTING level orders (B6, 10-03 ruling): a level
+	// order has no one-candle expiry — it rests until a later candle closes
+	// through its level or the RTH window ends. Keyed by the level key so a
+	// resting order is never re-emitted (B16: one intent per reference).
+	LevelArms map[string]LevelArm `json:"level_arms,omitempty"`
 }
 
 // MarshalState renders the state for the ledger (rebuild source).
@@ -180,6 +185,46 @@ func handleTouchIntents(e *Evaluator, lvl Level, intents []Intent) []Intent {
 			e.State.ISBOnly[lvl.Key] = true
 		}
 		out = append(out, in)
+	}
+	return out
+}
+
+// rthWindowEndMin is the RTH window end in CT minutes (15:00) — B6 cancels
+// resting level orders at the window end.
+const rthWindowEndMin = 15 * 60
+
+// LevelArm is one resting level order (B6): the touch level it was placed
+// at, its side and its placement candle — the cancel sweep closes it when a
+// LATER candle closes through the level or at the RTH window end.
+type LevelArm struct {
+	ArmID      string  `json:"arm_id"`
+	Side       Side    `json:"side"`
+	LevelPrice float64 `json:"level_price"`
+	PlacedAt   int64   `json:"placed_at"` // the placement candle's CloseTime
+}
+
+// levelArmCancels is the B6 cancel sweep [D2.3 p1 @18:01–19:12, recovered
+// @23:48]: a resting level order is cancelled when a LATER closed candle
+// CLOSES THROUGH the level ("Minh cancel"), or at the RTH window end
+// (15:00 CT). The placement candle itself never cancels.
+func (e *Evaluator) levelArmCancels(cur market.Kline, now int64) []Intent {
+	if len(e.State.LevelArms) == 0 {
+		return nil
+	}
+	_, hh, mm := ctOf(now)
+	windowEnd := hh*60+mm >= rthWindowEndMin
+	var out []Intent
+	for key, arm := range e.State.LevelArms {
+		through := false
+		if cur.CloseTime > arm.PlacedAt {
+			through = arm.Side == SideLong && cur.Close < arm.LevelPrice ||
+				arm.Side == SideShort && cur.Close > arm.LevelPrice
+		}
+		if through || windowEnd {
+			out = append(out, Intent{Action: CancelArm, ArmID: arm.ArmID,
+				Reason: "level order rest cancelled — a later candle closed through the level, or the window ended [D2.3 p1 @18:01–19:12; recovered @23:48]"})
+			delete(e.State.LevelArms, key)
+		}
 	}
 	return out
 }
@@ -662,31 +707,54 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 		if e.State.ISBBox != nil && cur.Close > e.State.ISBBox.Low && cur.Close < e.State.ISBBox.High {
 			continue
 		}
+		// B16 (10-03 ruling, D5.3 p1 @20:40–22:12): ONE intent per reference —
+		// while a level order RESTS at this level, the level is not re-emitted
+		// (no double size on repeated touches).
+		if _, resting := e.State.LevelArms[lvl.Key]; resting {
+			continue
+		}
 		for _, ex := range oldExtremes {
-			in, ok, _ := PHLPLHGatedR2(tr, ex.level, ex.idx, len(bars)-1, priorSameRole(ex, oldExtremes), e.Cfg, e.State.HTF, e.State.Day.Verdict, dg)
-			if ok {
-				// N12: a level touch fills by the close of the NEXT 1m candle.
-				in.ExpiryMs = cur.CloseTime + 60_000
-				// G2 place (CTO R-b): the setup's PLACE — the touch level. For the
-				// EMA the anchor is the loss-time price (the stop, K1).
-				in.AnchorKey = lvl.Key
-				in.Anchor = lvl.Price
-				if lvl.Kind == KindEMA34 || lvl.Kind == KindEMA9 || lvl.Kind == KindEMA34HTF {
-					in.Anchor = in.Stop
+			in, ok, reason := PHLPLHGatedR2(tr, ex.level, ex.idx, len(bars)-1, priorSameRole(ex, oldExtremes), e.Cfg, e.State.HTF, e.State.Day.Verdict, dg)
+			if !ok {
+				if reason == targetCloserThanStopReason {
+					e.refuse("phl_target_below_floor") // E-2: the D1.2 floor holds for the PHL too
 				}
-				if isEMA34(lvl) {
-					e.State.EmaPendingSide = in.Side
-					e.State.EmaPendingEntry = in.Price
-					e.State.EmaPendingStop = in.Stop
-					e.State.EmaPendingTarget = in.Target
-					e.State.EmaPendingExpiry = in.ExpiryMs
-					e.State.EmaPendingFilled = false
-				}
-				out = append(out, in)
-				break
+				continue
 			}
+			// B6 (10-03 ruling): a LEVEL order RESTS — the one-candle expiry is
+			// the ISB rule only [D1.4 p1 @18:32]. ExpiryMs stays 0; the cancel
+			// sweep (levelArmCancels) closes it through the level or at the
+			// window end.
+			// G2 place (CTO R-b): the setup's PLACE — the touch level. For the
+			// EMA the anchor is the loss-time price (the stop, K1).
+			e.State.ArmSeq++
+			id := fmt.Sprintf("lvl-%d", e.State.ArmSeq)
+			in.ArmID = id
+			in.AnchorKey = lvl.Key
+			in.Anchor = lvl.Price
+			if lvl.Kind == KindEMA34 || lvl.Kind == KindEMA9 || lvl.Kind == KindEMA34HTF {
+				in.Anchor = in.Stop
+			}
+			if e.State.LevelArms == nil {
+				e.State.LevelArms = map[string]LevelArm{}
+			}
+			e.State.LevelArms[lvl.Key] = LevelArm{ArmID: id, Side: in.Side, LevelPrice: lvl.Price, PlacedAt: cur.CloseTime}
+			if isEMA34(lvl) {
+				e.State.EmaPendingSide = in.Side
+				e.State.EmaPendingEntry = in.Price
+				e.State.EmaPendingStop = in.Stop
+				e.State.EmaPendingTarget = in.Target
+				e.State.EmaPendingExpiry = in.ExpiryMs
+				e.State.EmaPendingFilled = false
+			}
+			out = append(out, in)
+			break
 		}
 	}
+
+	// B6 cancel sweep: a resting level order dies when a later candle
+	// closes through its level, or at the RTH window end.
+	out = append(out, e.levelArmCancels(cur, now)...)
 
 	// §4.1 box trades (BOX RULING R1 2026-10-03, ONE path = DS-106's
 	// boxEntryIntent — CTO 12:38:50Z): every return visit of every live box is

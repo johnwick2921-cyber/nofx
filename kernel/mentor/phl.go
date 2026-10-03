@@ -84,6 +84,9 @@ func PHLPLHR2(t Touch, oldExtreme Level, extremeIdx, barIdx int, priorSwing floa
 	if reward < cfg.RoomMultiple*risk {
 		return Intent{}, false, "room rule: reward < " + fnum(cfg.RoomMultiple) + "x risk — not enough room [D5.3 p1 @ 09:16]"
 	}
+	if reward < risk {
+		return Intent{}, false, targetCloserThanStopReason
+	}
 	return Intent{
 		Action: PlaceStopEntry,
 		Side:   side,
@@ -93,6 +96,12 @@ func PHLPLHR2(t Touch, oldExtreme Level, extremeIdx, barIdx int, priorSwing floa
 		Reason: "PHL/PLH: buy stop at the previous candle's high, stop at the broken candle's low, target near the old extreme [D2.2 p1 @ 19:34, 04:58, 07:33]",
 	}, true, ""
 }
+
+// targetCloserThanStopReason is the D1.2 floor refusal ("the target is
+// never smaller than the stop" [D1.2 p1 @ 07:48]) — the call site routes it
+// to the refusal ledger (CTO E-2 2026-10-03T15:12Z: the floor holds for
+// EVERY setup's intent).
+const targetCloserThanStopReason = "target closer than the stop — the target is never smaller than the stop [D1.2 p1 @ 07:48]"
 
 // PHLPLHGated is the call site the evaluator uses for every PHL/PLH: the
 // §2.2 rules in PHLPLH, then the two direction gates on top —

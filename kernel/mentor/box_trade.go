@@ -176,7 +176,7 @@ func boxEntryIntent(ref market.Kline, b Box, boxes []Box, levels []Level, trig T
 	if abs(target-price) < cfg.RoomMultiple*risk {
 		return nil
 	}
-	fl := ConfluenceVerdict(b, side, levels, trig)
+	fl := ConfluenceVerdict(b, side, trig)
 	// G2 place (CTO R-b / 13:20:08Z): a box is ONE place — the key WITHOUT the
 	// ":top"/":bottom" suffix, the anchor is the box MIDPOINT (the replay's).
 	base := strings.TrimSuffix(strings.TrimSuffix(b.Key, ":top"), ":bottom")
@@ -192,11 +192,6 @@ func boxEntryIntent(ref market.Kline, b Box, boxes []Box, levels []Level, trig T
 		Reason:     "box edge return: reject close outside → stop order with the rejecting candle as the reference [D3.2 p1 @ 21:04–21:33; D3.4 p3 @ 07:02]",
 	}}
 }
-
-// ConfluenceWithinPts is the R2 "at" tolerance: the key level must lie
-// INSIDE the box or within 2 pts of its edge [00-METHOD Risk-reward;
-// D3.4 p3 @ 07:38].
-const ConfluenceWithinPts = 2.0
 
 // ConfluenceFlag is the R2 output for DS-102's exit-C / size-10 branch.
 // On=false means normal sizing; the size-20 escalation (4h AND 1h agree AND
@@ -215,7 +210,10 @@ type ConfluenceFlag struct {
 //
 // side is the trade side; trig is the 5m trigger line. Fail-closed: no
 // trigger line (empty direction) can never agree, so confluence stays off.
-func ConfluenceVerdict(b Box, side Side, keyLevels []Level, trig TriggerLine) ConfluenceFlag {
+// ConfluenceVerdict is B3 (10-03 ruling, D3.4 p3 @07:38–08:22): confluence
+// = an FTGL/FTGH entry + the 5m trigger agrees — NO key-level condition. LONG
+// = FTGL (support); SHORT = FTGH. Feeds DS-102's exit-C / size-10.
+func ConfluenceVerdict(b Box, side Side, trig TriggerLine) ConfluenceFlag {
 	if side != SideLong && side != SideShort {
 		return ConfluenceFlag{}
 	}
@@ -236,13 +234,5 @@ func ConfluenceVerdict(b Box, side Side, keyLevels []Level, trig TriggerLine) Co
 			return ConfluenceFlag{}
 		}
 	}
-	for _, l := range keyLevels {
-		if l.Kind != KindKeyLevel {
-			continue
-		}
-		if l.Price >= b.Bottom-ConfluenceWithinPts && l.Price <= b.Top+ConfluenceWithinPts {
-			return ConfluenceFlag{On: true, Side: side}
-		}
-	}
-	return ConfluenceFlag{}
+	return ConfluenceFlag{On: true, Side: side}
 }
