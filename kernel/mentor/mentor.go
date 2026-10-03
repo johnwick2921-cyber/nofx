@@ -161,6 +161,9 @@ func DefaultConfig() Config {
 
 		ISBReverseEMA9Enabled: false,
 
+		PHLMinCandlesFromExtreme: 3,
+		PHLTargetShyPts:          5,
+
 		StopCeilingPts: 25,
 		RoomMultiple:   2,
 		RangeGapPts:    0,
