@@ -31,6 +31,10 @@ type State struct {
 	BoxRefs map[string]int `json:"box_refs,omitempty"`
 	// Limits is the G1 leg budget + G2 loss box state machine (DS-107).
 	Limits Limits `json:"limits,omitempty"`
+	// Refusals is the B-rules refusal ledger (CTO 13:51:31Z): every filter
+	// that DROPS an intent names its reason and counts it, like the replay
+	// funnel stages — DS-105 diffs these against the replay.
+	Refusals map[string]int `json:"refusals,omitempty"`
 	// Trigger is the 5m trigger-line state (§5.1).
 	Trigger TriggerLine `json:"trigger"`
 	// HTF is the §5.4 4h/1h direction state (DS-106, fold item 3).
@@ -174,22 +178,32 @@ func handleTouchIntents(e *Evaluator, lvl Level, intents []Intent) []Intent {
 	return out
 }
 
+// refuse records a B-rules refusal: every drop carries a named reason and
+// a counter (the replay's funnel-stage parity — CTO 13:51:31Z).
+func (e *Evaluator) refuse(reason string) {
+	if e.State.Refusals == nil {
+		e.State.Refusals = map[string]int{}
+	}
+	e.State.Refusals[reason]++
+}
+
 // boxBanFilter drops entry intents whose entry price — or whose reference
 // candle close — sits INSIDE a box: "NEVER trade inside the box, neither the
 // candle nor your entry point" [D3.2 p1 @ 06:59].
-func boxBanFilter(out []Intent, boxes []Box, cur market.Kline) []Intent {
+func boxBanFilter(out []Intent, boxes []Box, cur market.Kline) (kept []Intent, refusals []string) {
 	if len(boxes) == 0 {
-		return out
+		return out, nil
 	}
-	kept := out[:0:0]
+	kept = out[:0:0]
 	for _, in := range out {
 		if (in.Action == PlaceStopEntry || in.Action == PlaceStopLimitEntry) &&
 			(InsideAnyBox(boxes, cur.Close) || InsideAnyBox(boxes, in.Price)) {
+			refusals = append(refusals, "inside_any_box")
 			continue
 		}
 		kept = append(kept, in)
 	}
-	return kept
+	return kept, refusals
 }
 
 // midRangeBoxed reports whether price sits between an FTGL floor box below
@@ -623,16 +637,25 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 
 	// BOX RULING part 2: InsideAnyBox — "NEVER trade inside the box" — neither
 	// the candle nor the entry point [D3.2 p1 @ 06:59].
-	out = boxBanFilter(out, boxes, bars[len(bars)-1])
+	out, refused := boxBanFilter(out, boxes, bars[len(bars)-1])
+	for _, r := range refused {
+		e.refuse(r)
+	}
 
 	// ORB gate ("ĐIỀU BẮT BUỘC" [X11 @16:43]): every intraday entry is gated
 	// on the opening range; the §8 swing is exempt (orbGateFilter).
-	out = orbGateFilter(out, e.State.ORB, e.Cfg)
+	out, refused = orbGateFilter(out, e.State.ORB, e.Cfg)
+	for _, r := range refused {
+		e.refuse(r)
+	}
 
 	// P0 fail-closed: seeded with a missing source → no ENTRIES, ever (cancels
 	// still flow — an arm left open must be closable).
 	if e.seeded && len(e.missing) > 0 {
-		out = failClosedFilter(out)
+		out, refused = failClosedFilter(out)
+		for _, r := range refused {
+			e.refuse(r)
+		}
 	}
 
 	// G1/G2 limits hook (DS-107): the leg budget and the loss box apply to
