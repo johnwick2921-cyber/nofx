@@ -787,6 +787,13 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 				continue
 			}
 			e.State.BoxRefs[b.Key] = r.RefBar
+			// B11 [D3.4 p2 @07:58–08:21]: inside the standing 5m-ISB box only
+			// a same-direction ISB trades ("em chỉ đánh inside bar cùng
+			// chiều") — box trades never.
+			if e.State.ISBBox != nil && bars[r.RefBar].Close > e.State.ISBBox.Low && bars[r.RefBar].Close < e.State.ISBBox.High {
+				e.refuse("box_isb_ban")
+				continue
+			}
 			for _, in := range boxEntryIntent(bars[r.RefBar], b, boxes, levels, e.State.Trigger, e.Cfg) {
 				// B9 [D5.1 p1 @16:24, @19:11–20:07]: box trades obey
 				// the same day/HTF gates as every other setup —
