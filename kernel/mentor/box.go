@@ -29,8 +29,10 @@ import (
 //     [D3.2 p2 @ 06:21]. Valid by construction — no 3rd-touch TEST for the
 //     box [@ 03:45]; the 3rd-touch rule belongs to the TRADE [@ 04:29],
 //     exposed as Box.Touches.
-//   - Deleted only on escape (a BODY closes outside) [D3.2 p1 @ 19:05;
-//     D3.4 p2 @ 12:11] or at the end of the day [D4.1 p2 @ 02:39–03:31].
+//   - NEVER deleted intraday. An escape (a BODY closes outside) only means
+//     you may trade again — it does NOT delete the box [D3.2 p1
+//     @ 18:30–19:30]. A box lives to the end of its day, then dies
+//     [D4.1 p2 @ 02:39–03:09: "ve roi thi de y nguyen do toi cuoi ngay"].
 //   - "NEVER trade inside the box" [D3.2 p1 @ 06:59] → InsideAnyBox.
 //   - "Draw TWO zones, never a third." [D3.2 p2 @ 09:14] → one floor +
 //     one ceiling.
@@ -55,8 +57,9 @@ const (
 	KindFTGLEdge LevelKind = "ftgl_edge"
 )
 
-// Box is one drawn FTGH/FTGL zone. Never redrawn: once built, the edges do
-// not move. Escaped boxes are deleted (dropped from the set).
+// Box is one drawn FTGH/FTGL zone. Never redrawn and never deleted
+// intraday: once built, the edges do not move and the box lives to the end
+// of its day. An escape only re-arms trading [D3.2 p1 @ 18:30–19:30].
 type Box struct {
 	Kind   BoxKind
 	Top    float64 // FTGH: highest wick of the earlier high · FTGL: body of the nearest low
@@ -169,8 +172,8 @@ func swings3(bars []market.Kline) []swingPairAt {
 
 // BoxesBuild is the pure, deterministic box scan: role extremes pair with
 // the NEAREST same-role extreme (in time, on the non-broken side) with NO
-// tolerance; escaped boxes are dropped; only boxes of the current trading
-// day survive. The same history always rebuilds the same set — a drawn box
+// tolerance; boxes are never dropped on escape; only boxes of the current
+// trading day survive. The same history always rebuilds the same set — a drawn box
 // is never redrawn. At most one floor and one ceiling ("two zones").
 func BoxesBuild(bars []market.Kline, cfg BoxCfg, now time.Time) []Box {
 	if cfg.TF == "" {
@@ -239,9 +242,6 @@ func BoxesBuild(bars []market.Kline, cfg BoxCfg, now time.Time) []Box {
 			continue // the box does not outlive its day
 		}
 		b.Touches = countBoxTouches(tfBars, *b, seq[extreme].idx, cfg)
-		if escaped(tfBars, *b, seq[extreme].idx) {
-			continue // price escaped → deleted [D3.4 p2 @ 12:11]
-		}
 		b.Key = "ftgh:" + fnum(b.Top) + ":" + fnum(b.Bottom)
 		if b.Kind == FTGL {
 			b.Key = "ftgl:" + fnum(b.Top) + ":" + fnum(b.Bottom)
