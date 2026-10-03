@@ -965,4 +965,9 @@ func (at *AutoTrader) settleArmedLedgerWhileOff(now time.Time) {
 		}
 		return nil
 	}, now)
+	// PARTIAL-CLOSE (2026-10-03, behind the #309 knob): the OFF head settles
+	// the same reduce fills and stop resizes the ON pass does — no-ops with
+	// the knob OFF.
+	at.consumeReduceFills(nt)
+	at.confirmStopResizes(nt, now)
 }

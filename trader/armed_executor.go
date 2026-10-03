@@ -1500,6 +1500,11 @@ func (at *AutoTrader) runArmedPlacementAt(bars []market.Kline, sinceMs int64, no
 		at.cancelSignalIfSafe(nt.CancelOrder, sid, "stale-working reaper", now)
 	})
 	at.consumeArmedOrderUpdates(nt, ledger)
+	// PARTIAL-CLOSE (2026-10-03, behind the #309 knob): drain the reduce_fill
+	// stream and settle pending stop resizes through the report regime. With
+	// the knob OFF these are no-ops.
+	at.consumeReduceFills(nt)
+	at.confirmStopResizes(nt, time.Now())
 	// D1/D2 — THE SETTLEMENT PASS. Every requested cancel is checked against the
 	// freshest PERSISTED snapshot: gone from a fresh book → cancelled, with the
 	// snapshot id that proved it; still listed, or no fresh book → it stays
@@ -2258,6 +2263,10 @@ func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *st
 	}
 	logArmedOrderUpdateSummary()
 	if u.OrderName != "" && u.OrderName != u.SignalID {
+		// Leg frames ("<signal>-sl" / "-tp") never match the entry's signal id.
+		// PARTIAL-CLOSE: a terminal leg report is still the report the stop
+		// resize waits on — route it before dropping the frame.
+		at.recordStopResizeReport(u)
 		return
 	}
 	if strings.EqualFold(u.State, "rejected") {

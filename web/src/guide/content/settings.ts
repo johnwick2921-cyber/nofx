@@ -1420,6 +1420,21 @@ const sessions: KnobSpec[] = [
     whenToTouch: 'Only with a deliberate move of the Mentor-mode gate.',
     perSession: 'No.',
   },
+  {
+    label: 'Partial close (mentor scale-out) — same knob',
+    where: 'Environment only (CANCEL_CONFIRM_REQUIRE_REPORT ON)',
+    what: 'The exact-quantity exit the mentor scale-out needs: reduce_position exits EXACTLY qty contracts at market (never more than the open position; qty ≥ open is refused — a full close stays close_position) and reports the fill WITH the remaining quantity. After a confirmed reduce fill the protective stop is resized to the remaining quantity through the cancel-confirm path; a leg cancel that cannot be confirmed FAILS CLOSED and the remainder is flattened — never a blind re-place, never a naked remainder. AddOn build 2026-10-03-c1 (hello flag reduce_position); Go refuses to send the frame to an older AddOn.',
+    trader:
+      'Nothing changes for the AI mode: the feature is byte-off unless the knob is ON, and the AI mode keeps its 1-contract rule.',
+    consumer:
+      'trader/partial_close.go (ReducePosition · consumeReduceFills · confirmStopResizes) · trader/ninjatrader/tcp_trader.go (ReducePosition · CancelBracketLeg) · store/partial_close.go (position_reductions + stop_resizes) · ninjascript VLTraderTCPClient.cs HandleReducePosition',
+    range: 'off | on · default off (same knob as the cancel-report regime)',
+    systemDefault: 'off',
+    recommended:
+      '⭐ keep OFF; the owner switches it ON with Mentor mode (SIM only).',
+    whenToTouch: 'Only with Mentor mode.',
+    perSession: 'No.',
+  },
 ]
 
 export const settings: GuideSection = {

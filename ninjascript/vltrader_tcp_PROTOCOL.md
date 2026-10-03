@@ -505,6 +505,52 @@ as every other capability):
 - the regime is OFF by default; with it OFF this frame is received and ignored
   (the field is additive), and the bot is byte-identical to today.
 
+### `reduce_position` / `reduce_fill` / `reduce_position_rejected` (2026-10-03-c1)
+
+PARTIAL-CLOSE — the exact-quantity cousin of `close_position`, so the mentor
+mode can scale out HALF at 1:1 while the protective stop keeps the remainder.
+Everything sits behind `CANCEL_CONFIRM_REQUIRE_REPORT` (default OFF); the AI
+mode keeps its 1-contract rule and never sends these frames.
+
+| frame | dir | payload |
+|---|---|---|
+| `reduce_position` | Go → AddOn | `{symbol, side, quantity, client_id, account?, trader_id?, seq?}` |
+| `reduce_fill` | AddOn → Go | `{client_id, symbol, side, quantity, fill_price, remaining, account?}` |
+| `reduce_position_rejected` | AddOn → Go | `{client_id, reason, account?}` |
+
+**Capability.** The hello carries `reduce_position: true` from this build. Go
+REFUSES to send the frame to a peer that never advertised it
+(`ErrReduceUnsupported`, before any write) — capability is proven by a
+RECEIVED frame, never assumed. The flag retires with the build id when the
+link drops.
+
+**Semantics.**
+- The AddOn exits EXACTLY `quantity` contracts at market (order name
+  `"<client_id>-rx"`), never more than the open position.
+- `quantity >= open` is REFUSED with a reason — a full close still goes
+  through `close_position`.
+- A fill reports `remaining` = open-at-request minus filled, on Filled AND
+  PartFilled; the Go ledger upserts by `client_id` so re-reports apply once
+  per step. A reduce fill NEVER produces a `position_close` and never
+  disturbs the bracket or the account ownership.
+- A rejected reduce leaves the position unchanged and the protective stop
+  untouched.
+
+**Protective-stop resize (Go side).** After a CONFIRMED reduce fill with a
+positive remaining, Go cancels the `-sl` leg with `cancel_order {leg:"sl"}` —
+the explicit leg call D1 reserves — and tracks the resize in `stop_resizes`
+with the SAME report-regime columns as armed_orders (request time, report
+time/state, F9 predates check). The replacement `place_protective_stop` at
+the remaining quantity is placed ONLY once the AddOn's positive terminal
+report for the leg's order id is recorded. A resize that cannot be confirmed
+FAILS CLOSED and the remainder is flattened — never a blind re-place, never a
+naked remainder.
+
+The leg cancel itself emits the dedupe-bypassed `order_update` cancel-report
+echo for the LEG's order id (see the cancel-report section above), so the
+report regime settles leg cancels exactly like entry cancels.
+
+
 
 Entry `signal.timestamp` is UTC command creation time (RFC3339 with fractional
 seconds), independent of the market bar close used to compose entry prices.
