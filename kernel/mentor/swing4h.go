@@ -64,6 +64,11 @@ type SwingCfg struct {
 	TargetEMA5mPeriod int     // first target EMA period on 5m; default 34
 	LeewayCandles     int     // ISB window after a through-close; default 2
 	Hold4hBars        int     // hold to the close of the N-th 4h candle after entry; default 2 [C]
+	// Respects5mZone — gate swing entries on the 5m trigger-line zone.
+	// Default false: §8 is a self-contained 4h → 5m procedure; nothing in
+	// D5.2 ties it to the 5m trigger lines. [C] not stated in the method —
+	// DS-103 wires the gate at the call site.
+	Respects5mZone bool
 }
 
 // DefaultSwingCfg returns the §8 defaults.
