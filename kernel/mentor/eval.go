@@ -49,6 +49,13 @@ type State struct {
 	Seed1mWatermark  int64   `json:"seed_1m_watermark,omitempty"`
 	EMA34            float64 `json:"ema34,omitempty"` // 1m EMA 34 (incremental)
 	EMA9             float64 `json:"ema9,omitempty"`  // 1m EMA 9 (incremental)
+
+	// E2 (CTO 12:27:25Z): the EMA34 loss machinery — the pending stop of the
+	// last emitted EMA setup, and the one-loss block until a departure.
+	EmaPendingSide  Side    `json:"ema_pending_side,omitempty"`
+	EmaPendingEntry float64 `json:"ema_pending_entry,omitempty"`
+	EmaPendingStop  float64 `json:"ema_pending_stop,omitempty"`
+	EmaBlocked      bool    `json:"ema_blocked,omitempty"`
 	// ArmSeq names the next arm.
 	ArmSeq int `json:"arm_seq"`
 }
@@ -488,9 +495,26 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 	// §2.2: PHL/PLH from a fresh reject touch against an old extreme,
 	// gated by trigger side, mid-range and the setup's own gates.
 	oldExtremes := oldExtremeIndexes(levels, bars)
+	// E2: watch the last emitted EMA stop; block the EMA line on a loss.
+	emaPrice := 0.0
+	for _, lvl := range levels {
+		if lvl.Kind == KindEMA34 {
+			emaPrice = lvl.Price
+			break
+		}
+	}
+	if emaPrice != 0 {
+		emaLossTick(e, emaPrice, cur)
+	}
+
 	for _, lvl := range levels {
 		tr := e.State.Touches[lvl.Key]
 		if tr.Outcome != TouchReject || e.State.ISBOnly[lvl.Key] {
+			continue
+		}
+		// E2 + E4: the EMA34 setup is gated on the loss block and the
+		// 30-minute crossing knob.
+		if isEMA34(lvl) && !emaSetupAllowed(e, lvl, bars, e.Cfg) {
 			continue
 		}
 		// LOCATION GATE (fold item 1): a PHL/PLH entry level must be a real
@@ -524,6 +548,11 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 			if ok {
 				// N12: a level touch fills by the close of the NEXT 1m candle.
 				in.ExpiryMs = cur.CloseTime + 60_000
+				if isEMA34(lvl) {
+					e.State.EmaPendingSide = in.Side
+					e.State.EmaPendingEntry = in.Price
+					e.State.EmaPendingStop = in.Stop
+				}
 				out = append(out, in)
 				break
 			}
