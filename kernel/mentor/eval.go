@@ -306,6 +306,19 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 	levels = withoutDeleted(levels, e.State.DeletedLevels)
 
 	var out []Intent
+	// A5 (CTO 1791041016051): expose the §7 verdict to the injector — every
+	// intent leaving this tick carries whether the trading day is DaySpent,
+	// so the size table holds 1–2 and the R9 15-pt stop cap applies. The
+	// defer covers the early `return out` (missing-target ISB) too: the
+	// stamp happens once, where the intents LEAVE, from the latched state
+	// computed below (the latch freezes at 08:30 CT, so a mid-tick verdict
+	// change cannot make the stamp lie).
+	defer func() {
+		spent := e.State.Day.Verdict == DaySpent
+		for i := range out {
+			out[i].SpentDay = spent
+		}
+	}()
 
 	// 5m trigger line advances every 1m close (aggregated 5m bars).
 	e.State.Trigger = TriggerTick(e.State.Trigger, barsTF(bars, 5), 5, e.Cfg)

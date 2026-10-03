@@ -130,17 +130,16 @@ func (at *AutoTrader) mentorEvalOnce(bars []market.Kline) {
 	intents := at.mentorEval.Tick(bars, last.OpenTime)
 	// S9 (D5.2 p2 @05:21): strong-day detection from the recent CLOSED 5m bars
 	// — 50–80 pt candles cut every tier to 1–2.
-	extra := mentorTierInputs{}
+	strongDay := false
 	if bars5 := market.FuturesBarsProvider("MNQ", "5m", 12); len(bars5) > 0 && mentorStrongDayFrom5m(bars5) {
-		extra.StrongDay = true
+		strongDay = true
 	}
 	for _, in := range intents {
 		switch in.Action {
 		case mentor.PlaceStopEntry:
-			// R2 STUB: the confluence flag feeds the size tier (10/20) and the
-			// exit fork (C) — nil seam → false, so neither fires until
-			// DS-103's tagged intents land.
-			extra.Confluence = mentorConfluenceFlag(in)
+			// A5: the spent-day flag rides the intent (stamped by the
+			// evaluator); confluence comes from the R2 stub seam.
+			extra := mentorExtraFor(in, strongDay)
 			if why := mentorRuleGate(in, extra); why != "" {
 				rule := "other"
 				if i := strings.Index(why, ":"); i > 0 {
