@@ -35,6 +35,14 @@ func mentorPlaceEnv() bool {
 	return false
 }
 
+// mentorBars1mDepth is the 1m history depth the mentor fetch asks for (P0 A6
+// routing, CTO 1791058624275): the §7 Globex run window (17:00→08:30 CT) is
+// 930 bars and the full RTH day to 15:00 CT is 1320 — 1500 covers both with
+// slack. The old 4-hour ask started mid-window: past the 08:30 freeze the
+// run window held ZERO of those bars and the day gate read DayNotMeasured
+// every day, so the bot never traded.
+const mentorBars1mDepth = 1500
+
 // mentorTick runs the evaluator on the latest 1m bars (the 2-minute scan's
 // fallback — the PRIMARY path is the event pass on every FINAL 1m bar). It
 // never touches the wire unless mentor mode AND MENTOR_PLACE are both on.
@@ -45,7 +53,7 @@ func (at *AutoTrader) mentorTick(ctx *kernel.Context) {
 	if market.FuturesBarsProvider == nil {
 		return
 	}
-	bars := market.FuturesBarsProvider("MNQ", "1m", 240)
+	bars := market.FuturesBarsProvider("MNQ", "1m", mentorBars1mDepth)
 	if len(bars) == 0 {
 		return
 	}
@@ -91,7 +99,7 @@ func (at *AutoTrader) mentorEventPassAt(now time.Time) bool {
 	if market.FuturesBarsProvider == nil {
 		return false
 	}
-	bars := market.FuturesBarsProvider("MNQ", "1m", 240)
+	bars := market.FuturesBarsProvider("MNQ", "1m", mentorBars1mDepth)
 	if len(bars) == 0 {
 		return false
 	}
