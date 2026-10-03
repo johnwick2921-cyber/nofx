@@ -62,6 +62,8 @@ type State struct {
 	EmaPendingTarget float64 `json:"ema_pending_target,omitempty"`
 	EmaPendingExpiry int64   `json:"ema_pending_expiry,omitempty"`
 	EmaPendingFilled bool    `json:"ema_pending_filled,omitempty"`
+	EmaLossPrice     float64 `json:"ema_loss_price,omitempty"`
+	EmaLossBarTime   int64   `json:"ema_loss_bar_time,omitempty"`
 	EmaBlocked       bool    `json:"ema_blocked,omitempty"`
 	// ArmSeq names the next arm.
 	ArmSeq int `json:"arm_seq"`
@@ -545,8 +547,12 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 		if !ok {
 			continue
 		}
-		if dirOK, trigSide, _ := TriggerVerdict(e.State.Trigger, price); !dirOK || trigSide != "" && trigSide != side {
-			continue
+		// LocTriggerFilter (CTO 13:20:22Z): false switches the 5m-trigger
+		// filter off for LEVEL rejects (the box path honours it separately).
+		if e.Cfg.LocTriggerFilter {
+			if dirOK, trigSide, _ := TriggerVerdict(e.State.Trigger, price); !dirOK || trigSide != "" && trigSide != side {
+				continue
+			}
 		}
 		if allowed, _ := SetupPermittedVerdict("PHL", levels, price, e.Cfg); !allowed {
 			continue
