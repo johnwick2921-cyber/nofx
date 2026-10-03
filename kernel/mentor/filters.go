@@ -95,10 +95,18 @@ func TriggerVerdict(t TriggerLine, price float64) (ok bool, side Side, reason st
 	if t.Dir == "" {
 		return true, "", ""
 	}
-	between := t.OldPrice != 0 &&
-		(price > t.Price && price < t.OldPrice || price < t.Price && price > t.OldPrice)
-	if between {
-		return false, "", "price between two opposing trigger lines — no trade [D3.4 p1 @ 16:38]"
+	// R4 (RULES FIX v3, D3.4 p1 @ 16:56–17:17 [A]): between two opposing
+	// trigger lines there is NO trade at all, ISB included — and the zone
+	// INCLUDES the lines themselves ("KHỎI ĐÁNH… đợi nó thoát ra khỏi 2
+	// cái"). Price must escape BOTH before anything may trade.
+	if t.OldPrice != 0 {
+		lo, hi := t.Price, t.OldPrice
+		if lo > hi {
+			lo, hi = hi, lo
+		}
+		if price >= lo && price <= hi {
+			return false, "", "between two opposing trigger lines — no trade at all, ISB included [D3.4 p1 @ 16:56–17:17]"
+		}
 	}
 	if t.Dir == SideLong && price < t.Price {
 		return false, "", "below the buy trigger line — do nothing [D3.4 p1 @ 06:22]"
