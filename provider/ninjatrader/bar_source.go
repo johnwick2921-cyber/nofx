@@ -28,8 +28,8 @@ const (
 //     the rule needs no assumption about what the instrument's price IS —
 //     the percent alone fired on a one-point move in a fixture priced at 100).
 //
-// Both are [I], stated on the boot line. NOFX_BAR_SCALE_MISMATCH_PCT and
-// NOFX_BAR_SCALE_MISMATCH_MULT override.
+// Both are [I], stated on the boot line. VL_BAR_SCALE_MISMATCH_PCT and
+// VL_BAR_SCALE_MISMATCH_MULT override.
 var (
 	// scaleCheckAdjacencyIntervals is how many bar intervals the replay's last
 	// bar may precede the live bar by and still be its reference (101 D1',

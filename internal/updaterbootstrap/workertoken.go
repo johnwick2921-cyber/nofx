@@ -125,7 +125,7 @@ func readWorkerTokenLine(home string) (string, bool, error) {
 	}
 	for _, line := range strings.Split(string(b), "\n") {
 		if k, v, ok := strings.Cut(line, "="); ok {
-			if strings.TrimSpace(k) == "VL_CUTOVER_TOKEN" || strings.TrimSpace(k) == "NOFX_CUTOVER_TOKEN" {
+			if strings.TrimSpace(k) == "VL_CUTOVER_TOKEN" || strings.TrimSpace(k) == "VL_CUTOVER_TOKEN" {
 				if t := strings.TrimSpace(v); t != "" {
 					return t, true, nil
 				}

@@ -8,7 +8,7 @@
 //
 // With no -days, the bar-coverage span is scanned from the bars table and each
 // covered session-day is re-evaluated. Default trader = the hoang day-plan
-// trader (env NOFX_TRADER_ID overrides). DB path: env NOFX_DB_PATH, default
+// trader (env VL_TRADER_ID overrides). DB path: env VL_DB_PATH, default
 // data/data.db.
 package main
 

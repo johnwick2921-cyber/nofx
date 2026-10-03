@@ -104,12 +104,12 @@ func (s *Server) SetUpdateStarter(f UpdateStarter) { s.updateStart = f }
 
 // ── W-ONE-BUTTON M4 3b-B U5b — the updater glue knob ────────────────────
 //
-// NOFX_UPDATER=1 (exactly "1"; anything else, or unset, is OFF) wires the
+// VL_UPDATER=1 (exactly "1"; anything else, or unset, is OFF) wires the
 // M4 worker behind the M3 routes. OFF is M3 byte for byte — the stub
 // verifier, no starter, the job routes' literal 404 before any filesystem
 // access, and no boot line (TestUpdatesKnobOffIsByteIdentical pins M3's
 // bytes as literals).
-const updaterKnobEnv = "NOFX_UPDATER"
+const updaterKnobEnv = "VL_UPDATER"
 
 // updateVerifierName is the name the boot line READS off the verifier the
 // server holds (never a literal the line asserts about itself).

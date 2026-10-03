@@ -18,7 +18,7 @@ import (
 // to remember to check:
 //
 //	· read the revision + build time EMBEDDED in this binary (runtime/debug)
-//	· compare against the INTENDED release (NOFX_EXPECTED_REVISION, or
+//	· compare against the INTENDED release (VL_EXPECTED_REVISION, or
 //	  deploy/RELEASE — whichever is set; a prefix match so short SHAs work)
 //	· re-render the prompt goldens embedded in this same binary
 //
