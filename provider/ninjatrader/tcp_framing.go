@@ -14,6 +14,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"strings"
 )
 
 // FrameType enumerates the 4 wire envelope types per spec L4382.
@@ -245,6 +247,13 @@ type OrderUpdatePayload struct {
 	TraderID  string  `json:"trader_id,omitempty"`
 	Seq       uint64  `json:"seq,omitempty"`
 
+	// CANCEL-REPORT (2026-10-03-c1): true when this order_update is the
+	// AddOn's positive per-order report emitted on cancel_order receipt
+	// (the echo), as distinct from a state-change event. The report regime
+	// (CANCEL_CONFIRM_REQUIRE_REPORT) settles cancels on these reports; an
+	// older AddOn never sets it (and predates the floor anyway).
+	CancelReport bool `json:"cancel_report,omitempty"`
+
 	// W117 F2 — see FillPayload.OrderedOwned.
 	OrderedOwned bool `json:"-"`
 	// W117 F2 — whether the broker book is proven post-change at application
@@ -344,6 +353,40 @@ const MinAddonBuildProtectiveStop = "2026-09-07-h1"
 // and capability is proven by RECEIPT, never assumed (same rule as every
 // other floor).
 const MinAddonBuildPictureHtf = "2026-09-20-p1"
+
+// MinAddonBuildCancelReport is the minimum AddOn build that certifies the
+// CANCEL-REPORT surface: on EVERY cancel_order receipt the AddOn echoes the
+// target order's current state as an order_update carrying cancel_report=true
+// (dedupe-bypassed), and its OnOrderUpdate stream continues to carry terminal
+// states. The report regime (CANCEL_CONFIRM_REQUIRE_REPORT) settles cancels
+// ONLY on these positive per-order reports — the order_snapshot deliberately
+// omits terminal orders (C# D3, 2026-09-07), so absence from a book is not a
+// terminal report and must not be treated as one when the regime is ON.
+//
+// The ISO date advances, per the suffix rule above.
+const MinAddonBuildCancelReport = "2026-10-03-c1"
+
+// CancelReportProven reports whether the far-side AddOn certifies cancel
+// reports. Unknown ("") NEVER satisfies — capability is proven by receipt,
+// not assumed (same rule as every other floor).
+func CancelReportProven(buildID string) bool {
+	return FarSideProven(buildID, MinAddonBuildCancelReport)
+}
+
+// CancelReportRegimeOn mirrors the trader's CANCEL_CONFIRM_REQUIRE_REPORT knob
+// (the provider package cannot import the trader package). N9 (review r2,
+// 2026-10-03): with the regime OFF the read loop DROPS cancel-report echo
+// frames BEFORE NoteEntryExecution, the ordered worker's snapshot wait,
+// RetryPendingNT8Exits and the picture-HTF consumer can see them — a report
+// frame is only meaningful to the regime, and the wire stays byte-identical
+// with the knob OFF.
+func CancelReportRegimeOn() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("CANCEL_CONFIRM_REQUIRE_REPORT"))) {
+	case "1", "true", "on", "yes":
+		return true
+	}
+	return false
+}
 
 // ErrAddonBuildTooOld is the sentinel behind a stop entry refused because the
 // AddOn NT8 has loaded predates the stop-slot fix. Callers errors.Is on it so a

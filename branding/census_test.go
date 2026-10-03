@@ -26,7 +26,7 @@ type censusEntry struct {
 
 var censusTable = map[string][]censusEntry{
 	"ninjascript/VLTraderTCPClient.cs": {
-		{count: 10, phase: "R5", reason: "removed in the cancel-confirm AddOn update (one F5)"},
+		{count: 3, phase: "final", reason: "PR A fold dropped the legacy account.txt branch — 10 → 3 (the removal R5 expected, one F5)"},
 	},
 }
 

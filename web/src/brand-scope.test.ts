@@ -1,4 +1,16 @@
 // Dispatch 102 freezes load-bearing identifiers, including their surrounding guards.
+// Wire baselines advanced 2026-10-03 for PR A (cancel-confirm report regime,
+// feat/cancel-confirm-a, DS-101):
+//   provider/ninjatrader/tcp_framing.go  sha256 d3a570e4… — SignalPayload gains
+//     cancel_report (parse-only, omitempty) + the cancel-report build floor and
+//     CancelReportRegimeOn. Additive JSON; no identifier renamed.
+//   provider/ninjatrader/tcp_server.go   sha256 5a59d739… — the order_update
+//     read loop drops a cancel-report echo when the regime is OFF, before any
+//     consumer. Knob-gated; no identifier renamed.
+//   ninjascript/VLTraderTCPClient.cs     sha256 b0c7f01a… — SendCancelReport
+//     echo (cancel_report=true) + the R5 account.txt branch drop + build id
+//     2026-10-03-c1. The order-name / account / signal-id contract is
+//     byte-untouched.
 // OWNER RULING 2026-09-30 (plan v7 FINAL R1b.10 / Z21, reverses the 09-08
 // Dispatch 102): the protected namespace is now `vl/…`; the old module prefix
 // is forbidden (Go: TestNoOldModuleImport; this file's base stays the
