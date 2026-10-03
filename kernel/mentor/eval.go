@@ -530,8 +530,8 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 			// B4: the 15m/5m conflict reads CLOSED buckets only — the
 			// still-forming 5m bucket is dropped [D4.2 p1 @ 05:10: "a
 			// 15-minute candle is only confirmed once CLOSED; trade from
-			// the next one"].
-			if conflict := ISBConflictVerdict(closedBuckets(bars, now, e.Cfg)); !conflict {
+			// the next one"]. B8: the 15m side is the REAL 15m TF.
+			if conflict := ISBConflictVerdict(closedBuckets(bars, now, e.Cfg), closedBucketsTF(bars, 15, now)); !conflict {
 				// OWNER RULING 2026-10-03 ("exactly like he said"): the ISB is
 				// NOT location-gated — "inside bar lúc nào cũng có thể take
 				// risk… trong range, trên range, ngoài range, dưới range"

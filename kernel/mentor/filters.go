@@ -114,49 +114,24 @@ func TriggerVerdict(t TriggerLine, price float64) (ok bool, side Side, reason st
 // [@ 00:00]. Same direction → trade; OPPOSITE directions → DO NOT TRADE AT ALL
 // [@ 14:35].
 
-// Is5mISB reports a 5m inside bar (the 1m body rule applied to 5m bars).
-func Is5mISB(prev, cur market.Kline) bool {
-	return IsISB(prev, cur)
-}
-
-// Is15mChurn is the 15m-ISB proxy (DS-108 §2.1): 3 consecutive 5m bars each
-// inside the FIRST one's range.
-func Is15mChurn(bars5m []market.Kline) bool {
-	if len(bars5m) < 3 {
+// ISBConflictVerdict — B8 (10-03 fix, D4.2 p1 @14:24–14:52; D5.1 p2
+// @01:55): the 15m read is the REAL 15m TF (aggregated CLOSED buckets), not
+// three 5m bars standing in for it — he says "mình nhắm theo khung 15 phút…
+// đánh theo khung 15 phút thật sự". A live 5m ISB and a live 15m ISB with
+// OPPOSITE directions → no trade at all [D4.2 p1 @ 14:35 "làm ơn đừng trade
+// luôn… 2 khung giờ lớn đang ngược chiều nhau"]. Both directions are the
+// INSIDE candle's colour (candle 1; ISBDirection), doji = no ISB at all.
+// The conflict is ISB-path only — its call site runs inside the IsISB gate.
+func ISBConflictVerdict(bars5m, bars15m []market.Kline) bool {
+	if len(bars5m) < 2 || len(bars15m) < 2 {
 		return false
 	}
-	first := bars5m[len(bars5m)-3]
-	last := bars5m[len(bars5m)-1]
-	for _, b := range bars5m[len(bars5m)-2:] {
-		if b.High > first.High || b.Low < first.Low {
-			return false
-		}
-	}
-	_ = last
-	return true
-}
-
-// barDir is a candle's own direction (body up/down) — the "inside bar's
-// direction" read in §5.3.
-func barDir(b market.Kline) Side {
-	if b.Close > b.Open {
-		return SideLong
-	}
-	return SideShort
-}
-
-// ISBConflictVerdict: a live 5m ISB and a live 15m churn with OPPOSITE
-// directions → no trade at all [D4.2 p1 @ 14:35]. The 5m ISB is the most
-// recent pair; the 15m read is the last 3 5m bars.
-func ISBConflictVerdict(bars5m []market.Kline) (conflict bool) {
-	if len(bars5m) < 3 {
+	p5, c5 := bars5m[len(bars5m)-2], bars5m[len(bars5m)-1]
+	p15, c15 := bars15m[len(bars15m)-2], bars15m[len(bars15m)-1]
+	if !IsISB(p5, c5) || !IsISB(p15, c15) {
 		return false
 	}
-	last, prev := bars5m[len(bars5m)-1], bars5m[len(bars5m)-2]
-	if !Is5mISB(prev, last) || !Is15mChurn(bars5m) {
-		return false
-	}
-	return barDir(last) != barDir(bars5m[len(bars5m)-3])
+	return ISBDirection(p5) != ISBDirection(p15)
 }
 
 // ── mid-range [§12, D3.2 p2 @ 08:34; D3.4 p3 @ 01:44] ───────────────────────
