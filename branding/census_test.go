@@ -25,17 +25,14 @@ type censusEntry struct {
 }
 
 var censusTable = map[string][]censusEntry{
-	".env.example": {
-		{count: 1, phase: "R5", reason: "transitional — re-pinned at final"},
-	},
 	"ninjascript/VLTraderTCPClient.cs": {
-		{count: 10, phase: "R5", reason: "transitional — re-pinned at final"},
+		{count: 10, phase: "R5", reason: "removed in the cancel-confirm AddOn update (one F5)"},
 	},
 }
 
 // Ceiling = sum of allowed counts at the R1b merge (1160) + 11 for the
 // e1dcc173 legacy job fixture (2026-10-02 #307).
-const censusCeiling = 11
+const censusCeiling = 10
 
 func TestCensusGuard(t *testing.T) {
 	tok := "no" + "fx" // runtime assembly — never the literal
