@@ -112,18 +112,39 @@ func TestISBBoxGatesTheEvaluator(t *testing.T) {
 	})
 }
 
-// TestMidRangeBoxed — MID-RANGE ban via boxes (CTO 1791003862333): between an
-// FTGL below and an FTGH above there is NO PHL, NO PLH, regardless of width.
+// TestMidRangeBoxed — MID-RANGE ban via boxes (CTO 1791003862333) with the
+// PING-PONG exception (FINAL box decision 2026-10-03): an entry whose
+// reference candle touches one of the two boxes is the box-edge trade
+// itself — "đánh ping pong — KHÔNG ĐƯỢC ĐÁNH GIỮA" — allowed when the
+// two-box range (FTGL top → FTGH bottom) is >= 50 pts, refused below with
+// ping_pong_range_too_small; any OTHER location between the boxes stays
+// banned [D3.2 p2 @ 07:50–09:14; D4.2 p2 @ 05:17].
 func TestMidRangeBoxed(t *testing.T) {
-	boxes := []Box{{Kind: FTGL, Top: 90, Bottom: 80}, {Kind: FTGH, Top: 120, Bottom: 110}}
-	if !midRangeBoxed(boxes, 100) {
-		t.Fatal("price between a floor box and a ceiling box is mid-range")
+	band := DefaultBoxCfg().TouchBandPts
+	none := market.Kline{}
+	boxes := []Box{{Kind: FTGL, Top: 90, Bottom: 80}, {Kind: FTGH, Top: 160, Bottom: 150}} // gap 60 >= 50
+	if banned, _ := midRangeBoxed(boxes, 120, none, band); !banned {
+		t.Fatal("price between a floor box and a ceiling box is mid-range (no box touch)")
 	}
-	if midRangeBoxed(boxes, 85) || midRangeBoxed(boxes, 115) {
+	if banned, _ := midRangeBoxed(boxes, 85, none, band); banned {
 		t.Fatal("outside the two boxes is not mid-range")
 	}
-	if midRangeBoxed([]Box{{Kind: FTGL, Top: 90, Bottom: 80}}, 100) {
+	if banned, _ := midRangeBoxed([]Box{{Kind: FTGL, Top: 90, Bottom: 80}}, 100, none, band); banned {
 		t.Fatal("one box alone cannot make a mid-range")
+	}
+	// ping-pong: the reference candle touches the FTGL top from above.
+	ref := market.Kline{High: 95, Low: 89.5, Close: 92, CloseTime: 1}
+	if banned, _ := midRangeBoxed(boxes, 120, ref, band); banned {
+		t.Fatal("a box-edge reference is the ping-pong trade, not mid-range (gap 60 >= 50)")
+	}
+	// gap < 50 → the box-edge trade is refused with the reason.
+	tight := []Box{{Kind: FTGL, Top: 90, Bottom: 80}, {Kind: FTGH, Top: 115, Bottom: 110}} // gap 20
+	if banned, reason := midRangeBoxed(tight, 100, ref, band); !banned || reason != "ping_pong_range_too_small" {
+		t.Fatalf("small two-box range = (%v, %q), want (true, ping_pong_range_too_small)", banned, reason)
+	}
+	// no touch between the boxes stays banned regardless of gap.
+	if banned, _ := midRangeBoxed(boxes, 120, none, band); !banned {
+		t.Fatal("no box touch → the mid-range ban holds")
 	}
 }
 

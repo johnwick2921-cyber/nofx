@@ -173,17 +173,33 @@ func boxBanFilter(out []Intent, boxes []Box, cur market.Kline) []Intent {
 // midRangeBoxed reports whether price sits between an FTGL floor box below
 // and an FTGH ceiling box above — the mid-range ban with NO width threshold
 // (CTO 1791003862333): "between two boxes: NO PHL, NO PLH, only the ISB".
-func midRangeBoxed(boxes []Box, price float64) bool {
-	var floor, ceil bool
-	for _, b := range boxes {
-		if b.Kind == FTGL && b.Top < price {
-			floor = true
+func midRangeBoxed(boxes []Box, price float64, ref market.Kline, touchBandPts float64) (banned bool, reason string) {
+	var floor, ceil *Box
+	for i := range boxes {
+		if boxes[i].Kind == FTGL && boxes[i].Top < price {
+			floor = &boxes[i]
 		}
-		if b.Kind == FTGH && b.Bottom > price {
-			ceil = true
+		if boxes[i].Kind == FTGH && boxes[i].Bottom > price {
+			ceil = &boxes[i]
 		}
 	}
-	return floor && ceil
+	if floor == nil || ceil == nil {
+		return false, ""
+	}
+	// PING-PONG exception (CTO FINAL box decision 2026-10-03): an entry whose
+	// REFERENCE candle touches one of the two boxes is the box-edge trade
+	// itself — "đánh ping pong — KHÔNG ĐƯỢC ĐÁNH GIỮA" [D3.2 p2 @ 07:50–09:14;
+	// D4.2 p2 @ 05:17] — not mid-range. Allowed when the range between the
+	// boxes (FTGL top → FTGH bottom) is >= 50 pts; below that it is refused
+	// as ping_pong_range_too_small. PHL/PLH at any OTHER location between the
+	// boxes stays banned.
+	if ref.CloseTime != 0 && (touchesEdge(*floor, ref, BoxCfg{TouchBandPts: touchBandPts}) || touchesEdge(*ceil, ref, BoxCfg{TouchBandPts: touchBandPts})) {
+		if ceil.Bottom-floor.Top >= PingPongMinGapPts {
+			return false, ""
+		}
+		return true, "ping_pong_range_too_small"
+	}
+	return true, ""
 }
 
 // isbArmActive reports whether an ISB arm for the SAME side is still live
@@ -206,7 +222,7 @@ func isbFlags(cur market.Kline, levels []Level, boxes []Box) string {
 	if touchesOldExtreme(cur, levels) {
 		flags = append(flags, "isb_at_old_extreme")
 	}
-	if midRangeBoxed(boxes, cur.Close) {
+	if banned, _ := midRangeBoxed(boxes, cur.Close, cur, DefaultBoxCfg().TouchBandPts); banned {
 		flags = append(flags, "isb_in_range")
 	}
 	return strings.Join(flags, "|")
@@ -510,8 +526,10 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 		}
 		// MID-RANGE ban via boxes (CTO 1791003862333): between an FTGL
 		// below and an FTGH above there is NO PHL, NO PLH, regardless of
-		// width — only the ISB.
-		if midRangeBoxed(boxes, price) {
+		// width — only the ISB. Ping-pong exception (FINAL box decision):
+		// an entry whose reference candle touches one of the boxes is the
+		// box-edge trade itself, allowed when the two-box range >= 50.
+		if banned, _ := midRangeBoxed(boxes, price, tr.RefBar, e.Cfg.Box.TouchBandPts); banned {
 			continue
 		}
 		// R5: nothing trades inside the standing 5m-ISB box except a

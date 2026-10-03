@@ -17,11 +17,12 @@ import (
 //   - a body escape above the box → the box is still there (B1: no intraday
 //     deletion).
 //
-// BLOCKER (DS-103's eval.go gates, census on the recorded tapes 2026-10-03):
-// the Go box path emits ZERO entries — mnq_1m_2026-09-15_rth: 5360 box-edge
-// rejects, 3560 killed by the between-trigger ban, 1777 by the mid-range
-// boxed ban, 13 reach PHLPLHGatedR2, 0 emitted. Until DS-103 opens the
-// path, the assertions are skipped instead of falsely green.
+// BLOCKER (updated after the ping-pong fix, 2026-10-03): the mid-range
+// exception is in (box-edge references pass midRangeBoxed — census on the
+// golden tape: 59 box-edge rejects now reach PHLPLHGatedR2), but
+// PHLPLHGatedR2's own gates (HTF direction / day gate / PHL geometry) still
+// emit ZERO box entries. Until DS-103 opens that gate, the assertions are
+// skipped instead of falsely green.
 func TestEvaluatorBoxPathRecordedTape(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Enabled = true
@@ -39,9 +40,9 @@ func TestEvaluatorBoxPathRecordedTape(t *testing.T) {
 	}
 
 	if len(entries) == 0 {
-		t.Skip("BLOCKER: the Go box path emits zero entries on recorded tapes " +
-			"(census: 5360 box-edge rejects on 2026-09-15, 13 reach PHLPLHGatedR2, 0 emitted — " +
-			"DS-103's eval.go gates). Assertions below go live when the path opens.")
+		t.Skip("BLOCKER: PHLPLHGatedR2 gates (HTF direction / day gate / PHL geometry) still emit zero box entries " +
+			"on recorded tapes — 59 box-edge rejects reach it on the golden tape, 0 emit. " +
+			"Assertions below go live when DS-103 opens that gate.")
 	}
 
 	if len(entries) < 2 {

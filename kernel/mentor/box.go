@@ -334,6 +334,12 @@ func touchesEdge(b Box, c market.Kline, cfg BoxCfg) bool {
 	return false
 }
 
+// PingPongMinGapPts is the FINAL box decision's two-box minimum: the
+// box-edge (ping-pong) trade is allowed only when the range between the
+// boxes — FTGL top → FTGH bottom — is at least 50 pts [D3.2 p2
+// @ 07:50–09:14; D4.2 p2 @ 05:17].
+const PingPongMinGapPts = 50.0
+
 // BoxEdgeLocations exports each live box's edges as locations for DS-103's
 // location gate (the box edge is one of the four setup locations).
 func BoxEdgeLocations(boxes []Box) []Level {
