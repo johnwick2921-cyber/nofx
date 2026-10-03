@@ -612,3 +612,24 @@ A value the AddOn cannot read is **left out**, never guessed. The Go reply sets 
 its `accept_seq`, monotonic accept time and `remote_port`, as that connection's record.
 The verifier binds to that record, **never** to `FarSideBuildID()`. `VL_BUILD_ID` keeps
 its ISO-date prefix, because the capability floors compare it bytewise.
+
+## `signal.stop_limit` (2026-10-03-c2) — mentor stop-LIMIT entries (PR B)
+
+The `signal` payload gains `stop_limit` (bool, omitempty). When true and
+`order_type` is `stop_entry`, the AddOn builds `OrderType.StopLimit` with
+`LimitPrice == StopPrice` — the entry fills at its price or misses, never a
+stop-MARKET (D1.4 p1 @24:41, p2 @00:00). Go sets the flag only when its
+`MENTOR_STOP_LIMIT` knob is ON and the far side proves
+`MinAddonBuildStopLimit` = `2026-10-03-c2` (fail-closed: an older AddOn would
+build StopMarket and fill sloppily). With the knob OFF the wire is
+byte-identical.
+
+N12: with limit == stop and Day time-in-force, a gap through the trigger leaves
+a RESTING limit that can fill later at a stale price. Go closes that window
+with a per-order EXPIRY, authored by the evaluator's intent, not a blanket
+timer: armed_orders.expiry_ms is stamped when the evaluator places the order
+(DS-102 — a level touch or a single ISB expires at the close of the NEXT 1m
+candle; ISB stacking is extended while the candles stay inside and cancelled
+at the 4th; the swing runs its 5m rule). The armed pass requests cancel for an
+unfilled order at now >= expiry_ms through the existing settlement path; a row
+with no expiry is never auto-cancelled. The AddOn needs no new frame for this.

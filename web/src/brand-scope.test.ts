@@ -11,6 +11,14 @@
 //     echo (cancel_report=true) + the R5 account.txt branch drop + build id
 //     2026-10-03-c1. The order-name / account / signal-id contract is
 //     byte-untouched.
+// Stack top (PR B, feat/stop-limit rebased on #312, 2026-10-03) re-pins the two
+// files PR B touches; tcp_server.go is untouched by PR B and keeps 5a59d739…:
+//   ninjascript/VLTraderTCPClient.cs     sha256 c3f4b51a… — build id
+//     2026-10-03-c2 + the stop_limit construction (OrderType.StopLimit with
+//     LimitPrice == StopPrice) and the stop-limit cancel-request type label.
+//     The protected order-name / account / signal-id contract is byte-untouched.
+//   provider/ninjatrader/tcp_framing.go  sha256 e46c12be… — SignalPayload.StopLimit
+//     + MinAddonBuildStopLimit (c2). Additive JSON; no identifier renamed.
 // OWNER RULING 2026-09-30 (plan v7 FINAL R1b.10 / Z21, reverses the 09-08
 // Dispatch 102): the protected namespace is now `vl/…`; the old module prefix
 // is forbidden (Go: TestNoOldModuleImport; this file's base stays the
