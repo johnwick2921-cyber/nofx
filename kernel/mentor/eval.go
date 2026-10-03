@@ -622,7 +622,13 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 	boxCfg := DefaultBoxCfg()
 	for _, b := range boxes {
 		last := e.State.BoxRefs[b.Key]
-		for _, r := range BoxReturnBars(bars, b, b.FormedAt, boxCfg) {
+		// Incremental walk from the last evaluated reference (O(new bars) per
+		// tick, not O(tape)) — the full BoxReturnBars walk was the 437s replay.
+		start := b.FormedAt + 1
+		if last+1 > start {
+			start = last + 1
+		}
+		for _, r := range BoxReturnBarsFrom(bars, b, start, boxCfg) {
 			if r.RefBar <= last {
 				continue
 			}
