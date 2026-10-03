@@ -1113,7 +1113,14 @@ namespace NinjaTrader.NinjaScript.AddOns
                 // trigger price (the tick offset was applied Go-side).
                 bool isLimit    = orderType == "limit" && limitPx > 0;
                 bool isStopEntry = orderType == "stop_entry" && stopPx > 0;
-                OrderType orderT = isLimit ? OrderType.Limit : (isStopEntry ? OrderType.StopMarket : OrderType.Market);
+                // MENTOR STOP-LIMIT (2026-10-03): stop_limit=true builds
+                // OrderType.StopLimit with LimitPrice == StopPrice — fills at
+                // its price or misses, never a stop-MARKET (D1.4 p1 @24:41,
+                // p2 @00:00). Go sets the flag only when its mentor knob is ON
+                // and the far side proved the floor.
+                bool stopLimitWanted = string.Equals(GetString(p, "stop_limit"), "true", StringComparison.OrdinalIgnoreCase);
+                OrderType orderT = isLimit ? OrderType.Limit
+                    : (isStopEntry ? (stopLimitWanted ? OrderType.StopLimit : OrderType.StopMarket) : OrderType.Market);
                 // WAVE B / D1 (2026-09-05) — ONE ORDER, CORRECT SLOTS.
                 // Account.CreateOrder is POSITIONAL: after `quantity` come
                 // (limitPrice, stopPrice, oco, name, gtd, customOrder). Until
@@ -1127,7 +1134,9 @@ namespace NinjaTrader.NinjaScript.AddOns
                 // loss below builds a StopMarket as (b.Qty, 0, b.Sl) and fills.
                 // A limit entry keeps the shape it has today: price in
                 // limitPrice, 0 in stopPrice. StopMarket only — no stop-limit.
-                double limitArg = isLimit ? limitPx : 0;
+                // A StopLimit carries its trigger in BOTH slots: limit =
+                // stop price (the mentor's exact-fill-or-miss rule).
+                double limitArg = isLimit ? limitPx : (isStopEntry && stopLimitWanted ? stopPx : 0);
                 double stopArg  = isStopEntry ? stopPx : 0;
                 var entryOrder = submitAccount.CreateOrder(
                     instrument, entryAction, orderT, OrderEntry.Manual,
@@ -1287,7 +1296,24 @@ namespace NinjaTrader.NinjaScript.AddOns
                     SendReduceRejected(clientId, "instrument not found " + symbol, account);
                     return;
                 }
-                Account target = account;
+                // P1-4 (review 2026-10-03): route to the account that HOLDS
+                // the position — payload account first, then the entry-fill
+                // map, then the active account — with the SAME SIM guard
+                // close_position applies (a LIVE account is never a target).
+                Account target = null;
+                string payloadAcct = GetString(p, "account");
+                string posKey = symbol;
+                try { posKey = instrument.MasterInstrument.Name; } catch { }
+                lock (posAcctLock) { positionAccountBySymbol.TryGetValue(posKey, out target); }
+                if (target == null && !string.IsNullOrEmpty(payloadAcct))
+                {
+                    lock (Account.All)
+                    {
+                        foreach (var a in Account.All)
+                            if (a.Name == payloadAcct) { target = a; break; }
+                    }
+                }
+                if (target == null) target = account;
                 if (target == null || !IsSimAccount(target))
                 {
                     SendReduceRejected(clientId, "resolved account is not a SIM account", target);
@@ -1324,8 +1350,21 @@ namespace NinjaTrader.NinjaScript.AddOns
                 OrderAction exitAction = side == "long" ? OrderAction.Sell : OrderAction.BuyToCover;
                 var order = target.CreateOrder(instrument, exitAction, OrderType.Market, OrderEntry.Manual,
                     TimeInForce.Day, qty, 0, 0, string.Empty, clientId + "-rx", Core.Globals.MaxDate, null);
+                int remaining = openQty - qty;
+                int bracketQty = -1;
                 lock (reduceOpenQtyLock) { reduceOpenQtyByClient[clientId] = openQty; }
                 target.Submit(new[] { order });
+                // V2 (2026-10-03): shrink the protective pair IN PLACE to cover
+                // the remainder — D2's NEVER cancel-and-replace. The exit was
+                // submitted FIRST, so a shrink failure leaves the pair
+                // OVER-covering (safe) and reports bracket_qty=-1, which Go
+                // fails closed on.
+                try { bracketQty = ShrinkBracketsForReduction(instrument, target, remaining); }
+                catch (Exception ex)
+                {
+                    LogWarn("VLTraderTCPClient: reduce bracket shrink threw: " + ex.Message);
+                }
+                lock (reduceOpenQtyLock) { reduceBracketQtyByClient[clientId] = bracketQty; }
                 LogInfo("VLTraderTCPClient: reduce_position submitted " + symbol + " " + side
                     + " qty=" + qty + " of " + openQty + " (client=" + clientId + ")");
             }
@@ -1354,6 +1393,55 @@ namespace NinjaTrader.NinjaScript.AddOns
             catch { }
         }
 
+        // ShrinkBracketsForReduction (PARTIAL-CLOSE v2, 2026-10-03) amends
+        // every protective pair for (instrument, account) IN PLACE so the SL
+        // total and the TP total are EXACTLY the remainder — D2's NEVER
+        // cancel-and-replace (cs:2759) applied to a reduce. Returns the new
+        // quantity, or -1 when no bracket exists or any Change threw.
+        private readonly Dictionary<string, int> reduceBracketQtyByClient = new Dictionary<string, int>();
+
+        private int ShrinkBracketsForReduction(Instrument instrument, Account ba, int remaining)
+        {
+            var pairs = new List<PlacedBracket>();
+            lock (signalMapLock)
+            {
+                foreach (var kv in placedBrackets)
+                {
+                    var pb = kv.Value;
+                    if (pb == null || pb.Instrument != instrument) continue;
+                    pairs.Add(pb);
+                }
+            }
+            if (pairs.Count == 0) return -1;
+            int left = remaining;
+            int assigned = 0;
+            foreach (var pb in pairs)
+            {
+                if (left <= 0) break;
+                int take = Math.Min(left, pb.Qty);
+                try
+                {
+                    var changed = new List<Order>();
+                    if (pb.SlOrder != null) { pb.SlOrder.QuantityChanged = take; changed.Add(pb.SlOrder); }
+                    if (pb.TpOrder != null) { pb.TpOrder.QuantityChanged = take; changed.Add(pb.TpOrder); }
+                    if (changed.Count == 0) continue;
+                    ba.Change(changed.ToArray());
+                    int was = pb.Qty;
+                    lock (signalMapLock) { pb.Qty = take; }
+                    assigned += take;
+                    left -= take;
+                    LogInfo("VLTraderTCPClient: bracket shrunk for reduce qty " + was + " -> " + take + " (remainder " + remaining + ")");
+                }
+                catch (Exception ex)
+                {
+                    LogWarn("VLTraderTCPClient: bracket shrink FAILED: " + ex.Message);
+                    return -1;
+                }
+            }
+            if (assigned != remaining) return -1;
+            return assigned;
+        }
+
         // SendReduceFillFrame reports a reduce fill WITH the remaining quantity
         // (open-at-request minus filled). Emitted on Filled AND PartFilled; the
         // Go ledger upserts by client_id so re-reports apply once per step.
@@ -1363,8 +1451,13 @@ namespace NinjaTrader.NinjaScript.AddOns
             try
             {
                 int remaining = -1;
+                int bracketQty = -1;
                 int openAtRequest = 0;
-                lock (reduceOpenQtyLock) { reduceOpenQtyByClient.TryGetValue(clientId, out openAtRequest); }
+                lock (reduceOpenQtyLock)
+                {
+                    reduceOpenQtyByClient.TryGetValue(clientId, out openAtRequest);
+                    reduceBracketQtyByClient.TryGetValue(clientId, out bracketQty);
+                }
                 if (openAtRequest > 0) remaining = openAtRequest - filledQty;
                 var payload = new Dictionary<string, object>
                 {
@@ -1374,10 +1467,11 @@ namespace NinjaTrader.NinjaScript.AddOns
                     ["quantity"]   = filledQty,
                     ["fill_price"] = fillPrice,
                     ["remaining"]  = remaining,
+                    ["bracket_qty"] = bracketQty,
                     ["account"]    = acctName ?? ""
                 };
                 WriteEnvelope("reduce_fill", payload);
-                LogInfo("VLTraderTCPClient: reduce_fill " + clientId + " filled=" + filledQty + " remaining=" + remaining);
+                LogInfo("VLTraderTCPClient: reduce_fill " + clientId + " filled=" + filledQty + " remaining=" + remaining + " bracket_qty=" + bracketQty);
             }
             catch (Exception ex)
             {
@@ -1638,7 +1732,9 @@ namespace NinjaTrader.NinjaScript.AddOns
                                       : (account != null ? account.Name : "");
                     // PARTIAL-CLOSE: a reduce exit reports reduce_fill and
                     // returns — the position is still OPEN (only reduced), the
-                    // bracket stays, the account ownership stays.
+                    // bracket stays, the account ownership stays. Emitted on
+                    // PartFilled AND Filled; the Go ledger upserts by
+                    // client_id so the pair applies once per progress step.
                     if (reduceExit)
                     {
                         SendReduceFillFrame(reduceClientId, rootSymbol, positionSide,
@@ -1653,6 +1749,20 @@ namespace NinjaTrader.NinjaScript.AddOns
                     // Position closed → drop its bracket tracking (auto-breakeven) and
                     // its A2 identity (echoed on the close frame just sent above).
                     lock (signalMapLock) { placedBrackets.Remove(signalId); signalIdentity.Remove(signalId); }
+                }
+                else if (e.OrderState == OrderState.PartFilled && reduceExit)
+                {
+                    // PARTIAL-CLOSE: a PARTIAL reduce fill reports progress with
+                    // the remaining quantity so far. The final Filled reports
+                    // the definitive remaining; the Go ledger upserts.
+                    string positionSide = (action == OrderAction.BuyToCover) ? "short" : "long";
+                    string rootSymbol = "";
+                    try { rootSymbol = e.Order.Instrument.MasterInstrument.Name; } catch { }
+                    string exitAcct = e.Order.Account != null ? e.Order.Account.Name
+                                      : (account != null ? account.Name : "");
+                    SendReduceFillFrame(reduceClientId, rootSymbol, positionSide,
+                                        e.AverageFillPrice, e.Filled, exitAcct);
+                    return;
                 }
                 else if (e.OrderState == OrderState.Rejected)
                 {
@@ -2319,23 +2429,37 @@ namespace NinjaTrader.NinjaScript.AddOns
                 }
                 PlacedBracket pb = null;
                 lock (signalMapLock) { placedBrackets.TryGetValue(signalId, out pb); }
-                if (pb == null)
+                Order legOrder = pb != null ? (leg == "sl" ? pb.SlOrder : pb.TpOrder) : null;
+                if (legOrder == null && account != null)
                 {
-                    LogInfo("VLTraderTCPClient: cancel_order leg=" + leg + " found NO tracked bracket for " + signalId + " — nothing cancelled");
-                    SendAck("cancel_order");
-                    return;
+                    // P1-1 (review 2026-10-03): placedBrackets is in-memory and
+                    // EMPTY after an NT8 restart — the leg must be resolved from
+                    // the account's own order collection by its "<signal>-<leg>"
+                    // name, or a restart strands every pending resize.
+                    string wantName = signalId + "-" + leg;
+                    lock (account.Orders)
+                    {
+                        foreach (Order o in account.Orders)
+                        {
+                            if (o != null && string.Equals(o.Name ?? "", wantName, StringComparison.OrdinalIgnoreCase))
+                            { legOrder = o; break; }
+                        }
+                    }
                 }
-                Order legOrder = leg == "sl" ? pb.SlOrder : pb.TpOrder;
                 if (legOrder == null)
                 {
-                    LogWarn("VLTraderTCPClient: cancel_order leg=" + leg + " has NO resting order for " + signalId + " — nothing cancelled");
+                    LogInfo("VLTraderTCPClient: cancel_order leg=" + leg + " found NO resting order for " + signalId + " — nothing cancelled");
                     SendAck("cancel_order");
                     return;
                 }
-                Account ba = pb.Account ?? account;
+                Account ba = (legOrder.Account ?? pb?.Account) ?? account;
                 ba.Cancel(new[] { legOrder });
                 LogInfo("VLTraderTCPClient: cancel_order leg=" + leg + " cancelled " + legOrder.Name + " (entry and sibling leg untouched)");
-                SendCancelReportForOrder(legOrder, legOrder.Name ?? signalId + "-" + leg);
+                // P1-1: the report carries the ENTRY signal id (suffix
+                // STRIPPED) with the leg's order name, so the Go leg route
+                // (OrderName != SignalID) matches it. An unstripped signal_id
+                // makes OrderName == SignalID and the report is dropped.
+                SendCancelReportForOrder(legOrder, signalId);
                 SendAck("cancel_order");
             }
             catch (Exception ex)

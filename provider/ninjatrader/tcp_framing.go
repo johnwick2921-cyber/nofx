@@ -64,6 +64,14 @@ type SignalPayload struct {
 	OrderType  string  `json:"order_type,omitempty"`
 	LimitPrice float64 `json:"limit_price,omitempty"`
 	StopPrice  float64 `json:"stop_price,omitempty"`
+	// StopLimit (MENTOR STOP-LIMIT, 2026-10-03): when true and OrderType is
+	// "stop_entry", the AddOn builds OrderType.StopLimit with LimitPrice ==
+	// StopPrice — the mentor rule "fills at its price or misses, never a
+	// stop-MARKET" (D1.4 p1 @24:41, p2 @00:00). Go sets this only when the
+	// mentor stop-limit knob is ON and the AddOn proves the floor; an older
+	// AddOn ignores the field and would build StopMarket, which is why the
+	// knob is fail-closed below MinAddonBuildStopLimit.
+	StopLimit bool `json:"stop_limit,omitempty"`
 }
 
 // FillPayload is the C#-AddOn → Go-server fill frame per spec L4398-4406.
@@ -224,9 +232,10 @@ type CancelOrderPayload struct {
 	// Leg (PARTIAL-CLOSE, 2026-10-03): when "sl" or "tp", the cancel targets
 	// THAT named bracket leg — the explicit leg call the C# D1 ruling
 	// (2026-09-07) reserves. Absent = the historical entry cancel,
-	// byte-identical framing; an older AddOn ignores the field and cancels
-	// the entry (which is why the leg path refuses unless the far side
-	// certified this build).
+	// byte-identical framing. NOTE: no Go-side build floor gates this field —
+	// an older AddOn ignores it and cancels the ENTRY instead, which is why
+	// the leg path is only ever sent under the partial-close knob (whose own
+	// wire capability is the reduce_position hello flag).
 	Leg      string `json:"leg,omitempty"`
 	Account  string `json:"account,omitempty"`
 	TraderID string `json:"trader_id,omitempty"`
@@ -378,6 +387,14 @@ const MinAddonBuildPictureHtf = "2026-09-20-p1"
 //
 // The ISO date advances, per the suffix rule above.
 const MinAddonBuildCancelReport = "2026-10-03-c1"
+
+// MinAddonBuildStopLimit is the minimum AddOn build that builds a stop_entry
+// as OrderType.StopLimit (LimitPrice == StopPrice) when the signal carries
+// stop_limit=true — the mentor's no-stop-MARKET rule (D1.4 p1 @24:41). Below
+// this floor an AddOn would build StopMarket and fill sloppily, so the knob is
+// fail-closed: Go refuses to set the flag unless the far side proves this
+// build.
+const MinAddonBuildStopLimit = "2026-10-03-c1"
 
 // CancelReportProven reports whether the far-side AddOn certifies cancel
 // reports. Unknown ("") NEVER satisfies — capability is proven by receipt,
@@ -669,7 +686,12 @@ type ReduceFillPayload struct {
 	Quantity  int     `json:"quantity"`
 	FillPrice float64 `json:"fill_price"`
 	Remaining int     `json:"remaining"`
-	Account   string  `json:"account,omitempty"`
+	// BracketQty (2026-10-03 redesign): the NEW quantity the AddOn set on the
+	// protective SL and TP IN PLACE (Account.Change) as part of the reduce —
+	// equals Remaining on success, -1 when the shrink failed or is unknown.
+	// Go verifies it against the next snapshot; -1 or a mismatch FAILS CLOSED.
+	BracketQty int    `json:"bracket_qty"`
+	Account    string `json:"account,omitempty"`
 }
 
 // ReduceRejectedPayload (C#-AddOn → Go-server) reports why a reduce_position

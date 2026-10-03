@@ -262,6 +262,11 @@ func cancelConfirmRequireReport() bool {
 // armedReportNow is the report receipt clock — swappable in tests (A28).
 var armedReportNow = func() int64 { return time.Now().UTC().UnixMilli() }
 
+// cancelReportBuildIDFor is the build-id seam the report pass reads — the far
+// side's build in production, swappable in tests so a pin can drive the
+// dispatch with a PROVEN build without a live connection (A28).
+var cancelReportBuildIDFor = func(at *AutoTrader) string { return at.farSideBuildID() }
+
 // ResetArmedReportNowForTest restores the real clock.
 func ResetArmedReportNowForTest() {
 	armedReportNow = func() int64 { return time.Now().UTC().UnixMilli() }
@@ -516,7 +521,7 @@ func (at *AutoTrader) confirmPendingCancels(ledger *store.ArmedOrderStore, cance
 	// With the knob ON a cancel settles ONLY on a positive per-order terminal
 	// report. The caller holds cancelConfirmMu, so the helper must not lock.
 	if cancelConfirmRequireReport() {
-		return at.confirmPendingCancelsReport(ledger, cancelFn, rows, now, timeout, cap, at.farSideBuildID())
+		return at.confirmPendingCancelsReport(ledger, cancelFn, rows, now, timeout, cap, cancelReportBuildIDFor(at))
 	}
 
 	for i := range rows {
@@ -633,6 +638,11 @@ func (at *AutoTrader) confirmPendingCancelsReport(ledger *store.ArmedOrderStore,
 			buildStr, nt.MinAddonBuildCancelReport, len(rows))
 		return 0, len(rows), 0
 	}
+	// P1-2 (review 2026-10-03): loop 2 must NEVER touch a row loop 1 settled.
+	// The census and the re-request walk the SAME stale `rows` slice — a row
+	// just confirmed (or re-armed) would otherwise get cancelFn + RequestCancel
+	// and be resurrected into cancel_pending.
+	settledIDs := map[int64]bool{}
 	for i := range rows {
 		r := rows[i]
 		ok, why := cancelReportQualifies(r)
@@ -645,6 +655,7 @@ func (at *AutoTrader) confirmPendingCancelsReport(ledger *store.ArmedOrderStore,
 				continue
 			}
 			settled++
+			settledIDs[r.ID] = true
 			at.logInfof("🧾 cancel-report CONFIRMED %s signal=%s — %s (report_ms=%d state=%s attempts=%d) — returned to armed-unplaced, re-placeable",
 				r.Scenario, shortID(r.SignalID), why, r.CancelReportMs, r.CancelReportState, r.CancelAttempts)
 			continue
@@ -657,6 +668,7 @@ func (at *AutoTrader) confirmPendingCancelsReport(ledger *store.ArmedOrderStore,
 			continue
 		}
 		settled++
+		settledIDs[r.ID] = true
 		at.logInfof("🧾 cancel-report CONFIRMED %s signal=%s — %s (report_ms=%d state=%s attempts=%d)",
 			r.Scenario, shortID(r.SignalID), why, r.CancelReportMs, r.CancelReportState, r.CancelAttempts)
 	}
@@ -664,6 +676,9 @@ func (at *AutoTrader) confirmPendingCancelsReport(ledger *store.ArmedOrderStore,
 	var overdue []store.ArmedOrderDB
 	for i := range rows {
 		r := rows[i]
+		if settledIDs[r.ID] {
+			continue // settled in loop 1 — never re-requested, never resurrected
+		}
 		if r.CancelRequestedAtMs <= 0 {
 			continue
 		}
@@ -965,9 +980,11 @@ func (at *AutoTrader) settleArmedLedgerWhileOff(now time.Time) {
 		}
 		return nil
 	}, now)
-	// PARTIAL-CLOSE (2026-10-03, behind the #309 knob): the OFF head settles
-	// the same reduce fills and stop resizes the ON pass does — no-ops with
-	// the knob OFF.
-	at.consumeReduceFills(nt)
-	at.confirmStopResizes(nt, now)
+	// PARTIAL-CLOSE (2026-10-03, behind its own knob): the OFF head drains
+	// the same reduce fills and verifies the in-place bracket shrink. P1-7:
+	// gated — with the knob OFF these are complete no-ops.
+	if partialCloseEnabled() {
+		at.consumeReduceFills(nt)
+		at.verifyBracketResizes(now)
+	}
 }
