@@ -525,7 +525,7 @@ done
 
 echo "== Z18 cross-home: two homes can never stand held by different lanes =="
 XH="$WORK/xhome"; mkdir -p "$XH"
-VLB() { HOME="$XH" VL_LOCK_BEAT_SECONDS=60 VL_LOCK_STALE_SECONDS=600 bash "$LOCK_SH" "$@" 2>&1; }
+VLB() { HOME="$XH" VL_LOCK_DIR= VL_LOCK_BEAT_SECONDS=60 VL_LOCK_STALE_SECONDS=600 bash "$LOCK_SH" "$@" 2>&1; }
 OLDB() { HOME="$XH" VL_LOCK_DIR="$XH/$o-main.lock.d" VL_LOCK_BEAT_SECONDS=60 VL_LOCK_STALE_SECONDS=600 bash "$LOCK_SH" "$@" 2>&1; }
 VLB acquire sess-B 'the vl home first' 60 >/dev/null
 out="$(OLDB acquire sess-A 'the retired home second' 60)"; rc=$?
@@ -561,8 +561,8 @@ check "no round ever left both homes held" "$both" "0"
 VLB acquire sess-B 'check mirror' 60 >/dev/null
 check "check never reads 0 beside a held other home" "$(OLDB check >/dev/null 2>&1; echo $?)" "1"
 VLB release sess-B >/dev/null
-check "check reads 0 only when BOTH homes are absent" "$(OLDA check >/dev/null 2>&1; echo $?)" "0"
-VLB2() { HOME="$XH" VL_LOCK_BEAT_SECONDS=1 VL_LOCK_STALE_SECONDS=4 bash "$LOCK_SH" "$@" 2>&1; }
+check "check reads 0 only when BOTH homes are absent" "$(OLDB check >/dev/null 2>&1; echo $?)" "0"
+VLB2() { HOME="$XH" VL_LOCK_DIR= VL_LOCK_BEAT_SECONDS=1 VL_LOCK_STALE_SECONDS=4 bash "$LOCK_SH" "$@" 2>&1; }
 VLB2 acquire sess-B 'short stale window' 60 >/dev/null
 kp="$(cat "$XH/vl-main.lock.d/keeper.pid" 2>/dev/null || echo)"
 [ -n "$kp" ] && kill -- -"$kp" 2>/dev/null
