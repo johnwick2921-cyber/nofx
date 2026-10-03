@@ -585,24 +585,32 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 							e.refuse("isb_target_below_floor")
 						} else {
 							chosen.Target = target
-							// ISB size flags for the injector: rule 2 (at an old
-							// high/low → REDUCE SIZE) and rule 3 (in a range → REDUCE
-							// SIZE, "Khi trade isb in-range bắt buộc giảm size" [D4.1 p1
-							// @ 08:05/09:40]) — the range is the same mid-range test as
-							// the PHL/PLH ban.
-							chosen.Flag = isbFlags(cur, levels, boxes)
-							// N12: a single ISB fills by the close of the NEXT 1m candle
-							// or it is cancelled ("cancel if the next candle does not
-							// fill" [D1.4 p1 @ 18:32–18:45]); stacking extends it below.
-							chosen.ExpiryMs = cur.CloseTime + 60_000
-							e.State.ArmSeq++
-							id := fmt.Sprintf("isb-%d", e.State.ArmSeq)
-							// the ISB candle is the 1st inside candle (Inside=1), so the
-							// stacking loop must skip this arm on the placement bar.
-							e.State.ISBArms[id] = ISBArm{FirstBar: cur, Inside: 0, Side: side}
-							justPlaced[id] = true
-							chosen.ArmID = id
-							out = append(out, chosen)
+							// B9 [D5.1 p1 @16:24, @19:11-20:07]: ISBs obey the spent-day
+							// cap too ("15 điểm bán, 10 điểm bán"). A cap that breaks the
+							// 1:1 floor refuses (same reason as an uncapped short target).
+							capped := CapTargetForDay(chosen, e.State.Day.Verdict, dg)
+							if !targetFloorOK(capped.Price, capped.Stop, capped.Target) {
+								e.refuse("isb_target_below_floor")
+							} else {
+								// ISB size flags for the injector: rule 2 (at an old
+								// high/low → REDUCE SIZE) and rule 3 (in a range → REDUCE
+								// SIZE, "Khi trade isb in-range bắt buộc giảm size" [D4.1 p1
+								// @ 08:05/09:40]) — the range is the same mid-range test as
+								// the PHL/PLH ban.
+								chosen.Flag = isbFlags(cur, levels, boxes)
+								// N12: a single ISB fills by the close of the NEXT 1m candle
+								// or it is cancelled ("cancel if the next candle does not
+								// fill" [D1.4 p1 @ 18:32–18:45]); stacking extends it below.
+								chosen.ExpiryMs = cur.CloseTime + 60_000
+								e.State.ArmSeq++
+								id := fmt.Sprintf("isb-%d", e.State.ArmSeq)
+								// the ISB candle is the 1st inside candle (Inside=1), so the
+								// stacking loop must skip this arm on the placement bar.
+								e.State.ISBArms[id] = ISBArm{FirstBar: cur, Inside: 0, Side: side}
+								justPlaced[id] = true
+								chosen.ArmID = id
+								out = append(out, chosen)
+							}
 						}
 					}
 				}
@@ -779,7 +787,27 @@ func (e *Evaluator) Tick(bars []market.Kline, now int64) []Intent {
 				continue
 			}
 			e.State.BoxRefs[b.Key] = r.RefBar
-			out = append(out, boxEntryIntent(bars[r.RefBar], b, boxes, levels, e.State.Trigger, e.Cfg)...)
+			for _, in := range boxEntryIntent(bars[r.RefBar], b, boxes, levels, e.State.Trigger, e.Cfg) {
+				// B9 [D5.1 p1 @16:24, @19:11–20:07]: box trades obey
+				// the same day/HTF gates as every other setup —
+				// the 4h/1h direction, the day-off and the spent cap.
+				if htfOK, htfSide, _ := HTFVerdict(e.State.HTF); !htfOK {
+					e.refuse("box_htf_blocked")
+				} else if in.Side != "" && htfSide != "" && in.Side != htfSide {
+					e.refuse("box_htf_side_mismatch")
+				} else if e.State.Day.Verdict == DayOff {
+					e.refuse("box_day_off")
+				} else {
+					capped := CapTargetForDay(in, e.State.Day.Verdict, dg)
+					if capped.Target != in.Target && !targetFloorOK(capped.Price, capped.Stop, capped.Target) {
+						// the CAP pulled the target inside the stop distance —
+						// refuse rather than emit a sub-floor intent.
+						e.refuse("box_target_below_floor")
+					} else {
+						out = append(out, capped)
+					}
+				}
+			}
 		}
 	}
 
