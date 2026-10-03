@@ -59,7 +59,7 @@ namespace NinjaTrader.NinjaScript.AddOns
         // + the hello epoch fields. 2026-09-23-m21 (M2.1): census `settled`,
         // no nested census locks, source_hash at activation. The ISO-date
         // prefix is kept (CTO ruling Q3).
-        private const string  VL_BUILD_ID             = "2026-09-30-m22";
+        private const string  VL_BUILD_ID             = "2026-10-03-c1";
         private const int    MAX_FRAME_BYTES         = 1 << 20; // 1 MB, spec L4376
 
         // === State ===
@@ -428,60 +428,17 @@ namespace NinjaTrader.NinjaScript.AddOns
         // Selection order (first match wins):
         //   1. The account name in %USERPROFILE%\VLTrader\account.txt
         //      (operator-editable — one line, e.g. "Sim101" or "MyPropAcct").
-        //   2. %USERPROFILE%\NofxTrader\account.txt (legacy), only when the
-        //      VLTrader file is absent or empty. The AddOn then copies the
-        //      legacy value into VLTrader ONCE (an EMPTY source is never
-        //      copied). When BOTH files hold a non-empty, different value the
-        //      VLTrader file wins and a WARN names both values — never a
-        //      silent account switch.
-        //   3. "Sim101" (SIM default).
-        //   4. The first available account.
+        //      NOTE (R5, 2026-10-03): the legacy NofxTrader\account.txt
+        //      migration branch was REMOVED in the cancel-confirm AddOn update
+        //      (one F5) — the NofxTrader folder holds only data\ and VLTrader
+        //      did not exist there yet, so there is nothing to migrate. If you
+        //      ever had NofxTrader\account.txt, move it to VLTrader\account.txt
+        //      yourself.
+        //   2. "Sim101" (SIM default).
+        //   3. The first available account.
         private void ResolveAccount()
         {
             string preferred = ReadAccountFile("VLTrader");
-            string legacy = null;
-
-            if (preferred == null)
-            {
-                legacy = ReadAccountFile("NofxTrader");
-                if (legacy != null)
-                {
-                    // VL absent or empty, legacy non-empty: copy ONCE into
-                    // VLTrader (creating the folder, overwriting an empty
-                    // file). An EMPTY source is never copied (ReadAccountFile
-                    // maps absent and empty to null).
-                    try
-                    {
-                        string vlDir = Path.Combine(
-                            Environment.GetEnvironmentVariable("USERPROFILE") ?? "",
-                            "VLTrader");
-                        Directory.CreateDirectory(vlDir);
-                        File.WriteAllText(Path.Combine(vlDir, "account.txt"), legacy);
-                        LogInfo("VLTraderTCPClient: account.txt copied NofxTrader→VLTrader (" + legacy + ")");
-                    }
-                    catch (Exception ex)
-                    {
-                        LogWarn("VLTraderTCPClient: could not copy account.txt into VLTrader: " + ex.Message);
-                    }
-                    preferred = legacy;
-                }
-            }
-            else
-            {
-                legacy = ReadAccountFile("NofxTrader");
-                if (legacy != null && legacy != preferred)
-                {
-                    // Both non-empty and different: VLTrader wins, and the
-                    // WARN fires ONCE here. The cached values replay the same
-                    // WARN on every TCP CONNECTED; ResolveAccount() is NEVER
-                    // called again and account.txt is never re-read on a
-                    // reconnect (that would switch `account` without moving
-                    // the subscriptions).
-                    accountConflictVl = preferred;
-                    accountConflictNofx = legacy;
-                    WarnAccountConflict();
-                }
-            }
 
             lock (Account.All)
             {
@@ -531,22 +488,6 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
             return null;
         }
-
-        // WarnAccountConflict names BOTH account.txt values and the winner.
-        // Called once at resolution and replayed on every TCP CONNECTED from
-        // the cached values (account.txt is never re-read on a reconnect).
-        private void WarnAccountConflict()
-        {
-            LogWarn("VLTraderTCPClient: account.txt conflict — VLTrader\\account.txt says \"" + accountConflictVl
-                + "\" but NofxTrader\\account.txt says \"" + accountConflictNofx
-                + "\"; using VLTrader (no silent account switch)");
-        }
-
-        // accountConflictVl / accountConflictNofx cache the resolution values
-        // so the CONNECTED handler can replay the conflict WARN without ever
-        // re-reading account.txt or re-running ResolveAccount().
-        private string accountConflictVl = null;
-        private string accountConflictNofx = null;
 
         // === SIM detection ===
         // Returns true if the account is a simulation account. Tries Account.Simulation
@@ -643,8 +584,6 @@ namespace NinjaTrader.NinjaScript.AddOns
                     client.Connect(GO_SERVER_HOST, GO_SERVER_PORT);
                     stream = client.GetStream();
                     LogInfo("VLTraderTCPClient: CONNECTED");
-                    if (accountConflictVl != null && accountConflictNofx != null)
-                        WarnAccountConflict();
                     // W-ONE-BUTTON M2 — a hold belongs to the connection that was
                     // told it. Go re-sends it at accept while held.
                     maintenanceHeld = false;
@@ -774,6 +713,13 @@ namespace NinjaTrader.NinjaScript.AddOns
                     // D5 (2026-09-07) — restore a stop for a position the broker
                     // is holding UNPROTECTED. Standalone: no bracket, no OCO group.
                     HandlePlaceProtectiveStop(payload);
+                }
+                else if (type == "reduce_position")
+                {
+                    // PARTIAL-CLOSE (2026-10-03) — exact-quantity market exit.
+                    // The hello advertises the capability; an older Go never
+                    // sends this frame type.
+                    HandleReducePosition(payload);
                 }
                 else if (type == "modify_bracket")
                 {
@@ -1167,7 +1113,14 @@ namespace NinjaTrader.NinjaScript.AddOns
                 // trigger price (the tick offset was applied Go-side).
                 bool isLimit    = orderType == "limit" && limitPx > 0;
                 bool isStopEntry = orderType == "stop_entry" && stopPx > 0;
-                OrderType orderT = isLimit ? OrderType.Limit : (isStopEntry ? OrderType.StopMarket : OrderType.Market);
+                // MENTOR STOP-LIMIT (2026-10-03): stop_limit=true builds
+                // OrderType.StopLimit with LimitPrice == StopPrice — fills at
+                // its price or misses, never a stop-MARKET (D1.4 p1 @24:41,
+                // p2 @00:00). Go sets the flag only when its mentor knob is ON
+                // and the far side proved the floor.
+                bool stopLimitWanted = string.Equals(GetString(p, "stop_limit"), "true", StringComparison.OrdinalIgnoreCase);
+                OrderType orderT = isLimit ? OrderType.Limit
+                    : (isStopEntry ? (stopLimitWanted ? OrderType.StopLimit : OrderType.StopMarket) : OrderType.Market);
                 // WAVE B / D1 (2026-09-05) — ONE ORDER, CORRECT SLOTS.
                 // Account.CreateOrder is POSITIONAL: after `quantity` come
                 // (limitPrice, stopPrice, oco, name, gtd, customOrder). Until
@@ -1181,7 +1134,9 @@ namespace NinjaTrader.NinjaScript.AddOns
                 // loss below builds a StopMarket as (b.Qty, 0, b.Sl) and fills.
                 // A limit entry keeps the shape it has today: price in
                 // limitPrice, 0 in stopPrice. StopMarket only — no stop-limit.
-                double limitArg = isLimit ? limitPx : 0;
+                // A StopLimit carries its trigger in BOTH slots: limit =
+                // stop price (the mentor's exact-fill-or-miss rule).
+                double limitArg = isLimit ? limitPx : (isStopEntry && stopLimitWanted ? stopPx : 0);
                 double stopArg  = isStopEntry ? stopPx : 0;
                 var entryOrder = submitAccount.CreateOrder(
                     instrument, entryAction, orderT, OrderEntry.Manual,
@@ -1308,6 +1263,222 @@ namespace NinjaTrader.NinjaScript.AddOns
                 }
             }
         }
+        // === PARTIAL-CLOSE (2026-10-03) — reduce_position ===
+        //
+        // Exits EXACTLY `quantity` contracts at market, never more than the open
+        // position. Refuses (with a reason) when quantity >= open — a full close
+        // still goes through close_position. The fill comes back as reduce_fill
+        // with the REMAINING quantity, computed as open-at-request minus filled.
+        private readonly object reduceOpenQtyLock = new object();
+        private readonly Dictionary<string, int> reduceOpenQtyByClient = new Dictionary<string, int>();
+
+        private void HandleReducePosition(Dictionary<string, object> p)
+        {
+            try
+            {
+                if (p == null) { LogWarn("VLTraderTCPClient: reduce_position empty payload"); return; }
+                string clientId = GetString(p, "client_id");
+                string symbol   = GetString(p, "symbol");
+                string side     = (GetString(p, "side") ?? "").ToLowerInvariant();
+                int qty         = GetInt(p, "quantity");
+                if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(symbol)
+                    || qty <= 0 || (side != "long" && side != "short"))
+                {
+                    SendReduceRejected(clientId, "incomplete reduce_position request", account);
+                    return;
+                }
+                if (account == null) { SendReduceRejected(clientId, "no account", null); return; }
+                string contract = VLContractResolver.ResolveFrontMonthContract(symbol);
+                string how;
+                var instrument = VLInstrumentLookup.Resolve(symbol, LogWarn, out how);
+                if (instrument == null)
+                {
+                    SendReduceRejected(clientId, "instrument not found " + symbol, account);
+                    return;
+                }
+                // P1-4 (review 2026-10-03): route to the account that HOLDS
+                // the position — payload account first, then the entry-fill
+                // map, then the active account — with the SAME SIM guard
+                // close_position applies (a LIVE account is never a target).
+                Account target = null;
+                string payloadAcct = GetString(p, "account");
+                string posKey = symbol;
+                try { posKey = instrument.MasterInstrument.Name; } catch { }
+                lock (posAcctLock) { positionAccountBySymbol.TryGetValue(posKey, out target); }
+                if (target == null && !string.IsNullOrEmpty(payloadAcct))
+                {
+                    lock (Account.All)
+                    {
+                        foreach (var a in Account.All)
+                            if (a.Name == payloadAcct) { target = a; break; }
+                    }
+                }
+                if (target == null) target = account;
+                if (target == null || !IsSimAccount(target))
+                {
+                    SendReduceRejected(clientId, "resolved account is not a SIM account", target);
+                    return;
+                }
+                int openQty = 0;
+                try
+                {
+                    lock (target.Positions)
+                    {
+                        foreach (var pos in target.Positions)
+                        {
+                            if (pos == null || pos.Instrument == null) continue;
+                            string root = "";
+                            try { root = pos.Instrument.MasterInstrument.Name; } catch { }
+                            if (!string.Equals(root, symbol, StringComparison.OrdinalIgnoreCase)) continue;
+                            if (side == "long"  && pos.MarketPosition == MarketPosition.Long)  openQty = pos.Quantity;
+                            if (side == "short" && pos.MarketPosition == MarketPosition.Short) openQty = pos.Quantity;
+                        }
+                    }
+                }
+                catch { }
+                if (openQty <= 0)
+                {
+                    SendReduceRejected(clientId, "no open position for " + symbol + " " + side, target);
+                    return;
+                }
+                if (qty >= openQty)
+                {
+                    SendReduceRejected(clientId, "quantity " + qty + " >= open " + openQty
+                        + " — a full close goes through close_position", target);
+                    return;
+                }
+                OrderAction exitAction = side == "long" ? OrderAction.Sell : OrderAction.BuyToCover;
+                var order = target.CreateOrder(instrument, exitAction, OrderType.Market, OrderEntry.Manual,
+                    TimeInForce.Day, qty, 0, 0, string.Empty, clientId + "-rx", Core.Globals.MaxDate, null);
+                int remaining = openQty - qty;
+                int bracketQty = -1;
+                lock (reduceOpenQtyLock) { reduceOpenQtyByClient[clientId] = openQty; }
+                target.Submit(new[] { order });
+                // V2 (2026-10-03): shrink the protective pair IN PLACE to cover
+                // the remainder — D2's NEVER cancel-and-replace. The exit was
+                // submitted FIRST, so a shrink failure leaves the pair
+                // OVER-covering (safe) and reports bracket_qty=-1, which Go
+                // fails closed on.
+                try { bracketQty = ShrinkBracketsForReduction(instrument, target, remaining); }
+                catch (Exception ex)
+                {
+                    LogWarn("VLTraderTCPClient: reduce bracket shrink threw: " + ex.Message);
+                }
+                lock (reduceOpenQtyLock) { reduceBracketQtyByClient[clientId] = bracketQty; }
+                LogInfo("VLTraderTCPClient: reduce_position submitted " + symbol + " " + side
+                    + " qty=" + qty + " of " + openQty + " (client=" + clientId + ")");
+            }
+            catch (Exception ex)
+            {
+                LogWarn("VLTraderTCPClient: reduce_position failed: " + ex.Message);
+                SendReduceRejected(GetString(p, "client_id"), ex.Message, account);
+            }
+        }
+
+        // SendReduceRejected reports WHY a reduce_position did not take. The
+        // position is unchanged and the protective stop untouched.
+        private void SendReduceRejected(string clientId, string reason, Account acct)
+        {
+            if (string.IsNullOrEmpty(clientId)) return;
+            try
+            {
+                var payload = new Dictionary<string, object>
+                {
+                    ["client_id"] = clientId,
+                    ["reason"]    = reason ?? "refused",
+                    ["account"]   = acct != null ? acct.Name : ""
+                };
+                WriteEnvelope("reduce_position_rejected", payload);
+            }
+            catch { }
+        }
+
+        // ShrinkBracketsForReduction (PARTIAL-CLOSE v2, 2026-10-03) amends
+        // every protective pair for (instrument, account) IN PLACE so the SL
+        // total and the TP total are EXACTLY the remainder — D2's NEVER
+        // cancel-and-replace (cs:2759) applied to a reduce. Returns the new
+        // quantity, or -1 when no bracket exists or any Change threw.
+        private readonly Dictionary<string, int> reduceBracketQtyByClient = new Dictionary<string, int>();
+
+        private int ShrinkBracketsForReduction(Instrument instrument, Account ba, int remaining)
+        {
+            var pairs = new List<PlacedBracket>();
+            lock (signalMapLock)
+            {
+                foreach (var kv in placedBrackets)
+                {
+                    var pb = kv.Value;
+                    if (pb == null || pb.Instrument != instrument) continue;
+                    pairs.Add(pb);
+                }
+            }
+            if (pairs.Count == 0) return -1;
+            int left = remaining;
+            int assigned = 0;
+            foreach (var pb in pairs)
+            {
+                if (left <= 0) break;
+                int take = Math.Min(left, pb.Qty);
+                try
+                {
+                    var changed = new List<Order>();
+                    if (pb.SlOrder != null) { pb.SlOrder.QuantityChanged = take; changed.Add(pb.SlOrder); }
+                    if (pb.TpOrder != null) { pb.TpOrder.QuantityChanged = take; changed.Add(pb.TpOrder); }
+                    if (changed.Count == 0) continue;
+                    ba.Change(changed.ToArray());
+                    int was = pb.Qty;
+                    lock (signalMapLock) { pb.Qty = take; }
+                    assigned += take;
+                    left -= take;
+                    LogInfo("VLTraderTCPClient: bracket shrunk for reduce qty " + was + " -> " + take + " (remainder " + remaining + ")");
+                }
+                catch (Exception ex)
+                {
+                    LogWarn("VLTraderTCPClient: bracket shrink FAILED: " + ex.Message);
+                    return -1;
+                }
+            }
+            if (assigned != remaining) return -1;
+            return assigned;
+        }
+
+        // SendReduceFillFrame reports a reduce fill WITH the remaining quantity
+        // (open-at-request minus filled). Emitted on Filled AND PartFilled; the
+        // Go ledger upserts by client_id so re-reports apply once per step.
+        private void SendReduceFillFrame(string clientId, string symbol, string side,
+            double fillPrice, int filledQty, string acctName)
+        {
+            try
+            {
+                int remaining = -1;
+                int bracketQty = -1;
+                int openAtRequest = 0;
+                lock (reduceOpenQtyLock)
+                {
+                    reduceOpenQtyByClient.TryGetValue(clientId, out openAtRequest);
+                    reduceBracketQtyByClient.TryGetValue(clientId, out bracketQty);
+                }
+                if (openAtRequest > 0) remaining = openAtRequest - filledQty;
+                var payload = new Dictionary<string, object>
+                {
+                    ["client_id"]  = clientId,
+                    ["symbol"]     = symbol ?? "",
+                    ["side"]       = side,
+                    ["quantity"]   = filledQty,
+                    ["fill_price"] = fillPrice,
+                    ["remaining"]  = remaining,
+                    ["bracket_qty"] = bracketQty,
+                    ["account"]    = acctName ?? ""
+                };
+                WriteEnvelope("reduce_fill", payload);
+                LogInfo("VLTraderTCPClient: reduce_fill " + clientId + " filled=" + filledQty + " remaining=" + remaining + " bracket_qty=" + bracketQty);
+            }
+            catch (Exception ex)
+            {
+                LogWarn("VLTraderTCPClient: reduce_fill frame failed: " + ex.Message);
+            }
+        }
+
         private void HandleClosePosition(Dictionary<string, object> p)
         {
             if (p == null) { LogWarn("VLTraderTCPClient: close_position empty payload"); return; }
@@ -1495,7 +1666,16 @@ namespace NinjaTrader.NinjaScript.AddOns
             string ocoId     = e.Order.Oco ?? "";
             string signalId  = orderName.Length > 0 ? orderName : ocoId;
             string exitReason = null;
-            if (signalId.EndsWith("-sl")) { exitReason = "sl"; signalId = signalId.Substring(0, signalId.Length - 3); }
+            // PARTIAL-CLOSE: "-rx" is the reduce exit — it reports reduce_fill
+            // (with the remaining quantity), never a position_close.
+            bool reduceExit = false;
+            string reduceClientId = "";
+            if (signalId.EndsWith("-rx"))
+            {
+                reduceExit = true;
+                reduceClientId = signalId.Substring(0, signalId.Length - 3);
+            }
+            else if (signalId.EndsWith("-sl")) { exitReason = "sl"; signalId = signalId.Substring(0, signalId.Length - 3); }
             else if (signalId.EndsWith("-tp")) { exitReason = "tp"; signalId = signalId.Substring(0, signalId.Length - 3); }
             else if (signalId.EndsWith("-lx"))
             {
@@ -1550,6 +1730,17 @@ namespace NinjaTrader.NinjaScript.AddOns
                     try { rootSymbol = e.Order.Instrument.MasterInstrument.Name; } catch { }
                     string exitAcct = e.Order.Account != null ? e.Order.Account.Name
                                       : (account != null ? account.Name : "");
+                    // PARTIAL-CLOSE: a reduce exit reports reduce_fill and
+                    // returns — the position is still OPEN (only reduced), the
+                    // bracket stays, the account ownership stays. Emitted on
+                    // PartFilled AND Filled; the Go ledger upserts by
+                    // client_id so the pair applies once per progress step.
+                    if (reduceExit)
+                    {
+                        SendReduceFillFrame(reduceClientId, rootSymbol, positionSide,
+                                            e.AverageFillPrice, e.Filled, exitAcct);
+                        return;
+                    }
                     SendPositionCloseFrame(signalId, rootSymbol, positionSide,
                                            e.AverageFillPrice, e.Filled, exitReason ?? "manual", exitAcct);
                     // PHASE 4: the position closed → drop its account ownership.
@@ -1558,6 +1749,20 @@ namespace NinjaTrader.NinjaScript.AddOns
                     // Position closed → drop its bracket tracking (auto-breakeven) and
                     // its A2 identity (echoed on the close frame just sent above).
                     lock (signalMapLock) { placedBrackets.Remove(signalId); signalIdentity.Remove(signalId); }
+                }
+                else if (e.OrderState == OrderState.PartFilled && reduceExit)
+                {
+                    // PARTIAL-CLOSE: a PARTIAL reduce fill reports progress with
+                    // the remaining quantity so far. The final Filled reports
+                    // the definitive remaining; the Go ledger upserts.
+                    string positionSide = (action == OrderAction.BuyToCover) ? "short" : "long";
+                    string rootSymbol = "";
+                    try { rootSymbol = e.Order.Instrument.MasterInstrument.Name; } catch { }
+                    string exitAcct = e.Order.Account != null ? e.Order.Account.Name
+                                      : (account != null ? account.Name : "");
+                    SendReduceFillFrame(reduceClientId, rootSymbol, positionSide,
+                                        e.AverageFillPrice, e.Filled, exitAcct);
+                    return;
                 }
                 else if (e.OrderState == OrderState.Rejected)
                 {
@@ -1574,6 +1779,15 @@ namespace NinjaTrader.NinjaScript.AddOns
                     if (string.IsNullOrEmpty(reason)) { try { reason = e.Error.ToString(); } catch { } }
                     string rejAcct = e.Order.Account != null ? e.Order.Account.Name
                                      : (account != null ? account.Name : "");
+                    // PARTIAL-CLOSE: a REJECTED reduce is reported as such — the
+                    // position is UNCHANGED and the protective stop untouched.
+                    if (reduceExit)
+                    {
+                        SendReduceRejected(reduceClientId, reason, e.Order.Account);
+                        LogWarn("VLTraderTCPClient: reduce_position REJECTED client_id=" + reduceClientId
+                                + " reason=" + reason + " — position UNCHANGED (nothing was reduced)");
+                        return;
+                    }
                     SendPositionCloseRejectedFrame(signalId, rootSymbol, positionSide, reason, rejAcct);
                     LogWarn("VLTraderTCPClient: exit/flatten REJECTED signal_id=" + signalId
                             + " " + positionSide + " reason=" + reason
@@ -1667,7 +1881,12 @@ namespace NinjaTrader.NinjaScript.AddOns
                 // F12: the running DLL identifies itself on the FIRST frame, so
                 // the Go boot line can answer "which build is NT8 running"
                 // without waiting for a heartbeat or a snapshot.
-                ["build_id"]         = VL_BUILD_ID
+                ["build_id"]         = VL_BUILD_ID,
+                // PARTIAL-CLOSE (2026-10-03): this build handles the
+                // reduce_position frame (exact-quantity market exit + a
+                // reduce_fill report with the remaining quantity). Go refuses
+                // to send the frame to a peer that never advertised this.
+                ["reduce_position"]  = true
             };
             // CTO ruling Q3 — this activation's epoch. Best-effort: a value that
             // cannot be read is left OUT (absent = unknown), never guessed.
@@ -2038,7 +2257,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                     lastOrderState[key] = state;
                 }
                 string signalId = orderName.Length > 0 ? orderName : (e.Order.Oco ?? "");
-                if (signalId.EndsWith("-sl") || signalId.EndsWith("-tp") || signalId.EndsWith("-lx"))
+                if (signalId.EndsWith("-sl") || signalId.EndsWith("-tp") || signalId.EndsWith("-lx") || signalId.EndsWith("-rx"))
                     signalId = signalId.Substring(0, signalId.Length - 3);
                 string sym = "";
                 try { sym = e.Order.Instrument.MasterInstrument.Name; } catch { }
@@ -2094,6 +2313,22 @@ namespace NinjaTrader.NinjaScript.AddOns
                 if (p == null) { LogWarn("VLTraderTCPClient: cancel_order empty payload"); return; }
                 string signalId = GetString(p, "signal_id");
                 if (string.IsNullOrEmpty(signalId)) { LogWarn("VLTraderTCPClient: cancel_order missing signal_id"); return; }
+
+                // ── PARTIAL-CLOSE (2026-10-03) — AN EXPLICIT LEG CANCEL. ──
+                //
+                // D1 (2026-09-07) made cancelling a bracket leg its own
+                // explicit call, never a side effect of an entry cancel. This
+                // is that call: "leg":"sl"|"tp" cancels THAT named leg only —
+                // the entry and the sibling leg are untouched — and echoes the
+                // cancel-report for the LEG's order id, so the Go report
+                // regime can confirm the resize the same way it confirms an
+                // entry cancel.
+                string leg = GetString(p, "leg");
+                if (!string.IsNullOrEmpty(leg))
+                {
+                    HandleCancelBracketLeg(signalId, leg.ToLowerInvariant());
+                    return;
+                }
 
                 // ── D1 (2026-09-07) — A CANCEL TARGETS THE ENTRY. FULL STOP. ──
                 //
@@ -2166,11 +2401,150 @@ namespace NinjaTrader.NinjaScript.AddOns
                 // no-op when the entry already filled, because the bracket was
                 // placed and the note consumed at that moment.
                 lock (signalMapLock) { pendingBrackets.Remove(signalId); }
+                SendCancelReport(signalId);
                 SendAck("cancel_order");
             }
             catch (Exception ex)
             {
                 LogWarn("VLTraderTCPClient: cancel_order failed: " + ex.Message);
+            }
+        }
+
+        // ── PARTIAL-CLOSE (2026-10-03) — the explicit leg cancel ─────────────
+        //
+        // Cancels ONE named bracket leg (sl | tp) and echoes the cancel-report
+        // for the LEG's order id. The entry order and the sibling leg are never
+        // touched (D1, 2026-09-07: a leg cancel is its own explicit call). When
+        // the bracket is not tracked, nothing is cancelled and nothing is
+        // reported — the Go report regime then never confirms and fails closed.
+        private void HandleCancelBracketLeg(string signalId, string leg)
+        {
+            try
+            {
+                if (leg != "sl" && leg != "tp")
+                {
+                    LogWarn("VLTraderTCPClient: cancel_order unknown leg \"" + leg + "\" for " + signalId);
+                    SendAck("cancel_order");
+                    return;
+                }
+                PlacedBracket pb = null;
+                lock (signalMapLock) { placedBrackets.TryGetValue(signalId, out pb); }
+                Order legOrder = pb != null ? (leg == "sl" ? pb.SlOrder : pb.TpOrder) : null;
+                if (legOrder == null && account != null)
+                {
+                    // P1-1 (review 2026-10-03): placedBrackets is in-memory and
+                    // EMPTY after an NT8 restart — the leg must be resolved from
+                    // the account's own order collection by its "<signal>-<leg>"
+                    // name, or a restart strands every pending resize.
+                    string wantName = signalId + "-" + leg;
+                    lock (account.Orders)
+                    {
+                        foreach (Order o in account.Orders)
+                        {
+                            if (o != null && string.Equals(o.Name ?? "", wantName, StringComparison.OrdinalIgnoreCase))
+                            { legOrder = o; break; }
+                        }
+                    }
+                }
+                if (legOrder == null)
+                {
+                    LogInfo("VLTraderTCPClient: cancel_order leg=" + leg + " found NO resting order for " + signalId + " — nothing cancelled");
+                    SendAck("cancel_order");
+                    return;
+                }
+                Account ba = (legOrder.Account ?? pb?.Account) ?? account;
+                ba.Cancel(new[] { legOrder });
+                LogInfo("VLTraderTCPClient: cancel_order leg=" + leg + " cancelled " + legOrder.Name + " (entry and sibling leg untouched)");
+                // P1-1: the report carries the ENTRY signal id (suffix
+                // STRIPPED) with the leg's order name, so the Go leg route
+                // (OrderName != SignalID) matches it. An unstripped signal_id
+                // makes OrderName == SignalID and the report is dropped.
+                SendCancelReportForOrder(legOrder, signalId);
+                SendAck("cancel_order");
+            }
+            catch (Exception ex)
+            {
+                LogWarn("VLTraderTCPClient: cancel_order leg cancel failed: " + ex.Message);
+            }
+        }
+
+        // ── CANCEL-REPORT (2026-10-03-c1) ─────────────────────────────────────
+        //
+        // The Go side's report regime (CANCEL_CONFIRM_REQUIRE_REPORT, off by
+        // default) settles a cancel ONLY on a POSITIVE per-order terminal
+        // report: the order_snapshot deliberately omits terminal orders (D3,
+        // 2026-09-07), so absence from a book cannot distinguish "cancelled"
+        // from "never answered". This echo is emitted on EVERY cancel_order
+        // receipt and bypasses the lastOrderState dedupe — it is the report the
+        // gate waits for, not a state-change event. A subsequent OnOrderUpdate
+        // still emits the real terminal transition (state=cancelled), which the
+        // Go side records as the latest report; both are idempotent there.
+        //
+        // FAIL-CLOSED BY CONSTRUCTION: if the order is not found in the
+        // account's collection (never placed, or purged), NOTHING is emitted —
+        // the Go side settles nothing and the slot stays busy. An absence we
+        // cannot explain is never dressed up as a report.
+        private void SendCancelReport(string signalId)
+        {
+            try
+            {
+                Order target = null;
+                Account acct = account;
+                lock (signalMapLock)
+                {
+                    workingEntries.TryGetValue(signalId, out target);
+                    if (target != null) { try { acct = target.Account ?? account; } catch { } }
+                }
+                if (target == null && acct != null)
+                {
+                    lock (acct.Orders)
+                    {
+                        foreach (Order o in acct.Orders)
+                        {
+                            if (o == null) continue;
+                            string n = o.Name ?? "";
+                            string g = o.Oco ?? "";
+                            if (n == signalId || g == signalId) { target = o; break; }
+                        }
+                    }
+                }
+                if (target == null) return;
+                SendCancelReportForOrder(target, signalId);
+            }
+            catch (Exception ex)
+            {
+                LogWarn("VLTraderTCPClient: cancel_report echo failed: " + ex.Message);
+            }
+        }
+
+        // SendCancelReportForOrder emits the dedupe-BYPASSED cancel-report for
+        // ONE order object — the entry path looks the order up by signal id;
+        // the leg path (HandleCancelBracketLeg) passes the leg order directly.
+        private void SendCancelReportForOrder(Order o, string signalId)
+        {
+            try
+            {
+                if (o == null) return;
+                string state = "";
+                try { state = o.OrderState.ToString().ToLowerInvariant(); } catch { }
+                var payload = new Dictionary<string, object>
+                {
+                    ["signal_id"]     = signalId,
+                    ["order_name"]    = o.Name ?? "",
+                    ["state"]         = state,
+                    ["fill_price"]    = o.AverageFillPrice,
+                    ["quantity"]      = o.Filled,
+                    ["account"]       = (o.Account ?? account) != null ? (o.Account ?? account).Name : "",
+                    ["cancel_report"] = true
+                };
+                try { payload["symbol"] = o.Instrument.MasterInstrument.Name ?? ""; } catch { }
+                StampIdentity(payload, signalId);
+                WriteEnvelope("order_update", payload);
+                LogInfo("VLTraderTCPClient: cancel_report echo " + signalId + " state=" + state);
+            }
+            catch (Exception ex)
+            {
+                LogWarn("VLTraderTCPClient: cancel_report echo failed: " + ex.Message);
             }
         }
 

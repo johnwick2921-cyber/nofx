@@ -1404,6 +1404,52 @@ const sessions: KnobSpec[] = [
     whenToTouch: 'Only with a deliberate session-thesis change.',
     perSession: 'N/A (they define it).',
   },
+  {
+    label: 'Cancel confirmation — report regime',
+    where: 'Environment only (no Strategy-page row)',
+    what: 'env CANCEL_CONFIRM_REQUIRE_REPORT (default OFF). OFF: a requested cancel is confirmed by the order’s absence from a fresh broker snapshot (2026-09-06 wave). ON: a cancel is DONE only when the AddOn reports the order Cancelled (or Filled, which is the filled path) for that order id — the positive per-order report. Until then the arm slot is BUSY (no re-place), a timeout prints one owner-visible CENSUS WARN naming every unconfirmed id, and cancels are re-requested up to the cap, never silently promoted.',
+    trader:
+      'The knob is the Mentor-mode gate (cancel/re-place every few candles). With it OFF the bot is byte-identical to today. An AddOn below build 2026-10-03-c1 fails closed while ON: no confirmation → no stop-entry placement.',
+    consumer:
+      'trader/cancel_confirm.go (cancelConfirmRequireReport · confirmPendingCancelsReport · slotReportBlock in armSlotGuard) · store/armed_orders.go (RecordCancelReport · ConfirmCancelByReport) · the AddOn echoes the order’s state on every cancel_order (VL_BUILD_ID 2026-10-03-c1)',
+    range:
+      'off | on · default off · companion envs CANCEL_CONFIRM_TIMEOUT_S (90) · CANCEL_REREQUEST_MAX (5)',
+    systemDefault: 'off',
+    recommended:
+      '⭐ keep OFF for the AI path; the owner turns it ON before Mentor mode places its first live (SIM) stop entry.',
+    whenToTouch: 'Only with a deliberate move of the Mentor-mode gate.',
+    perSession: 'No.',
+  },
+  {
+    label: 'Partial close (mentor scale-out) — own knob',
+    where: 'Environment only (PARTIAL_CLOSE_ENABLED, default OFF)',
+    what: 'The exact-quantity exit the mentor scale-out needs: reduce_position exits EXACTLY qty contracts at market (never more than the open position; qty ≥ open is refused — a full close stays close_position). As part of the same frame the AddOn shrinks the existing SL and TP IN PLACE (Account.Change — never cancel-and-replace) to the remaining quantity and reports it as bracket_qty; Go verifies the shrink on the next snapshot and FAILS CLOSED (flattens the remainder) on a mismatch or an absent quantity. AddOn build 2026-10-03-c1 (hello flag reduce_position); Go refuses the send to an older AddOn.',
+    trader:
+      'Nothing changes for the AI mode: the feature is byte-off unless its own knob is ON (it is SPLIT from CANCEL_CONFIRM_REQUIRE_REPORT), and the AI mode keeps its 1-contract rule.',
+    consumer:
+      'trader/partial_close.go (ReducePosition · consumeReduceFills · verifyBracketResizes) · trader/ninjatrader/tcp_trader.go (ReducePosition) · store/partial_close.go (position_reductions) · ninjascript VLTraderTCPClient.cs HandleReducePosition + ShrinkBracketsForReduction',
+    range:
+      'off | on · default off · companion knob MENTOR_STOP_LIMIT (default OFF)',
+    systemDefault: 'off',
+    recommended:
+      '⭐ keep OFF; the owner switches it ON with Mentor mode (SIM only).',
+    whenToTouch: 'Only with Mentor mode.',
+    perSession: 'No.',
+  },
+  {
+    label: 'Mentor stop-limit entries',
+    where: 'Environment only (MENTOR_STOP_LIMIT, default OFF)',
+    what: 'D1.4: never a stop-MARKET. With the knob ON, stop entries carry stop_limit=true and the AddOn builds OrderType.StopLimit with LimitPrice == StopPrice: the entry fills at its price or misses. Fail-closed: Go refuses the flag unless the AddOn proves build 2026-10-03-c1.',
+    trader: 'The mentor evaluator drives this knob; the AI path never sets it.',
+    consumer:
+      'provider/ninjatrader/tcp_framing.go (SignalPayload.StopLimit, MinAddonBuildStopLimit) · trader/ninjatrader/tcp_trader.go (PlaceStopEntryWithLimit) · ninjascript VLTraderTCPClient.cs (stop_limit construction)',
+    range: 'off | on · default off',
+    systemDefault: 'off',
+    recommended:
+      '⭐ keep OFF until Mentor mode; then ON with SIM-only trading.',
+    whenToTouch: 'Only with Mentor mode.',
+    perSession: 'No.',
+  },
 ]
 
 export const settings: GuideSection = {

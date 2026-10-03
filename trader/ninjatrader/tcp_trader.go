@@ -774,6 +774,19 @@ func (t *TCPTrader) PlaceLimitEntry(symbol, side string, quantity float64, limit
 // tick offset is applied by the caller). Back-compat law: the frame is
 // additive JSON — only send it when the far-side AddOn has proven it.
 func (t *TCPTrader) PlaceStopEntry(symbol, side string, quantity float64, stopPx, sl, tp float64, beforeSend ...func(string) error) (string, error) {
+	return t.placeStopEntry(symbol, side, quantity, stopPx, sl, tp, false, beforeSend...)
+}
+
+// PlaceStopEntryWithLimit (MENTOR STOP-LIMIT, 2026-10-03) is PlaceStopEntry
+// with stop_limit=true: the AddOn builds OrderType.StopLimit with LimitPrice ==
+// StopPrice, so the entry fills at its price or misses — never a stop-MARKET
+// (D1.4 p1 @24:41, p2 @00:00). Fail-closed: refused when the far side does not
+// prove MinAddonBuildStopLimit (an older AddOn would build StopMarket).
+func (t *TCPTrader) PlaceStopEntryWithLimit(symbol, side string, quantity float64, stopPx, sl, tp float64, beforeSend ...func(string) error) (string, error) {
+	return t.placeStopEntry(symbol, side, quantity, stopPx, sl, tp, true, beforeSend...)
+}
+
+func (t *TCPTrader) placeStopEntry(symbol, side string, quantity float64, stopPx, sl, tp float64, stopLimit bool, beforeSend ...func(string) error) (string, error) {
 	// CAPABILITY HANDSHAKE — the far-side AddOn must PROVE, by a build_id that
 	// arrived on the wire, that it will BUILD this order correctly. Two distinct
 	// failures live behind this one gate:
@@ -797,6 +810,15 @@ func (t *TCPTrader) PlaceStopEntry(symbol, side string, quantity float64, stopPx
 		}
 		return "", fmt.Errorf("ninjatrader/tcp: refusing stop-entry %s %s trigger=%.2f qty=%.0f [guard=far_side_build] — addon build predates the stop-slot fix (build_id=%s, need ≥ %s): does not prove stop_entry support; F5-compile + restart the new AddOn: %w",
 			side, symbol, stopPx, quantity, ntwire.BuildIDForLog(bid), ntwire.MinAddonBuildStopSlot, ntwire.ErrAddonBuildTooOld)
+	}
+	if stopLimit {
+		// MENTOR STOP-LIMIT floor (2026-10-03): an AddOn below it builds
+		// StopMarket even when the flag is set — fail closed, never a sloppy
+		// stop-MARKET fill (D1.4 p1 @24:41).
+		if bid := t.server.FarSideBuildID(); !ntwire.FarSideProven(bid, ntwire.MinAddonBuildStopLimit) {
+			return "", fmt.Errorf("ninjatrader/tcp: refusing stop-limit entry %s %s [guard=far_side_build] — addon build %s cannot prove stop_limit support (need ≥ %s): %w",
+				side, symbol, ntwire.BuildIDForLog(bid), ntwire.MinAddonBuildStopLimit, ntwire.ErrAddonBuildTooOld)
+		}
 	}
 	tradeAcct := t.boundAccount
 	if tradeAcct == "" {
@@ -847,6 +869,7 @@ func (t *TCPTrader) PlaceStopEntry(symbol, side string, quantity float64, stopPx
 		Timestamp:  time.Now().UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano),
 		OrderType:  "stop_entry",
 		StopPrice:  entry,
+		StopLimit:  stopLimit,
 	}
 	if err := assertBoundAccount("stop-entry", symbol, payload.Account, t.boundAccount); err != nil {
 		logger.Errorf("🚨 %v — REFUSING to submit stop-entry", err)
@@ -897,6 +920,58 @@ func (t *TCPTrader) CancelOrder(signalID string) error {
 	return t.server.SendCancelOrder(ntwire.CancelOrderPayload{
 		Symbol: t.symbol, SignalID: signalID, Account: t.boundAccount, TraderID: t.traderID,
 	})
+}
+
+// CancelBracketLeg (PARTIAL-CLOSE) cancels ONE named bracket leg for the entry
+// signal — the explicit leg call the C# D1 ruling (2026-09-07) reserves:
+// cancelling a protective leg is its own request, never a side effect of an
+// entry cancel. Leg is "sl" or "tp". The C# side resolves the leg from its
+// bracket map and then from the account's own orders (P1-1); when neither
+// holds a resting order, nothing is cancelled and no report is emitted, so
+// the report regime never confirms and the caller fails closed.
+func (t *TCPTrader) CancelBracketLeg(signalID, leg string) error {
+	if t == nil || t.server == nil {
+		return fmt.Errorf("ninjatrader/tcp: trader not bound")
+	}
+	leg = strings.ToLower(strings.TrimSpace(leg))
+	if leg != "sl" && leg != "tp" {
+		return fmt.Errorf("ninjatrader/tcp: bracket leg must be sl or tp, got %q", leg)
+	}
+	return t.server.SendCancelOrder(ntwire.CancelOrderPayload{
+		Symbol: t.symbol, SignalID: signalID, Leg: leg,
+		Account: t.boundAccount, TraderID: t.traderID,
+	})
+}
+
+// ReducePosition (PARTIAL-CLOSE) asks the AddOn to exit EXACTLY qty contracts
+// at market. It refuses BEFORE the send when the far side never advertised the
+// reduce_position capability in its hello (ErrReduceUnsupported), and applies
+// the same account guards as PlaceProtectiveStop (bound account + tradeable —
+// P1-4).
+func (t *TCPTrader) ReducePosition(side string, qty int, clientID string) error {
+	if t == nil || t.server == nil || !t.server.ReducePositionSupported() {
+		return ntwire.ErrReduceUnsupported
+	}
+	tradeAcct := t.boundAccount
+	if tradeAcct == "" {
+		return fmt.Errorf("ninjatrader/tcp: refusing reduce_position on %s — trader has no bound account", t.symbol)
+	}
+	if !t.isAccountTradeable(tradeAcct) {
+		return fmt.Errorf("ninjatrader/tcp: refusing reduce_position — account %q is not tradeable (not on allow-list / not SIM)", tradeAcct)
+	}
+	return t.server.SendReducePosition(ntwire.ReducePositionPayload{
+		Symbol: t.symbol, Side: side, Quantity: qty, ClientID: clientID,
+		Account: t.boundAccount, TraderID: t.traderID,
+	})
+}
+
+// ReduceFills returns THIS trader's reduce_fill stream (symbol, account) — the
+// AddOn's report of a filled partial exit with the remaining quantity.
+func (t *TCPTrader) ReduceFills() <-chan ntwire.ReduceFillPayload {
+	if t == nil || t.server == nil {
+		return nil
+	}
+	return t.server.SubscribeReduceFillsFor(t.symbol, t.boundAccount)
 }
 
 // ModifyBracket (PHASE 2 armed orders) modifies the live bracket SL/TP in place.

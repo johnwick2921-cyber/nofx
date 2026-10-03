@@ -468,6 +468,104 @@ The C# producer is explicitly deferred to the next owner-run AddOn wave.
 This additive receive-only extension does not change the protocol version or
 claim that h1 supplies rejection reasons.
 
+### `order_update` cancel-report echo (2026-10-03-c1) — AddOn → Go
+
+The cancel-report regime (`CANCEL_CONFIRM_REQUIRE_REPORT`, default OFF) settles
+a cancel ONLY on a POSITIVE per-order terminal report. The `order_snapshot`
+deliberately omits terminal orders (Filled/Cancelled/Rejected/Expired are
+history — C# D3, 2026-09-07), so absence from a book cannot distinguish
+"cancelled" from "never answered".
+
+From build `2026-10-03-c1` the AddOn emits, on EVERY `cancel_order` receipt, an
+`order_update` frame for the target order whose payload carries the new field:
+
+| field | type | meaning |
+|---|---|---|
+| `cancel_report` | bool | `true` marks this frame as the cancel-request echo, as distinct from a state-change event |
+
+The echo carries the order's CURRENT state (`state` field, unchanged semantics):
+for an order still resting that is `working`/`accepted`; for one already
+terminal it is `filled`/`cancelled`/`rejected`. The real terminal transition
+follows via the normal `OnOrderUpdate` stream, which continues to emit
+`state=cancelled` etc. The echo BYPASSES the per-order-name state dedupe — it
+is the report the gate waits for, not a state-change event.
+
+**Fail-closed by construction.** If the target order is not found in the
+account's order collection (never placed, or purged), the AddOn emits NOTHING.
+The Go side then records no report, the row stays `cancel_pending`, the slot
+stays BUSY, and a timeout prints the owner-visible census WARN. An absence the
+AddOn cannot explain is never dressed up as a report.
+
+Go-side gates, all keyed on the build id (bytewise date-prefix floor, same rule
+as every other capability):
+
+- `MinAddonBuildCancelReport = "2026-10-03-c1"` (`provider/ninjatrader/tcp_framing.go`)
+- an AddOn below the floor, while the regime is ON: no cancel confirms, no
+  re-arm, no stop-entry placement — fail-closed, owner-visible WARN.
+- the regime is OFF by default; with it OFF this frame is received and ignored
+  (the field is additive), and the bot is byte-identical to today.
+
+### `reduce_position` / `reduce_fill` / `reduce_position_rejected` (2026-10-03-c1)
+
+PARTIAL-CLOSE — the exact-quantity cousin of `close_position`, so the mentor
+mode can scale out HALF at 1:1 while the protective stop keeps the remainder.
+Everything sits behind `CANCEL_CONFIRM_REQUIRE_REPORT` (default OFF); the AI
+mode keeps its 1-contract rule and never sends these frames.
+
+| frame | dir | payload |
+|---|---|---|
+| `reduce_position` | Go → AddOn | `{symbol, side, quantity, client_id, account?, trader_id?, seq?}` |
+| `reduce_fill` | AddOn → Go | `{client_id, symbol, side, quantity, fill_price, remaining, bracket_qty, account?}` |
+| `reduce_position_rejected` | AddOn → Go | `{client_id, reason, account?}` |
+
+**Capability.** The hello carries `reduce_position: true` from this build. Go
+REFUSES to send the frame to a peer that never advertised it
+(`ErrReduceUnsupported`, before any write) — capability is proven by a
+RECEIVED frame, never assumed. The flag retires with the build id when the
+link drops. The feature has its OWN knob (`PARTIAL_CLOSE_ENABLED`, default
+OFF); the cancel-report regime has its own (`CANCEL_CONFIRM_REQUIRE_REPORT`) —
+they are SPLIT.
+
+**Semantics.**
+- The AddOn routes to the account that HOLDS the position — payload account,
+  then the entry-fill map, then the active account — with the same SIM guard
+  `close_position` applies.
+- The AddOn exits EXACTLY `quantity` contracts at market (order name
+  `"<client_id>-rx"`), never more than the open position.
+- `quantity >= open` is REFUSED with a reason — a full close still goes
+  through `close_position`.
+- A fill reports `remaining` = open-at-request minus filled and
+  `bracket_qty` = the NEW quantity set on the protective pair, on Filled AND
+  PartFilled; the Go ledger upserts by `client_id` so re-reports apply once
+  per step. A reduce fill NEVER produces a `position_close` and never
+  disturbs the bracket OCO group or the account ownership.
+- A rejected reduce leaves the position unchanged and the protective stop
+  untouched.
+
+**Protective-stop resize — IN PLACE, never cancel-and-replace (v2,
+2026-10-03).** As part of `reduce_position`, the AddOn amends the existing SL
+and TP quantities with `Account.Change` (the D2 pattern at
+`AmendBracketQuantity`) so the pair covers EXACTLY the remainder. The exit is
+submitted FIRST: a shrink failure leaves the pair OVER-covering (safe) and
+reports `bracket_qty = -1`, which Go FAILS CLOSED on. Go verifies the shrink
+against the next broker snapshot (`verifyBracketResize`: every working -sl
+and -tp for the symbol carries the remaining quantity); a window that expires
+without a confirming book FLATTENS the remainder. There is no naked window,
+no doubled stop, and no OCO cascade — a cancel of the bracket is never sent
+on this path.
+
+### `signal.stop_limit` (2026-10-03-c1) — mentor stop-LIMIT entries
+
+The `signal` payload gains `stop_limit` (bool, omitempty). When true and
+`order_type` is `stop_entry`, the AddOn builds `OrderType.StopLimit` with
+`LimitPrice == StopPrice` — the entry fills at its price or misses, never a
+stop-MARKET (D1.4 p1 @24:41, p2 @00:00). Go sets the flag only when its
+`MENTOR_STOP_LIMIT` knob is ON and the far side proves
+`MinAddonBuildStopLimit` (fail-closed: an older AddOn would build StopMarket
+and fill sloppily). With the knob OFF the wire is byte-identical.
+
+
+
 Entry `signal.timestamp` is UTC command creation time (RFC3339 with fractional
 seconds), independent of the market bar close used to compose entry prices.
 Go checks that payload timestamp before enqueue and again immediately before
