@@ -2,13 +2,12 @@ package ninjatrader
 
 import (
 	"math"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"vl/internal/envcompat"
 )
 
 // Bar sources, mirrored from store so the ring can stamp without importing it.
@@ -46,37 +45,36 @@ func init() {
 	// A knob that is documented is a knob that exists (class 19). Positive
 	// finite values only; anything else keeps the default and says nothing —
 	// the boot line prints the value in force either way, and the SOURCE of
-	// the read that supplied it (VL / NOFX / default — R5 removes the NOFX
-	// branch with the envcompat package). The Env("…") literals stay at the
+	// the read that supplied it (VL / default). The env literals stay at the
 	// call sites: the pairing census reads them here.
-	if v, src := envScaleKnob(envcompat.Env("BAR_SCALE_MISMATCH_PCT")); v > 0 {
+	if v, src := envScaleKnob(os.Getenv("VL_BAR_SCALE_MISMATCH_PCT")); v > 0 {
 		ScaleMismatchPct, scaleMismatchPctSrc = v, src
 	}
-	if v, src := envScaleKnob(envcompat.Env("BAR_SCALE_MISMATCH_MULT")); v > 0 {
+	if v, src := envScaleKnob(os.Getenv("VL_BAR_SCALE_MISMATCH_MULT")); v > 0 {
 		ScaleMismatchRangeMult, scaleMismatchRangeMultSrc = v, src
 	}
 }
 
 // envScaleKnob parses an already-read knob; (0, default) means "keep the
-// default AND its source" — a rejected value is not an env value.
-func envScaleKnob(raw string, src envcompat.Source) (float64, envcompat.Source) {
+// default AND its source" — a rejected value is not an env value. The source
+// is "VL" for an accepted env value, "default" otherwise.
+func envScaleKnob(raw string) (float64, string) {
 	v, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
 	if err != nil || v <= 0 || math.IsInf(v, 0) {
-		return 0, envcompat.SourceDefault
+		return 0, "default"
 	}
-	return v, src
+	return v, "VL"
 }
 
 // The env source each knob's value came from; default until a parse accepted
 // an env value (a rejected value keeps the default AND its source).
 var (
-	scaleMismatchPctSrc       = envcompat.SourceDefault
-	scaleMismatchRangeMultSrc = envcompat.SourceDefault
+	scaleMismatchPctSrc       = "default"
+	scaleMismatchRangeMultSrc = "default"
 )
 
 // ScaleMismatchPctSource and ScaleMismatchRangeMultSource name the env source
-// of the value in force, READ onto the source boot line (A11). // R5 removes
-// the NOFX branch with envcompat.
+// of the value in force, READ onto the source boot line (A11).
 func ScaleMismatchPctSource() string       { return string(scaleMismatchPctSrc) }
 func ScaleMismatchRangeMultSource() string { return string(scaleMismatchRangeMultSrc) }
 

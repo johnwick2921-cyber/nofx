@@ -60,7 +60,7 @@ func TestReleaseWorkflowDefaultsToThisRepoAndNeverThePartner(t *testing.T) {
 	if !strings.Contains(y, "RELEASE_REPO") {
 		t.Fatalf("the artifact target must be ONE variable, RELEASE_REPO, so the owner changes it in one line")
 	}
-	if !strings.Contains(y, "johnwick2921-cyber/nofx") {
+	if !strings.Contains(y, "johnwick2921-cyber/vl") {
 		t.Fatalf("RELEASE_REPO must DEFAULT to this repo")
 	}
 	if strings.Contains(y, "vlautoagenttraderv1") {

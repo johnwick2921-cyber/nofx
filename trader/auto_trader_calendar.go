@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"vl/calendar"
-	"vl/internal/envcompat"
 	"vl/kernel"
 	"vl/store"
 )
@@ -115,7 +114,7 @@ func (at *AutoTrader) maybeFetchCalendar(now time.Time) {
 // calendar.Event ({"time": RFC3339-UTC, "currency", "title", "impact":"T1"}).
 // Missing/unreadable/invalid file → nil (FetchWeek reports SourceNone + warns).
 func calendarStaticLoader() []calendar.Event {
-	path, _ := envcompat.Env("CALENDAR_STATIC") // R5 removes
+	path := os.Getenv("VL_CALENDAR_STATIC") // R5: VL_ only
 	if path == "" {
 		path = "calendar_static_t1.json"
 	}

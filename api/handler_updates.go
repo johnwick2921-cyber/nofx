@@ -7,13 +7,13 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"vl/auth"
 	"vl/config"
-	"vl/internal/envcompat"
 	"vl/internal/updateauth"
 	"vl/internal/updaterjob"
 	"vl/internal/updatersource"
@@ -68,10 +68,6 @@ const updatesAdminIDKey = "updates_admin_user_id"
 // list, so a cross-origin page can never get a browser to send it (the
 // preflight fails) — pinned by TestUpdatePreflightNeverAllowsTheUpdateHeader.
 const UpdateHeader = "X-VL-Update"
-
-// LegacyUpdateHeader is the pre-rename name, accepted until R5 (transition
-// table entry (d)); R5 removes this const and the dual-accept test.
-const LegacyUpdateHeader = "X-NOFX-Update"
 
 // maxUpdateInstallBody caps the install body (a Grant is ~200 bytes).
 const maxUpdateInstallBody = 4096
@@ -137,7 +133,7 @@ func updateVerifierName(v updateauth.Verifier) string {
 // dialled (a worker is started by hand, attended — not dialling at boot is
 // not knowing yet, so n/a, never "down").
 func (s *Server) configureUpdater() {
-	if v, _ := envcompat.Env("UPDATER"); v != "1" { // R5 removes: VL_/NOFX_ prefix is envcompat's business
+	if v := os.Getenv("VL_UPDATER"); v != "1" { // R5: VL_ only
 		return
 	}
 	s.updaterOn = true
@@ -427,10 +423,8 @@ func (s *Server) updatesRefusal(c *gin.Context) string {
 	if h := forwardingHeader(r.Header); h != "" {
 		return "forwarded request (" + h + ")"
 	}
-	// CSRF: the custom header, exactly one value in total across
-	// both names, exactly "1". The legacy name stays accepted until R5
-	// (transition entry (d)).
-	vs := append(append([]string{}, r.Header.Values(UpdateHeader)...), r.Header.Values(LegacyUpdateHeader)...)
+	// CSRF: the custom header, exactly one value, exactly "1".
+	vs := r.Header.Values(UpdateHeader)
 	if len(vs) != 1 || vs[0] != "1" {
 		return "update header missing or wrong"
 	}

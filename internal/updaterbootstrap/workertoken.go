@@ -171,7 +171,7 @@ func writeWorkerTokenLine(home, token string) error {
 	if b, err := os.ReadFile(path); err == nil {
 		for _, line := range strings.Split(string(b), "\n") {
 			k, _, ok := strings.Cut(line, "=")
-			if ok && (strings.TrimSpace(k) == "VL_CUTOVER_TOKEN" || strings.TrimSpace(k) == "NOFX_CUTOVER_TOKEN") {
+					if ok && strings.TrimSpace(k) == "VL_CUTOVER_TOKEN" {
 				continue
 			}
 			lines = append(lines, line)
